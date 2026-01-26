@@ -22,9 +22,9 @@ export type ModelCategory = z.infer<typeof ModelCategorySchema>;
 export const DEFAULT_MODEL_CATEGORY: ModelCategory = 'general';
 
 export const ModelCategories = {
-  REASONING: 'reasoning' as const,
-  GENERAL: 'general' as const,
   CREATIVE: 'creative' as const,
+  GENERAL: 'general' as const,
+  REASONING: 'reasoning' as const,
   RESEARCH: 'research' as const,
 } as const;
 
@@ -50,10 +50,10 @@ export const DEFAULT_MODEL_CATEGORY_FILTER: ModelCategoryFilter = 'all';
 // 5. CONSTANT OBJECT
 export const ModelCategoryFilters = {
   ALL: 'all' as const,
-  TEXT: 'text' as const,
-  VISION: 'vision' as const,
   CODE: 'code' as const,
   FUNCTION: 'function' as const,
+  TEXT: 'text' as const,
+  VISION: 'vision' as const,
 } as const;
 
 // ============================================================================
@@ -72,8 +72,8 @@ export type StreamingBehavior = z.infer<typeof StreamingBehaviorSchema>;
 export const DEFAULT_STREAMING_BEHAVIOR: StreamingBehavior = 'token';
 
 export const StreamingBehaviors = {
-  TOKEN: 'token' as const,
   BUFFERED: 'buffered' as const,
+  TOKEN: 'token' as const,
 } as const;
 
 // ============================================================================
@@ -93,8 +93,8 @@ export const DEFAULT_JSON_MODE_QUALITY: JsonModeQuality = 'good';
 
 export const JsonModeQualities = {
   EXCELLENT: 'excellent' as const,
-  GOOD: 'good' as const,
   FAIR: 'fair' as const,
+  GOOD: 'good' as const,
   POOR: 'poor' as const,
 } as const;
 
@@ -114,12 +114,12 @@ export type ModelProvider = z.infer<typeof ModelProviderSchema>;
 export const DEFAULT_MODEL_PROVIDER: ModelProvider = 'openai';
 
 export const ModelProviders = {
-  X_AI: 'x-ai' as const,
   ANTHROPIC: 'anthropic' as const,
-  GOOGLE: 'google' as const,
   DEEPSEEK: 'deepseek' as const,
-  OPENAI: 'openai' as const,
+  GOOGLE: 'google' as const,
   MISTRALAI: 'mistralai' as const,
+  OPENAI: 'openai' as const,
+  X_AI: 'x-ai' as const,
 } as const;
 
 export function isModelProvider(value: unknown): value is ModelProvider {
@@ -127,12 +127,12 @@ export function isModelProvider(value: unknown): value is ModelProvider {
 }
 
 export const PROVIDER_STREAMING_DEFAULTS: Record<ModelProvider, StreamingBehavior> = {
-  [ModelProviders.OPENAI]: StreamingBehaviors.TOKEN,
   [ModelProviders.ANTHROPIC]: StreamingBehaviors.TOKEN,
-  [ModelProviders.MISTRALAI]: StreamingBehaviors.TOKEN,
-  [ModelProviders.X_AI]: StreamingBehaviors.BUFFERED,
   [ModelProviders.DEEPSEEK]: StreamingBehaviors.BUFFERED,
   [ModelProviders.GOOGLE]: StreamingBehaviors.BUFFERED,
+  [ModelProviders.MISTRALAI]: StreamingBehaviors.TOKEN,
+  [ModelProviders.OPENAI]: StreamingBehaviors.TOKEN,
+  [ModelProviders.X_AI]: StreamingBehaviors.BUFFERED,
 } as const;
 
 // ============================================================================
@@ -182,38 +182,38 @@ export type ModelId = z.infer<typeof ModelIdSchema>;
 
 // 5. CONSTANT OBJECT - Define before DEFAULT_MODEL_ID so it can be referenced
 export const ModelIds = {
-  OPENAI_GPT_OSS_120B: 'openai/gpt-oss-120b' as const,
-  OPENAI_GPT_5_NANO: 'openai/gpt-5-nano' as const,
-  OPENAI_GPT_4_1_NANO: 'openai/gpt-4.1-nano' as const,
-  OPENAI_GPT_4O_MINI: 'openai/gpt-4o-mini' as const,
-  X_AI_GROK_4_FAST: 'x-ai/grok-4-fast' as const,
-  X_AI_GROK_4_1_FAST: 'x-ai/grok-4.1-fast' as const,
-  X_AI_GROK_CODE_FAST_1: 'x-ai/grok-code-fast-1' as const,
+  ANTHROPIC_CLAUDE_HAIKU_4_5: 'anthropic/claude-haiku-4.5' as const,
+  ANTHROPIC_CLAUDE_OPUS_4: 'anthropic/claude-opus-4' as const,
+  ANTHROPIC_CLAUDE_OPUS_4_5: 'anthropic/claude-opus-4.5' as const,
+  ANTHROPIC_CLAUDE_SONNET_4: 'anthropic/claude-sonnet-4' as const,
+  ANTHROPIC_CLAUDE_SONNET_4_5: 'anthropic/claude-sonnet-4.5' as const,
   DEEPSEEK_DEEPSEEK_CHAT_V3_0324: 'deepseek/deepseek-chat-v3-0324' as const,
   DEEPSEEK_DEEPSEEK_V3_2: 'deepseek/deepseek-v3.2' as const,
   GOOGLE_GEMINI_2_5_FLASH: 'google/gemini-2.5-flash' as const,
-  OPENAI_GPT_5_MINI: 'openai/gpt-5-mini' as const,
-  OPENAI_GPT_4_1_MINI: 'openai/gpt-4.1-mini' as const,
-  MISTRALAI_MISTRAL_LARGE_2512: 'mistralai/mistral-large-2512' as const,
-  GOOGLE_GEMINI_3_FLASH_PREVIEW: 'google/gemini-3-flash-preview' as const,
-  ANTHROPIC_CLAUDE_HAIKU_4_5: 'anthropic/claude-haiku-4.5' as const,
-  OPENAI_O3_MINI: 'openai/o3-mini' as const,
-  OPENAI_O4_MINI: 'openai/o4-mini' as const,
   GOOGLE_GEMINI_2_5_PRO: 'google/gemini-2.5-pro' as const,
+  GOOGLE_GEMINI_3_FLASH_PREVIEW: 'google/gemini-3-flash-preview' as const,
+  GOOGLE_GEMINI_3_PRO_PREVIEW: 'google/gemini-3-pro-preview' as const,
+  MISTRALAI_MISTRAL_LARGE_2512: 'mistralai/mistral-large-2512' as const,
+  OPENAI_GPT_4_1: 'openai/gpt-4.1' as const,
+  OPENAI_GPT_4_1_MINI: 'openai/gpt-4.1-mini' as const,
+  OPENAI_GPT_4_1_NANO: 'openai/gpt-4.1-nano' as const,
+  OPENAI_GPT_4O_MINI: 'openai/gpt-4o-mini' as const,
   OPENAI_GPT_5: 'openai/gpt-5' as const,
   OPENAI_GPT_5_1: 'openai/gpt-5.1' as const,
   OPENAI_GPT_5_2: 'openai/gpt-5.2' as const,
+  OPENAI_GPT_5_MINI: 'openai/gpt-5-mini' as const,
+  OPENAI_GPT_5_NANO: 'openai/gpt-5-nano' as const,
+  OPENAI_GPT_OSS_120B: 'openai/gpt-oss-120b' as const,
+  OPENAI_O1: 'openai/o1' as const,
   OPENAI_O3: 'openai/o3' as const,
-  OPENAI_GPT_4_1: 'openai/gpt-4.1' as const,
-  GOOGLE_GEMINI_3_PRO_PREVIEW: 'google/gemini-3-pro-preview' as const,
+  OPENAI_O3_MINI: 'openai/o3-mini' as const,
+  OPENAI_O4_MINI: 'openai/o4-mini' as const,
   X_AI_GROK_3: 'x-ai/grok-3' as const,
   X_AI_GROK_4: 'x-ai/grok-4' as const,
   X_AI_GROK_4_1: 'x-ai/grok-4.1' as const,
-  ANTHROPIC_CLAUDE_SONNET_4: 'anthropic/claude-sonnet-4' as const,
-  ANTHROPIC_CLAUDE_SONNET_4_5: 'anthropic/claude-sonnet-4.5' as const,
-  ANTHROPIC_CLAUDE_OPUS_4_5: 'anthropic/claude-opus-4.5' as const,
-  OPENAI_O1: 'openai/o1' as const,
-  ANTHROPIC_CLAUDE_OPUS_4: 'anthropic/claude-opus-4' as const,
+  X_AI_GROK_4_1_FAST: 'x-ai/grok-4.1-fast' as const,
+  X_AI_GROK_4_FAST: 'x-ai/grok-4-fast' as const,
+  X_AI_GROK_CODE_FAST_1: 'x-ai/grok-code-fast-1' as const,
 } as const;
 
 // 4. DEFAULT VALUE - Uses ModelIds for single source of truth
@@ -241,23 +241,23 @@ export const DEFAULT_MODEL_CAPABILITY_TAGS: ModelCapabilityTag[] = [];
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const ModelCapabilityTags = {
   FAST: 'fast' as const, // Quick response, lower cost models
-  VISION: 'vision' as const, // Supports image/visual input
-  REASONING: 'reasoning' as const, // Enhanced reasoning/thinking
   PDF: 'pdf' as const, // Supports PDF/document processing
+  REASONING: 'reasoning' as const, // Enhanced reasoning/thinking
+  VISION: 'vision' as const, // Supports image/visual input
 } as const;
 
 // Tag display labels for UI
 export const MODEL_CAPABILITY_TAG_LABELS: Record<ModelCapabilityTag, string> = {
   [ModelCapabilityTags.FAST]: 'Fast',
-  [ModelCapabilityTags.VISION]: 'Vision',
-  [ModelCapabilityTags.REASONING]: 'Reasoning',
   [ModelCapabilityTags.PDF]: 'PDF',
+  [ModelCapabilityTags.REASONING]: 'Reasoning',
+  [ModelCapabilityTags.VISION]: 'Vision',
 } as const;
 
 // Tag icons for UI (Lucide icon names)
 export const MODEL_CAPABILITY_TAG_ICONS: Record<ModelCapabilityTag, string> = {
   [ModelCapabilityTags.FAST]: 'zap',
-  [ModelCapabilityTags.VISION]: 'eye',
-  [ModelCapabilityTags.REASONING]: 'brain',
   [ModelCapabilityTags.PDF]: 'fileText',
+  [ModelCapabilityTags.REASONING]: 'brain',
+  [ModelCapabilityTags.VISION]: 'eye',
 } as const;

@@ -41,10 +41,10 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
   const body = init?.body ? String(init.body) : undefined;
 
   fetchCalls.push({
-    url,
-    method,
     body,
+    method,
     timestamp: Date.now(),
+    url,
   });
 
   if (url.includes('/moderator')) {
@@ -58,18 +58,18 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
   if (url.includes('/messages')) {
     const threadId = url.match(/threads\/([^/]+)/)?.[1] || 'test-thread';
     return Promise.resolve({
-      ok: true,
-      status: 200,
       headers: new Headers({ 'content-type': 'application/json' }),
       json: async () => createMockMessagesListResponse(threadId, 0, 2),
+      ok: true,
+      status: 200,
     } as Response);
   }
 
   return Promise.resolve({
-    ok: true,
-    status: 200,
     headers: new Headers({ 'content-type': 'application/json' }),
     json: async () => ({ success: true }),
+    ok: true,
+    status: 200,
   } as Response);
 }
 
@@ -83,12 +83,12 @@ describe('moderator API Integration', () => {
   beforeEach(() => {
     fetchCalls = [];
     originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(mockFetchImplementation);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mockFetchImplementation);
 
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
         mutations: { retry: false },
+        queries: { gcTime: 0, retry: false },
       },
     });
   });
@@ -109,8 +109,8 @@ describe('moderator API Integration', () => {
       act(() => {
         store.getState().setThread(createMockThread({ id: threadId }));
         store.getState().setParticipants([
-          createMockParticipant({ id: 'p1', threadId, priority: 0 }),
-          createMockParticipant({ id: 'p2', threadId, priority: 1 }),
+          createMockParticipant({ id: 'p1', priority: 0, threadId }),
+          createMockParticipant({ id: 'p2', priority: 1, threadId }),
         ]);
       });
 
@@ -125,21 +125,21 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: `${threadId}_r${roundNumber}_user`,
-            role: MessageRoles.USER,
-            parts: [{ type: 'text', text: 'Test question' }],
             metadata: { roundNumber },
+            parts: [{ text: 'Test question', type: 'text' }],
+            role: MessageRoles.USER,
           },
           {
             id: participantMessageIds[0],
+            metadata: { participantIndex: 0, roundNumber },
+            parts: [{ text: 'Participant 1 response', type: 'text' }],
             role: MessageRoles.ASSISTANT,
-            parts: [{ type: 'text', text: 'Participant 1 response' }],
-            metadata: { roundNumber, participantIndex: 0 },
           },
           {
             id: participantMessageIds[1],
+            metadata: { participantIndex: 1, roundNumber },
+            parts: [{ text: 'Participant 2 response', type: 'text' }],
             role: MessageRoles.ASSISTANT,
-            parts: [{ type: 'text', text: 'Participant 2 response' }],
-            metadata: { roundNumber, participantIndex: 1 },
           },
         ]);
       });
@@ -149,9 +149,9 @@ describe('moderator API Integration', () => {
         const response = await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ participantMessageIds }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
 
@@ -159,8 +159,9 @@ describe('moderator API Integration', () => {
         if (reader) {
           while (true) {
             const { done } = await reader.read();
-            if (done)
+            if (done) {
               break;
+            }
           }
         }
       });
@@ -174,8 +175,9 @@ describe('moderator API Integration', () => {
       expect(moderatorCalls[0].url).toContain(`/threads/${threadId}/rounds/${roundNumber}/moderator`);
 
       const firstCallBody = moderatorCalls[0].body;
-      if (!firstCallBody)
+      if (!firstCallBody) {
         throw new Error('expected firstCallBody');
+      }
 
       const body = JSON.parse(firstCallBody);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
@@ -194,12 +196,12 @@ describe('moderator API Integration', () => {
 
       // Verify trigger state
       const hasBeenTriggered = store.getState().hasModeratorStreamBeenTriggered(moderatorId, roundNumber);
-      expect(hasBeenTriggered).toBe(true);
+      expect(hasBeenTriggered).toBeTruthy();
 
       // Attempt to trigger again (should be prevented by store logic)
       // In real scenario, the hook would check hasModeratorStreamBeenTriggered and skip
       // Here we verify the store state works correctly
-      expect(hasBeenTriggered).toBe(true);
+      expect(hasBeenTriggered).toBeTruthy();
     });
 
     it('should handle multiple rounds with separate moderator calls', async () => {
@@ -216,9 +218,9 @@ describe('moderator API Integration', () => {
           await fetch(
             `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
             {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ participantMessageIds }),
+              headers: { 'Content-Type': 'application/json' },
+              method: 'POST',
             },
           );
         });
@@ -246,9 +248,9 @@ describe('moderator API Integration', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userQuery: 'test query' }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
       });
@@ -258,9 +260,9 @@ describe('moderator API Integration', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
       });
@@ -281,16 +283,16 @@ describe('moderator API Integration', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
           {
-            method: 'POST',
             body: JSON.stringify({ userQuery: 'test' }),
+            method: 'POST',
           },
         );
 
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
             body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+            method: 'POST',
           },
         );
       });
@@ -312,21 +314,21 @@ describe('moderator API Integration', () => {
       const _roundNumber = 0;
 
       // Initial state
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // Set streaming state
       act(() => {
         store.getState().setIsModeratorStreaming(true);
       });
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       // Complete streaming
       act(() => {
         store.getState().completeModeratorStream();
       });
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
 
     it('should add moderator message to messages array', async () => {
@@ -340,13 +342,13 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: moderatorId,
-            role: MessageRoles.ASSISTANT,
-            parts: [],
             metadata: {
               isModerator: true,
-              roundNumber,
               participantIndex: MODERATOR_PARTICIPANT_INDEX,
+              roundNumber,
             },
+            parts: [],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       });
@@ -355,7 +357,7 @@ describe('moderator API Integration', () => {
       const moderatorMsg = messages.find(m => m.id === moderatorId);
 
       expect(moderatorMsg).toBeDefined();
-      expect(moderatorMsg?.metadata?.isModerator).toBe(true);
+      expect(moderatorMsg?.metadata?.isModerator).toBeTruthy();
       expect(moderatorMsg?.metadata?.roundNumber).toBe(roundNumber);
     });
 
@@ -370,9 +372,9 @@ describe('moderator API Integration', () => {
         store.getState().setMessages([
           {
             id: moderatorId,
-            role: MessageRoles.ASSISTANT,
-            parts: [],
             metadata: { isModerator: true, roundNumber },
+            parts: [],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       });
@@ -382,7 +384,7 @@ describe('moderator API Integration', () => {
         store.getState().setMessages((current) => {
           return current.map(msg =>
             msg.id === moderatorId
-              ? { ...msg, parts: [{ type: 'text', text: 'Moderator summary' }] }
+              ? { ...msg, parts: [{ text: 'Moderator summary', type: 'text' }] }
               : msg,
           );
         });
@@ -418,11 +420,11 @@ describe('moderator API Integration', () => {
 
       // Fetch messages
       await queryClient.fetchQuery({
-        queryKey: ['threads', threadId, 'messages'],
         queryFn: async () => {
           const response = await fetch(`/api/v1/chat/threads/${threadId}/messages`);
           return response.json();
         },
+        queryKey: ['threads', threadId, 'messages'],
       });
 
       // Moderator should not be triggered by message fetch
@@ -434,23 +436,23 @@ describe('moderator API Integration', () => {
   describe('error Handling', () => {
     it('should handle moderator API errors gracefully', async () => {
       // Override mock to return error
-      globalThis.fetch = vi.fn().mockImplementation((input, _init) => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((input, _init) => {
         const url = typeof input === 'string' ? input : input.toString();
 
         if (url.includes('/moderator')) {
           return Promise.resolve({
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ error: { message: 'Server error' }, success: false }),
             ok: false,
             status: 500,
-            headers: new Headers({ 'content-type': 'application/json' }),
-            json: async () => ({ success: false, error: { message: 'Server error' } }),
           } as Response);
         }
 
         return Promise.resolve({
-          ok: true,
-          status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => ({ success: true }),
+          ok: true,
+          status: 200,
         } as Response);
       });
 
@@ -461,9 +463,9 @@ describe('moderator API Integration', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
       } catch {
@@ -471,27 +473,27 @@ describe('moderator API Integration', () => {
       }
 
       // Should not crash
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
 
     it('should not retry moderator on client error', async () => {
-      globalThis.fetch = vi.fn().mockImplementation((input) => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
         const url = typeof input === 'string' ? input : input.toString();
-        fetchCalls.push({ url, method: 'POST', timestamp: Date.now() });
+        fetchCalls.push({ method: 'POST', timestamp: Date.now(), url });
 
         if (url.includes('/moderator')) {
           return Promise.resolve({
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ error: { message: 'Bad request' }, success: false }),
             ok: false,
             status: 400,
-            headers: new Headers({ 'content-type': 'application/json' }),
-            json: async () => ({ success: false, error: { message: 'Bad request' } }),
           } as Response);
         }
 
         return Promise.resolve({
+          json: async () => ({ success: true }),
           ok: true,
           status: 200,
-          json: async () => ({ success: true }),
         } as Response);
       });
 
@@ -502,8 +504,8 @@ describe('moderator API Integration', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
             body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+            method: 'POST',
           },
         );
       } catch {
@@ -525,12 +527,12 @@ describe('moderator API Integration', () => {
       // Attempt concurrent calls (second should be prevented by store)
       const promises = [
         fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-          method: 'POST',
           body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+          method: 'POST',
         }),
         fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-          method: 'POST',
           body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+          method: 'POST',
         }),
       ];
 
@@ -547,8 +549,8 @@ describe('moderator API Integration', () => {
       // Rapidly trigger moderator for different rounds
       for (let i = 0; i < 3; i++) {
         await fetch(`/api/v1/chat/threads/${threadId}/rounds/${i}/moderator`, {
-          method: 'POST',
           body: JSON.stringify({ participantMessageIds: [`msg${i}`] }),
+          method: 'POST',
         });
       }
 

@@ -22,7 +22,7 @@ type RegenerateRoundResult = {
 export async function handleRoundRegeneration(
   params: RegenerateRoundParams,
 ): Promise<RegenerateRoundResult> {
-  const { threadId, regenerateRound, participantIndex, db } = params;
+  const { db, participantIndex, regenerateRound, threadId } = params;
 
   if (participantIndex !== 0) {
     return {

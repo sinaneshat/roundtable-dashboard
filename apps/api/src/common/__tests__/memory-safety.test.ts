@@ -75,8 +75,8 @@ describe('memoryBudgetConfigSchema', () => {
 
   it('should allow custom values', () => {
     const config = MemoryBudgetConfigSchema.parse({
-      maxMessages: 50,
       maxAttachments: 5,
+      maxMessages: 50,
       maxRagResults: 2,
     });
 
@@ -299,11 +299,11 @@ describe('size Estimation Utilities', () => {
 describe('calculateDynamicLimits', () => {
   it('should return default limits for simple requests', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 10,
       attachmentCount: 0,
+      hasProject: false,
       hasRag: false,
       hasWebSearch: false,
-      hasProject: false,
+      messageCount: 10,
     });
 
     expect(limits.maxMessages).toBe(75);
@@ -313,11 +313,11 @@ describe('calculateDynamicLimits', () => {
 
   it('should reduce limits for high attachment count', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 10,
       attachmentCount: 8,
+      hasProject: false,
       hasRag: false,
       hasWebSearch: false,
-      hasProject: false,
+      messageCount: 10,
     });
 
     expect(limits.maxMessages).toBe(50); // Reduced
@@ -326,11 +326,11 @@ describe('calculateDynamicLimits', () => {
 
   it('should reduce limits for RAG + web search', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 10,
       attachmentCount: 0,
+      hasProject: true,
       hasRag: true,
       hasWebSearch: true,
-      hasProject: true,
+      messageCount: 10,
     });
 
     expect(limits.maxMessages).toBe(50);
@@ -340,11 +340,11 @@ describe('calculateDynamicLimits', () => {
 
   it('should reduce limits for high message count', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 120,
       attachmentCount: 2,
+      hasProject: false,
       hasRag: false,
       hasWebSearch: false,
-      hasProject: false,
+      messageCount: 120,
     });
 
     expect(limits.maxAttachments).toBe(3); // Reduced to 3 for >50 messages
@@ -353,11 +353,11 @@ describe('calculateDynamicLimits', () => {
 
   it('should use minimum limits for complex requests', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 80,
       attachmentCount: 5,
+      hasProject: true,
       hasRag: true,
       hasWebSearch: true,
-      hasProject: true,
+      messageCount: 80,
     });
 
     // Most restrictive limits for complex requests within 128MB worker memory
@@ -512,11 +512,11 @@ describe('integration Scenarios', () => {
   it('should dynamically adjust limits for complex request', () => {
     // Simulate a complex request with many features enabled
     const limits = calculateDynamicLimits({
-      messageCount: 100,
       attachmentCount: 10,
+      hasProject: true,
       hasRag: true,
       hasWebSearch: true,
-      hasProject: true,
+      messageCount: 100,
     });
 
     const tracker = new MemoryBudgetTracker(limits);
@@ -529,11 +529,11 @@ describe('integration Scenarios', () => {
 
   it('should handle file upload scenario within limits', () => {
     const limits = calculateDynamicLimits({
-      messageCount: 20,
       attachmentCount: 5,
+      hasProject: false,
       hasRag: false,
       hasWebSearch: false,
-      hasProject: false,
+      messageCount: 20,
     });
 
     const tracker = new MemoryBudgetTracker(limits);

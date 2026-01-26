@@ -35,38 +35,38 @@ const THREAD_ID = 'thread-test-e2e';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: THREAD_ID,
-    userId: 'user-123',
-    title: 'E2E Test Thread',
-    slug: 'e2e-test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: THREAD_ID,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'e2e-test-thread',
+    status: 'active',
+    title: 'E2E Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createParticipant(index: number, modelId = `model-${index}`): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: THREAD_ID,
-    modelId,
-    role: `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: `Participant ${index}`,
+    settings: null,
+    threadId: THREAD_ID,
     updatedAt: new Date(),
   } as ChatParticipant;
 }
@@ -74,8 +74,8 @@ function createParticipant(index: number, modelId = `model-${index}`): ChatParti
 /** Creates a user message with deterministic ID */
 function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
-    id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
+    id: `${THREAD_ID}_r${roundNumber}_user`,
     roundNumber,
   });
 }
@@ -83,10 +83,10 @@ function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`)
 /** Creates an optimistic user message (temporary ID) */
 function _createOptimisticUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
-    id: `optimistic-${Date.now()}-${roundNumber}`,
     content,
-    roundNumber,
+    id: `optimistic-${Date.now()}-${roundNumber}`,
     isOptimistic: true,
+    roundNumber,
   });
 }
 
@@ -98,12 +98,12 @@ function createAssistantMsg(
   finishReason = FinishReasons.STOP,
 ): ApiMessage {
   return createTestAssistantMessage({
-    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
-    roundNumber,
+    finishReason,
+    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason,
+    roundNumber,
   });
 }
 
@@ -114,22 +114,22 @@ function createTempAssistantMsg(
   content = `Response R${roundNumber}P${participantIndex}`,
 ): ApiMessage {
   return createTestAssistantMessage({
-    id: `gen-${Math.random().toString(36).slice(2)}`,
     content,
-    roundNumber,
+    finishReason: undefined, // Still streaming
+    id: `gen-${Math.random().toString(36).slice(2)}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason: undefined, // Still streaming
+    roundNumber,
   });
 }
 
 /** Creates a moderator message */
 function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
-    id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
-    roundNumber,
     finishReason: FinishReasons.STOP,
+    id: `${THREAD_ID}_r${roundNumber}_moderator`,
+    roundNumber,
   });
 }
 
@@ -138,21 +138,21 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
   const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
     complete: MessageStatuses.COMPLETE,
     failed: MessageStatuses.FAILED,
+    pending: MessageStatuses.PENDING,
+    streaming: MessageStatuses.STREAMING,
   };
   return {
-    id: `presearch-${THREAD_ID}-r${roundNumber}`,
-    threadId: THREAD_ID,
-    roundNumber,
-    userQuery: `Query ${roundNumber}`,
-    status: statusMap[status],
-    searchData: status === 'complete' ? { queries: [], results: [], moderatorSummary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-${THREAD_ID}-r${roundNumber}`,
+    roundNumber,
+    searchData: status === 'complete' ? { failureCount: 0, moderatorSummary: 'Done', queries: [], results: [], successCount: 1, totalResults: 0, totalTime: 100 } : null,
+    status: statusMap[status],
+    threadId: THREAD_ID,
+    userQuery: `Query ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -160,7 +160,22 @@ function createPreSearch(
 // INVARIANT HELPERS
 // ============================================================================
 
-type MessageWithMetadata = ApiMessage & { metadata: { roundNumber: number; role?: string; isModerator?: boolean; participantIndex?: number } };
+/**
+ * Test message metadata type for assertions
+ */
+type TestMessageMetadata = {
+  isModerator?: boolean;
+  participantIndex?: number;
+  role?: string;
+  roundNumber: number;
+};
+
+/**
+ * ApiMessage with test metadata type
+ */
+type MessageWithMetadata = ApiMessage & {
+  metadata: TestMessageMetadata;
+};
 
 /** Validates all message flow invariants */
 function validateMessageInvariants(messages: ApiMessage[], expectedRounds: number, participantsPerRound: number) {
@@ -180,8 +195,9 @@ function validateMessageInvariants(messages: ApiMessage[], expectedRounds: numbe
     const participantResponses = new Map<number, number>();
     for (const msg of assistantMsgs) {
       const meta = msg.metadata as MessageWithMetadata['metadata'];
-      if (meta.role === UIMessageRoles.ASSISTANT && meta.isModerator)
-        continue; // Skip moderator
+      if (meta.role === UIMessageRoles.ASSISTANT && meta.isModerator) {
+        continue;
+      } // Skip moderator
       const pIdx = meta.participantIndex;
       if (pIdx !== undefined) {
         participantResponses.set(pIdx, (participantResponses.get(pIdx) || 0) + 1);
@@ -246,8 +262,9 @@ describe('message Flow Invariants', () => {
 
       expect(round0UserMsgs).toHaveLength(1);
       const firstUserMsg = round0UserMsgs[0];
-      if (!firstUserMsg)
+      if (!firstUserMsg) {
         throw new Error('expected user message');
+      }
       expect(firstUserMsg.id).toBe(`${THREAD_ID}_r0_user`);
     });
   });
@@ -349,8 +366,9 @@ describe('message Flow Invariants', () => {
       // Should have exactly 1 assistant message with deterministic ID
       expect(assistantMsgs).toHaveLength(1);
       const firstAssistantMsg = assistantMsgs[0];
-      if (!firstAssistantMsg)
+      if (!firstAssistantMsg) {
         throw new Error('expected assistant message');
+      }
       expect(firstAssistantMsg.id).toBe(`${THREAD_ID}_r0_p0`);
     });
   });
@@ -499,9 +517,9 @@ describe('pre-Search Invariants', () => {
   it('pre-search trigger is idempotent', () => {
     const store = createChatStore();
 
-    expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
-    expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
-    expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
+    expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
+    expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
+    expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
   });
 });
 
@@ -615,7 +633,7 @@ describe('deduplication Algorithm', () => {
     // After refactoring: Should keep only deterministic ID
     // Note: Current behavior may differ; this is the target state
     const hasDetId = assistantMsgs.some(m => m.id === `${THREAD_ID}_r0_p0`);
-    expect(hasDetId).toBe(true);
+    expect(hasDetId).toBeTruthy();
   });
 
   it('deduplicates user messages by round', () => {
@@ -634,8 +652,9 @@ describe('deduplication Algorithm', () => {
 
     expect(userMsgs).toHaveLength(1);
     const firstUserMsg = userMsgs[0];
-    if (!firstUserMsg)
+    if (!firstUserMsg) {
       throw new Error('expected user message');
+    }
     expect(firstUserMsg.id).toBe(`${THREAD_ID}_r0_user`);
   });
 });

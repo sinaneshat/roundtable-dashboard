@@ -28,10 +28,10 @@ export type MCPProtocolMethod = z.infer<typeof MCPProtocolMethodSchema>;
 
 export const MCPProtocolMethods = {
   INITIALIZE: 'initialize' as const,
-  TOOLS_LIST: 'tools/list' as const,
   RESOURCES_LIST: 'resources/list' as const,
   RESOURCES_READ: 'resources/read' as const,
   TOOLS_CALL: 'tools/call' as const,
+  TOOLS_LIST: 'tools/list' as const,
 } as const;
 
 // ============================================================================
@@ -72,29 +72,29 @@ export const MCPToolMethodSchema = z.enum(MCP_TOOL_METHODS).openapi({
 export type MCPToolMethod = z.infer<typeof MCPToolMethodSchema>;
 
 export const MCPToolMethods = {
-  CREATE_THREAD: 'create_thread' as const,
-  GET_THREAD: 'get_thread' as const,
-  LIST_THREADS: 'list_threads' as const,
-  DELETE_THREAD: 'delete_thread' as const,
-  CREATE_PROJECT: 'create_project' as const,
-  GET_PROJECT: 'get_project' as const,
-  LIST_PROJECTS: 'list_projects' as const,
-  UPDATE_PROJECT: 'update_project' as const,
-  DELETE_PROJECT: 'delete_project' as const,
-  LIST_PROJECT_THREADS: 'list_project_threads' as const,
-  LIST_KNOWLEDGE_FILES: 'list_knowledge_files' as const,
-  DELETE_KNOWLEDGE_FILE: 'delete_knowledge_file' as const,
-  SEND_MESSAGE: 'send_message' as const,
-  GENERATE_RESPONSES: 'generate_responses' as const,
-  LIST_ROUNDS: 'list_rounds' as const,
-  REGENERATE_ROUND: 'regenerate_round' as const,
-  ROUND_FEEDBACK: 'round_feedback' as const,
-  GENERATE_ANALYSIS: 'generate_analysis' as const,
-  GET_ROUND_ANALYSIS: 'get_round_analysis' as const,
   ADD_PARTICIPANT: 'add_participant' as const,
-  UPDATE_PARTICIPANT: 'update_participant' as const,
-  REMOVE_PARTICIPANT: 'remove_participant' as const,
+  CREATE_PROJECT: 'create_project' as const,
+  CREATE_THREAD: 'create_thread' as const,
+  DELETE_KNOWLEDGE_FILE: 'delete_knowledge_file' as const,
+  DELETE_PROJECT: 'delete_project' as const,
+  DELETE_THREAD: 'delete_thread' as const,
+  GENERATE_ANALYSIS: 'generate_analysis' as const,
+  GENERATE_RESPONSES: 'generate_responses' as const,
+  GET_PROJECT: 'get_project' as const,
+  GET_ROUND_ANALYSIS: 'get_round_analysis' as const,
+  GET_THREAD: 'get_thread' as const,
+  LIST_KNOWLEDGE_FILES: 'list_knowledge_files' as const,
   LIST_MODELS: 'list_models' as const,
+  LIST_PROJECT_THREADS: 'list_project_threads' as const,
+  LIST_PROJECTS: 'list_projects' as const,
+  LIST_ROUNDS: 'list_rounds' as const,
+  LIST_THREADS: 'list_threads' as const,
+  REGENERATE_ROUND: 'regenerate_round' as const,
+  REMOVE_PARTICIPANT: 'remove_participant' as const,
+  ROUND_FEEDBACK: 'round_feedback' as const,
+  SEND_MESSAGE: 'send_message' as const,
+  UPDATE_PARTICIPANT: 'update_participant' as const,
+  UPDATE_PROJECT: 'update_project' as const,
 } as const;
 
 // ============================================================================

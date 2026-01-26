@@ -43,7 +43,7 @@ describe('render efficiency - subscription patterns (documentation)', () => {
      * - Prevents re-renders when unrelated state changes
      * - Batches updates together
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents scoped selector pattern for specific state slices', () => {
@@ -59,7 +59,7 @@ describe('render efficiency - subscription patterns (documentation)', () => {
      * Good (scoped to input state only):
      *   const inputValue = useChatStore(state => state.inputValue)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents anti-pattern: multiple individual selectors', () => {
@@ -82,7 +82,7 @@ describe('render efficiency - subscription patterns (documentation)', () => {
      *     participantIndex: state.currentParticipantIndex
      *   })))
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -127,11 +127,11 @@ describe('render efficiency - state update frequency', () => {
     for (let i = 1; i <= 20; i++) {
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Word '.repeat(i) }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Word '.repeat(i), type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         },
       ]);
     }
@@ -193,8 +193,8 @@ describe('render efficiency - batched operations', () => {
 
     // Verify all state was reset
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 
@@ -216,7 +216,7 @@ describe('render efficiency - batched operations', () => {
      * - Prevents intermediate inconsistent states
      * - Better UX (no flashing)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -228,11 +228,11 @@ describe('render efficiency - memory management', () => {
     for (let i = 1; i <= 100; i++) {
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Text '.repeat(i) }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Text '.repeat(i), type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         },
       ]);
     }
@@ -252,7 +252,7 @@ describe('render efficiency - memory management', () => {
     store.getState().completeStreaming();
 
     let state = store.getState();
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
 
     // Round 1
@@ -262,7 +262,7 @@ describe('render efficiency - memory management', () => {
     store.getState().completeStreaming();
 
     state = store.getState();
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 });
@@ -288,7 +288,7 @@ describe('render efficiency - performance best practices', () => {
      * 5. Scope selectors to minimum necessary state:
      *    Only select what the component actually uses
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents store update optimization patterns', () => {
@@ -309,7 +309,7 @@ describe('render efficiency - performance best practices', () => {
      * 4. Clear state when no longer needed:
      *    completeStreaming clears all streaming state
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents monitoring and debugging techniques', () => {
@@ -334,7 +334,7 @@ describe('render efficiency - performance best practices', () => {
      * 5. Regression tests:
      *    Add tests when optimizations are made to prevent regressions
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -381,6 +381,6 @@ describe('render efficiency - regression prevention', () => {
      * - Check for memory leaks
      * - Verify batched operations still batch
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

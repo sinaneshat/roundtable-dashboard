@@ -55,12 +55,12 @@ function createCompleteRound(
     includeModeratorMessage?: boolean;
   } = {},
 ): UIMessage[] {
-  const { userMessage = `Question for round ${roundNumber}`, includeModeratorMessage = true } = options;
+  const { includeModeratorMessage = true, userMessage = `Question for round ${roundNumber}` } = options;
 
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `${threadId}_r${roundNumber}_user`,
       content: userMessage,
+      id: `${threadId}_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -69,12 +69,12 @@ function createCompleteRound(
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `${threadId}_r${roundNumber}_p${i}`,
         content: `Participant ${i} response for round ${roundNumber}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -84,21 +84,21 @@ function createCompleteRound(
     // Create moderator message with correct metadata structure
     const moderatorMessage: UIMessage = {
       id: `${threadId}_r${roundNumber}_moderator`,
-      role: MessageRoles.ASSISTANT,
-      parts: [
-        {
-          type: MessagePartTypes.TEXT,
-          text: `Moderator analysis for round ${roundNumber}`,
-        },
-      ],
       metadata: {
-        role: MessageRoles.ASSISTANT,
-        roundNumber,
-        isModerator: true,
-        model: 'gpt-4o', // Required field for moderator metadata
         finishReason: FinishReasons.STOP,
         hasError: false,
+        isModerator: true,
+        model: 'gpt-4o', // Required field for moderator metadata
+        role: MessageRoles.ASSISTANT,
+        roundNumber,
       },
+      parts: [
+        {
+          text: `Moderator analysis for round ${roundNumber}`,
+          type: MessagePartTypes.TEXT,
+        },
+      ],
+      role: MessageRoles.ASSISTANT,
     };
     messages.push(moderatorMessage);
   }
@@ -113,15 +113,15 @@ function createStreamingParticipantMessage(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  partialContent: string = '',
+  partialContent = '',
 ): UIMessage {
   return createTestAssistantMessage({
-    id: `${threadId}_r${roundNumber}_p${participantIndex}`,
     content: partialContent,
-    roundNumber,
+    finishReason: partialContent ? undefined : FinishReasons.UNKNOWN,
+    id: `${threadId}_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason: partialContent ? undefined : FinishReasons.UNKNOWN,
+    roundNumber,
   });
 }
 
@@ -155,8 +155,8 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
 
     // === ROUND 2: Starts immediately (no pause) ===
     const round2UserMessage = createTestUserMessage({
-      id: `${threadId}_r1_user`,
       content: 'Second question',
+      id: `${threadId}_r1_user`,
       roundNumber: 1,
     });
 
@@ -195,15 +195,15 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
     // and might trigger incorrect UI states
 
     // The flow state machine should recognize we're streaming participants, not moderator
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).currentRoundNumber).toBe(1);
 
     // ✅ FIX VERIFICATION: Ensure state machine doesn't think moderator is streaming
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
     // ✅ FIX VERIFICATION: createdModeratorRounds should track round 0 only
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(false);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeFalsy();
   });
 
   it('fAILING: Round 2 should not trigger moderator creation until all participants complete', () => {
@@ -217,17 +217,17 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
     // Round 2 starts - first participant completes immediately
     const round2Messages = [
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'First participant response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -241,18 +241,18 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
     // Moderator should NOT be created for round 1
 
     // Verify moderator NOT created for round 1
-    expect(state.tryMarkModeratorCreated(1)).toBe(true); // Should return true (not created yet)
+    expect(state.tryMarkModeratorCreated(1)).toBeTruthy(); // Should return true (not created yet)
 
     // Now complete second participant
     const round2Complete = [
       ...round2Messages,
       createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'Second participant response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -261,7 +261,7 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
 
     // Now moderator CAN be created
     const canCreate = state.tryMarkModeratorCreated(1);
-    expect(canCreate).toBe(false); // Already marked in previous check
+    expect(canCreate).toBeFalsy(); // Already marked in previous check
   });
 
   it('fAILING: Moderator trigger guard should check round-specific completion', () => {
@@ -275,17 +275,17 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
     // Round 1 with only 1 of 2 participants complete
     const round1Partial = [
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'First participant response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -310,7 +310,7 @@ describe('race Condition: Round 1 Moderator Leaking Into Round 2', () => {
     // ❌ RACE: Not all participants responded for current round
     // Moderator should NOT trigger yet
     const allParticipantsResponded = round1AssistantMessages.length >= 2;
-    expect(allParticipantsResponded).toBe(false);
+    expect(allParticipantsResponded).toBeFalsy();
   });
 });
 
@@ -355,8 +355,8 @@ describe('race Condition: Participant Count Changes Between Rounds', () => {
 
     // Round 1: Should have 3 participants
     const round1UserMessage = createTestUserMessage({
-      id: `${threadId}_r1_user`,
       content: 'Second question',
+      id: `${threadId}_r1_user`,
       roundNumber: 1,
     });
 
@@ -376,12 +376,12 @@ describe('race Condition: Participant Count Changes Between Rounds', () => {
 
     // Add first participant response
     const round1P0 = createTestAssistantMessage({
-      id: `${threadId}_r1_p0`,
       content: 'P0 response round 1',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: `${threadId}_r1_p0`,
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages([...round0Messages, round1UserMessage, round1P0]);
@@ -413,25 +413,25 @@ describe('race Condition: Participant Count Changes Between Rounds', () => {
     // Round 1: Should expect only 2 participants
     const round1Messages = [
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'P0 response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'P1 response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -445,11 +445,11 @@ describe('race Condition: Participant Count Changes Between Rounds', () => {
 
     // ✅ All participants responded for round 1 (2 out of 2)
     const allResponded = round1Participants.length >= 2;
-    expect(allResponded).toBe(true);
+    expect(allResponded).toBeTruthy();
 
     // Moderator should be triggerable now
     const canCreate = state.tryMarkModeratorCreated(1);
-    expect(canCreate).toBe(true);
+    expect(canCreate).toBeTruthy();
   });
 });
 
@@ -464,7 +464,7 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
   beforeEach(() => {
     store = createChatStore();
     const state = getStoreState(store);
-    state.setThread(createMockThread({ id: threadId, enableWebSearch: false }));
+    state.setThread(createMockThread({ enableWebSearch: false, id: threadId }));
     state.setParticipants(createMockParticipants(2));
     state.setScreenMode(ScreenModes.THREAD);
     state.setShowInitialUI(false);
@@ -481,22 +481,22 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
     state.setMessages(round0Messages);
     state.tryMarkModeratorCreated(0);
 
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
 
     // CONFIG CHANGE: Disable web search
     state.setEnableWebSearch(false);
 
     // Round 1: Should NOT wait for pre-search (disabled)
     const round1UserMessage = createTestUserMessage({
-      id: `${threadId}_r1_user`,
       content: 'Second question',
+      id: `${threadId}_r1_user`,
       roundNumber: 1,
     });
 
     state.setMessages([...round0Messages, round1UserMessage]);
 
     // ❌ RACE: Pre-search tracking for round 0 should not affect round 1
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
 
     // Start streaming immediately (no pre-search wait)
     state.setIsStreaming(true);
@@ -505,8 +505,8 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
     state.setCurrentRoundNumber(1);
 
     // Should be streaming (not waiting)
-    expect(getStoreState(store).isStreaming).toBe(true);
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
   });
 
   it('fAILING: Pre-search enabled mid-conversation should block Round 2', () => {
@@ -518,15 +518,15 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
     state.setMessages(round0Messages);
     state.tryMarkModeratorCreated(0);
 
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeFalsy();
 
     // CONFIG CHANGE: Enable web search
     state.setEnableWebSearch(true);
 
     // Round 1: Should wait for pre-search
     const round1UserMessage = createTestUserMessage({
-      id: `${threadId}_r1_user`,
       content: 'Second question',
+      id: `${threadId}_r1_user`,
       roundNumber: 1,
     });
 
@@ -536,7 +536,7 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
     state.markPreSearchTriggered(1);
 
     // ✅ Pre-search should be tracked for round 1
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
 
     // ❌ RACE: If we check "any pre-search triggered" instead of "round 1 pre-search complete",
     // we might incorrectly wait or not wait
@@ -550,17 +550,17 @@ describe('race Condition: Pre-Search Enabled/Disabled Between Rounds', () => {
     state.markPreSearchTriggered(1);
     state.markPreSearchTriggered(2);
 
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(2)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(2)).toBeTruthy();
 
     // Clear round 1 only
     state.clearPreSearchTracking(1);
 
     // Round 0 and 2 should still be tracked
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
-    expect(state.hasPreSearchBeenTriggered(2)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
+    expect(state.hasPreSearchBeenTriggered(2)).toBeTruthy();
 
     // ✅ Per-round tracking works correctly
   });
@@ -593,13 +593,13 @@ describe('race Condition: Chat Mode Changes Between Rounds', () => {
     state.tryMarkModeratorCreated(0);
 
     // Round 0 moderator created in ANALYZING mode
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
 
     // CONFIG CHANGE: Switch to DEBATING
     state.setSelectedMode(ChatModes.DEBATING);
 
     // Round 0 moderator should still be tracked (historical)
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
 
     // ❌ RACE: Changing mode should not clear moderator tracking for completed rounds
   });
@@ -619,25 +619,25 @@ describe('race Condition: Chat Mode Changes Between Rounds', () => {
     // Round 1: Should use ANALYZING mode
     const round1Messages = [
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'P0 response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'P1 response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -646,7 +646,7 @@ describe('race Condition: Chat Mode Changes Between Rounds', () => {
 
     // Moderator for round 1 should be created with ANALYZING mode
     const canCreate = state.tryMarkModeratorCreated(1);
-    expect(canCreate).toBe(true);
+    expect(canCreate).toBeTruthy();
 
     // Verify selectedMode is ANALYZING
     expect(getStoreState(store).selectedMode).toBe(ChatModes.ANALYZING);
@@ -690,14 +690,14 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
     state.tryMarkModeratorCreated(0);
 
     // ✅ Streaming state should be cleared
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).currentParticipantIndex).toBe(0);
-    expect(getStoreState(store).streamingRoundNumber).toBe(null);
+    expect(getStoreState(store).streamingRoundNumber).toBeNull();
 
     // Round 1 starts
     const round1UserMessage = createTestUserMessage({
-      id: `${threadId}_r1_user`,
       content: 'Second question',
+      id: `${threadId}_r1_user`,
       roundNumber: 1,
     });
 
@@ -705,7 +705,7 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
 
     // ❌ RACE: If streaming state not cleared, round 1 might inherit stale values
     expect(getStoreState(store).currentParticipantIndex).toBe(0);
-    expect(getStoreState(store).streamingRoundNumber).toBe(null);
+    expect(getStoreState(store).streamingRoundNumber).toBeNull();
 
     // Start round 1 streaming
     state.setIsStreaming(true);
@@ -713,7 +713,7 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
     state.setStreamingRoundNumber(1);
     state.setCurrentRoundNumber(1);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).currentParticipantIndex).toBe(0);
     expect(getStoreState(store).streamingRoundNumber).toBe(1);
   });
@@ -726,8 +726,8 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
     state.registerAnimation(1);
 
     expect(getStoreState(store).pendingAnimations.size).toBe(2);
-    expect(getStoreState(store).pendingAnimations.has(0)).toBe(true);
-    expect(getStoreState(store).pendingAnimations.has(1)).toBe(true);
+    expect(getStoreState(store).pendingAnimations.has(0)).toBeTruthy();
+    expect(getStoreState(store).pendingAnimations.has(1)).toBeTruthy();
 
     // Complete round 0
     const round0Messages = createCompleteRound(threadId, 0, 2, { includeModeratorMessage: true });
@@ -752,31 +752,31 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
     state.setMessages(round0Messages);
     state.tryMarkModeratorCreated(0);
 
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
 
     // Round 1
     const round1Messages = [
       ...round0Messages,
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'Response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'Response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -785,8 +785,8 @@ describe('race Condition: Streaming State Cleanup Between Rounds', () => {
     state.tryMarkModeratorCreated(1);
 
     // ✅ Both rounds should be tracked
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
     expect(getStoreState(store).createdModeratorRounds.size).toBe(2);
 
     // ❌ RACE: If tracking uses global flag instead of Set, round 0 might be lost
@@ -821,25 +821,25 @@ describe('race Condition: Immediate Consecutive Rounds', () => {
     // Round 1: Participants complete but moderator MESSAGE not in array yet
     const round1Messages = [
       createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Second question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'Response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'Response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -849,13 +849,13 @@ describe('race Condition: Immediate Consecutive Rounds', () => {
     // Mark moderator created for round 1 (flag set, but message not yet in array)
     state.tryMarkModeratorCreated(1);
 
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
 
     // ❌ RACE: User immediately submits Round 2 question
     // Moderator message for Round 1 hasn't been added to messages array yet
     const round2UserMessage = createTestUserMessage({
-      id: `${threadId}_r2_user`,
       content: 'Third question immediately',
+      id: `${threadId}_r2_user`,
       roundNumber: 2,
     });
 
@@ -869,7 +869,7 @@ describe('race Condition: Immediate Consecutive Rounds', () => {
     expect(round1Moderator).toBeFalsy();
 
     // But tracking says it was created
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
 
     // ❌ This desync can cause UI issues where:
     // - Moderator card tries to render for round 1 but finds no message

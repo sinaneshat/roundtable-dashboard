@@ -38,9 +38,9 @@ let callOrder: NetworkCall[] = [];
 
 function recordCall(type: NetworkCall['type'], roundNumber: number): void {
   callOrder.push({
-    type,
-    timestamp: Date.now(),
     roundNumber,
+    timestamp: Date.now(),
+    type,
   });
 }
 
@@ -94,7 +94,9 @@ async function simulatePatchRequest(
   changes: PatchChanges,
 ): Promise<void> {
   recordCall('PATCH', roundNumber);
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
 
   const currentThread = store.getState().thread;
   if (currentThread) {
@@ -113,7 +115,9 @@ async function simulateChangelogFetch(
   roundNumber: number,
 ): Promise<void> {
   recordCall('changelog', roundNumber);
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
 
   // Clear waiting flags after changelog completes
   store.getState().setIsWaitingForChangelog(false);
@@ -125,7 +129,9 @@ async function simulatePreSearchExecution(
   roundNumber: number,
 ): Promise<void> {
   recordCall('pre-search', roundNumber);
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
 
   store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.COMPLETE);
 }
@@ -135,20 +141,22 @@ async function simulateStreaming(
   roundNumber: number,
 ): Promise<void> {
   recordCall('stream', roundNumber);
-  await new Promise(resolve => setTimeout(resolve, 10));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 10);
+  });
 }
 
 function addPreSearchPlaceholder(store: ChatStoreApi, roundNumber: number): void {
   store.getState().addPreSearch({
-    id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status: MessageStatuses.PENDING,
-    searchData: null,
-    userQuery: `Question for round ${roundNumber}`,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-r${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status: MessageStatuses.PENDING,
+    threadId: 'thread-123',
+    userQuery: `Question for round ${roundNumber}`,
   });
 }
 
@@ -271,20 +279,20 @@ describe('flag State Verification Across Rounds', () => {
     // Before PATCH
     store.getState().setConfigChangeRoundNumber(1);
     expect(store.getState().configChangeRoundNumber).toBe(1);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     // After PATCH
     await simulatePatchRequest(store, 1, {});
     expect(store.getState().configChangeRoundNumber).toBe(1); // Still set
-    expect(store.getState().isWaitingForChangelog).toBe(true);
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     // After changelog
     await simulateChangelogFetch(store, 1);
     expect(store.getState().configChangeRoundNumber).toBeNull();
-    expect(store.getState().isWaitingForChangelog).toBe(false);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should correctly set and clear flags for round 2', async () => {
@@ -296,18 +304,18 @@ describe('flag State Verification Across Rounds', () => {
     await simulateChangelogFetch(store, 1);
 
     // Round 2 - verify flags are cleared from round 1
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
     // Set flags for round 2
     store.getState().setConfigChangeRoundNumber(2);
     expect(store.getState().configChangeRoundNumber).toBe(2);
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     await simulatePatchRequest(store, 2, {});
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     await simulateChangelogFetch(store, 2);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should correctly set and clear flags for round 3', async () => {
@@ -321,21 +329,21 @@ describe('flag State Verification Across Rounds', () => {
     }
 
     // Round 3 - this is where user reports issues
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
     store.getState().setConfigChangeRoundNumber(3);
     expect(store.getState().configChangeRoundNumber).toBe(3);
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     await simulatePatchRequest(store, 3, {});
     expect(store.getState().configChangeRoundNumber).toBe(3); // Still blocking
-    expect(store.getState().isWaitingForChangelog).toBe(true);
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     await simulateChangelogFetch(store, 3);
     expect(store.getState().configChangeRoundNumber).toBeNull();
-    expect(store.getState().isWaitingForChangelog).toBe(false);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 });
 
@@ -360,14 +368,14 @@ describe('pre-Search Blocking Across Rounds', () => {
     await simulatePatchRequest(store, 1, { enableWebSearch: true });
 
     // Pre-search should be blocked (flags still set)
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
     expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.PENDING);
 
     // Changelog completes
     await simulateChangelogFetch(store, 1);
 
     // Now pre-search can execute
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
     await simulatePreSearchExecution(store, 1);
 
     expect(getCallsByRound(1)).toEqual(['PATCH', 'changelog', 'pre-search']);
@@ -389,10 +397,10 @@ describe('pre-Search Blocking Across Rounds', () => {
     addPreSearchPlaceholder(store, 2);
 
     await simulatePatchRequest(store, 2, { enableWebSearch: true });
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     await simulateChangelogFetch(store, 2);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
     await simulatePreSearchExecution(store, 2);
 
@@ -419,12 +427,12 @@ describe('pre-Search Blocking Across Rounds', () => {
     await simulatePatchRequest(store, 3, { enableWebSearch: true });
 
     // CRITICAL: Verify blocking is still enforced on round 3
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(3);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     await simulateChangelogFetch(store, 3);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
     await simulatePreSearchExecution(store, 3);
 
@@ -580,14 +588,14 @@ describe('race Condition Prevention on Round 3+', () => {
     store.getState().setConfigChangeRoundNumber(3);
 
     // Try to stream (should be blocked)
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     // Proper sequence
     await simulatePatchRequest(store, 3, {});
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     await simulateChangelogFetch(store, 3);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should prevent changelog fetch before PATCH on round 3', async () => {
@@ -603,14 +611,14 @@ describe('race Condition Prevention on Round 3+', () => {
     // Round 3: configChangeRoundNumber set but isWaitingForChangelog is false
     // This simulates the state BEFORE PATCH completes
     store.getState().setConfigChangeRoundNumber(3);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
     // Changelog should not be triggered yet (no isWaitingForChangelog)
     // The shouldFetch condition is: isWaitingForChangelog && configChangeRoundNumber !== null
 
     // After PATCH, isWaitingForChangelog becomes true
     await simulatePatchRequest(store, 3, {});
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // NOW changelog can fetch
     await simulateChangelogFetch(store, 3);
@@ -635,14 +643,14 @@ describe('race Condition Prevention on Round 3+', () => {
     await simulatePatchRequest(store, 3, { enableWebSearch: true });
 
     // Pre-search should be blocked
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
     expect(store.getState().preSearches.find(ps => ps.roundNumber === 3)?.status).toBe(MessageStatuses.PENDING);
 
     // Complete changelog
     await simulateChangelogFetch(store, 3);
 
     // Now pre-search can proceed
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should handle rapid round transitions (3 → 4 → 5)', async () => {
@@ -662,17 +670,17 @@ describe('race Condition Prevention on Round 3+', () => {
       store.getState().setConfigChangeRoundNumber(round);
 
       // Verify blocking
-      expect(isBlockedByChangelogFlags(store)).toBe(true);
+      expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
       await simulatePatchRequest(store, round, { mode: ChatModes.DEBATING });
 
       // Still blocking
-      expect(isBlockedByChangelogFlags(store)).toBe(true);
+      expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
       await simulateChangelogFetch(store, round);
 
       // Unblocked
-      expect(isBlockedByChangelogFlags(store)).toBe(false);
+      expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
       await simulateStreaming(store, round);
 
@@ -699,21 +707,21 @@ describe('inconsistent State Detection', () => {
     // configChangeRoundNumber is null
 
     // This is the inconsistent state the use-changelog-sync hook should fix
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
 
     // In real code, use-changelog-sync detects this and clears isWaitingForChangelog
     // The shouldFetch condition would be false (need both flags)
     const shouldFetch = store.getState().isWaitingForChangelog
       && store.getState().configChangeRoundNumber !== null;
-    expect(shouldFetch).toBe(false);
+    expect(shouldFetch).toBeFalsy();
 
     // But isBlockedByChangelogFlags would still return true (blocking streaming)
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     // The fix in use-changelog-sync clears this
     store.getState().setIsWaitingForChangelog(false);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should detect configChangeRoundNumber set but PATCH never completes', async () => {
@@ -723,13 +731,13 @@ describe('inconsistent State Detection', () => {
     store.getState().setConfigChangeRoundNumber(3);
 
     // State is blocked
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
-    expect(store.getState().isWaitingForChangelog).toBe(false); // PATCH didn't set this
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
+    expect(store.getState().isWaitingForChangelog).toBeFalsy(); // PATCH didn't set this
 
     // After timeout (30s in real code), should be cleared
     // This simulates the timeout behavior
     store.getState().setConfigChangeRoundNumber(null);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 
   it('should handle stale configChangeRoundNumber from previous round', async () => {
@@ -742,20 +750,20 @@ describe('inconsistent State Detection', () => {
 
     // Round 2 starts with stale configChangeRoundNumber=1
     expect(store.getState().configChangeRoundNumber).toBe(1);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // This is a bug state - round 2 is blocked by round 1's flags
-    expect(isBlockedByChangelogFlags(store)).toBe(true);
+    expect(isBlockedByChangelogFlags(store)).toBeTruthy();
 
     // Complete changelog for round 1 to unblock
     await simulateChangelogFetch(store, 1);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
 
     // Now round 2 can proceed
     store.getState().setConfigChangeRoundNumber(2);
     await simulatePatchRequest(store, 2, {});
     await simulateChangelogFetch(store, 2);
-    expect(isBlockedByChangelogFlags(store)).toBe(false);
+    expect(isBlockedByChangelogFlags(store)).toBeFalsy();
   });
 });
 
@@ -840,11 +848,11 @@ describe('full 3-Round Scenarios', () => {
     expect(store.getState().configChangeRoundNumber).toBe(1);
 
     await simulatePatchRequest(store, 1, {});
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     await simulateChangelogFetch(store, 1);
     expect(store.getState().configChangeRoundNumber).toBeNull();
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
     // Round 2
     store.getState().setConfigChangeRoundNumber(2);
@@ -865,6 +873,6 @@ describe('full 3-Round Scenarios', () => {
 
     await simulateChangelogFetch(store, 3);
     expect(store.getState().configChangeRoundNumber).toBeNull();
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
   });
 });

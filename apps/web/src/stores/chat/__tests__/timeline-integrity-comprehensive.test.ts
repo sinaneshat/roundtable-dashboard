@@ -70,26 +70,26 @@ type TimelineElement = {
 
 function createMockThread(id: string, enableWebSearch = false): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id,
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: 'analyzing',
     status: 'active',
-    enableWebSearch,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
   } satisfies ChatThread;
 }
 
 function createMockParticipants(count: number) {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: `model-${i}`,
-    role: `Role ${i}`,
-    priority: i,
-    isEnabled: true,
     createdAt: new Date(),
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `model-${i}`,
+    priority: i,
+    role: `Role ${i}`,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   }));
 }
@@ -100,17 +100,17 @@ function createModeratorMessage(
   text: string,
 ): UIMessage {
   const metadata: DbModeratorMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    isModerator: true,
-    roundNumber,
-    model: 'moderator-model',
     hasError: false,
+    isModerator: true,
+    model: 'moderator-model',
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
   };
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -147,9 +147,9 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
 
     if (userMsg) {
       timeline.push({
-        type: TimelineElementTypes.USER_MESSAGE,
         roundNumber,
         timestamp: timestamp++,
+        type: TimelineElementTypes.USER_MESSAGE,
       });
     }
 
@@ -157,9 +157,9 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     const preSearch = state.preSearches.find(ps => ps.roundNumber === roundNumber);
     if (preSearch) {
       timeline.push({
-        type: TimelineElementTypes.PRE_SEARCH,
         roundNumber,
         timestamp: timestamp++,
+        type: TimelineElementTypes.PRE_SEARCH,
       });
     }
 
@@ -186,10 +186,10 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     for (const msg of participantMsgs) {
       if (hasAssistantMetadata(msg)) {
         timeline.push({
-          type: TimelineElementTypes.PARTICIPANT_MESSAGE,
-          roundNumber,
           participantIndex: msg.metadata.participantIndex,
+          roundNumber,
           timestamp: timestamp++,
+          type: TimelineElementTypes.PARTICIPANT_MESSAGE,
         });
       }
     }
@@ -201,9 +201,9 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     });
     if (moderatorMsg) {
       timeline.push({
-        type: TimelineElementTypes.MODERATOR,
         roundNumber,
         timestamp: timestamp++,
+        type: TimelineElementTypes.MODERATOR,
       });
     }
   }
@@ -236,13 +236,15 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
 
     // Build expected order
     expectedOrder.push(TimelineElementTypes.USER_MESSAGE);
-    if (hasPreSearch)
+    if (hasPreSearch) {
       expectedOrder.push(TimelineElementTypes.PRE_SEARCH);
+    }
     for (let i = 0; i < participantCount; i++) {
       expectedOrder.push(TimelineElementTypes.PARTICIPANT_MESSAGE);
     }
-    if (hasModerator)
+    if (hasModerator) {
       expectedOrder.push(TimelineElementTypes.MODERATOR);
+    }
 
     // Validate
     const actualOrder = sortedElements.map(e => e.type);
@@ -266,7 +268,7 @@ function validateTimelineOrder(timeline: TimelineElement[]): {
     }
   }
 
-  return { isValid: errors.length === 0, errors };
+  return { errors, isValid: errors.length === 0 };
 }
 
 // ============================================================================
@@ -282,42 +284,42 @@ describe('multi-Round Timeline Integrity', () => {
     store.getState().setParticipants(participants);
 
     // Round 0
-    const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
+    const r0User = createTestUserMessage({ content: 'Q1', id: 'user-r0', roundNumber: 0 });
     const r0P0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'A1',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     const r0P1 = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'A2',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     const r0Moderator = createModeratorMessage('thread-123', 0, 'Round 0 moderator');
 
     // Round 1
-    const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
+    const r1User = createTestUserMessage({ content: 'Q2', id: 'user-r1', roundNumber: 1 });
     const r1P0 = createTestAssistantMessage({
-      id: 'p0-r1',
       content: 'B1',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r1',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
     const r1P1 = createTestAssistantMessage({
-      id: 'p1-r1',
       content: 'B2',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r1',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
     const r1Moderator = createModeratorMessage('thread-123', 1, 'Round 1 moderator');
 
@@ -326,20 +328,20 @@ describe('multi-Round Timeline Integrity', () => {
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
     expect(timeline).toHaveLength(8); // 2 rounds × (1 user + 2 participants + 1 moderator)
 
     // Round 0
-    expect(timeline[0]).toMatchObject({ type: TimelineElementTypes.USER_MESSAGE, roundNumber: 0 });
-    expect(timeline[1]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 0, participantIndex: 0 });
-    expect(timeline[2]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 0, participantIndex: 1 });
-    expect(timeline[3]).toMatchObject({ type: TimelineElementTypes.MODERATOR, roundNumber: 0 });
+    expect(timeline[0]).toMatchObject({ roundNumber: 0, type: TimelineElementTypes.USER_MESSAGE });
+    expect(timeline[1]).toMatchObject({ participantIndex: 0, roundNumber: 0, type: TimelineElementTypes.PARTICIPANT_MESSAGE });
+    expect(timeline[2]).toMatchObject({ participantIndex: 1, roundNumber: 0, type: TimelineElementTypes.PARTICIPANT_MESSAGE });
+    expect(timeline[3]).toMatchObject({ roundNumber: 0, type: TimelineElementTypes.MODERATOR });
 
     // Round 1
-    expect(timeline[4]).toMatchObject({ type: TimelineElementTypes.USER_MESSAGE, roundNumber: 1 });
-    expect(timeline[5]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 1, participantIndex: 0 });
-    expect(timeline[6]).toMatchObject({ type: TimelineElementTypes.PARTICIPANT_MESSAGE, roundNumber: 1, participantIndex: 1 });
-    expect(timeline[7]).toMatchObject({ type: TimelineElementTypes.MODERATOR, roundNumber: 1 });
+    expect(timeline[4]).toMatchObject({ roundNumber: 1, type: TimelineElementTypes.USER_MESSAGE });
+    expect(timeline[5]).toMatchObject({ participantIndex: 0, roundNumber: 1, type: TimelineElementTypes.PARTICIPANT_MESSAGE });
+    expect(timeline[6]).toMatchObject({ participantIndex: 1, roundNumber: 1, type: TimelineElementTypes.PARTICIPANT_MESSAGE });
+    expect(timeline[7]).toMatchObject({ roundNumber: 1, type: TimelineElementTypes.MODERATOR });
   });
 
   it('should handle mixed web search enabled/disabled across rounds', () => {
@@ -350,27 +352,27 @@ describe('multi-Round Timeline Integrity', () => {
     store.getState().setParticipants(participants);
 
     // Round 0: with web search
-    const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
+    const r0User = createTestUserMessage({ content: 'Q1', id: 'user-r0', roundNumber: 0 });
     store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
     const r0P0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'A1',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     // Round 1: without web search (user disabled it)
-    const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
+    const r1User = createTestUserMessage({ content: 'Q2', id: 'user-r1', roundNumber: 1 });
     // No pre-search for round 1
     const r1P0 = createTestAssistantMessage({
-      id: 'p0-r1',
       content: 'B1',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r1',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     store.getState().setMessages([r0User, r0P0, r1User, r1P0]);
@@ -379,15 +381,15 @@ describe('multi-Round Timeline Integrity', () => {
 
     // Round 0 should have pre-search
     const round0 = timeline.filter(e => e.roundNumber === 0);
-    expect(round0.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBe(true);
+    expect(round0.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBeTruthy();
 
     // Round 1 should NOT have pre-search
     const round1 = timeline.filter(e => e.roundNumber === 1);
-    expect(round1.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBe(false);
+    expect(round1.some(e => e.type === TimelineElementTypes.PRE_SEARCH)).toBeFalsy();
 
     // Both rounds should be valid
     const validation = validateTimelineOrder(timeline);
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
   });
 });
 
@@ -405,16 +407,16 @@ describe('participant Sequential Execution', () => {
 
     // P0 streaming (not complete)
     const p0Streaming = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'Streaming...',
-      roundNumber: 0,
+      finishReason: FinishReasons.UNKNOWN, // Still streaming
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN, // Still streaming
+      roundNumber: 0,
     });
 
     store.getState().setMessages([
-      createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 }),
       p0Streaming,
     ]);
 
@@ -422,7 +424,7 @@ describe('participant Sequential Execution', () => {
     const currentIdx = store.getState().currentParticipantIndex;
     const canStartP1 = currentIdx === 1;
 
-    expect(canStartP1).toBe(false);
+    expect(canStartP1).toBeFalsy();
     expect(currentIdx).toBe(0);
   });
 
@@ -436,16 +438,16 @@ describe('participant Sequential Execution', () => {
 
     // P0 completes
     const p0Complete = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'Complete',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([
-      createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 }),
       p0Complete,
     ]);
 
@@ -456,16 +458,16 @@ describe('participant Sequential Execution', () => {
 
     // P1 completes
     const p1Complete = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'Complete',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([
-      createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 }),
       p0Complete,
       p1Complete,
     ]);
@@ -483,18 +485,18 @@ describe('participant Sequential Execution', () => {
     store.getState().setThread(createMockThread('thread-123', false));
     store.getState().setParticipants(createMockParticipants(participantCount));
 
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
     const messages = [userMsg];
 
     // Add completed participants one by one
     for (let i = 0; i < participantCount; i++) {
       const pMsg = createTestAssistantMessage({
-        id: `p${i}-r0`,
         content: `Response ${i}`,
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `p${i}-r0`,
         participantId: `p${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
       messages.push(pMsg);
 
@@ -530,64 +532,64 @@ describe('resumption Timeline Integrity', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     // Complete round 0
-    const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
+    const r0User = createTestUserMessage({ content: 'Q1', id: 'user-r0', roundNumber: 0 });
     store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
     const r0P0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'A0',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     const r0P1 = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'A1',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1]);
 
     // Round 1 incomplete (interrupted by refresh)
-    const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
+    const r1User = createTestUserMessage({ content: 'Q2', id: 'user-r1', roundNumber: 1 });
     store.getState().addPreSearch(createMockStoredPreSearch(1, MessageStatuses.COMPLETE));
     const r1P0 = createTestAssistantMessage({
-      id: 'p0-r1',
       content: 'Incomplete...',
-      roundNumber: 1,
+      finishReason: FinishReasons.UNKNOWN, // Incomplete
+      id: 'p0-r1',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN, // Incomplete
+      roundNumber: 1,
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1, r1User, r1P0]);
 
     // Set up resumption state
     store.getState().setStreamResumptionState({
-      threadId: 'thread-123',
-      roundNumber: 1,
-      participantIndex: 0,
-      state: StreamStatuses.ACTIVE,
       createdAt: new Date(),
+      participantIndex: 0,
+      roundNumber: 1,
+      state: StreamStatuses.ACTIVE,
+      threadId: 'thread-123',
     });
 
     // Verify resumption is needed
-    expect(store.getState().needsStreamResumption()).toBe(true);
+    expect(store.getState().needsStreamResumption()).toBeTruthy();
 
     // After resumption completes, P1 should be next
     store.getState().setNextParticipantToTrigger(1);
 
     // Complete P0 R1
     const r1P0Complete = createTestAssistantMessage({
-      id: 'p0-r1',
       content: 'Complete after resume',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r1',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1, r1User, r1P0Complete]);
@@ -596,7 +598,7 @@ describe('resumption Timeline Integrity', () => {
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
   });
 
   it('should resume from pre-search if interrupted during search', () => {
@@ -608,14 +610,14 @@ describe('resumption Timeline Integrity', () => {
     // Pre-search interrupted (STREAMING state)
     store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.STREAMING));
 
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
     store.getState().setMessages([userMsg]);
 
     // Check pre-search needs resumption
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
     const needsResume = preSearch?.status === MessageStatuses.STREAMING;
 
-    expect(needsResume).toBe(true);
+    expect(needsResume).toBeTruthy();
 
     // After pre-search resumes and completes
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
@@ -624,7 +626,7 @@ describe('resumption Timeline Integrity', () => {
     const updatedPreSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
     const canStartParticipants = updatedPreSearch?.status === MessageStatuses.COMPLETE;
 
-    expect(canStartParticipants).toBe(true);
+    expect(canStartParticipants).toBeTruthy();
   });
 
   it('should resume from correct participant if interrupted mid-round', () => {
@@ -633,49 +635,49 @@ describe('resumption Timeline Integrity', () => {
     store.getState().setThread(createMockThread('thread-123', false));
     store.getState().setParticipants(createMockParticipants(3));
 
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
 
     // P0 complete, P1 incomplete, P2 not started
     const p0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'Complete',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     const p1Incomplete = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'Streaming...',
-      roundNumber: 0,
+      finishReason: FinishReasons.UNKNOWN,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.UNKNOWN,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0, p1Incomplete]);
 
     // Set resumption state for P1
     store.getState().setStreamResumptionState({
-      threadId: 'thread-123',
-      roundNumber: 0,
-      participantIndex: 1,
-      state: StreamStatuses.ACTIVE,
       createdAt: new Date(),
+      participantIndex: 1,
+      roundNumber: 0,
+      state: StreamStatuses.ACTIVE,
+      threadId: 'thread-123',
     });
 
     // Should resume from P1 (index 1)
     expect(store.getState().streamResumptionState?.participantIndex).toBe(1);
-    expect(store.getState().needsStreamResumption()).toBe(true);
+    expect(store.getState().needsStreamResumption()).toBeTruthy();
 
     // After P1 completes, P2 should be next
     const p1Complete = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'Complete',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0, p1Complete]);
@@ -697,15 +699,15 @@ describe('timeline Race Condition Prevention', () => {
 
     // First trigger
     const firstResult = store.getState().tryMarkPreSearchTriggered(0);
-    expect(firstResult).toBe(true);
+    expect(firstResult).toBeTruthy();
 
     // Duplicate trigger (race condition)
     const secondResult = store.getState().tryMarkPreSearchTriggered(0);
-    expect(secondResult).toBe(false);
+    expect(secondResult).toBeFalsy();
 
     // Different round should work
     const thirdResult = store.getState().tryMarkPreSearchTriggered(1);
-    expect(thirdResult).toBe(true);
+    expect(thirdResult).toBeTruthy();
   });
 
   it('should handle concurrent message submissions', () => {
@@ -719,12 +721,12 @@ describe('timeline Race Condition Prevention', () => {
 
     // Second concurrent submission should be blocked
     const canSendSecond = !store.getState().hasSentPendingMessage;
-    expect(canSendSecond).toBe(false);
+    expect(canSendSecond).toBeFalsy();
 
     // After streaming completes, can send again
     store.getState().completeStreaming();
     const canSendAfterComplete = !store.getState().hasSentPendingMessage;
-    expect(canSendAfterComplete).toBe(true);
+    expect(canSendAfterComplete).toBeTruthy();
   });
 
   it('should wait for animations before moderator', async () => {
@@ -761,19 +763,19 @@ describe('moderator Trigger Timing', () => {
     store.getState().setThread(createMockThread('thread-123', false));
     store.getState().setParticipants(createMockParticipants(participantCount));
 
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
 
     // Add messages incrementally
     const allMessages = [userMsg];
 
     for (let i = 0; i < participantCount; i++) {
       const pMsg = createTestAssistantMessage({
-        id: `p${i}-r0`,
         content: `Response ${i}`,
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `p${i}-r0`,
         participantId: `p${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
       allMessages.push(pMsg);
       store.getState().setMessages([...allMessages]);
@@ -835,7 +837,7 @@ describe('web Search Toggle Between Rounds', () => {
 
     const webSearchToggled = round0Config.enableWebSearch !== round1Config.enableWebSearch;
 
-    expect(webSearchToggled).toBe(true);
+    expect(webSearchToggled).toBeTruthy();
   });
 });
 
@@ -851,22 +853,22 @@ describe('streaming State Transitions', () => {
     store.getState().setParticipants(createMockParticipants(1));
 
     // Initial state
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // Prepare for streaming
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Start streaming
     store.getState().setIsStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().isStreaming).toBe(true);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeTruthy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // Complete streaming
     store.getState().completeStreaming();
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
     expect(store.getState().currentParticipantIndex).toBe(0);
   });
 
@@ -881,7 +883,7 @@ describe('streaming State Transitions', () => {
     // Navigate to different thread
     store.getState().resetForThreadNavigation();
 
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
     expect(store.getState().currentParticipantIndex).toBe(0);
     expect(store.getState().streamingRoundNumber).toBeNull();
   });
@@ -907,17 +909,17 @@ describe('error Handling in Timeline', () => {
       = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-    expect(shouldBlockParticipants).toBe(false);
+    expect(shouldBlockParticipants).toBeFalsy();
 
     // Add participant messages
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
     const p0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'Response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0]);
@@ -933,27 +935,27 @@ describe('error Handling in Timeline', () => {
     store.getState().setThread(createMockThread('thread-123', false));
     store.getState().setParticipants(createMockParticipants(2));
 
-    const userMsg = createTestUserMessage({ id: 'user-r0', content: 'Q', roundNumber: 0 });
+    const userMsg = createTestUserMessage({ content: 'Q', id: 'user-r0', roundNumber: 0 });
 
     // P0 errors
     const p0Error = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'Error occurred',
-      roundNumber: 0,
+      finishReason: FinishReasons.ERROR,
+      hasError: true,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      hasError: true,
-      finishReason: FinishReasons.ERROR,
+      roundNumber: 0,
     });
 
     // P1 should still proceed
     const p1 = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'Response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0Error, p1]);
@@ -963,7 +965,7 @@ describe('error Handling in Timeline', () => {
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
   });
 });
 
@@ -987,8 +989,8 @@ describe('regeneration Timeline Integrity', () => {
     store.getState().startRegeneration(0);
 
     // Round 0 tracking should be cleared
-    expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-    expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+    expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
+    expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
   });
 
   it('should preserve other rounds during regeneration', () => {
@@ -1005,7 +1007,7 @@ describe('regeneration Timeline Integrity', () => {
     store.getState().startRegeneration(0);
 
     // Round 1 should be preserved
-    expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
   });
 });
 
@@ -1026,8 +1028,8 @@ describe('complete Conversation Flow', () => {
     for (let round = 0; round < 3; round++) {
       // User message
       const userMsg = createTestUserMessage({
-        id: `user-r${round}`,
         content: `Question ${round}`,
+        id: `user-r${round}`,
         roundNumber: round,
       });
       allMessages.push(userMsg);
@@ -1038,12 +1040,12 @@ describe('complete Conversation Flow', () => {
       // Participants
       for (let p = 0; p < participants.length; p++) {
         const pMsg = createTestAssistantMessage({
-          id: `p${p}-r${round}`,
           content: `P${p} R${round} response`,
-          roundNumber: round,
+          finishReason: FinishReasons.STOP,
+          id: `p${p}-r${round}`,
           participantId: `participant-${p}`,
           participantIndex: p,
-          finishReason: FinishReasons.STOP,
+          roundNumber: round,
         });
         allMessages.push(pMsg);
       }
@@ -1059,7 +1061,7 @@ describe('complete Conversation Flow', () => {
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
     expect(validation.errors).toHaveLength(0);
 
     // Verify element counts
@@ -1077,22 +1079,22 @@ describe('complete Conversation Flow', () => {
     // Round 0: 2 participants
     store.getState().setParticipants(createMockParticipants(2));
 
-    const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
+    const r0User = createTestUserMessage({ content: 'Q1', id: 'user-r0', roundNumber: 0 });
     const r0P0 = createTestAssistantMessage({
-      id: 'p0-r0',
       content: 'A0',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     const r0P1 = createTestAssistantMessage({
-      id: 'p1-r0',
       content: 'A1',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r0',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1]);
@@ -1100,30 +1102,30 @@ describe('complete Conversation Flow', () => {
     // Round 1: 3 participants (one added)
     store.getState().setParticipants(createMockParticipants(3));
 
-    const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
+    const r1User = createTestUserMessage({ content: 'Q2', id: 'user-r1', roundNumber: 1 });
     const r1P0 = createTestAssistantMessage({
-      id: 'p0-r1',
       content: 'B0',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p0-r1',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
     const r1P1 = createTestAssistantMessage({
-      id: 'p1-r1',
       content: 'B1',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p1-r1',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
     const r1P2 = createTestAssistantMessage({
-      id: 'p2-r1',
       content: 'B2',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'p2-r1',
       participantId: 'p2',
       participantIndex: 2,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     store.getState().setMessages([r0User, r0P0, r0P1, r1User, r1P0, r1P1, r1P2]);
@@ -1131,7 +1133,7 @@ describe('complete Conversation Flow', () => {
     const timeline = buildTimelineFromStore(store);
     const validation = validateTimelineOrder(timeline);
 
-    expect(validation.isValid).toBe(true);
+    expect(validation.isValid).toBeTruthy();
 
     // Round 0 has 2 participant messages
     const round0Participants = timeline.filter(

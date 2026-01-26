@@ -37,34 +37,34 @@ import { createChatStore } from '../store';
 
 function createMockParticipant(index: number, modelId: string) {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId,
-    role: `Role ${index}`,
-    priority: index,
-    isEnabled: true,
     createdAt: new Date(),
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: `Role ${index}`,
+    threadId: 'thread-123',
   };
 }
 
 function createMockThread(enableWebSearch = false) {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: 'debating' as const,
     status: 'active' as const,
-    enableWebSearch,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
   };
 }
 
 function createCompleteRoundMessages(roundNumber: number, participantCount: number): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -72,12 +72,12 @@ function createCompleteRoundMessages(roundNumber: number, participantCount: numb
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Response R${roundNumber}P${i}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -156,13 +156,13 @@ describe('non-Initial Round First Participant Duplication', () => {
         ...messagesBeforeOptimistic,
         {
           id: `optimistic-user-${Date.now()}-r1`,
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 1 question' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: 1,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Round 1 question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -202,11 +202,11 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...currentMsgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Streaming...',
-          roundNumber: 1,
+          id: 'thread-123_r1_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ]);
 
@@ -229,8 +229,8 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Simulate server returning confirmed user message (same content, different ID)
       const currentMsgs = store.getState().messages;
       const serverUserMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Round 1 question',
+        id: 'thread-123_r1_user',
         roundNumber: 1,
       });
 
@@ -264,7 +264,7 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setIsStreaming(true);
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Start round 1
       store.getState().setStreamingRoundNumber(1);
@@ -294,20 +294,20 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...r1Msgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Response R1P0',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r1_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r1_p1',
           content: 'Response R1P1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r1_p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ]);
       store.getState().completeStreaming();
@@ -334,13 +334,13 @@ describe('non-Initial Round First Participant Duplication', () => {
         ...currentMsgs,
         {
           id: `optimistic-user-early-r1`,
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Early optimistic' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: 1,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Early optimistic', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(1);
@@ -401,19 +401,20 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Simulate first participant starting to stream
       const currentMsgs = store.getState().messages;
       const firstParticipantMsg = createTestAssistantMessage({
-        id: 'thread-123_r1_p0',
         content: 'First response...',
-        roundNumber: 1,
+        id: 'thread-123_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
       store.getState().setMessages([...currentMsgs, firstParticipantMsg]);
 
       // CRITICAL ASSERTION: Count assistant messages for participant 0 in round 1
       const messages = store.getState().messages;
       const round1Participant0Messages = messages.filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         const roundNum = getRoundNumber(m.metadata);
         const pIdx = m.metadata && typeof m.metadata === 'object' && 'participantIndex' in m.metadata
           ? m.metadata.participantIndex
@@ -456,11 +457,11 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...currentMsgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Response with reduced config...',
-          roundNumber: 1,
+          id: 'thread-123_r1_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ]);
 
@@ -499,19 +500,20 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...currentMsgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Response after web search...',
-          roundNumber: 1,
+          id: 'thread-123_r1_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ]);
 
       // Verify no duplicates
       const messages = store.getState().messages;
       const round1Participant0Count = messages.filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         const roundNum = getRoundNumber(m.metadata);
         const pIdx = m.metadata && typeof m.metadata === 'object' && 'participantIndex' in m.metadata
           ? m.metadata.participantIndex
@@ -547,12 +549,12 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...currentMsgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Gemini response',
-          roundNumber: 1,
+          id: 'thread-123_r1_p0',
+          modelId: 'gemini-pro',
           participantId: 'participant-0',
           participantIndex: 0,
-          modelId: 'gemini-pro',
+          roundNumber: 1,
         }),
       ]);
 
@@ -569,7 +571,7 @@ describe('non-Initial Round First Participant Duplication', () => {
         return false;
       });
 
-      expect(hasOldModelIds).toBe(false);
+      expect(hasOldModelIds).toBeFalsy();
     });
   });
 
@@ -589,11 +591,11 @@ describe('non-Initial Round First Participant Duplication', () => {
 
       // First chunk
       const msg1 = createTestAssistantMessage({
-        id: 'thread-123_r1_p0',
         content: 'First chunk...',
-        roundNumber: 1,
+        id: 'thread-123_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
       store.getState().setMessages([...baseMessages, msg1]);
 
@@ -608,7 +610,7 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Second chunk - UPDATE same message
       const msg2 = {
         ...msg1,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'First chunk... second chunk...' }],
+        parts: [{ text: 'First chunk... second chunk...', type: MessagePartTypes.TEXT }],
       };
       store.getState().setMessages([...baseMessages, msg2]);
 
@@ -623,7 +625,7 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Third chunk
       const msg3 = {
         ...msg1,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'First chunk... second chunk... third chunk' }],
+        parts: [{ text: 'First chunk... second chunk... third chunk', type: MessagePartTypes.TEXT }],
       };
       store.getState().setMessages([...baseMessages, msg3]);
 
@@ -649,18 +651,18 @@ describe('non-Initial Round First Participant Duplication', () => {
 
       // Simulate a race condition where same message ID appears twice
       const duplicateMsg1 = createTestAssistantMessage({
-        id: 'thread-123_r1_p0',
         content: 'Content A',
-        roundNumber: 1,
+        id: 'thread-123_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
       const duplicateMsg2 = createTestAssistantMessage({
-        id: 'thread-123_r1_p0', // SAME ID
         content: 'Content B',
-        roundNumber: 1,
+        id: 'thread-123_r1_p0', // SAME ID
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       // Try to add both (simulating race condition)
@@ -706,20 +708,20 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Simulate: Store has message with ID "store_r1_p0"
       const currentMsgs = store.getState().messages;
       const storeMsg = createTestAssistantMessage({
-        id: 'store_r1_p0', // Store-generated ID
         content: 'Response from store placeholder',
-        roundNumber: 1,
+        id: 'store_r1_p0', // Store-generated ID
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       // AND: Chat hook has message with different ID but same round+participant
       const hookMsg = createTestAssistantMessage({
-        id: 'server_r1_p0', // Server-generated ID
         content: 'Response from server',
-        roundNumber: 1,
+        id: 'server_r1_p0', // Server-generated ID
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       // Simulate both being in the message array (what could happen before dedup)
@@ -728,8 +730,9 @@ describe('non-Initial Round First Participant Duplication', () => {
       // Count messages for round 1, participant 0
       const messages = store.getState().messages;
       const round1P0Messages = messages.filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         const roundNum = getRoundNumber(m.metadata);
         const pIdx = m.metadata && typeof m.metadata === 'object' && 'participantIndex' in m.metadata
           ? m.metadata.participantIndex
@@ -770,8 +773,9 @@ describe('non-Initial Round First Participant Duplication', () => {
           if (seen.has(key)) {
             // Mark earlier one for removal (keep latest)
             const existingIdx = seen.get(key);
-            if (existingIdx === undefined)
+            if (existingIdx === undefined) {
               throw new Error('expected existing index in seen map');
+            }
             toRemove.add(existingIdx);
             seen.set(key, i);
           } else {
@@ -783,9 +787,9 @@ describe('non-Initial Round First Participant Duplication', () => {
       }
 
       const messages: TestMsg[] = [
-        { id: 'store_r1_p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantIndex: 0 } },
-        { id: 'server_r1_p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantIndex: 0 } }, // Duplicate
-        { id: 'store_r1_p1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantIndex: 1 } },
+        { id: 'store_r1_p0', metadata: { participantIndex: 0, roundNumber: 1 }, role: MessageRoles.ASSISTANT },
+        { id: 'server_r1_p0', metadata: { participantIndex: 0, roundNumber: 1 }, role: MessageRoles.ASSISTANT }, // Duplicate
+        { id: 'store_r1_p1', metadata: { participantIndex: 1, roundNumber: 1 }, role: MessageRoles.ASSISTANT },
       ];
 
       const deduplicated = deduplicateByRoundParticipant(messages);
@@ -814,11 +818,11 @@ describe('non-Initial Round First Participant Duplication', () => {
       store.getState().setMessages([
         ...r1Msgs,
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Streaming...',
-          roundNumber: 1,
+          id: 'thread-123_r1_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ]);
 

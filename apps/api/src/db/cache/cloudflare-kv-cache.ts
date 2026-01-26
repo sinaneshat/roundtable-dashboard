@@ -117,8 +117,8 @@ export class CloudflareKVCache extends Cache {
 
       if (keysToInvalidate.size > 0) {
         await Promise.all(
-          Array.from(keysToInvalidate).map(key =>
-            this.kv.delete(this.getPrefixedKey(key)),
+          Array.from(keysToInvalidate).map(async key =>
+            await this.kv.delete(this.getPrefixedKey(key)),
           ),
         );
       }
@@ -132,8 +132,8 @@ export class CloudflareKVCache extends Cache {
     tags?: string | string[];
   }): Promise<void> {
     await this.onMutate({
-      tags: params.tags ?? [],
       tables: params.tables ?? [],
+      tags: params.tags ?? [],
     });
   }
 
@@ -147,8 +147,8 @@ export class CloudflareKVCache extends Cache {
 
       if (allKeys.size > 0) {
         await Promise.all(
-          Array.from(allKeys).map(key =>
-            this.kv.delete(this.getPrefixedKey(key)),
+          Array.from(allKeys).map(async key =>
+            await this.kv.delete(this.getPrefixedKey(key)),
           ),
         );
       }
@@ -164,20 +164,25 @@ export class CloudflareKVCache extends Cache {
   }
 
   private calculateTtl(config?: CacheConfig): number {
-    if (config?.ex)
+    if (config?.ex) {
       return config.ex;
-    if (config?.px)
+    }
+    if (config?.px) {
       return Math.floor(config.px / 1000);
-    if (config?.exat)
+    }
+    if (config?.exat) {
       return Math.max(0, config.exat - Math.floor(Date.now() / 1000));
-    if (config?.pxat)
+    }
+    if (config?.pxat) {
       return Math.max(0, Math.floor((config.pxat - Date.now()) / 1000));
+    }
     return this.defaultTtl;
   }
 
   private normalizeToArray<T>(value: T | T[] | undefined | null): T[] {
-    if (!value)
+    if (!value) {
       return [];
+    }
     return Array.isArray(value) ? value : [value];
   }
 

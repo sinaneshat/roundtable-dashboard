@@ -30,9 +30,9 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
     }
 
     const timings = {
+      appAgeMs: Date.now() - appStartTime,
       appModuleLoadMs: appModuleLoadTime,
       handlerExecutionMs: Date.now() - handlerStart,
-      appAgeMs: Date.now() - appStartTime,
     };
 
     // Return with timing info in response headers
@@ -92,15 +92,15 @@ async function checkDatabase() {
     await db.run('SELECT 1');
 
     return {
-      status: HealthStatuses.HEALTHY,
-      message: 'Database is responsive',
       duration: Date.now() - startTime,
+      message: 'Database is responsive',
+      status: HealthStatuses.HEALTHY,
     };
   } catch (error) {
     return {
-      status: HealthStatuses.UNHEALTHY,
-      message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       duration: Date.now() - startTime,
+      message: `Database connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: HealthStatuses.UNHEALTHY,
     };
   }
 }
@@ -113,27 +113,29 @@ function checkEnvironment(c: HealthCheckContext) {
     const missingVars: string[] = [];
 
     // Check for required environment variables
-    if (!c.env.BETTER_AUTH_SECRET)
+    if (!c.env.BETTER_AUTH_SECRET) {
       missingVars.push('BETTER_AUTH_SECRET');
-    if (!c.env.WEBAPP_ENV)
+    }
+    if (!c.env.WEBAPP_ENV) {
       missingVars.push('WEBAPP_ENV');
+    }
 
     if (missingVars.length > 0) {
       return {
-        status: HealthStatuses.DEGRADED,
+        details: { detailType: 'health_check', missingCount: missingVars.length, missingVars: missingVars.join(', ') },
         message: `Missing environment variables: ${missingVars.join(', ')}`,
-        details: { detailType: 'health_check', missingVars: missingVars.join(', '), missingCount: missingVars.length },
+        status: HealthStatuses.DEGRADED,
       };
     }
 
     return {
-      status: HealthStatuses.HEALTHY,
       message: 'All required environment variables are present',
+      status: HealthStatuses.HEALTHY,
     };
   } catch (error) {
     return {
-      status: HealthStatuses.UNHEALTHY,
       message: `Environment check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      status: HealthStatuses.UNHEALTHY,
     };
   }
 }

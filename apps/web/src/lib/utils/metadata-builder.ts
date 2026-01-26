@@ -66,7 +66,7 @@ export type ParticipantMetadataParams = {
   citations?: DbCitation[];
 
   // Available sources (files/context available to AI, shown even without inline citations)
-  availableSources?: Array<{
+  availableSources?: {
     id: string;
     sourceType: CitationSourceType;
     title: string;
@@ -83,7 +83,7 @@ export type ParticipantMetadataParams = {
     description?: string;
     // Content excerpt for quote display in Sources tooltip
     excerpt?: string;
-  }>;
+  }[];
 
   // Reasoning duration in seconds (for "Thought for X seconds" display on page refresh)
   reasoningDuration?: number;
@@ -100,26 +100,26 @@ export function createParticipantMetadata(
   params: ParticipantMetadataParams,
 ): DbAssistantMessageMetadata {
   return {
-    role: MessageRoles.ASSISTANT,
-
-    // Required fields (no defaults)
-    roundNumber: params.roundNumber,
-    participantId: params.participantId,
-    participantIndex: params.participantIndex,
-    participantRole: params.participantRole,
-    model: params.model,
-
     // AI SDK fields with defaults
     finishReason: params.finishReason ?? FinishReasons.UNKNOWN,
-    usage: params.usage ?? {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-    },
 
     hasError: params.hasError ?? false,
-    isTransient: params.isTransient ?? false,
     isPartialResponse: params.isPartialResponse ?? false,
+    isTransient: params.isTransient ?? false,
+    model: params.model,
+    participantId: params.participantId,
+
+    participantIndex: params.participantIndex,
+    participantRole: params.participantRole,
+
+    role: MessageRoles.ASSISTANT,
+    // Required fields (no defaults)
+    roundNumber: params.roundNumber,
+    usage: params.usage ?? {
+      completionTokens: 0,
+      promptTokens: 0,
+      totalTokens: 0,
+    },
 
     // Optional error details (only present if provided)
     ...(params.errorType && { errorType: params.errorType }),
@@ -187,8 +187,8 @@ export function createStreamingMetadata(
     ...params,
     finishReason: FinishReasons.UNKNOWN,
     usage: {
-      promptTokens: 0,
       completionTokens: 0,
+      promptTokens: 0,
       totalTokens: 0,
     },
   });
@@ -215,8 +215,8 @@ export function completeStreamingMetadata(
     finishReason: finishResult.finishReason,
     usage: usageData
       ? {
-          promptTokens,
           completionTokens,
+          promptTokens,
           totalTokens: totalTokens ?? promptTokens + completionTokens,
         }
       : streamMetadata.usage,
@@ -238,13 +238,13 @@ export function createStreamErrorMetadata(
   },
 ): DbAssistantMessageMetadata {
   return updateParticipantMetadata(streamMetadata, {
-    hasError: true,
+    errorCategory: error.errorCategory,
     errorMessage: error.message,
     errorType: error.errorType,
-    errorCategory: error.errorCategory,
-    isTransient: error.isTransient ?? false,
+    hasError: true,
     isPartialResponse: false,
-    statusCode: error.statusCode,
+    isTransient: error.isTransient ?? false,
     responseBody: error.responseBody,
+    statusCode: error.statusCode,
   });
 }

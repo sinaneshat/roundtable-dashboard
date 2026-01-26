@@ -37,3 +37,24 @@ export async function createCustomerPortalSessionService(data: CreateCustomerPor
   }
   return res.json();
 }
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard to check if portal response is successful
+ */
+export function isPortalSuccess(response: CreateCustomerPortalSessionResponse | undefined): response is Extract<CreateCustomerPortalSessionResponse, { success: true }> {
+  return response !== undefined && response.success === true && 'data' in response;
+}
+
+/**
+ * Get portal URL from successful response
+ */
+export function getPortalUrl(response: CreateCustomerPortalSessionResponse | undefined): string | undefined {
+  if (!isPortalSuccess(response)) {
+    return undefined;
+  }
+  return response.data.url;
+}

@@ -43,7 +43,7 @@ type ChangelogChangeData = {
   role?: string | null;
   previousRole?: string | null;
   newRole?: string | null;
-  newOrder?: Array<{ id: string; priority: number }>;
+  newOrder?: { id: string; priority: number }[];
 };
 
 type ChangelogEntry = {
@@ -82,14 +82,14 @@ function createMockThread(
   enableWebSearch = false,
 ): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id,
-    userId: 'user-123',
-    title: 'Test Thread',
     mode,
     status: 'active',
-    enableWebSearch,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
   } as ChatThread;
 }
 
@@ -99,13 +99,13 @@ function createMockParticipant(
   role: string | null = null,
 ): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId,
-    role,
-    priority: index,
-    isEnabled: true,
     createdAt: new Date(),
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   } as ChatParticipant;
 }
@@ -120,12 +120,12 @@ function createChangelogEntry(
 ): ChangelogEntry {
   changelogCounter++;
   return {
-    id: `changelog-${threadId}-r${roundNumber}-${changelogCounter}`,
-    threadId,
-    roundNumber,
-    changeType: changeType as typeof ChangelogChangeTypes[keyof typeof ChangelogChangeTypes],
     changeData,
+    changeType: changeType as typeof ChangelogChangeTypes[keyof typeof ChangelogChangeTypes],
     createdAt: new Date(),
+    id: `changelog-${threadId}-r${roundNumber}-${changelogCounter}`,
+    roundNumber,
+    threadId,
   };
 }
 
@@ -162,14 +162,14 @@ function detectConfigChanges(
   });
 
   return {
+    attachmentsChanged: prevConfig.hasAttachments !== currConfig.hasAttachments
+      || prevConfig.attachmentCount !== currConfig.attachmentCount,
     modeChanged: prevConfig.mode !== currConfig.mode,
-    webSearchToggled: prevConfig.enableWebSearch !== currConfig.enableWebSearch,
     participantsAdded,
     participantsRemoved,
     participantsReordered,
     participantsRoleChanged,
-    attachmentsChanged: prevConfig.hasAttachments !== currConfig.hasAttachments
-      || prevConfig.attachmentCount !== currConfig.attachmentCount,
+    webSearchToggled: prevConfig.enableWebSearch !== currConfig.enableWebSearch,
   };
 }
 
@@ -184,30 +184,30 @@ function buildChangelogEntries(
 
   if (changes.modeChanged) {
     entries.push(createChangelogEntry(threadId, roundNumber, ChangelogChangeTypes.MODE_CHANGED, {
-      previousMode: prevConfig.mode,
       newMode: currConfig.mode,
+      previousMode: prevConfig.mode,
     }));
   }
 
   if (changes.webSearchToggled) {
     entries.push(createChangelogEntry(threadId, roundNumber, ChangelogChangeTypes.WEB_SEARCH_TOGGLED, {
-      previousValue: prevConfig.enableWebSearch,
       newValue: currConfig.enableWebSearch,
+      previousValue: prevConfig.enableWebSearch,
     }));
   }
 
   for (const added of changes.participantsAdded) {
     entries.push(createChangelogEntry(threadId, roundNumber, ChangelogChangeTypes.PARTICIPANT_ADDED, {
-      participantId: added.id,
       modelId: added.modelId,
+      participantId: added.id,
       role: added.role,
     }));
   }
 
   for (const removed of changes.participantsRemoved) {
     entries.push(createChangelogEntry(threadId, roundNumber, ChangelogChangeTypes.PARTICIPANT_REMOVED, {
-      participantId: removed.id,
       modelId: removed.modelId,
+      participantId: removed.id,
       role: removed.role,
     }));
   }
@@ -221,9 +221,9 @@ function buildChangelogEntries(
   for (const roleChanged of changes.participantsRoleChanged) {
     const prev = prevConfig.participants.find(p => p.id === roleChanged.id);
     entries.push(createChangelogEntry(threadId, roundNumber, ChangelogChangeTypes.PARTICIPANT_ROLE_CHANGED, {
+      newRole: roleChanged.role,
       participantId: roleChanged.id,
       previousRole: prev?.role,
-      newRole: roleChanged.role,
     }));
   }
 
@@ -240,15 +240,15 @@ function simulateRoundCompletion(
     userContent?: string;
   } = {},
 ): void {
-  const { includePreSearch = false, includeModerator = true, userContent = `Question R${roundNumber}` } = options;
+  const { includeModerator = true, includePreSearch = false, userContent = `Question R${roundNumber}` } = options;
 
   // Get existing messages
   const existingMessages = store.getState().messages;
 
   // User message
   const userMsg = createTestUserMessage({
-    id: `user-r${roundNumber}`,
     content: userContent,
+    id: `user-r${roundNumber}`,
     roundNumber,
   });
 
@@ -262,12 +262,12 @@ function simulateRoundCompletion(
     .filter(p => p.isEnabled)
     .sort((a, b) => a.priority - b.priority)
     .map((p, idx) => createTestAssistantMessage({
-      id: `thread-123_r${roundNumber}_p${idx}`,
       content: `Response from ${p.modelId} (${p.role || 'no role'})`,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `thread-123_r${roundNumber}_p${idx}`,
       participantId: p.id,
       participantIndex: idx,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     }));
 
   store.getState().setMessages([...existingMessages, userMsg, ...participantMsgs]);
@@ -290,14 +290,14 @@ describe('mode Change Timeline Tests', () => {
 
       // Round 0: Brainstorm mode
       const config0: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.BRAINSTORMING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Ideator', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.BRAINSTORMING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Ideator' },
+        ],
+        roundNumber: 0,
       };
 
       store.getState().setThread(createMockThread(threadId, config0.mode, config0.enableWebSearch));
@@ -309,23 +309,23 @@ describe('mode Change Timeline Tests', () => {
 
       // Round 1: Analyze mode (changed)
       const config1: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: config0.participants,
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: config0.participants,
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(config0, config1);
-      expect(changes.modeChanged).toBe(true);
+      expect(changes.modeChanged).toBeTruthy();
 
       const changelog = buildChangelogEntries(threadId, 1, changes, config0, config1);
       expect(changelog).toHaveLength(1);
       expect(changelog[0]?.changeType).toBe(ChangelogChangeTypes.MODE_CHANGED);
       expect(changelog[0]?.changeData).toEqual({
-        previousMode: ChatModes.BRAINSTORMING,
         newMode: ChatModes.ANALYZING,
+        previousMode: ChatModes.BRAINSTORMING,
       });
 
       // Complete round 1
@@ -339,8 +339,8 @@ describe('mode Change Timeline Tests', () => {
       const messages = store.getState().messages;
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
         }),
       );
 
@@ -363,49 +363,49 @@ describe('mode Change Timeline Tests', () => {
         }
 
         const prevConfig: RoundConfiguration = {
-          roundNumber: i,
-          mode: fromMode,
-          enableWebSearch: false,
-          participants: [],
-          hasAttachments: false,
           attachmentCount: 0,
+          enableWebSearch: false,
+          hasAttachments: false,
+          mode: fromMode,
+          participants: [],
+          roundNumber: i,
         };
 
         const currConfig: RoundConfiguration = {
-          roundNumber: i + 1,
-          mode: toMode,
-          enableWebSearch: false,
-          participants: [],
-          hasAttachments: false,
           attachmentCount: 0,
+          enableWebSearch: false,
+          hasAttachments: false,
+          mode: toMode,
+          participants: [],
+          roundNumber: i + 1,
         };
 
         const changes = detectConfigChanges(prevConfig, currConfig);
-        expect(changes.modeChanged).toBe(true);
+        expect(changes.modeChanged).toBeTruthy();
       }
     });
 
     it('should not create changelog when mode stays the same', () => {
       const config0: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [],
+        roundNumber: 0,
       };
 
       const config1: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING, // Same mode
-        enableWebSearch: false,
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING, // Same mode
+        participants: [],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(config0, config1);
-      expect(changes.modeChanged).toBe(false);
+      expect(changes.modeChanged).toBeFalsy();
     });
   });
 
@@ -415,11 +415,11 @@ describe('mode Change Timeline Tests', () => {
       const threadId = 'thread-123';
 
       const configs: RoundConfiguration[] = [
-        { roundNumber: 0, mode: ChatModes.BRAINSTORMING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 1, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 2, mode: ChatModes.DEBATING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 3, mode: ChatModes.DEBATING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 }, // No change
-        { roundNumber: 4, mode: ChatModes.SOLVING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.BRAINSTORMING, participants: [], roundNumber: 0 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.ANALYZING, participants: [], roundNumber: 1 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.DEBATING, participants: [], roundNumber: 2 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.DEBATING, participants: [], roundNumber: 3 }, // No change
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.SOLVING, participants: [], roundNumber: 4 },
       ];
 
       const allChangelog: ChangelogEntry[] = [];
@@ -452,32 +452,32 @@ describe('web Search Toggle Timeline Tests', () => {
   describe('enable Web Search', () => {
     it('should create changelog when web search enabled', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: true, // Enabled
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: true, // Enabled
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
-      expect(changes.webSearchToggled).toBe(true);
+      expect(changes.webSearchToggled).toBeTruthy();
 
       const entries = buildChangelogEntries('thread-123', 1, changes, prevConfig, currConfig);
       expect(entries).toHaveLength(1);
       expect(entries[0]?.changeType).toBe(ChangelogChangeTypes.WEB_SEARCH_TOGGLED);
       expect(entries[0]?.changeData).toEqual({
-        previousValue: false,
         newValue: true,
+        previousValue: false,
       });
     });
 
@@ -499,30 +499,30 @@ describe('web Search Toggle Timeline Tests', () => {
   describe('disable Web Search', () => {
     it('should create changelog when web search disabled', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: true,
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: true,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false, // Disabled
-        participants: [],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false, // Disabled
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
-      expect(changes.webSearchToggled).toBe(true);
+      expect(changes.webSearchToggled).toBeTruthy();
 
       const entries = buildChangelogEntries('thread-123', 1, changes, prevConfig, currConfig);
       expect(entries[0]?.changeData).toEqual({
-        previousValue: true,
         newValue: false,
+        previousValue: true,
       });
     });
 
@@ -541,10 +541,10 @@ describe('web Search Toggle Timeline Tests', () => {
   describe('web Search Toggle Across Multiple Rounds', () => {
     it('should track toggle pattern: off → on → off → on', () => {
       const configs: RoundConfiguration[] = [
-        { roundNumber: 0, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 1, mode: ChatModes.ANALYZING, enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 2, mode: ChatModes.ANALYZING, enableWebSearch: false, participants: [], hasAttachments: false, attachmentCount: 0 },
-        { roundNumber: 3, mode: ChatModes.ANALYZING, enableWebSearch: true, participants: [], hasAttachments: false, attachmentCount: 0 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.ANALYZING, participants: [], roundNumber: 0 },
+        { attachmentCount: 0, enableWebSearch: true, hasAttachments: false, mode: ChatModes.ANALYZING, participants: [], roundNumber: 1 },
+        { attachmentCount: 0, enableWebSearch: false, hasAttachments: false, mode: ChatModes.ANALYZING, participants: [], roundNumber: 2 },
+        { attachmentCount: 0, enableWebSearch: true, hasAttachments: false, mode: ChatModes.ANALYZING, participants: [], roundNumber: 3 },
       ];
 
       const allChangelog: ChangelogEntry[] = [];
@@ -576,26 +576,26 @@ describe('participant Change Timeline Tests', () => {
   describe('participant Addition', () => {
     it('should detect single participant addition', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Analyst' },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: 'Critic', priority: 1, isEnabled: true }, // Added
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Analyst' },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Critic' }, // Added
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -605,28 +605,28 @@ describe('participant Change Timeline Tests', () => {
 
     it('should detect multiple participant additions', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: 'A', priority: 1, isEnabled: true },
-          { id: 'p2', modelId: 'gemini-pro', role: 'B', priority: 2, isEnabled: true },
-          { id: 'p3', modelId: 'llama-70b', role: 'C', priority: 3, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'A' },
+          { id: 'p2', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: 'B' },
+          { id: 'p3', isEnabled: true, modelId: 'llama-70b', priority: 3, role: 'C' },
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -638,14 +638,14 @@ describe('participant Change Timeline Tests', () => {
 
       // Round 0: 1 participant
       const config0: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
+        ],
+        roundNumber: 0,
       };
 
       store.getState().setThread(createMockThread('thread-123'));
@@ -654,16 +654,16 @@ describe('participant Change Timeline Tests', () => {
 
       // Round 1: 3 participants
       const config1: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: 'Support', priority: 1, isEnabled: true },
-          { id: 'p2', modelId: 'gemini-pro', role: 'Reviewer', priority: 2, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Support' },
+          { id: 'p2', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: 'Reviewer' },
+        ],
+        roundNumber: 1,
       };
 
       store.getState().setParticipants([
@@ -692,27 +692,27 @@ describe('participant Change Timeline Tests', () => {
   describe('participant Removal', () => {
     it('should detect single participant removal', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'A', priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: 'B', priority: 1, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'A' },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'B' },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
+        attachmentCount: 0,
         enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
         participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'A', priority: 0, isEnabled: true },
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'A' },
           // p1 removed
         ],
-        hasAttachments: false,
-        attachmentCount: 0,
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -722,27 +722,27 @@ describe('participant Change Timeline Tests', () => {
 
     it('should handle complete participant replacement', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: null },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p2', modelId: 'gemini-pro', role: null, priority: 0, isEnabled: true },
-          { id: 'p3', modelId: 'llama-70b', role: null, priority: 1, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p2', isEnabled: true, modelId: 'gemini-pro', priority: 0, role: null },
+          { id: 'p3', isEnabled: true, modelId: 'llama-70b', priority: 1, role: null },
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -754,31 +754,31 @@ describe('participant Change Timeline Tests', () => {
   describe('participant Reordering', () => {
     it('should detect priority swap', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-          { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: null },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 1, isEnabled: true }, // Was 0, now 1
-          { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 0, isEnabled: true }, // Was 1, now 0
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 1, role: null }, // Was 0, now 1
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 0, role: null }, // Was 1, now 0
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
-      expect(changes.participantsReordered).toBe(true);
+      expect(changes.participantsReordered).toBeTruthy();
     });
 
     it('should ensure messages follow new priority order', () => {
@@ -786,8 +786,8 @@ describe('participant Change Timeline Tests', () => {
 
       // Round 0: GPT first, Claude second
       const participants0 = [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: true },
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: null },
       ];
 
       store.getState().setThread(createMockThread('thread-123'));
@@ -799,8 +799,8 @@ describe('participant Change Timeline Tests', () => {
 
       // Round 1: Claude first, GPT second (swapped)
       const participants1 = [
-        { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 0, isEnabled: true },
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 1, isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 0, role: null },
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 1, role: null },
       ];
 
       store.getState().setParticipants([
@@ -828,25 +828,25 @@ describe('participant Change Timeline Tests', () => {
   describe('participant Role Change', () => {
     it('should detect role change', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Analyst' },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Critic', priority: 0, isEnabled: true }, // Role changed
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Critic' }, // Role changed
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -856,25 +856,25 @@ describe('participant Change Timeline Tests', () => {
 
     it('should detect null to role assignment', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Expert', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Expert' },
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -883,25 +883,25 @@ describe('participant Change Timeline Tests', () => {
 
     it('should detect role removal (to null)', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Expert', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Expert' },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true }, // Role removed
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null }, // Role removed
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -912,25 +912,25 @@ describe('participant Change Timeline Tests', () => {
   describe('model Change (Same Participant Slot)', () => {
     it('should detect model replacement as add + remove', () => {
       const prevConfig: RoundConfiguration = {
-        roundNumber: 0,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
+        ],
+        roundNumber: 0,
       };
 
       const currConfig: RoundConfiguration = {
-        roundNumber: 1,
-        mode: ChatModes.ANALYZING,
-        enableWebSearch: false,
-        participants: [
-          { id: 'p1', modelId: 'claude-3-opus', role: 'Lead', priority: 0, isEnabled: true }, // Different ID, different model
-        ],
-        hasAttachments: false,
         attachmentCount: 0,
+        enableWebSearch: false,
+        hasAttachments: false,
+        mode: ChatModes.ANALYZING,
+        participants: [
+          { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 0, role: 'Lead' }, // Different ID, different model
+        ],
+        roundNumber: 1,
       };
 
       const changes = detectConfigChanges(prevConfig, currConfig);
@@ -949,32 +949,32 @@ describe('participant Change Timeline Tests', () => {
 describe('combined Changes Timeline Tests', () => {
   it('should handle mode + web search + participant changes together', () => {
     const prevConfig: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.BRAINSTORMING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: 'Ideator', priority: 0, isEnabled: true },
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Ideator' },
+      ],
+      roundNumber: 0,
     };
 
     const currConfig: RoundConfiguration = {
-      roundNumber: 1,
-      mode: ChatModes.ANALYZING, // Changed
-      enableWebSearch: true, // Changed
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true }, // Role changed
-        { id: 'p1', modelId: 'claude-3-opus', role: 'Critic', priority: 1, isEnabled: true }, // Added
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: true, // Changed
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING, // Changed
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Analyst' }, // Role changed
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Critic' }, // Added
+      ],
+      roundNumber: 1,
     };
 
     const changes = detectConfigChanges(prevConfig, currConfig);
 
-    expect(changes.modeChanged).toBe(true);
-    expect(changes.webSearchToggled).toBe(true);
+    expect(changes.modeChanged).toBeTruthy();
+    expect(changes.webSearchToggled).toBeTruthy();
     expect(changes.participantsAdded).toHaveLength(1);
     expect(changes.participantsRoleChanged).toHaveLength(1);
 
@@ -992,22 +992,22 @@ describe('combined Changes Timeline Tests', () => {
     store.getState().setThread(createMockThread(threadId, ChatModes.BRAINSTORMING, false));
     store.getState().setParticipants([createMockParticipant(0, 'gpt-4o', 'Lead')]);
     simulateRoundCompletion(store, 0, [
-      { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
+      { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
     ]);
 
     // Round 1: Multiple changes
     const changelog = [
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.MODE_CHANGED, {
-        previousMode: ChatModes.BRAINSTORMING,
         newMode: ChatModes.ANALYZING,
+        previousMode: ChatModes.BRAINSTORMING,
       }),
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.WEB_SEARCH_TOGGLED, {
-        previousValue: false,
         newValue: true,
+        previousValue: false,
       }),
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.PARTICIPANT_ADDED, {
-        participantId: 'p1',
         modelId: 'claude-3-opus',
+        participantId: 'p1',
       }),
     ];
 
@@ -1018,8 +1018,8 @@ describe('combined Changes Timeline Tests', () => {
     ]);
     store.getState().addPreSearch(createMockStoredPreSearch(1, MessageStatuses.COMPLETE));
     simulateRoundCompletion(store, 1, [
-      { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
-      { id: 'p1', modelId: 'claude-3-opus', role: 'Support', priority: 1, isEnabled: true },
+      { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
+      { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Support' },
     ], { includePreSearch: true });
 
     // Verify timeline elements via useThreadTimeline
@@ -1028,8 +1028,8 @@ describe('combined Changes Timeline Tests', () => {
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages,
         changelog,
+        messages,
         preSearches,
       }),
     );
@@ -1061,26 +1061,26 @@ describe('combined Changes Timeline Tests', () => {
 
   it('should handle no changes (identical config)', () => {
     const config: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: true,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: 'Lead', priority: 0, isEnabled: true },
-        { id: 'p1', modelId: 'claude-3-opus', role: 'Support', priority: 1, isEnabled: true },
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: true,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Lead' },
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Support' },
+      ],
+      roundNumber: 0,
     };
 
     const nextConfig = { ...config, roundNumber: 1 };
 
     const changes = detectConfigChanges(config, nextConfig);
 
-    expect(changes.modeChanged).toBe(false);
-    expect(changes.webSearchToggled).toBe(false);
+    expect(changes.modeChanged).toBeFalsy();
+    expect(changes.webSearchToggled).toBeFalsy();
     expect(changes.participantsAdded).toHaveLength(0);
     expect(changes.participantsRemoved).toHaveLength(0);
-    expect(changes.participantsReordered).toBe(false);
+    expect(changes.participantsReordered).toBeFalsy();
     expect(changes.participantsRoleChanged).toHaveLength(0);
   });
 });
@@ -1098,20 +1098,20 @@ describe('changelog Placement in Timeline', () => {
     store.getState().setThread(createMockThread(threadId, ChatModes.BRAINSTORMING));
     store.getState().setParticipants([createMockParticipant(0, 'gpt-4o')]);
     simulateRoundCompletion(store, 0, [
-      { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
+      { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
     ]);
 
     // Round 1 with changelog
     const changelog = [
       createChangelogEntry(threadId, 1, ChangelogChangeTypes.MODE_CHANGED, {
-        previousMode: ChatModes.BRAINSTORMING,
         newMode: ChatModes.ANALYZING,
+        previousMode: ChatModes.BRAINSTORMING,
       }),
     ];
 
     store.getState().setThread(createMockThread(threadId, ChatModes.ANALYZING));
     simulateRoundCompletion(store, 1, [
-      { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
+      { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
     ]);
 
     // Get messages from store
@@ -1127,8 +1127,8 @@ describe('changelog Placement in Timeline', () => {
     // Verify timeline ordering using useThreadTimeline
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages,
         changelog,
+        messages,
       }),
     );
 
@@ -1147,14 +1147,14 @@ describe('changelog Placement in Timeline', () => {
   it('should NOT create changelog for first round', () => {
     // First round has no "previous" config to compare against
     const config0: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+      ],
+      roundNumber: 0,
     };
 
     // No previous config means no changes to detect
@@ -1168,7 +1168,7 @@ describe('changelog Placement in Timeline', () => {
 
     // Same config = no changes
     const changes = detectConfigChanges(config0, config0);
-    expect(changes.modeChanged).toBe(false);
+    expect(changes.modeChanged).toBeFalsy();
     expect(changes.participantsAdded).toHaveLength(0);
   });
 });
@@ -1180,23 +1180,23 @@ describe('changelog Placement in Timeline', () => {
 describe('edge Cases', () => {
   it('should handle empty participants list', () => {
     const prevConfig: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [],
+      roundNumber: 0,
     };
 
     const currConfig: RoundConfiguration = {
-      roundNumber: 1,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+      ],
+      roundNumber: 1,
     };
 
     const changes = detectConfigChanges(prevConfig, currConfig);
@@ -1206,24 +1206,24 @@ describe('edge Cases', () => {
 
   it('should handle all participants removed', () => {
     const prevConfig: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: true },
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: null },
+      ],
+      roundNumber: 0,
     };
 
     const currConfig: RoundConfiguration = {
-      roundNumber: 1,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [],
+      roundNumber: 1,
     };
 
     const changes = detectConfigChanges(prevConfig, currConfig);
@@ -1233,18 +1233,18 @@ describe('edge Cases', () => {
 
   it('should handle large number of participants', () => {
     const createLargeConfig = (count: number): RoundConfiguration => ({
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
+      attachmentCount: 0,
       enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
       participants: Array.from({ length: count }, (_, i) => ({
         id: `p${i}`,
-        modelId: `model-${i}`,
-        role: `Role ${i}`,
-        priority: i,
         isEnabled: true,
+        modelId: `model-${i}`,
+        priority: i,
+        role: `Role ${i}`,
       })),
-      hasAttachments: false,
-      attachmentCount: 0,
+      roundNumber: 0,
     });
 
     const config10 = createLargeConfig(10);
@@ -1256,27 +1256,27 @@ describe('edge Cases', () => {
 
   it('should handle disabled participants', () => {
     const prevConfig: RoundConfiguration = {
-      roundNumber: 0,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: false }, // Disabled
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        { id: 'p1', isEnabled: false, modelId: 'claude-3-opus', priority: 1, role: null }, // Disabled
+      ],
+      roundNumber: 0,
     };
 
     const currConfig: RoundConfiguration = {
-      roundNumber: 1,
-      mode: ChatModes.ANALYZING,
-      enableWebSearch: false,
-      participants: [
-        { id: 'p0', modelId: 'gpt-4o', role: null, priority: 0, isEnabled: true },
-        { id: 'p1', modelId: 'claude-3-opus', role: null, priority: 1, isEnabled: true }, // Now enabled
-      ],
-      hasAttachments: false,
       attachmentCount: 0,
+      enableWebSearch: false,
+      hasAttachments: false,
+      mode: ChatModes.ANALYZING,
+      participants: [
+        { id: 'p0', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: null },
+        { id: 'p1', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: null }, // Now enabled
+      ],
+      roundNumber: 1,
     };
 
     // Detect the re-enabling
@@ -1284,7 +1284,7 @@ describe('edge Cases', () => {
     const p1Curr = currConfig.participants.find(p => p.id === 'p1');
 
     const wasReEnabled = p1Prev && !p1Prev.isEnabled && p1Curr && p1Curr.isEnabled;
-    expect(wasReEnabled).toBe(true);
+    expect(wasReEnabled).toBeTruthy();
   });
 });
 
@@ -1303,18 +1303,18 @@ describe('round Number Consistency', () => {
 
     // Add elements for round 2
     const userMsg = createTestUserMessage({
-      id: `user-r${roundNumber}`,
       content: 'Question',
+      id: `user-r${roundNumber}`,
       roundNumber,
     });
 
     const p0Msg = createTestAssistantMessage({
-      id: `${threadId}_r${roundNumber}_p0`,
       content: 'Response',
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `${threadId}_r${roundNumber}_p0`,
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     });
 
     store.getState().setMessages([userMsg, p0Msg]);

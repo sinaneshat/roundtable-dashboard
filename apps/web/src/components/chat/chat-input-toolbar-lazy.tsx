@@ -53,13 +53,13 @@ const ChatInputToolbarMenuInternal = dynamic<ChatInputToolbarMenuProps>(
     default: m.ChatInputToolbarMenu,
   })),
   {
-    ssr: false,
     loading: () => (
       <>
         <ChatInputToolbarSkeleton />
         <ChatInputToolbarMobileSkeleton />
       </>
     ),
+    ssr: false,
   },
 );
 

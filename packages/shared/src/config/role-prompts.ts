@@ -119,11 +119,11 @@ Propose ONE concrete step or decision. Acknowledge trade-offs and uncertainty.`,
  * @returns System prompt string for the role
  */
 function buildParticipantSystemPrompt(role?: string | null, mode?: ChatMode | null): string {
-  const basePrompt = mode && MODE_PROMPTS[mode]
+  const basePrompt = mode !== null && mode !== undefined && mode in MODE_PROMPTS
     ? MODE_PROMPTS[mode]
     : MODE_PROMPTS[ChatModes.ANALYZING];
 
-  if (role) {
+  if (role !== null && role !== undefined && role !== '') {
     return `**Your assigned role: ${role}**
 
 Incorporate this role into your analytical framing. Let it inform your perspective and the assumptions you surface, but follow all rules below.

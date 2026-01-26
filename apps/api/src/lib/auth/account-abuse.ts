@@ -56,10 +56,10 @@ export async function recordAccountDeletion(email: string): Promise<void> {
   const record = existing[0];
   if (!record) {
     await db.insert(deletedAccountAudit).values({
-      id: crypto.randomUUID(),
-      emailHash,
       deletionCount: 1,
+      emailHash,
       firstDeletedAt: now,
+      id: crypto.randomUUID(),
       lastDeletedAt: now,
     });
   } else {

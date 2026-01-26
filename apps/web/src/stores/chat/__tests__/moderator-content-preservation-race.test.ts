@@ -32,37 +32,37 @@ import { createChatStore } from '../store';
 
 function createThread() {
   return {
+    createdAt: '2024-01-01T00:00:00Z',
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    projectId: null,
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    mode: 'debating' as const,
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    metadata: null,
-    version: 1,
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z',
     lastMessageAt: '2024-01-01T00:00:00Z',
+    metadata: null,
+    mode: 'debating' as const,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: '2024-01-01T00:00:00Z',
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createParticipant(index: number) {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: '2024-01-01T00:00:00Z',
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: '2024-01-01T00:00:00Z',
   };
 }
@@ -70,9 +70,9 @@ function createParticipant(index: number) {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: `Question for round ${roundNumber}` }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: `Question for round ${roundNumber}`, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -83,46 +83,46 @@ function createParticipantMessage(
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: `Response from participant ${participantIndex}`, state: 'done' as const }],
     metadata: {
+      finishReason: 'stop',
+      model: `model-${participantIndex}`,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: 'stop',
     },
+    parts: [{ state: 'done' as const, text: `Response from participant ${participantIndex}`, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [], // Empty = placeholder
     metadata: {
       isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [], // Empty = placeholder
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createModeratorWithContent(threadId: string, roundNumber: number, content: string): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: content, state: 'done' as const }],
     metadata: {
-      isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
-      model: 'Council Moderator',
-      role: MessageRoles.ASSISTANT,
       finishReason: 'stop',
+      isModerator: true,
+      model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{ state: 'done' as const, text: content, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -134,8 +134,9 @@ function getModeratorForRound(messages: UIMessage[], roundNumber: number): UIMes
 }
 
 function getModeratorContent(moderator: UIMessage | undefined): string {
-  if (!moderator)
+  if (!moderator) {
     return '';
+  }
   const textPart = moderator.parts?.find(p => p.type === 'text' && 'text' in p);
   return textPart && 'text' in textPart ? (textPart.text as string) : '';
 }
@@ -313,7 +314,7 @@ describe('moderator Content Preservation Race Condition', () => {
       // Simulate incremental streaming - partial content
       const partialModerator: UIMessage = {
         ...moderatorPlaceholder,
-        parts: [{ type: 'text', text: 'Partial content during str' }],
+        parts: [{ text: 'Partial content during str', type: 'text' }],
       };
       store.getState().setMessages([userMsg, p0Msg, partialModerator]);
 
@@ -323,7 +324,7 @@ describe('moderator Content Preservation Race Condition', () => {
       // More content streamed
       const moreModerator: UIMessage = {
         ...moderatorPlaceholder,
-        parts: [{ type: 'text', text: 'Partial content during streaming.' }],
+        parts: [{ text: 'Partial content during streaming.', type: 'text' }],
       };
       store.getState().setMessages([userMsg, p0Msg, moreModerator]);
 

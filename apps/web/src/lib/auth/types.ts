@@ -17,14 +17,14 @@ import { z } from 'zod';
  * Validates user data from authentication endpoints
  */
 export const userSchema = z.object({
-  id: z.string().min(1),
-  email: z.string().email().optional(),
-  name: z.string().min(1),
-  emailVerified: z.boolean(),
-  image: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
+  email: z.string().email().optional(),
+  emailVerified: z.boolean(),
+  id: z.string().min(1),
+  image: z.string().nullable().optional(),
+  name: z.string().min(1),
   role: z.string().nullable().optional(),
+  updatedAt: z.coerce.date(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -34,15 +34,15 @@ export type User = z.infer<typeof userSchema>;
  * Validates session metadata from authentication endpoints
  */
 export const sessionSchema = z.object({
-  id: z.string().min(1),
-  userId: z.string().min(1),
-  token: z.string().min(1),
-  expiresAt: z.coerce.date(),
   createdAt: z.coerce.date(),
-  updatedAt: z.coerce.date(),
-  ipAddress: z.string().nullable().optional(),
-  userAgent: z.string().nullable().optional(),
+  expiresAt: z.coerce.date(),
+  id: z.string().min(1),
   impersonatedBy: z.string().nullable().optional(),
+  ipAddress: z.string().nullable().optional(),
+  token: z.string().min(1),
+  updatedAt: z.coerce.date(),
+  userAgent: z.string().nullable().optional(),
+  userId: z.string().min(1),
 });
 
 export type Session = z.infer<typeof sessionSchema>;

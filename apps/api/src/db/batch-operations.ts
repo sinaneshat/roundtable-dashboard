@@ -51,8 +51,9 @@ export function prepareStatement(
  * const chunkSize = getD1ChunkSize(13); // 7 rows for 13-column table
  */
 export function getD1ChunkSize(columnCount: number): number {
-  if (columnCount <= 0)
+  if (columnCount <= 0) {
     return 1;
+  }
   return Math.max(1, Math.floor(D1_MAX_PARAMETERS / columnCount));
 }
 
@@ -71,8 +72,9 @@ export function getD1ChunkSize(columnCount: number): number {
  * }
  */
 export function* chunkForD1Insert<T>(items: T[], columnCount: number): Generator<T[]> {
-  if (items.length === 0)
+  if (items.length === 0) {
     return;
+  }
 
   const chunkSize = getD1ChunkSize(columnCount);
   for (let i = 0; i < items.length; i += chunkSize) {

@@ -33,8 +33,8 @@ type LazyProviderProps<T extends Record<string, unknown>> = {
  */
 export function LazyProvider<T extends Record<string, unknown>>({
   children,
-  loader,
   fallback,
+  loader,
   providerProps,
 }: LazyProviderProps<T>) {
   const [Provider, setProvider] = useState<ComponentType<T> | null>(null);
@@ -43,14 +43,16 @@ export function LazyProvider<T extends Record<string, unknown>>({
     let cancelled = false;
 
     loader().then((module) => {
-      if (cancelled)
+      if (cancelled) {
         return;
+      }
       // Handle both default exports and direct component exports
-      const component = 'default' in module ? module.default : module;
+      const component = 'default' in module ? module['default'] : module;
       setProvider(() => component);
     }).catch((error) => {
-      if (cancelled)
+      if (cancelled) {
         return;
+      }
       console.error('[LazyProvider] Failed to load provider:', error);
     });
 
@@ -87,8 +89,8 @@ function scheduleWhenIdle(callback: () => void, timeout = 2000): void {
  */
 export function IdleLazyProvider<T extends Record<string, unknown>>({
   children,
-  loader,
   fallback,
+  loader,
   providerProps,
   timeout = 2000,
 }: LazyProviderProps<T> & { timeout?: number }) {
@@ -99,13 +101,15 @@ export function IdleLazyProvider<T extends Record<string, unknown>>({
 
     scheduleWhenIdle(() => {
       loader().then((module) => {
-        if (cancelled)
+        if (cancelled) {
           return;
-        const component = 'default' in module ? module.default : module;
+        }
+        const component = 'default' in module ? module['default'] : module;
         setProvider(() => component);
       }).catch((error) => {
-        if (cancelled)
+        if (cancelled) {
           return;
+        }
         console.error('[IdleLazyProvider] Failed to load provider:', error);
       });
     }, timeout);

@@ -19,10 +19,10 @@ import {
 describe('generateOgVersionHash', () => {
   it('should generate consistent hash for same input', () => {
     const data = {
-      title: 'Test Thread',
+      messageCount: 10,
       mode: 'analyzing',
       participantCount: 3,
-      messageCount: 10,
+      title: 'Test Thread',
     };
 
     const hash1 = generateOgVersionHash(data);
@@ -255,10 +255,10 @@ describe('cache Key Uniqueness', () => {
 describe('version Hash Stability', () => {
   it('should produce stable hashes across multiple calls', () => {
     const data = {
-      title: 'Stable Test',
+      messageCount: 25,
       mode: 'analyzing',
       participantCount: 5,
-      messageCount: 25,
+      title: 'Stable Test',
       updatedAt: new Date('2024-01-15T12:00:00Z'),
     };
 
@@ -271,8 +271,8 @@ describe('version Hash Stability', () => {
 
   it('should handle empty strings in content', () => {
     const hash = generateOgVersionHash({
-      title: '',
       mode: '',
+      title: '',
     });
 
     expect(hash).toBeDefined();
@@ -281,8 +281,8 @@ describe('version Hash Stability', () => {
 
   it('should handle zero counts', () => {
     const hash = generateOgVersionHash({
-      participantCount: 0,
       messageCount: 0,
+      participantCount: 0,
     });
 
     expect(hash).toBeDefined();

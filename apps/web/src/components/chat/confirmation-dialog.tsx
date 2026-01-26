@@ -45,30 +45,32 @@ const variantStyles: Record<ConfirmationDialogVariant, string> = {
 };
 
 export function ConfirmationDialog({
-  open,
-  onOpenChange,
-  title,
+  cancelText,
+  children,
+  confirmingText,
+  confirmText,
   description,
   icon,
-  confirmText,
-  confirmingText,
-  cancelText,
   isLoading = false,
-  variant = ConfirmationDialogVariants.DEFAULT,
-  onConfirm,
   onCancel,
-  children,
+  onConfirm,
+  onOpenChange,
+  open,
+  title,
+  variant = ConfirmationDialogVariants.DEFAULT,
 }: ConfirmationDialogProps) {
   const handleCancel = () => {
-    if (isLoading)
+    if (isLoading) {
       return;
+    }
     onCancel?.();
     onOpenChange(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (isLoading && !newOpen)
+    if (isLoading && !newOpen) {
       return;
+    }
     onOpenChange(newOpen);
   };
 

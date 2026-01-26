@@ -27,9 +27,9 @@ import type { TypedLogger } from '@/types/logger';
  * Storage operation result schema
  */
 export const StorageResultSchema = z.object({
-  success: z.boolean(),
-  key: z.string().optional(),
   error: z.string().optional(),
+  key: z.string().optional(),
+  success: z.boolean(),
 });
 
 /** Storage operation result */
@@ -50,14 +50,14 @@ export type StorageMetadata = z.infer<typeof StorageMetadataSchema>;
  * Stored object info schema
  */
 export const StoredObjectSchema = z.object({
-  key: z.string(),
-  size: z.number(),
+  customMetadata: z.record(z.string(), z.string()).optional(),
   etag: z.string().optional(),
-  lastModified: z.date().optional(),
   httpMetadata: z.object({
     contentType: z.string().optional(),
   }).optional(),
-  customMetadata: z.record(z.string(), z.string()).optional(),
+  key: z.string(),
+  lastModified: z.date().optional(),
+  size: z.number(),
 });
 
 /** Stored object info */
@@ -76,19 +76,19 @@ export type StoredObject = z.infer<typeof StoredObjectSchema>;
  * 3. Our parts include `data` which the OpenRouter provider directly uses
  */
 export const ModelFilePartSchema = z.object({
-  type: z.literal('file'),
   /** File data as Uint8Array - OpenRouter provider expects this format */
   data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
     message: 'data must be Uint8Array',
   }),
-  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
-  mimeType: z.string(),
   /** Original filename for reference */
   filename: z.string().optional(),
-  /** Data URL for UIMessage compatibility */
-  url: z.string(),
   /** MIME type for UIMessage compatibility (same as mimeType) */
   mediaType: z.string(),
+  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
+  mimeType: z.string(),
+  type: z.literal('file'),
+  /** Data URL for UIMessage compatibility */
+  url: z.string(),
 });
 
 /** File part ready for AI model consumption */
@@ -111,15 +111,15 @@ export type ModelFilePart = z.infer<typeof ModelFilePartSchema>;
  * - filename?: string
  */
 export const ModelFilePartBinarySchema = z.object({
-  type: z.literal('file'),
   /** File data as Uint8Array - sent directly to AI provider */
   data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
     message: 'data must be Uint8Array',
   }),
-  /** MIME type of the file */
-  mimeType: z.string(),
   /** Original filename for reference */
   filename: z.string().optional(),
+  /** MIME type of the file */
+  mimeType: z.string(),
+  type: z.literal('file'),
 });
 
 /** Binary-only file part (no URL field) for AI model consumption */
@@ -138,11 +138,11 @@ export type ModelFilePartBinary = z.infer<typeof ModelFilePartBinarySchema>;
  * - mimeType: string (optional in AI SDK, required here for provider compatibility)
  */
 export const ModelImagePartSchema = z.object({
-  type: z.literal('image'),
   /** Raw base64 string (NOT data URL) - required for Bedrock compatibility */
   image: z.string(),
   /** MIME type of the image - matches AI SDK's ImageUIPart.mimeType */
   mimeType: z.string(),
+  type: z.literal('image'),
 });
 
 /** Image part ready for AI model consumption */
@@ -156,15 +156,15 @@ export type ModelImagePart = z.infer<typeof ModelImagePartSchema>;
  * URL must be publicly accessible with signed authentication.
  */
 export const ModelFilePartUrlSchema = z.object({
-  type: z.literal('file'),
-  /** Public URL for AI provider to fetch the file */
-  url: z.string().url(),
-  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
-  mimeType: z.string(),
   /** Original filename for reference */
   filename: z.string().optional(),
   /** MIME type for UIMessage compatibility (same as mimeType) */
   mediaType: z.string(),
+  /** MIME type of the file (AI SDK v6 LanguageModelV2 format) */
+  mimeType: z.string(),
+  type: z.literal('file'),
+  /** Public URL for AI provider to fetch the file */
+  url: z.string().url(),
 });
 
 /** URL-based file part for AI model consumption */
@@ -177,11 +177,11 @@ export type ModelFilePartUrl = z.infer<typeof ModelFilePartUrlSchema>;
  * AI providers fetch the image from the URL directly.
  */
 export const ModelImagePartUrlSchema = z.object({
-  type: z.literal('image'),
   /** Public URL for AI provider to fetch the image */
   image: z.string().url(),
   /** MIME type of the image */
   mimeType: z.string(),
+  type: z.literal('image'),
 });
 
 /** URL-based image part for AI model consumption */
@@ -203,12 +203,12 @@ export type ModelMediaPart = z.infer<typeof ModelMediaPartSchema>;
  * Subset of ModelFilePart for internal use
  */
 export const ModelFilePartWithDataSchema = z.object({
-  type: z.literal('file'),
   data: z.custom<Uint8Array>(val => val instanceof Uint8Array, {
     message: 'data must be Uint8Array',
   }),
-  mimeType: z.string(),
   filename: z.string().optional(),
+  mimeType: z.string(),
+  type: z.literal('file'),
 });
 
 /** Minimal file part with binary data */
@@ -223,9 +223,9 @@ export type ModelFilePartWithData = z.infer<typeof ModelFilePartWithDataSchema>;
  */
 export const LoadAttachmentContentParamsSchema = z.object({
   attachmentIds: z.array(z.string()),
-  r2Bucket: z.custom<R2Bucket | undefined>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   logger: z.custom<TypedLogger>().optional(),
+  r2Bucket: z.custom<R2Bucket | undefined>(),
 });
 
 export type LoadAttachmentContentParams = z.infer<typeof LoadAttachmentContentParamsSchema>;
@@ -234,8 +234,8 @@ export type LoadAttachmentContentParams = z.infer<typeof LoadAttachmentContentPa
  * Error that occurred during attachment loading
  */
 export const AttachmentLoadErrorSchema = z.object({
-  uploadId: z.string(),
   error: z.string(),
+  uploadId: z.string(),
 });
 
 export type AttachmentLoadError = z.infer<typeof AttachmentLoadErrorSchema>;
@@ -244,10 +244,10 @@ export type AttachmentLoadError = z.infer<typeof AttachmentLoadErrorSchema>;
  * Statistics for attachment load operation
  */
 export const AttachmentLoadStatsSchema = z.object({
-  total: z.number(),
-  loaded: z.number(),
   failed: z.number(),
+  loaded: z.number(),
   skipped: z.number(),
+  total: z.number(),
 });
 
 export type AttachmentLoadStats = z.infer<typeof AttachmentLoadStatsSchema>;
@@ -256,8 +256,8 @@ export type AttachmentLoadStats = z.infer<typeof AttachmentLoadStatsSchema>;
  * Result of loading attachment content
  */
 export const LoadAttachmentContentResultSchema = z.object({
-  fileParts: z.array(ModelFilePartSchema),
   errors: z.array(AttachmentLoadErrorSchema),
+  fileParts: z.array(ModelFilePartSchema),
   stats: AttachmentLoadStatsSchema,
 });
 
@@ -267,10 +267,10 @@ export type LoadAttachmentContentResult = z.infer<typeof LoadAttachmentContentRe
  * Parameters for loading attachment content for multiple messages
  */
 export const LoadMessageAttachmentsParamsSchema = z.object({
-  messageIds: z.array(z.string()),
-  r2Bucket: z.custom<R2Bucket | undefined>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   logger: z.custom<TypedLogger>().optional(),
+  messageIds: z.array(z.string()),
+  r2Bucket: z.custom<R2Bucket | undefined>(),
 });
 
 export type LoadMessageAttachmentsParams = z.infer<typeof LoadMessageAttachmentsParamsSchema>;
@@ -279,9 +279,9 @@ export type LoadMessageAttachmentsParams = z.infer<typeof LoadMessageAttachments
  * Error that occurred during message attachment loading
  */
 export const MessageAttachmentLoadErrorSchema = z.object({
+  error: z.string(),
   messageId: z.string(),
   uploadId: z.string(),
-  error: z.string(),
 });
 
 export type MessageAttachmentLoadError = z.infer<typeof MessageAttachmentLoadErrorSchema>;
@@ -290,11 +290,11 @@ export type MessageAttachmentLoadError = z.infer<typeof MessageAttachmentLoadErr
  * Statistics for message attachment load operation
  */
 export const MessageAttachmentLoadStatsSchema = z.object({
-  messagesWithAttachments: z.number(),
-  totalUploads: z.number(),
-  loaded: z.number(),
   failed: z.number(),
+  loaded: z.number(),
+  messagesWithAttachments: z.number(),
   skipped: z.number(),
+  totalUploads: z.number(),
 });
 
 export type MessageAttachmentLoadStats = z.infer<typeof MessageAttachmentLoadStatsSchema>;
@@ -303,12 +303,46 @@ export type MessageAttachmentLoadStats = z.infer<typeof MessageAttachmentLoadSta
  * Result of loading message attachments
  */
 export const LoadMessageAttachmentsResultSchema = z.object({
-  filePartsByMessageId: z.custom<Map<string, ModelFilePart[]>>(),
   errors: z.array(MessageAttachmentLoadErrorSchema),
+  filePartsByMessageId: z.custom<Map<string, ModelFilePart[]>>(),
   stats: MessageAttachmentLoadStatsSchema,
 });
 
 export type LoadMessageAttachmentsResult = z.infer<typeof LoadMessageAttachmentsResultSchema>;
+
+/**
+ * Parameters for loading attachment content with URL generation
+ * Extends base parameters with URL generation requirements
+ */
+export const LoadAttachmentContentUrlParamsSchema = LoadAttachmentContentParamsSchema.extend({
+  /** Base URL of the application for generating signed URLs */
+  baseUrl: z.string().min(1),
+  /** BETTER_AUTH_SECRET for signing */
+  secret: z.string().min(1),
+  /** Optional thread ID for URL signing */
+  threadId: z.string().optional(),
+  /** User ID for signing URLs */
+  userId: z.string().min(1),
+});
+
+export type LoadAttachmentContentUrlParams = z.infer<typeof LoadAttachmentContentUrlParamsSchema>;
+
+/**
+ * Parameters for loading message attachments with URL generation
+ * Extends base parameters with URL generation requirements
+ */
+export const LoadMessageAttachmentsUrlParamsSchema = LoadMessageAttachmentsParamsSchema.extend({
+  /** Base URL of the application for generating signed URLs */
+  baseUrl: z.string().min(1),
+  /** BETTER_AUTH_SECRET for signing */
+  secret: z.string().min(1),
+  /** Optional thread ID for URL signing */
+  threadId: z.string().optional(),
+  /** User ID for signing URLs */
+  userId: z.string().min(1),
+});
+
+export type LoadMessageAttachmentsUrlParams = z.infer<typeof LoadMessageAttachmentsUrlParamsSchema>;
 
 // ============================================================================
 // SIGNED URL TYPES
@@ -318,14 +352,14 @@ export type LoadMessageAttachmentsResult = z.infer<typeof LoadMessageAttachments
  * Options for generating signed URLs (owner-only access)
  */
 export const SignedUrlOptionsSchema = z.object({
+  /** Expiration time in milliseconds (default: 15 minutes) */
+  expirationMs: z.number().optional(),
+  /** Optional thread ID for thread-scoped access */
+  threadId: z.string().optional(),
   /** Upload ID to sign */
   uploadId: z.string(),
   /** User ID who owns the file and is being granted access */
   userId: z.string(),
-  /** Optional thread ID for thread-scoped access */
-  threadId: z.string().optional(),
-  /** Expiration time in milliseconds (default: 15 minutes) */
-  expirationMs: z.number().optional(),
 });
 
 export type SignedUrlOptions = z.infer<typeof SignedUrlOptionsSchema>;
@@ -334,16 +368,16 @@ export type SignedUrlOptions = z.infer<typeof SignedUrlOptionsSchema>;
  * Signed URL query parameters
  */
 export const SignedUrlParamsSchema = z.object({
-  /** Upload ID */
-  id: z.string(),
   /** Expiration timestamp (Unix ms) */
   exp: z.number(),
-  /** User ID or 'public' */
-  uid: z.string(),
-  /** Optional thread ID */
-  tid: z.string().optional(),
+  /** Upload ID */
+  id: z.string(),
   /** Cryptographic signature */
   sig: z.string(),
+  /** Optional thread ID */
+  tid: z.string().optional(),
+  /** User ID or 'public' */
+  uid: z.string(),
 });
 
 export type SignedUrlParams = z.infer<typeof SignedUrlParamsSchema>;
@@ -352,18 +386,18 @@ export type SignedUrlParams = z.infer<typeof SignedUrlParamsSchema>;
  * Valid signature result (owner-only, no public access)
  */
 export const ValidSignatureResultSchema = z.object({
-  valid: z.literal(true),
+  threadId: z.string().optional(),
   uploadId: z.string(),
   userId: z.string(),
-  threadId: z.string().optional(),
+  valid: z.literal(true),
 });
 
 /**
  * Invalid signature result
  */
 export const InvalidSignatureResultSchema = z.object({
-  valid: z.literal(false),
   error: z.string(),
+  valid: z.literal(false),
 });
 
 /**
@@ -384,11 +418,11 @@ export type ValidateSignatureResult = z.infer<typeof ValidateSignatureResultSche
  * Upload cleanup state schema
  */
 export const UploadCleanupStateSchema = z.object({
-  uploadId: z.string(),
-  userId: z.string(),
+  createdAt: z.number(),
   r2Key: z.string(),
   scheduledAt: z.number(),
-  createdAt: z.number(),
+  uploadId: z.string(),
+  userId: z.string(),
 });
 
 export type UploadCleanupState = z.infer<typeof UploadCleanupStateSchema>;
@@ -397,8 +431,8 @@ export type UploadCleanupState = z.infer<typeof UploadCleanupStateSchema>;
  * Schedule cleanup result
  */
 export const ScheduleCleanupResultSchema = z.object({
-  scheduled: z.boolean(),
   alarmTime: z.number(),
+  scheduled: z.boolean(),
 });
 
 export type ScheduleCleanupResult = z.infer<typeof ScheduleCleanupResultSchema>;

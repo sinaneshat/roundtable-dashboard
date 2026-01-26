@@ -152,8 +152,9 @@ export function isModelCompatibleWithFileSize(
   totalFileSizeMB: number,
 ): boolean {
   // If model has no limit defined, assume compatible
-  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null) {
     return true;
+  }
   return totalFileSizeMB <= modelMaxFileSizeMB;
 }
 
@@ -169,10 +170,12 @@ export function getFileSizeIncompatibilityReason(
   modelMaxFileSizeMB: number | undefined,
   totalFileSizeMB: number,
 ): IncompatibilityReason | null {
-  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null) {
     return null;
-  if (totalFileSizeMB <= modelMaxFileSizeMB)
+  }
+  if (totalFileSizeMB <= modelMaxFileSizeMB) {
     return null;
+  }
   return IncompatibilityReasons.FILE_TOO_LARGE;
 }
 
@@ -186,8 +189,9 @@ export function getFileSizeIncompatibilityReason(
 export function getFileSizeCapacityMessage(
   modelMaxFileSizeMB: number | undefined,
 ): string | null {
-  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null) {
     return null;
+  }
   return `This model supports up to ${modelMaxFileSizeMB}MB of file content`;
 }
 
@@ -282,7 +286,7 @@ export function getDetailedIncompatibleModelIds<T extends { id: string; capabili
 
   // No files = no incompatibilities
   if (files.length === 0) {
-    return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+    return { fileIncompatibleIds, incompatibleIds, visionIncompatibleIds };
   }
 
   const hasImages = filesHaveImages(files);
@@ -301,7 +305,7 @@ export function getDetailedIncompatibleModelIds<T extends { id: string; capabili
     }
   }
 
-  return { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds };
+  return { fileIncompatibleIds, incompatibleIds, visionIncompatibleIds };
 }
 
 // ============================================================================
@@ -312,12 +316,15 @@ export function getDetailedIncompatibleModelIds<T extends { id: string; capabili
  * Helper to extract mediaType from a message part
  */
 function getPartMediaType(part: unknown): string | null {
-  if (typeof part !== 'object' || part === null)
+  if (typeof part !== 'object' || part === null) {
     return null;
-  if (!('type' in part) || part.type !== 'file')
+  }
+  if (!('type' in part) || part.type !== 'file') {
     return null;
-  if (!('mediaType' in part) || typeof part.mediaType !== 'string')
+  }
+  if (!('mediaType' in part) || typeof part.mediaType !== 'string') {
     return null;
+  }
   return part.mediaType;
 }
 
@@ -329,11 +336,12 @@ function getPartMediaType(part: unknown): string | null {
  * @returns true if any message contains vision-required files (images/PDFs)
  */
 export function threadHasVisionRequiredFiles(
-  messages: Array<{ parts?: unknown[] }>,
+  messages: { parts?: unknown[] }[],
 ): boolean {
   return messages.some((msg) => {
-    if (!msg.parts)
+    if (!msg.parts) {
       return false;
+    }
     return msg.parts.some((part) => {
       const mediaType = getPartMediaType(part);
       return mediaType !== null && isVisionRequiredMimeType(mediaType);
@@ -346,11 +354,12 @@ export function threadHasVisionRequiredFiles(
  * Used to determine if non-vision models should be disabled
  */
 export function threadHasImageFiles(
-  messages: Array<{ parts?: unknown[] }>,
+  messages: { parts?: unknown[] }[],
 ): boolean {
   return messages.some((msg) => {
-    if (!msg.parts)
+    if (!msg.parts) {
       return false;
+    }
     return msg.parts.some((part) => {
       const mediaType = getPartMediaType(part);
       return mediaType !== null && isImageFile(mediaType);
@@ -363,11 +372,12 @@ export function threadHasImageFiles(
  * Used to determine if non-file-supporting models should be disabled
  */
 export function threadHasDocumentFiles(
-  messages: Array<{ parts?: unknown[] }>,
+  messages: { parts?: unknown[] }[],
 ): boolean {
   return messages.some((msg) => {
-    if (!msg.parts)
+    if (!msg.parts) {
       return false;
+    }
     return msg.parts.some((part) => {
       const mediaType = getPartMediaType(part);
       return mediaType !== null && isDocumentFile(mediaType);

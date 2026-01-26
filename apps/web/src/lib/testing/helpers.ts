@@ -29,21 +29,21 @@ export function createAssistantMetadata(
   participantIndex: number,
 ): DbAssistantMessageMetadata {
   return {
-    role: MessageRoles.ASSISTANT,
-    roundNumber,
+    finishReason: FinishReasons.STOP,
+    hasError: false,
+    isPartialResponse: false,
+    isTransient: false,
+    model: 'gpt-4',
     participantId,
     participantIndex,
     participantRole: null,
-    model: 'gpt-4',
-    finishReason: FinishReasons.STOP,
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
     usage: {
-      promptTokens: 100,
       completionTokens: 50,
+      promptTokens: 100,
       totalTokens: 150,
     },
-    hasError: false,
-    isTransient: false,
-    isPartialResponse: false,
   };
 }
 
@@ -52,13 +52,13 @@ export function createTestUIMessage(data: {
   role: UIMessageRole;
   content: string;
   metadata: DbUserMessageMetadata | DbAssistantMessageMetadata;
-  parts?: Array<{ type: 'text'; text: string }>;
+  parts?: { type: 'text'; text: string }[];
 }): UIMessage {
   return {
     id: data.id,
-    role: data.role,
-    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: data.metadata,
+    parts: data.parts ?? [{ text: data.content, type: MessagePartTypes.TEXT }],
+    role: data.role,
   };
 }
 
@@ -67,17 +67,17 @@ export function createTestUserMessage(data: {
   content: string;
   roundNumber: number;
   createdAt?: string;
-  parts?: Array<{ type: 'text'; text: string }>;
+  parts?: { type: 'text'; text: string }[];
 }): UIMessage {
   return {
     id: data.id,
-    role: UIMessageRoles.USER,
-    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber: data.roundNumber,
       ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
     },
+    parts: data.parts ?? [{ text: data.content, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -91,30 +91,30 @@ export function createTestAssistantMessage(data: {
   finishReason?: DbAssistantMessageMetadata['finishReason'];
   hasError?: boolean;
   createdAt?: string;
-  parts?: Array<{ type: 'text'; text: string }>;
+  parts?: { type: 'text'; text: string }[];
 }): UIMessage {
   return {
     id: data.id,
-    role: UIMessageRoles.ASSISTANT,
-    parts: data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber: data.roundNumber,
+      finishReason: data.finishReason ?? FinishReasons.STOP,
+      hasError: data.hasError ?? false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: data.model ?? 'gpt-4',
       participantId: data.participantId,
       participantIndex: data.participantIndex,
       participantRole: null,
-      model: data.model ?? 'gpt-4',
-      finishReason: data.finishReason ?? FinishReasons.STOP,
+      role: MessageRoles.ASSISTANT,
+      roundNumber: data.roundNumber,
       usage: {
-        promptTokens: 100,
         completionTokens: 50,
+        promptTokens: 100,
         totalTokens: 150,
       },
-      hasError: data.hasError ?? false,
-      isTransient: false,
-      isPartialResponse: false,
       ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
     },
+    parts: data.parts ?? [{ text: data.content, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -126,52 +126,52 @@ export function createTestModeratorMessage(data: {
   finishReason?: DbAssistantMessageMetadata['finishReason'];
   hasError?: boolean;
   createdAt?: string;
-  parts?: Array<{ type: 'text'; text: string }>;
+  parts?: { type: 'text'; text: string }[];
 }): UIMessage {
-  const parts: Array<{ type: 'text'; text: string }> = data.parts ?? [{ type: MessagePartTypes.TEXT, text: data.content }];
+  const parts: { type: 'text'; text: string }[] = data.parts ?? [{ text: data.content, type: MessagePartTypes.TEXT }];
   return {
     id: data.id,
-    role: UIMessageRoles.ASSISTANT,
-    parts,
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber: data.roundNumber,
-      model: data.model ?? ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: data.finishReason ?? FinishReasons.STOP,
+      hasError: data.hasError ?? false,
+      isModerator: true,
+      model: data.model ?? ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
+      role: MessageRoles.ASSISTANT,
+      roundNumber: data.roundNumber,
       usage: {
-        promptTokens: 100,
         completionTokens: 50,
+        promptTokens: 100,
         totalTokens: 150,
       },
-      hasError: data.hasError ?? false,
       ...(data.createdAt !== undefined && { createdAt: data.createdAt }),
     },
+    parts,
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
 export function createMockMessages(customMessages?: AbstractIntlMessages): AbstractIntlMessages {
   const defaultMessages: AbstractIntlMessages = {
+    chat: {
+      modelLabel: 'Model',
+      newThread: 'New Chat',
+      participantLabel: 'Participant',
+      sendMessage: 'Send Message',
+    },
     common: {
-      loading: 'Loading...',
-      error: 'Error',
-      save: 'Save',
       cancel: 'Cancel',
-      submit: 'Submit',
       close: 'Close',
+      confirm: 'Confirm',
+      create: 'Create',
       delete: 'Delete',
       edit: 'Edit',
-      create: 'Create',
-      update: 'Update',
-      confirm: 'Confirm',
-      yes: 'Yes',
+      error: 'Error',
+      loading: 'Loading...',
       no: 'No',
-    },
-    chat: {
-      newThread: 'New Chat',
-      sendMessage: 'Send Message',
-      participantLabel: 'Participant',
-      modelLabel: 'Model',
+      save: 'Save',
+      submit: 'Submit',
+      update: 'Update',
+      yes: 'Yes',
     },
   };
 
@@ -179,7 +179,9 @@ export function createMockMessages(customMessages?: AbstractIntlMessages): Abstr
 }
 
 export async function waitForAsync(ms = 0): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 export function createMockDate(dateString = '2024-01-01T00:00:00.000Z'): Date {

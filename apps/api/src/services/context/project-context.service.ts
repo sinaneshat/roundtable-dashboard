@@ -32,6 +32,7 @@ import type {
   ProjectSearchContext,
 } from '@/common/schemas/project-context';
 import * as tables from '@/db';
+import type { UploadMetadata } from '@/db/validation/upload';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { getExtractedText } from '@/lib/utils/metadata';
 import { PreSearchDataPayloadSchema } from '@/routes/chat/schema';
@@ -50,32 +51,32 @@ import type { CitableSource, CitationSourceMap } from '@/types/citations';
 export async function getProjectMemories(
   params: Pick<ProjectContextParams, 'projectId' | 'maxMemories' | 'db'>,
 ): Promise<ProjectMemoryContext> {
-  const { projectId, maxMemories = 10, db } = params;
+  const { db, maxMemories = 10, projectId } = params;
 
   const memories = await db.query.projectMemory.findMany({
+    columns: {
+      content: true,
+      id: true,
+      importance: true,
+      source: true,
+      sourceThreadId: true,
+      summary: true,
+    },
+    limit: maxMemories,
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
     where: and(
       eq(tables.projectMemory.projectId, projectId),
       eq(tables.projectMemory.isActive, true),
     ),
-    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
-    limit: maxMemories,
-    columns: {
-      id: true,
-      content: true,
-      summary: true,
-      source: true,
-      importance: true,
-      sourceThreadId: true,
-    },
   });
 
   // Get total count for pagination info
   const allMemories = await db.query.projectMemory.findMany({
+    columns: { id: true },
     where: and(
       eq(tables.projectMemory.projectId, projectId),
       eq(tables.projectMemory.isActive, true),
     ),
-    columns: { id: true },
   });
 
   return {
@@ -94,20 +95,20 @@ export async function getProjectMemories(
 export async function getProjectChatContext(
   params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxMessagesPerThread' | 'db'>,
 ): Promise<ProjectChatContext> {
-  const { projectId, currentThreadId, maxMessagesPerThread = 5, db } = params;
+  const { currentThreadId, db, maxMessagesPerThread = 5, projectId } = params;
 
   // Get other threads in this project (excluding current)
   const projectThreads = await db.query.chatThread.findMany({
-    where: and(
-      eq(tables.chatThread.projectId, projectId),
-      ne(tables.chatThread.id, currentThreadId),
-    ),
-    orderBy: [desc(tables.chatThread.lastMessageAt)],
-    limit: 5, // Only get 5 most recently active threads
     columns: {
       id: true,
       title: true,
     },
+    limit: 5, // Only get 5 most recently active threads
+    orderBy: [desc(tables.chatThread.lastMessageAt)],
+    where: and(
+      eq(tables.chatThread.projectId, projectId),
+      ne(tables.chatThread.id, currentThreadId),
+    ),
   });
 
   if (projectThreads.length === 0) {
@@ -118,24 +119,24 @@ export async function getProjectChatContext(
   const threadsWithMessages = await Promise.all(
     projectThreads.map(async (thread) => {
       const messages = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, thread.id),
-        orderBy: [desc(tables.chatMessage.roundNumber), desc(tables.chatMessage.createdAt)],
-        limit: maxMessagesPerThread,
         columns: {
-          role: true,
           parts: true,
+          role: true,
           roundNumber: true,
         },
+        limit: maxMessagesPerThread,
+        orderBy: [desc(tables.chatMessage.roundNumber), desc(tables.chatMessage.createdAt)],
+        where: eq(tables.chatMessage.threadId, thread.id),
       });
 
       return {
         id: thread.id,
-        title: thread.title,
         messages: messages.map(msg => ({
-          role: msg.role,
           content: extractTextFromParts(msg.parts),
+          role: msg.role,
           roundNumber: msg.roundNumber,
         })).filter(msg => msg.content.trim().length > 0),
+        title: thread.title,
       };
     }),
   );
@@ -159,15 +160,15 @@ export async function getProjectChatContext(
 export async function getProjectSearchContext(
   params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxSearchResults' | 'db'>,
 ): Promise<ProjectSearchContext> {
-  const { projectId, currentThreadId, maxSearchResults = 5, db } = params;
+  const { currentThreadId, db, maxSearchResults = 5, projectId } = params;
 
   // Get other threads in this project
   const projectThreads = await db.query.chatThread.findMany({
+    columns: { id: true, title: true },
     where: and(
       eq(tables.chatThread.projectId, projectId),
       ne(tables.chatThread.id, currentThreadId),
     ),
-    columns: { id: true, title: true },
   });
 
   if (projectThreads.length === 0) {
@@ -179,18 +180,18 @@ export async function getProjectSearchContext(
 
   // Get completed pre-searches from project threads
   const preSearches = await db.query.chatPreSearch.findMany({
+    columns: {
+      roundNumber: true,
+      searchData: true,
+      threadId: true,
+      userQuery: true,
+    },
+    limit: maxSearchResults,
+    orderBy: [desc(tables.chatPreSearch.createdAt)],
     where: and(
       inArray(tables.chatPreSearch.threadId, threadIds),
       eq(tables.chatPreSearch.status, PreSearchStatuses.COMPLETE),
     ),
-    orderBy: [desc(tables.chatPreSearch.createdAt)],
-    limit: maxSearchResults,
-    columns: {
-      threadId: true,
-      roundNumber: true,
-      userQuery: true,
-      searchData: true,
-    },
   });
 
   const searches = preSearches.map((search) => {
@@ -198,15 +199,15 @@ export async function getProjectSearchContext(
     const searchData = parseResult.success ? parseResult.data : null;
 
     return {
+      results: searchData?.results?.slice(0, 3).map(r => ({
+        answer: r.answer,
+        query: r.query,
+      })) || [],
+      roundNumber: search.roundNumber,
+      summary: searchData?.summary || null,
       threadId: search.threadId,
       threadTitle: threadTitleMap.get(search.threadId) || 'Unknown',
-      roundNumber: search.roundNumber,
       userQuery: search.userQuery,
-      summary: searchData?.summary || null,
-      results: searchData?.results?.slice(0, 3).map(r => ({
-        query: r.query,
-        answer: r.answer,
-      })) || [],
     };
   });
 
@@ -226,15 +227,15 @@ export async function getProjectSearchContext(
 export async function getProjectModeratorContext(
   params: Pick<ProjectContextParams, 'projectId' | 'currentThreadId' | 'maxModerators' | 'db'>,
 ): Promise<ProjectModeratorContext> {
-  const { projectId, currentThreadId, maxModerators = 3, db } = params;
+  const { currentThreadId, db, maxModerators = 3, projectId } = params;
 
   // Get other threads in this project
   const projectThreads = await db.query.chatThread.findMany({
+    columns: { id: true, title: true },
     where: and(
       eq(tables.chatThread.projectId, projectId),
       ne(tables.chatThread.id, currentThreadId),
     ),
-    columns: { id: true, title: true },
   });
 
   if (projectThreads.length === 0) {
@@ -247,17 +248,17 @@ export async function getProjectModeratorContext(
   // ✅ TEXT STREAMING: Query chatMessage for moderator messages
   // Moderator messages have role: MessageRoles.ASSISTANT and metadata.isModerator: true
   const allMessages = await db.query.chatMessage.findMany({
+    columns: {
+      metadata: true,
+      parts: true,
+      roundNumber: true,
+      threadId: true,
+    },
+    orderBy: [desc(tables.chatMessage.createdAt)],
     where: and(
       inArray(tables.chatMessage.threadId, threadIds),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    orderBy: [desc(tables.chatMessage.createdAt)],
-    columns: {
-      threadId: true,
-      roundNumber: true,
-      parts: true,
-      metadata: true,
-    },
   });
 
   // Filter for moderator messages and extract text
@@ -268,15 +269,15 @@ export async function getProjectModeratorContext(
 
   // Get user questions for each round
   const userMessages = await db.query.chatMessage.findMany({
+    columns: {
+      parts: true,
+      roundNumber: true,
+      threadId: true,
+    },
     where: and(
       inArray(tables.chatMessage.threadId, threadIds),
       eq(tables.chatMessage.role, MessageRoles.USER),
     ),
-    columns: {
-      threadId: true,
-      roundNumber: true,
-      parts: true,
-    },
   });
 
   // Map user questions by thread+round
@@ -301,13 +302,13 @@ export async function getProjectModeratorContext(
     const userQuestion = userQuestionMap.get(`${msg.threadId}_${msg.roundNumber}`) || '';
 
     return {
-      threadId: msg.threadId,
-      threadTitle: threadTitleMap.get(msg.threadId) || 'Unknown',
-      roundNumber: msg.roundNumber,
-      userQuestion,
+      keyThemes: null,
       moderator: moderatorText,
       recommendations: [],
-      keyThemes: null,
+      roundNumber: msg.roundNumber,
+      threadId: msg.threadId,
+      threadTitle: threadTitleMap.get(msg.threadId) || 'Unknown',
+      userQuestion,
     };
   });
 
@@ -348,7 +349,7 @@ const TEXT_MIME_TYPES = new Set([
  * - Text files: fetch from R2 and decode
  */
 async function loadAttachmentTextContent(
-  upload: { r2Key: string; mimeType: string; fileSize: number; metadata: unknown },
+  upload: { r2Key: string; mimeType: string; fileSize: number; metadata: UploadMetadata | null },
   r2Bucket: R2Bucket,
 ): Promise<string | null> {
   // 1. Check for pre-extracted text (PDFs and processed docs)
@@ -386,7 +387,7 @@ async function loadAttachmentTextContent(
 export async function getProjectAttachmentContext(
   params: Pick<ProjectContextParams, 'projectId' | 'db' | 'r2Bucket'> & { maxAttachments?: number },
 ): Promise<ProjectAttachmentContext> {
-  const { projectId, maxAttachments = 10, db, r2Bucket } = params;
+  const { db, maxAttachments = 10, projectId, r2Bucket } = params;
 
   // 1. Get project-level attachments (directly attached to project)
   const projectAttachmentsRaw = await db
@@ -407,16 +408,16 @@ export async function getProjectAttachmentContext(
 
   // 2. Get thread-level uploads
   const projectThreads = await db.query.chatThread.findMany({
-    where: eq(tables.chatThread.projectId, projectId),
     columns: { id: true, title: true },
+    where: eq(tables.chatThread.projectId, projectId),
   });
 
   const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
 
-  let threadUploadsRaw: Array<{
+  let threadUploadsRaw: {
     thread_upload: { threadId: string; uploadId: string };
-    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: unknown };
-  }> = [];
+    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: UploadMetadata | null };
+  }[] = [];
 
   if (projectThreads.length > 0) {
     const threadIds = projectThreads.map(t => t.id);
@@ -436,7 +437,7 @@ export async function getProjectAttachmentContext(
 
   // 3. Load text content for attachments in parallel when r2Bucket available
   const loadContent = async (
-    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: unknown },
+    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: UploadMetadata | null },
     threadId: string | null,
     threadTitle: string | null,
     source: 'project' | 'thread',
@@ -446,27 +447,27 @@ export async function getProjectAttachmentContext(
       textContent = await loadAttachmentTextContent(upload, r2Bucket);
     }
     return {
-      id: upload.id,
       filename: upload.filename,
-      mimeType: upload.mimeType,
       fileSize: upload.fileSize,
+      id: upload.id,
+      mimeType: upload.mimeType,
       r2Key: upload.r2Key,
-      threadId,
-      threadTitle,
       source,
       textContent,
+      threadId,
+      threadTitle,
     };
   };
 
   // 4. Process project attachments
-  const projectAttachmentPromises = projectAttachmentsRaw.map(row =>
-    loadContent(row.upload, null, null, 'project'),
+  const projectAttachmentPromises = projectAttachmentsRaw.map(async row =>
+    await loadContent(row.upload, null, null, 'project'),
   );
 
   // 5. Process thread uploads (excluding duplicates)
   const filteredThreadUploads = threadUploadsRaw.filter(row => !projectUploadIds.has(row.upload.id));
-  const threadAttachmentPromises = filteredThreadUploads.map(row =>
-    loadContent(
+  const threadAttachmentPromises = filteredThreadUploads.map(async row =>
+    await loadContent(
       row.upload,
       row.thread_upload.threadId,
       threadTitleMap.get(row.thread_upload.threadId) || null,
@@ -507,11 +508,11 @@ export async function getAggregatedProjectContext(
   ]);
 
   return {
-    memories,
-    chats,
-    searches,
-    moderators,
     attachments,
+    chats,
+    memories,
+    moderators,
+    searches,
   };
 }
 
@@ -582,7 +583,7 @@ type RagSearchResultItem = {
   file_id: string;
   filename: string;
   score: number;
-  content: Array<{ type: string; text: string }>;
+  content: { type: string; text: string }[];
 };
 
 /**
@@ -614,24 +615,24 @@ export type ProjectRagContextResult = {
 export async function getProjectRagContext(
   params: ProjectRagContextParams,
 ): Promise<ProjectRagContextResult> {
-  const { projectId, query, ai, db, maxResults = 5, userId } = params;
+  const { ai, db, maxResults = 5, projectId, query, userId } = params;
 
   const emptyResult: ProjectRagContextResult = {
-    instructions: null,
-    ragContext: '',
     citableSources: [],
     citationSourceMap: new Map(),
+    instructions: null,
+    ragContext: '',
   };
 
   // Fetch project with RAG config
   const project = await db.query.chatProject.findFirst({
-    where: eq(tables.chatProject.id, projectId),
     columns: {
-      id: true,
-      customInstructions: true,
       autoragInstanceId: true,
+      customInstructions: true,
+      id: true,
       r2FolderPrefix: true,
     },
+    where: eq(tables.chatProject.id, projectId),
   });
 
   if (!project) {
@@ -647,33 +648,33 @@ export async function getProjectRagContext(
 
   // Fetch active project memories (including instruction memory)
   const memories = await db.query.projectMemory.findMany({
+    columns: {
+      content: true,
+      id: true,
+      importance: true,
+      source: true,
+      summary: true,
+    },
+    limit: 10,
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
     where: and(
       eq(tables.projectMemory.projectId, projectId),
       eq(tables.projectMemory.isActive, true),
     ),
-    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
-    limit: 10,
-    columns: {
-      id: true,
-      content: true,
-      summary: true,
-      source: true,
-      importance: true,
-    },
   });
 
   // Add memories as citable sources
   for (const memory of memories) {
     const citationId = `${CitationSourcePrefixes[CitationSourceTypes.MEMORY]}_${memory.id.slice(0, 8)}`;
     const memorySource: CitableSource = {
-      id: citationId,
-      type: CitationSourceTypes.MEMORY,
-      sourceId: memory.id,
-      title: memory.summary || 'Project Memory',
       content: memory.content.slice(0, 300) + (memory.content.length > 300 ? '...' : ''),
+      id: citationId,
       metadata: {
         importance: memory.importance,
       },
+      sourceId: memory.id,
+      title: memory.summary || 'Project Memory',
+      type: CitationSourceTypes.MEMORY,
     };
     citableSources.push(memorySource);
     citationSourceMap.set(citationId, memorySource);
@@ -686,19 +687,7 @@ export async function getProjectRagContext(
 
     try {
       const ragResponse = await ai.autorag(project.autoragInstanceId).aiSearch({
-        query,
-        max_num_results: maxResults,
-        rewrite_query: true,
-        stream: false,
-        reranking: {
-          enabled: true,
-          model: '@cf/baai/bge-reranker-base',
-        },
-        ranking_options: {
-          score_threshold: 0.3,
-        },
         filters: {
-          type: 'and',
           filters: [
             {
               key: 'folder',
@@ -711,7 +700,19 @@ export async function getProjectRagContext(
               value: `${project.r2FolderPrefix}/z`,
             },
           ],
+          type: 'and',
         },
+        max_num_results: maxResults,
+        query,
+        ranking_options: {
+          score_threshold: 0.3,
+        },
+        reranking: {
+          enabled: true,
+          model: '@cf/baai/bge-reranker-base',
+        },
+        rewrite_query: true,
+        stream: false,
       });
 
       // Track RAG query span for PostHog analytics
@@ -719,18 +720,18 @@ export async function getProjectRagContext(
       trackSpan(
         { userId: userId || 'anonymous' },
         {
-          traceId: ragTraceId,
-          spanName: 'rag_query',
-          inputState: { query, projectId, maxResults },
+          inputState: { maxResults, projectId, query },
           outputState: { resultsCount: ragResponse.data?.length || 0 },
+          spanName: 'rag_query',
+          traceId: ragTraceId,
         },
         ragLatencyMs,
         {
           additionalProperties: {
-            projectId,
-            operation_type: 'rag_query',
             autorag_instance_id: project.autoragInstanceId,
             estimated_cost_usd: CLOUDFLARE_AI_SEARCH_COST_PER_QUERY,
+            operation_type: 'rag_query',
+            projectId,
             provider: 'cloudflare',
           },
         },
@@ -747,14 +748,14 @@ export async function getProjectRagContext(
             const citationId = `${CitationSourcePrefixes[CitationSourceTypes.RAG]}_${result.file_id.slice(0, 8)}`;
 
             const ragSource: CitableSource = {
-              id: citationId,
-              type: CitationSourceTypes.RAG,
-              sourceId: result.file_id,
-              title: result.filename,
               content: contentText.slice(0, 500) + (contentText.length > 500 ? '...' : ''),
+              id: citationId,
               metadata: {
                 filename: result.filename,
               },
+              sourceId: result.file_id,
+              title: result.filename,
+              type: CitationSourceTypes.RAG,
             };
             citableSources.push(ragSource);
             citationSourceMap.set(citationId, ragSource);
@@ -800,9 +801,9 @@ export async function getProjectRagContext(
   }
 
   return {
-    instructions,
-    ragContext,
     citableSources,
     citationSourceMap,
+    instructions,
+    ragContext,
   };
 }

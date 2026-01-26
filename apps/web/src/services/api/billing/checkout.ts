@@ -55,3 +55,51 @@ export async function syncAfterCheckoutService(data?: SyncAfterCheckoutRequest):
   }
   return res.json();
 }
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard to check if checkout response is successful
+ */
+export function isCheckoutSuccess(response: CreateCheckoutSessionResponse | undefined): response is Extract<CreateCheckoutSessionResponse, { success: true }> {
+  return response !== undefined && response.success === true && 'data' in response;
+}
+
+/**
+ * Get checkout URL from successful response
+ */
+export function getCheckoutUrl(response: CreateCheckoutSessionResponse | undefined): string | undefined {
+  if (!isCheckoutSuccess(response)) {
+    return undefined;
+  }
+  return response.data.url;
+}
+
+/**
+ * Type guard to check if sync-after-checkout response is successful
+ */
+export function isSyncAfterCheckoutSuccess(response: SyncAfterCheckoutResponse | undefined): response is Extract<SyncAfterCheckoutResponse, { success: true }> {
+  return response !== undefined && response.success === true && 'data' in response;
+}
+
+/**
+ * Get tier change from sync response safely
+ */
+export function getSyncedTierChange(response: SyncAfterCheckoutResponse | undefined) {
+  if (!isSyncAfterCheckoutSuccess(response)) {
+    return undefined;
+  }
+  return response.data.tierChange;
+}
+
+/**
+ * Get purchase type from sync response safely
+ */
+export function getSyncPurchaseType(response: SyncAfterCheckoutResponse | undefined) {
+  if (!isSyncAfterCheckoutSuccess(response)) {
+    return undefined;
+  }
+  return response.data.purchaseType;
+}

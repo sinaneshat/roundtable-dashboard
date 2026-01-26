@@ -27,10 +27,10 @@ export type BillingInterval = z.infer<typeof BillingIntervalSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const BillingIntervals = {
-  MONTH: 'month' as const,
-  YEAR: 'year' as const,
-  WEEK: 'week' as const,
   DAY: 'day' as const,
+  MONTH: 'month' as const,
+  WEEK: 'week' as const,
+  YEAR: 'year' as const,
 } as const;
 
 // ============================================================================
@@ -82,9 +82,9 @@ export type SubscriptionChangeType = z.infer<typeof SubscriptionChangeTypeSchema
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const SubscriptionChangeTypes = {
-  UPGRADE: 'upgrade' as const,
-  DOWNGRADE: 'downgrade' as const,
   CHANGE: 'change' as const,
+  DOWNGRADE: 'downgrade' as const,
+  UPGRADE: 'upgrade' as const,
 } as const;
 
 // ============================================================================
@@ -118,13 +118,13 @@ export type StripeSubscriptionStatus = z.infer<typeof StripeSubscriptionStatusSc
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const StripeSubscriptionStatuses = {
   ACTIVE: 'active' as const,
-  TRIALING: 'trialing' as const,
-  PAST_DUE: 'past_due' as const,
-  UNPAID: 'unpaid' as const,
   CANCELED: 'canceled' as const,
   INCOMPLETE: 'incomplete' as const,
   INCOMPLETE_EXPIRED: 'incomplete_expired' as const,
+  PAST_DUE: 'past_due' as const,
   PAUSED: 'paused' as const,
+  TRIALING: 'trialing' as const,
+  UNPAID: 'unpaid' as const,
 } as const;
 
 // Active subscription status subset (billable states)
@@ -205,7 +205,7 @@ export const SubscriptionTiers = {
 } as const;
 
 export function assertNeverTier(tier: never): never {
-  throw new Error(`Unhandled tier: ${tier}. Update all tier configurations.`);
+  throw new Error(`Unhandled tier: ${String(tier)}. Update all tier configurations.`);
 }
 
 // ============================================================================
@@ -229,9 +229,9 @@ export type UsageStatus = z.infer<typeof UsageStatusSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const UsageStatuses = {
+  CRITICAL: 'critical' as const,
   DEFAULT: 'default' as const,
   WARNING: 'warning' as const,
-  CRITICAL: 'critical' as const,
 } as const;
 
 export const UsageStatusMetadata: Record<UsageStatus, {
@@ -241,26 +241,26 @@ export const UsageStatusMetadata: Record<UsageStatus, {
   progressColor: string;
   threshold: number;
 }> = {
+  [UsageStatuses.CRITICAL]: {
+    color: 'bg-destructive',
+    label: 'Critical',
+    progressColor: 'bg-destructive',
+    textColor: 'text-destructive',
+    threshold: 0.1,
+  },
   [UsageStatuses.DEFAULT]: {
-    label: 'Normal',
     color: 'bg-primary',
-    textColor: 'text-foreground',
+    label: 'Normal',
     progressColor: 'bg-primary',
+    textColor: 'text-foreground',
     threshold: 0.5,
   },
   [UsageStatuses.WARNING]: {
-    label: 'Low Credits',
     color: 'bg-warning',
-    textColor: 'text-orange-600 dark:text-orange-500',
+    label: 'Low Credits',
     progressColor: 'bg-warning',
+    textColor: 'text-orange-600 dark:text-orange-500',
     threshold: 0.2,
-  },
-  [UsageStatuses.CRITICAL]: {
-    label: 'Critical',
-    color: 'bg-destructive',
-    textColor: 'text-destructive',
-    progressColor: 'bg-destructive',
-    threshold: 0.1,
   },
 } as const;
 
@@ -338,13 +338,13 @@ export type CreditTransactionType = z.infer<typeof CreditTransactionTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const CreditTransactionTypes = {
+  ADJUSTMENT: 'adjustment' as const,
   CREDIT_GRANT: 'credit_grant' as const,
+  DEDUCTION: 'deduction' as const,
   MONTHLY_REFILL: 'monthly_refill' as const,
   PURCHASE: 'purchase' as const,
-  DEDUCTION: 'deduction' as const,
-  RESERVATION: 'reservation' as const,
   RELEASE: 'release' as const,
-  ADJUSTMENT: 'adjustment' as const,
+  RESERVATION: 'reservation' as const,
 } as const;
 
 export function isCreditTransactionType(value: unknown): value is CreditTransactionType {
@@ -423,20 +423,20 @@ export type CreditAction = z.infer<typeof CreditActionSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const CreditActions = {
-  USER_MESSAGE: 'user_message' as const,
   AI_RESPONSE: 'ai_response' as const,
-  WEB_SEARCH: 'web_search' as const,
-  FILE_READING: 'file_reading' as const,
-  THREAD_CREATION: 'thread_creation' as const,
   ANALYSIS_GENERATION: 'analysis_generation' as const,
-  SIGNUP_BONUS: 'signup_bonus' as const,
-  MONTHLY_RENEWAL: 'monthly_renewal' as const,
   CREDIT_PURCHASE: 'credit_purchase' as const,
+  FILE_READING: 'file_reading' as const,
   FREE_ROUND_COMPLETE: 'free_round_complete' as const,
   MEMORY_EXTRACTION: 'memory_extraction' as const,
-  RAG_QUERY: 'rag_query' as const,
+  MONTHLY_RENEWAL: 'monthly_renewal' as const,
   PROJECT_FILE_LINK: 'project_file_link' as const,
   PROJECT_STORAGE: 'project_storage' as const,
+  RAG_QUERY: 'rag_query' as const,
+  SIGNUP_BONUS: 'signup_bonus' as const,
+  THREAD_CREATION: 'thread_creation' as const,
+  USER_MESSAGE: 'user_message' as const,
+  WEB_SEARCH: 'web_search' as const,
 } as const;
 
 // ============================================================================
@@ -460,8 +460,8 @@ export type PurchaseType = z.infer<typeof PurchaseTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const PurchaseTypes = {
-  SUBSCRIPTION: 'subscription' as const,
   NONE: 'none' as const,
+  SUBSCRIPTION: 'subscription' as const,
 } as const;
 
 export function isPurchaseType(value: unknown): value is PurchaseType {
@@ -522,9 +522,9 @@ export type BillingErrorType = z.infer<typeof BillingErrorTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const BillingErrorTypes = {
+  AUTHENTICATION_FAILED: 'authentication_failed' as const,
   PAYMENT_FAILED: 'payment_failed' as const,
   SYNC_FAILED: 'sync_failed' as const,
-  AUTHENTICATION_FAILED: 'authentication_failed' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
 
@@ -557,8 +557,8 @@ export type PaymentMethodType = z.infer<typeof PaymentMethodTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const PaymentMethodTypes = {
-  CARD: 'card' as const,
   BANK_ACCOUNT: 'bank_account' as const,
+  CARD: 'card' as const,
   SEPA_DEBIT: 'sepa_debit' as const,
 } as const;
 
@@ -613,28 +613,28 @@ export type ModelPricingTier = z.infer<typeof ModelPricingTierSchema>;
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const ModelPricingTiers = {
   BUDGET: 'budget' as const, // ≤$0.10/M input - cheapest models
-  STANDARD: 'standard' as const, // $0.10-$0.50/M input - mid-range
-  PRO: 'pro' as const, // $0.50-$3/M input - premium models
   FLAGSHIP: 'flagship' as const, // $3-$10/M input - top-tier
+  PRO: 'pro' as const, // $0.50-$3/M input - premium models
+  STANDARD: 'standard' as const, // $0.10-$0.50/M input - mid-range
   ULTIMATE: 'ultimate' as const, // >$10/M input - most expensive
 } as const;
 
 // Credit multipliers by tier - based on actual cost ratios to ensure profitability
 export const MODEL_TIER_CREDIT_MULTIPLIERS: Record<ModelPricingTier, number> = {
   [ModelPricingTiers.BUDGET]: 1, // Base rate: ~$0.25/M blended
-  [ModelPricingTiers.STANDARD]: 3, // ~$0.85/M blended (3.4x budget)
-  [ModelPricingTiers.PRO]: 25, // ~$6.7/M blended (27x budget)
   [ModelPricingTiers.FLAGSHIP]: 75, // ~$19/M blended (76x budget)
+  [ModelPricingTiers.PRO]: 25, // ~$6.7/M blended (27x budget)
+  [ModelPricingTiers.STANDARD]: 3, // ~$0.85/M blended (3.4x budget)
   [ModelPricingTiers.ULTIMATE]: 200, // ~$50/M blended (200x budget)
 } as const;
 
 // Input price thresholds (per million tokens) for tier classification
 export const MODEL_TIER_THRESHOLDS: Record<ModelPricingTier, { min: number; max: number }> = {
-  [ModelPricingTiers.BUDGET]: { min: 0, max: 0.10 },
-  [ModelPricingTiers.STANDARD]: { min: 0.10, max: 0.50 },
-  [ModelPricingTiers.PRO]: { min: 0.50, max: 3.00 },
-  [ModelPricingTiers.FLAGSHIP]: { min: 3.00, max: 10.00 },
-  [ModelPricingTiers.ULTIMATE]: { min: 10.00, max: Number.POSITIVE_INFINITY },
+  [ModelPricingTiers.BUDGET]: { max: 0.10, min: 0 },
+  [ModelPricingTiers.FLAGSHIP]: { max: 10.00, min: 3.00 },
+  [ModelPricingTiers.PRO]: { max: 3.00, min: 0.50 },
+  [ModelPricingTiers.STANDARD]: { max: 0.50, min: 0.10 },
+  [ModelPricingTiers.ULTIMATE]: { max: Number.POSITIVE_INFINITY, min: 10.00 },
 } as const;
 
 export function isModelPricingTier(value: unknown): value is ModelPricingTier {
@@ -667,9 +667,9 @@ export type ModelCostCategory = z.infer<typeof ModelCostCategorySchema>;
 // 5. CONSTANT OBJECT
 export const ModelCostCategories = {
   FREE: 'free' as const,
+  HIGH: 'high' as const,
   LOW: 'low' as const,
   MEDIUM: 'medium' as const,
-  HIGH: 'high' as const,
 } as const;
 
 // ============================================================================
@@ -721,9 +721,9 @@ export type StripeProratioBehavior = z.infer<typeof StripeProratioBehaviorSchema
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const StripeProratioBehaviors = {
+  ALWAYS_INVOICE: 'always_invoice' as const,
   CREATE_PRORATIONS: 'create_prorations' as const,
   NONE: 'none' as const,
-  ALWAYS_INVOICE: 'always_invoice' as const,
 } as const;
 
 // ============================================================================
@@ -859,9 +859,9 @@ export type CreditStatus = z.infer<typeof CreditStatusSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const CreditStatuses = {
-  OK: 'ok' as const,
-  LOW: 'low' as const,
   INSUFFICIENT: 'insufficient' as const,
+  LOW: 'low' as const,
+  OK: 'ok' as const,
 } as const;
 
 export function isValidCreditStatus(value: unknown): value is CreditStatus {

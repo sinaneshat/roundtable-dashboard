@@ -26,17 +26,17 @@ type UseTitleAnimationControllerOptions = {
 
 export function useTitleAnimationController({ store }: UseTitleAnimationControllerOptions) {
   const {
-    animationPhase,
-    oldTitle,
-    newTitle,
-    displayedTitle,
     animatingThreadId,
+    animationPhase,
+    displayedTitle,
+    newTitle,
+    oldTitle,
   } = useStore(store, useShallow(s => ({
-    animationPhase: s.animationPhase,
-    oldTitle: s.oldTitle,
-    newTitle: s.newTitle,
-    displayedTitle: s.displayedTitle,
     animatingThreadId: s.animatingThreadId,
+    animationPhase: s.animationPhase,
+    displayedTitle: s.displayedTitle,
+    newTitle: s.newTitle,
+    oldTitle: s.oldTitle,
   })));
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -67,18 +67,21 @@ export function useTitleAnimationController({ store }: UseTitleAnimationControll
       timeoutRef.current = timeout;
       return () => {
         clearTimeout(timeout);
-        if (timeoutRef.current === timeout)
+        if (timeoutRef.current === timeout) {
           timeoutRef.current = null;
+        }
       };
     }
 
     // Continue deleting
     const timeout = setTimeout(() => {
-      if (document.hidden)
+      if (document.hidden) {
         return;
+      }
       const currentState = store.getState();
-      if (currentState.animationPhase !== 'deleting')
+      if (currentState.animationPhase !== 'deleting') {
         return;
+      }
       const nextTitle = displayedTitle.slice(0, -1);
       currentState.updateDisplayedTitle(nextTitle);
     }, DELETE_SPEED_MS);
@@ -86,8 +89,9 @@ export function useTitleAnimationController({ store }: UseTitleAnimationControll
 
     return () => {
       clearTimeout(timeout);
-      if (timeoutRef.current === timeout)
+      if (timeoutRef.current === timeout) {
         timeoutRef.current = null;
+      }
     };
   }, [animationPhase, displayedTitle, oldTitle, animatingThreadId, store]);
 
@@ -107,11 +111,13 @@ export function useTitleAnimationController({ store }: UseTitleAnimationControll
 
     // Continue typing
     const timeout = setTimeout(() => {
-      if (document.hidden)
+      if (document.hidden) {
         return;
+      }
       const currentState = store.getState();
-      if (currentState.animationPhase !== 'typing')
+      if (currentState.animationPhase !== 'typing') {
         return;
+      }
       const nextTitle = newTitle.slice(0, currentLength + 1);
       currentState.updateDisplayedTitle(nextTitle);
     }, TYPE_SPEED_MS);
@@ -119,8 +125,9 @@ export function useTitleAnimationController({ store }: UseTitleAnimationControll
 
     return () => {
       clearTimeout(timeout);
-      if (timeoutRef.current === timeout)
+      if (timeoutRef.current === timeout) {
         timeoutRef.current = null;
+      }
     };
   }, [animationPhase, displayedTitle, newTitle, animatingThreadId, store]);
 
@@ -138,8 +145,9 @@ export function useTitleAnimationController({ store }: UseTitleAnimationControll
 
     return () => {
       clearTimeout(timeout);
-      if (timeoutRef.current === timeout)
+      if (timeoutRef.current === timeout) {
         timeoutRef.current = null;
+      }
     };
   }, [animationPhase, animatingThreadId, store]);
 

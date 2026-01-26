@@ -76,8 +76,9 @@ describe('background Completion Scenarios', () => {
       KV: {
         get: vi.fn().mockImplementation(async (key: string, format?: string) => {
           const raw = currentState[key];
-          if (!raw)
+          if (!raw) {
             return null;
+          }
           // Service uses 'json' format which auto-parses
           return format === 'json' ? JSON.parse(raw) : raw;
         }),
@@ -417,10 +418,10 @@ describe('background Completion Scenarios', () => {
       ]);
 
       const status = await computeRoundStatus({
-        threadId,
-        roundNumber,
-        env: mockEnv as never,
         db: mockDb as never,
+        env: mockEnv as never,
+        roundNumber,
+        threadId,
       });
 
       expect(status.status).toBe(RoundExecutionStatuses.RUNNING);
@@ -438,8 +439,8 @@ describe('background Completion Scenarios', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: `${threadId}_r0_p0`,
-          participantId: 'p0',
           metadata: {},
+          participantId: 'p0',
         },
       ]);
       mockDb.query.chatParticipant.findMany.mockResolvedValue([
@@ -448,10 +449,10 @@ describe('background Completion Scenarios', () => {
       ]);
 
       const status = await computeRoundStatus({
-        threadId,
-        roundNumber,
-        env: emptyEnv as never,
         db: mockDb as never,
+        env: emptyEnv as never,
+        roundNumber,
+        threadId,
       });
 
       // Should show incomplete - some messages but no KV state
@@ -467,10 +468,10 @@ describe('background Completion Scenarios', () => {
       mockDb.query.chatParticipant.findMany.mockResolvedValue([]);
 
       const status = await computeRoundStatus({
-        threadId,
-        roundNumber,
-        env: emptyEnv as never,
         db: mockDb as never,
+        env: emptyEnv as never,
+        roundNumber,
+        threadId,
       });
 
       expect(status.isComplete).toBe(true);

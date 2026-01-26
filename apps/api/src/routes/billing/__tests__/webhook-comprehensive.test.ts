@@ -37,8 +37,8 @@ function createMockWebhookEvent(
   data: Record<string, string | number | boolean | null> = {},
 ): MockStripeEvent {
   const eventData = {
-    id: `obj_${Math.random().toString(36).substring(7)}`,
     customer: customerId,
+    id: `obj_${Math.random().toString(36).substring(7)}`,
     ...data,
   };
 
@@ -49,7 +49,7 @@ function createMockWebhookEvent(
 function createMockSubscription(
   customerId: string,
   status: StripeSubscriptionStatus = StripeSubscriptionStatuses.ACTIVE,
-  priceId: string = 'price_pro_monthly',
+  priceId = 'price_pro_monthly',
   overrides: Partial<MockStripeSubscription> = {},
 ): MockStripeSubscription {
   const base = createMockStripeSubscription({
@@ -71,14 +71,14 @@ function createMockSubscription(
 function createMockInvoice(
   customerId: string,
   subscriptionId: string,
-  amountPaid: number = 5900,
+  amountPaid = 5900,
   status: StripeInvoiceStatus = 'paid',
 ): MockStripeInvoice {
   return createMockStripeInvoice({
-    customer: customerId,
-    subscription: subscriptionId,
     amountPaid,
+    customer: customerId,
     status,
+    subscription: subscriptionId,
   });
 }
 
@@ -151,12 +151,12 @@ describe('stripe Webhook Event Processing', () => {
 
       // Should return 200 and skip processing
       const response = {
-        received: true,
         event: {
           id: eventId,
-          type: 'customer.subscription.updated',
           processed: true,
+          type: 'customer.subscription.updated',
         },
+        received: true,
       };
 
       expect(response.received).toBe(true);
@@ -191,9 +191,9 @@ describe('stripe Webhook Event Processing', () => {
   describe('out-of-Order Event Handling', () => {
     it('handles events arriving in wrong chronological order', () => {
       const events = [
-        { id: 'evt_1', created: 1000, type: 'customer.subscription.created' },
-        { id: 'evt_2', created: 2000, type: 'customer.subscription.updated' },
-        { id: 'evt_3', created: 1500, type: 'invoice.paid' }, // Out of order
+        { created: 1000, id: 'evt_1', type: 'customer.subscription.created' },
+        { created: 2000, id: 'evt_2', type: 'customer.subscription.updated' },
+        { created: 1500, id: 'evt_3', type: 'invoice.paid' }, // Out of order
       ];
 
       // Sort by timestamp to understand order
@@ -207,9 +207,9 @@ describe('stripe Webhook Event Processing', () => {
     it('fetches fresh data from Stripe API regardless of event order', () => {
       // Theo's Pattern: Always sync from API, never trust webhook payload order
       const syncStrategy = {
+        alwaysFetchFresh: true,
         source: 'stripe_api',
         trustWebhookPayload: false,
-        alwaysFetchFresh: true,
       };
 
       expect(syncStrategy.source).toBe('stripe_api');
@@ -239,8 +239,8 @@ describe('stripe Webhook Event Processing', () => {
         customerId,
         {
           mode: 'subscription',
-          subscription: 'sub_new_123',
           payment_status: 'paid',
+          subscription: 'sub_new_123',
         },
       );
 
@@ -287,8 +287,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('updates user tier from free to pro', () => {
       const tierChange = {
-        previousTier: 'free',
         newTier: 'pro',
+        previousTier: 'free',
       };
 
       expect(tierChange.previousTier).toBe('free');
@@ -299,11 +299,11 @@ describe('stripe Webhook Event Processing', () => {
       const subscription = createMockSubscription('cus_test_sync', StripeSubscriptionStatuses.ACTIVE, 'price_pro_monthly');
 
       const dbRecord = {
-        id: subscription.id,
-        userId: 'user_123',
         customerId: subscription.customer as string,
-        status: subscription.status,
+        id: subscription.id,
         priceId: subscription.items.data[0]?.price.id,
+        status: subscription.status,
+        userId: 'user_123',
       };
 
       expect(dbRecord.status).toBe('active');
@@ -346,13 +346,13 @@ describe('stripe Webhook Event Processing', () => {
       const newPrice = 'price_pro_monthly';
 
       const event = createMockWebhookEvent('customer.subscription.updated', customerId, {
+        items: {
+          data: [{ price: { id: newPrice, unit_amount: 5900 } }],
+        },
         previous_attributes: {
           items: {
             data: [{ price: { id: previousPrice, unit_amount: 59000 } }],
           },
-        },
-        items: {
-          data: [{ price: { id: newPrice, unit_amount: 5900 } }],
         },
       });
 
@@ -376,8 +376,8 @@ describe('stripe Webhook Event Processing', () => {
       const periodEnd = now + 30 * 24 * 60 * 60;
 
       const billingPeriod = {
-        currentPeriodStart: new Date(now * 1000),
         currentPeriodEnd: new Date(periodEnd * 1000),
+        currentPeriodStart: new Date(now * 1000),
       };
 
       expect(billingPeriod.currentPeriodEnd.getTime()).toBeGreaterThan(billingPeriod.currentPeriodStart.getTime());
@@ -401,8 +401,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('downgrades user tier to free', () => {
       const tierChange = {
-        previousTier: 'pro',
         newTier: 'free',
+        previousTier: 'pro',
       };
 
       expect(tierChange.previousTier).toBe('pro');
@@ -420,8 +420,8 @@ describe('stripe Webhook Event Processing', () => {
       const analyticsEvent = {
         event: 'subscription_canceled',
         properties: {
-          subscriptionId: 'sub_canceled_123',
           canceledAt: new Date(),
+          subscriptionId: 'sub_canceled_123',
         },
       };
 
@@ -466,8 +466,8 @@ describe('stripe Webhook Event Processing', () => {
       const revenueEvent = {
         event: 'subscription_renewed',
         properties: {
-          revenue: 5900,
           currency: 'usd',
+          revenue: 5900,
           subscriptionId: 'sub_123',
         },
       };
@@ -510,9 +510,9 @@ describe('stripe Webhook Event Processing', () => {
       const analyticsEvent = {
         event: 'payment_failed',
         properties: {
-          subscriptionId: 'sub_123',
-          invoiceId: 'in_failed_123',
           attemptCount: 2,
+          invoiceId: 'in_failed_123',
+          subscriptionId: 'sub_123',
         },
       };
 
@@ -559,9 +559,9 @@ describe('stripe Webhook Event Processing', () => {
 
     it('uses waitUntil for async processing', () => {
       const asyncPattern = {
-        responseStatus: 200,
-        processing: 'async',
         method: 'waitUntil',
+        processing: 'async',
+        responseStatus: 200,
       };
 
       expect(asyncPattern.responseStatus).toBe(200);
@@ -583,8 +583,8 @@ describe('stripe Webhook Event Processing', () => {
     it('fetches fresh data from Stripe API', () => {
       // Theo's Pattern: NEVER trust webhook payload data
       const dataSource = {
-        webhookPayload: false,
         stripeAPI: true,
+        webhookPayload: false,
       };
 
       expect(dataSource.webhookPayload).toBe(false);
@@ -616,9 +616,9 @@ describe('stripe Webhook Event Processing', () => {
     it('syncs payment method details', () => {
       const paymentMethod = {
         brand: 'visa',
-        last4: '4242',
         expMonth: 12,
         expYear: 2025,
+        last4: '4242',
       };
 
       expect(paymentMethod.brand).toBe('visa');
@@ -630,8 +630,8 @@ describe('stripe Webhook Event Processing', () => {
       const thirtyDaysLater = now + 30 * 24 * 60 * 60 * 1000;
 
       const billingPeriod = {
-        start: new Date(now),
         end: new Date(thirtyDaysLater),
+        start: new Date(now),
       };
 
       expect(billingPeriod.end.getTime()).toBeGreaterThan(billingPeriod.start.getTime());
@@ -688,9 +688,9 @@ describe('stripe Webhook Event Processing', () => {
 
     it('logs processing errors for investigation', () => {
       const errorLog = {
+        eventId: 'evt_failed_123',
         level: 'error',
         message: 'Webhook processing failed',
-        eventId: 'evt_failed_123',
       };
 
       expect(errorLog.level).toBe('error');
@@ -729,8 +729,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('handles deleted customer', () => {
       const customer = {
-        id: 'cus_deleted',
         deleted: true,
+        id: 'cus_deleted',
       };
 
       const isDeleted = 'deleted' in customer && customer.deleted;
@@ -747,8 +747,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('handles cancel_at_period_end flag', () => {
       const subscription = {
-        id: 'sub_cancel_later',
         cancel_at_period_end: true,
+        id: 'sub_cancel_later',
         status: 'active',
       };
 
@@ -783,8 +783,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('invalidates cache after updates', () => {
       const cacheInvalidation = {
-        tags: ['user_subscription', 'user_credits', 'customer_data'],
         invalidate: true,
+        tags: ['user_subscription', 'user_credits', 'customer_data'],
       };
 
       expect(cacheInvalidation.invalidate).toBe(true);
@@ -797,8 +797,8 @@ describe('stripe Webhook Event Processing', () => {
       const analyticsEvent = {
         name: 'subscription_started',
         properties: {
-          revenue: 5900,
           currency: 'usd',
+          revenue: 5900,
           subscriptionId: 'sub_new_123',
         },
       };
@@ -809,8 +809,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('tracks subscription renewed event', () => {
       const analyticsEvent = {
-        name: 'subscription_renewed',
         billingReason: 'subscription_cycle',
+        name: 'subscription_renewed',
       };
 
       expect(analyticsEvent.name).toBe('subscription_renewed');
@@ -827,8 +827,8 @@ describe('stripe Webhook Event Processing', () => {
 
     it('tracks payment failed event', () => {
       const analyticsEvent = {
-        name: 'payment_failed',
         attemptCount: 2,
+        name: 'payment_failed',
       };
 
       expect(analyticsEvent.name).toBe('payment_failed');

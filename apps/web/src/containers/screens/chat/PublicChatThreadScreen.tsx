@@ -123,16 +123,16 @@ type PublicChatThreadScreenProps = {
   errorState?: PublicThreadErrorState;
 };
 
-export default function PublicChatThreadScreen({ slug, initialData, errorState }: PublicChatThreadScreenProps) {
+export default function PublicChatThreadScreen({ errorState, initialData, slug }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
   const hasLoaderData = Boolean(initialData);
   const { data: queryData } = usePublicThreadQuery(slug, {
+    enabled: errorState !== 'no_longer_public',
     initialData: hasLoaderData && initialData
-      ? { success: true as const, data: initialData }
+      ? { data: initialData, success: true as const }
       : undefined,
     staleTime: hasLoaderData ? 10_000 : undefined,
-    enabled: errorState !== 'no_longer_public',
   });
 
   // Prefer query data (which includes initialData), fall back to loader data
@@ -151,16 +151,16 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
     transformPreSearches(threadResponse?.preSearches || []), [threadResponse]);
 
   const timeline: TimelineItem[] = useThreadTimeline({
-    messages,
     changelog,
+    messages,
     preSearches,
   });
 
   const isStoreReady = messages.length > 0;
 
   useChatScroll({
-    messages,
     enableNearBottomDetection: true,
+    messages,
   });
 
   if (errorState === 'no_longer_public') {
@@ -188,7 +188,7 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
         <Button asChild size="sm" className="shrink-0">
           <Link
             to="/auth/sign-in"
-            search={{ utm_source: 'public_chat', utm_medium: 'header', utm_campaign: 'try_free' }}
+            search={{ utm_campaign: 'try_free', utm_medium: 'header', utm_source: 'public_chat' }}
             className="flex items-center gap-1.5"
           >
             <span>{t('chat.public.tryFree')}</span>
@@ -277,15 +277,15 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
                 <>
                   <ThreadTimeline
                     timelineItems={timeline}
-                    user={user || { name: t('user.defaultName'), image: null }}
+                    user={user || { image: null, name: t('user.defaultName') }}
                     participants={participants}
                     threadId={thread.id}
                     threadTitle={thread.title}
-                    isReadOnly={true}
+                    isReadOnly
                     preSearches={preSearches}
                     isDataReady={isStoreReady}
-                    disableVirtualization={true}
-                    skipEntranceAnimations={true}
+                    disableVirtualization
+                    skipEntranceAnimations
                   />
 
                   <div className="mt-8 mb-8">
@@ -294,7 +294,7 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
                         blur={0}
                         borderWidth={2}
                         spread={80}
-                        glow={true}
+                        glow
                         disabled={false}
                         proximity={64}
                         inactiveZone={0.01}
@@ -310,7 +310,7 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
                         <Button asChild>
                           <Link
                             to="/auth/sign-in"
-                            search={{ utm_source: 'public_chat', utm_medium: 'bottom_cta', utm_campaign: 'try_free' }}
+                            search={{ utm_campaign: 'try_free', utm_medium: 'bottom_cta', utm_source: 'public_chat' }}
                             className="flex items-center gap-2"
                           >
                             <span>{t('chat.public.getStartedFree')}</span>

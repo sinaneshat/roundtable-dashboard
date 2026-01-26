@@ -22,8 +22,8 @@ export const CursorDirectionSchema = z.enum(CURSOR_DIRECTIONS).openapi({
 export type CursorDirection = z.infer<typeof CursorDirectionSchema>;
 
 export const CursorDirections = {
-  FORWARD: 'forward' as const,
   BACKWARD: 'backward' as const,
+  FORWARD: 'forward' as const,
 } as const;
 
 // ============================================================================
@@ -31,8 +31,8 @@ export const CursorDirections = {
 // ============================================================================
 
 export const CURSOR_DIRECTION_LABELS: Record<CursorDirection, string> = {
-  [CursorDirections.FORWARD]: 'Next',
   [CursorDirections.BACKWARD]: 'Previous',
+  [CursorDirections.FORWARD]: 'Next',
 } as const;
 
 // ============================================================================

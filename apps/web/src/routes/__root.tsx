@@ -62,13 +62,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       return { session: null };
     }
   },
-  // ✅ RUNTIME ENV VARS: Fetch from server and pass to client
-  // wrangler.jsonc vars are only available at server runtime (process.env)
-  // This loader makes them available to client components
+  component: RootComponent,
+  errorComponent: RootErrorComponent,
   loader: async () => {
     const env = await getPublicEnv();
     return { env };
   },
+  // ✅ RUNTIME ENV VARS: Fetch from server and pass to client
+  // wrangler.jsonc vars are only available at server runtime (process.env)
+  // This loader makes them available to client components
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -127,8 +129,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       ],
     };
   },
-  component: RootComponent,
-  errorComponent: RootErrorComponent,
 });
 
 function RootComponent() {
@@ -163,7 +163,7 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
           >
             <IdleLazyProvider<{ children: ReactNode; apiKey?: string }>
               loader={() => import('@/components/providers/posthog-provider').then(m => ({ default: m.default }))}
-              providerProps={{ children: null, apiKey: env.VITE_POSTHOG_API_KEY }}
+              providerProps={{ apiKey: env.VITE_POSTHOG_API_KEY, children: null }}
             >
               {children}
             </IdleLazyProvider>
@@ -181,8 +181,9 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
  * Returns false in local environment or SSR context
  */
 function isPostHogAvailable(): boolean {
-  if (typeof window === 'undefined')
+  if (typeof window === 'undefined') {
     return false;
+  }
   return getWebappEnv() !== WebAppEnvs.LOCAL;
 }
 
@@ -191,16 +192,17 @@ function isPostHogAvailable(): boolean {
  * Uses dynamic import to avoid loading PostHog in critical path
  */
 async function trackErrorToPostHog(error: Error, context: { url: string; userAgent: string }) {
-  if (!isPostHogAvailable())
+  if (!isPostHogAvailable()) {
     return;
+  }
 
   // Lazy load PostHog only when needed for error tracking
   const posthog = (await import('posthog-js')).default;
   posthog.capture('$exception', {
     $exception_message: error.message,
+    $exception_source: 'tanstack_router_error_boundary',
     $exception_stack_trace_raw: error.stack,
     $exception_type: error.name,
-    $exception_source: 'tanstack_router_error_boundary',
     url: context.url,
     userAgent: context.userAgent,
   });
@@ -208,13 +210,13 @@ async function trackErrorToPostHog(error: Error, context: { url: string; userAge
 
 function RootErrorComponent({ error, reset }: ErrorComponentProps) {
   const isProd = getWebappEnv() === WebAppEnvs.PROD;
-  const hasTracked = useRef(false);
+  const hasTrackedRef = useRef(false);
   const t = useTranslations();
 
   // Track error to PostHog once
   useEffect(() => {
-    if (error && !hasTracked.current) {
-      hasTracked.current = true;
+    if (error && !hasTrackedRef.current) {
+      hasTrackedRef.current = true;
       trackErrorToPostHog(error, {
         url: typeof window !== 'undefined' ? window.location.href : '',
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',

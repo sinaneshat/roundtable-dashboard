@@ -10,8 +10,8 @@ import type { ChatProject } from '@/db/validation/project';
  * Project with attachment and thread relation arrays (from relational query)
  */
 type ProjectWithRelations = {
-  attachments?: Array<{ id: string }>;
-  threads?: Array<{ id: string }>;
+  attachments?: { id: string }[];
+  threads?: { id: string }[];
 } & ChatProject;
 
 /**

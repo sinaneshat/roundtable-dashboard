@@ -18,12 +18,12 @@ import { AdminClearUserCacheBodySchema, AdminSearchUserQuerySchema } from './sch
 export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: AdminSearchUserQuerySchema,
     operationName: 'adminSearchUser',
+    validateQuery: AdminSearchUserQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { q, limit = 5 } = c.validated.query;
+    const { limit = 5, q } = c.validated.query;
 
     // Check admin role - user is cast to AdminUser which includes role field
     requireAdmin(user as Parameters<typeof requireAdmin>[0]);
@@ -33,6 +33,14 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
 
     // Search by name or email (case-insensitive partial match), excluding current user
     const users = await db.query.user.findMany({
+      columns: {
+        email: true,
+        id: true,
+        image: true,
+        name: true,
+      },
+      limit,
+      orderBy: (user, { asc }) => [asc(user.name)],
       where: and(
         ne(tables.user.id, user.id),
         or(
@@ -40,19 +48,11 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
           like(sql`lower(${tables.user.name})`, searchPattern),
         ),
       ),
-      columns: {
-        id: true,
-        email: true,
-        name: true,
-        image: true,
-      },
-      limit,
-      orderBy: (user, { asc }) => [asc(user.name)],
     });
 
     return Responses.ok(c, {
-      users,
       total: users.length,
+      users,
     });
   },
 );
@@ -64,8 +64,8 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
 export const adminClearUserCacheHandler: RouteHandler<typeof adminClearUserCacheRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: AdminClearUserCacheBodySchema,
     operationName: 'adminClearUserCache',
+    validateBody: AdminClearUserCacheBodySchema,
   },
   async (c) => {
     const { user } = c.auth();

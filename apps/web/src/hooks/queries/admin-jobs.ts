@@ -26,17 +26,17 @@ export function useAdminJobsQuery(options?: {
   refetchInterval?: number | false;
 }) {
   const { isAuthenticated } = useAuthCheck();
-  const { status, enabled = true, refetchInterval = false } = options ?? {};
+  const { enabled = true, refetchInterval = false, status } = options ?? {};
 
   return useQuery({
-    queryKey: queryKeys.adminJobs.list(status),
-    queryFn: () => listJobsService({ query: status ? { status } : undefined }),
-    staleTime: STALE_TIMES.adminJobs,
-    gcTime: GC_TIMES.STANDARD,
-    refetchOnWindowFocus: true,
-    refetchInterval,
     enabled: isAuthenticated && enabled,
+    gcTime: GC_TIMES.STANDARD,
+    queryFn: () => listJobsService({ query: status ? { status } : undefined }),
+    queryKey: queryKeys.adminJobs.list(status),
+    refetchInterval,
+    refetchOnWindowFocus: true,
     retry: false,
+    staleTime: STALE_TIMES.adminJobs,
     throwOnError: false,
   });
 }
@@ -51,7 +51,6 @@ export function useAdminJobsInfiniteQuery() {
   return useInfiniteQuery({
     ...adminJobsInfiniteQueryOptions,
     enabled: isAuthenticated,
-    refetchOnMount: 'always',
     refetchInterval: (query) => {
       const pages = query.state.data?.pages ?? [];
       const hasActiveJobs = pages.some(page =>
@@ -62,6 +61,7 @@ export function useAdminJobsInfiniteQuery() {
       // Poll every 3s when jobs are active, 30s otherwise
       return hasActiveJobs ? 3000 : 30000;
     },
+    refetchOnMount: 'always',
   });
 }
 
@@ -72,13 +72,13 @@ export function useAdminJobQuery(jobId: string, enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.adminJobs.detail(jobId),
-    queryFn: () => getJobService({ param: { id: jobId } }),
     enabled: isAuthenticated && !!jobId && enabled,
-    staleTime: STALE_TIMES.adminJobs,
     gcTime: GC_TIMES.STANDARD,
+    queryFn: () => getJobService({ param: { id: jobId } }),
+    queryKey: queryKeys.adminJobs.detail(jobId),
     refetchOnWindowFocus: true,
     retry: false,
+    staleTime: STALE_TIMES.adminJobs,
     throwOnError: false,
   });
 }

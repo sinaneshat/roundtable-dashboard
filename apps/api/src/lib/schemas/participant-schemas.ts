@@ -313,8 +313,8 @@ export function isMinimalParticipant(
 const BaseParticipantConfigSchema = z.object({
   id: z.string(),
   modelId: z.string().min(1, 'Model ID is required'),
-  role: z.string().nullable().optional(),
   priority: z.number().int().nonnegative(),
+  role: z.string().nullable().optional(),
 });
 
 /**
@@ -350,9 +350,9 @@ export const ParticipantConfigSchema = BaseParticipantConfigSchema.extend({
   customRoleId: z.string().optional(),
   settings: z
     .object({
-      temperature: z.number().min(0).max(2).optional(),
       maxTokens: z.number().int().positive().optional(),
       systemPrompt: z.string().optional(),
+      temperature: z.number().min(0).max(2).optional(),
     })
     .optional(),
 });
@@ -508,6 +508,54 @@ export function isParticipantConfigArray(
 }
 
 // ============================================================================
+// COMPARABLE PARTICIPANT SCHEMA - Used for comparison operations
+// ============================================================================
+
+/**
+ * ComparableParticipant schema - Common fields for participant comparison
+ *
+ * REPLACES inline type extension in:
+ * - /src/lib/utils/participant.ts (ComparableParticipant type)
+ *
+ * Used for:
+ * - Participant comparison and equality checks
+ * - Participant key generation
+ * - Change detection
+ *
+ * Contains the minimal fields needed to compare two participants.
+ * Accepts both ChatParticipant and ParticipantConfig objects.
+ *
+ * @example
+ * ```typescript
+ * import { ComparableParticipantSchema } from '@/lib/schemas/participant-schemas';
+ *
+ * const comparable = ComparableParticipantSchema.parse({
+ *   modelId: 'openai/gpt-4o-mini',
+ *   role: 'The Summarizer',
+ *   priority: 0,
+ * });
+ * ```
+ */
+export const ComparableParticipantSchema = z.object({
+  customRoleId: z.string().nullable().optional(),
+  isEnabled: z.boolean().optional(),
+  modelId: z.string(),
+  priority: z.number(),
+  role: z.string().nullable().optional(),
+});
+
+export type ComparableParticipant = z.infer<typeof ComparableParticipantSchema>;
+
+/**
+ * TYPE GUARD: Check if value is ComparableParticipant
+ */
+export function isComparableParticipant(
+  data: unknown,
+): data is ComparableParticipant {
+  return ComparableParticipantSchema.safeParse(data).success;
+}
+
+// ============================================================================
 // PARTICIPANT VALIDATION SCHEMAS - SERVICE LAYER
 // ============================================================================
 
@@ -532,8 +580,8 @@ export function isParticipantConfigArray(
  */
 export const ParticipantForValidationSchema = z.object({
   id: z.string(),
-  modelId: z.string(),
   isEnabled: z.boolean().optional(),
+  modelId: z.string(),
 });
 
 export type ParticipantForValidation = z.infer<

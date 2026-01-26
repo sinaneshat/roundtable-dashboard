@@ -34,7 +34,7 @@ type RenderCounterProps = {
   children: ReactNode;
 };
 
-const RenderCounter = memo(({ componentId, onRender, children }: RenderCounterProps) => {
+const RenderCounter = memo(({ children, componentId, onRender }: RenderCounterProps) => {
   const renderCount = useRef(0);
 
   useEffect(() => {
@@ -52,7 +52,7 @@ type MockMessageCardProps = {
   onRender: (id: string) => void;
 };
 
-const MockMessageCard = memo(({ messageId, parts, status, onRender }: MockMessageCardProps) => {
+const MockMessageCard = memo(({ messageId, onRender, parts, status }: MockMessageCardProps) => {
   const renderCount = useRef(0);
 
   useEffect(() => {
@@ -72,16 +72,19 @@ const MockMessageCard = memo(({ messageId, parts, status, onRender }: MockMessag
     </div>
   );
 }, (prev, next) => {
-  if (prev.status !== next.status)
+  if (prev.status !== next.status) {
     return false;
-  if (prev.parts.length !== next.parts.length)
+  }
+  if (prev.parts.length !== next.parts.length) {
     return false;
+  }
 
   for (let i = 0; i < prev.parts.length; i++) {
     const prevPart = prev.parts[i];
     const nextPart = next.parts[i];
-    if (prevPart?.type !== nextPart?.type)
+    if (prevPart?.type !== nextPart?.type) {
       return false;
+    }
     if (prevPart?.type === MessagePartTypes.TEXT && nextPart?.type === MessagePartTypes.TEXT) {
       if ('text' in prevPart && 'text' in nextPart && prevPart.text !== nextPart.text) {
         return false;
@@ -154,30 +157,30 @@ describe('message Box Render Audit', () => {
        * Test: P0 streaming 50 chunks → P0 card renders 50x, other cards 0x
        */
       const userMessage = createTestUserMessage({
-        id: 'user-r0',
         content: 'Hello',
+        id: 'user-r0',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: '',
-        roundNumber: 0,
+        finishReason: FinishReasons.UNKNOWN,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.UNKNOWN,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'Complete response from P1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
-      store.setState({ isStreaming: true, currentParticipantIndex: 0 });
+      store.setState({ currentParticipantIndex: 0, isStreaming: true });
 
       const { rerender } = rtlRender(
         <MessageListWithTracking
@@ -195,12 +198,12 @@ describe('message Box Render Audit', () => {
       // Simulate 50 streaming chunks for P0
       for (let i = 1; i <= 50; i++) {
         const updatedP0 = createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'Chunk '.repeat(i),
-          roundNumber: 0,
+          finishReason: i === 50 ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: i === 50 ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+          roundNumber: 0,
         });
 
         rerender(
@@ -223,38 +226,38 @@ describe('message Box Render Audit', () => {
        * Test: Updating P0 content → P1, P2, moderator render 0x
        */
       const userMessage = createTestUserMessage({
-        id: 'user-r0',
         content: 'Hello',
+        id: 'user-r0',
         roundNumber: 0,
       });
 
       const p0 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'P0 initial',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       const p1 = createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'P1 complete',
-        roundNumber: 0,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 0,
       });
 
       const p2 = createTestAssistantMessage({
-        id: 'thread_r0_p2',
         content: 'P2 complete',
-        roundNumber: 0,
+        id: 'thread_r0_p2',
         participantId: 'p2',
         participantIndex: 2,
+        roundNumber: 0,
       });
 
       const moderator = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Moderator summary',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -270,11 +273,11 @@ describe('message Box Render Audit', () => {
 
       // Update only P0
       const updatedP0 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'P0 UPDATED content',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       rerender(
@@ -308,11 +311,11 @@ describe('message Box Render Audit', () => {
       for (let i = 1; i <= 10; i++) {
         store.getState().setMessages([
           createTestAssistantMessage({
-            id: 'thread_r0_p0',
             content: 'Content '.repeat(i),
-            roundNumber: 0,
+            id: 'thread_r0_p0',
             participantId: 'p0',
             participantIndex: 0,
+            roundNumber: 0,
           }),
         ]);
       }
@@ -332,24 +335,24 @@ describe('message Box Render Audit', () => {
        * Test: Moderator streams without affecting participant card renders
        */
       const p0 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'P0 complete',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       const p1 = createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'P1 complete',
-        roundNumber: 0,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 0,
       });
 
       const moderator = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: '',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -368,8 +371,8 @@ describe('message Box Render Audit', () => {
       // Simulate 30 moderator chunks
       for (let i = 1; i <= 30; i++) {
         const updatedMod = createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: 'Summary '.repeat(i),
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         });
 
@@ -394,22 +397,22 @@ describe('message Box Render Audit', () => {
        * Test: Starting round 1 → round 0 messages render 0x
        */
       // Round 0 complete messages
-      const r0User = createTestUserMessage({ id: 'user-r0', content: 'Q1', roundNumber: 0 });
+      const r0User = createTestUserMessage({ content: 'Q1', id: 'user-r0', roundNumber: 0 });
       const r0P0 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'R0P0',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       const r0Mod = createTestModeratorMessage({
-        id: 'thread_r0_mod',
         content: 'R0 Summary',
+        id: 'thread_r0_mod',
         roundNumber: 0,
       });
 
       // Round 1 starting
-      const r1User = createTestUserMessage({ id: 'user-r1', content: 'Q2', roundNumber: 1 });
+      const r1User = createTestUserMessage({ content: 'Q2', id: 'user-r1', roundNumber: 1 });
 
       const { rerender } = rtlRender(
         <MessageListWithTracking
@@ -423,12 +426,12 @@ describe('message Box Render Audit', () => {
 
       // Add round 1 P0 (streaming starts)
       const r1P0 = createTestAssistantMessage({
-        id: 'thread_r1_p0',
         content: 'R1P0 streaming...',
-        roundNumber: 1,
+        finishReason: FinishReasons.UNKNOWN,
+        id: 'thread_r1_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.UNKNOWN,
+        roundNumber: 1,
       });
 
       rerender(
@@ -453,11 +456,11 @@ describe('message Box Render Audit', () => {
        * Test: isStreaming flip → message cards 0x renders (if content same)
        */
       const p0 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'P0 content',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       store.setState({ isStreaming: true });

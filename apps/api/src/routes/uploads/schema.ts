@@ -24,13 +24,13 @@ import { uploadSelectSchema } from '@/db/validation/upload';
  * (threadUpload, messageUpload) after upload completes
  */
 export const UploadFileRequestSchema = z.object({
-  file: z.instanceof(File).openapi({
-    description: 'File to upload (multipart/form-data)',
-    type: 'string',
-    format: 'binary',
-  }),
   description: z.string().max(500).optional().openapi({
     description: 'Optional file description for AI context',
+  }),
+  file: z.instanceof(File).openapi({
+    description: 'File to upload (multipart/form-data)',
+    format: 'binary',
+    type: 'string',
   }),
 }).openapi('UploadFileRequest');
 
@@ -97,8 +97,8 @@ export const ListUploadsResponseSchema = createCursorPaginatedResponseSchema(Upl
  */
 export const DeleteUploadResponseSchema = createApiResponseSchema(
   z.object({
-    id: CoreSchemas.id(),
     deleted: z.boolean(),
+    id: CoreSchemas.id(),
   }),
 );
 
@@ -128,12 +128,12 @@ export const CreateMultipartUploadRequestSchema = z.object({
     description: 'Original filename',
     example: 'large-document.pdf',
   }),
+  fileSize: z.number().int().positive().openapi({
+    description: 'Total file size in bytes',
+  }),
   mimeType: z.string().min(1).openapi({
     description: 'MIME type of the file',
     example: 'application/pdf',
-  }),
-  fileSize: z.number().int().positive().openapi({
-    description: 'Total file size in bytes',
   }),
   threadId: z.string().optional().openapi({
     description: 'Optional thread ID to associate with',
@@ -145,14 +145,14 @@ export const CreateMultipartUploadRequestSchema = z.object({
  */
 export const CreateMultipartUploadResponseSchema = createApiResponseSchema(
   z.object({
-    uploadId: z.string().openapi({
-      description: 'R2 multipart upload ID',
+    attachmentId: z.string().openapi({
+      description: 'Database attachment ID (for tracking)',
     }),
     key: z.string().openapi({
       description: 'R2 object key for this upload',
     }),
-    attachmentId: z.string().openapi({
-      description: 'Database attachment ID (for tracking)',
+    uploadId: z.string().openapi({
+      description: 'R2 multipart upload ID',
     }),
   }),
 );
@@ -161,13 +161,13 @@ export const CreateMultipartUploadResponseSchema = createApiResponseSchema(
  * Upload part request (body is raw binary)
  */
 export const UploadPartParamsSchema = z.object({
-  uploadId: z.string().openapi({
-    param: { name: 'uploadId', in: 'query' },
-    description: 'Multipart upload ID',
-  }),
   partNumber: z.string().openapi({
-    param: { name: 'partNumber', in: 'query' },
     description: 'Part number (1-based)',
+    param: { in: 'query', name: 'partNumber' },
+  }),
+  uploadId: z.string().openapi({
+    description: 'Multipart upload ID',
+    param: { in: 'query', name: 'uploadId' },
   }),
 }).openapi('UploadPartParams');
 
@@ -176,11 +176,11 @@ export const UploadPartParamsSchema = z.object({
  */
 export const UploadPartResponseSchema = createApiResponseSchema(
   z.object({
-    partNumber: z.number().int().positive().openapi({
-      description: 'Part number that was uploaded',
-    }),
     etag: z.string().openapi({
       description: 'ETag of the uploaded part (required for completion)',
+    }),
+    partNumber: z.number().int().positive().openapi({
+      description: 'Part number that was uploaded',
     }),
   }),
 );
@@ -190,8 +190,8 @@ export const UploadPartResponseSchema = createApiResponseSchema(
  */
 export const CompleteMultipartUploadRequestSchema = z.object({
   parts: z.array(z.object({
-    partNumber: z.number().int().positive(),
     etag: z.string(),
+    partNumber: z.number().int().positive(),
   })).openapi({
     description: 'Array of uploaded parts with their ETags',
   }),
@@ -207,8 +207,8 @@ export const CompleteMultipartUploadResponseSchema = createApiResponseSchema(Upl
  */
 export const AbortMultipartUploadResponseSchema = createApiResponseSchema(
   z.object({
-    uploadId: z.string(),
     aborted: z.boolean(),
+    uploadId: z.string(),
   }),
 );
 
@@ -227,13 +227,13 @@ export const RequestUploadTicketSchema = z.object({
     description: 'Original filename',
     example: 'document.pdf',
   }),
-  mimeType: z.string().min(1).openapi({
-    description: 'MIME type of the file',
-    example: 'application/pdf',
-  }),
   fileSize: z.number().int().positive().openapi({
     description: 'File size in bytes',
     example: 1024000,
+  }),
+  mimeType: z.string().min(1).openapi({
+    description: 'MIME type of the file',
+    example: 'application/pdf',
   }),
 }).openapi('RequestUploadTicketRequest');
 
@@ -241,14 +241,14 @@ export const RequestUploadTicketSchema = z.object({
  * Upload ticket response - contains the signed token
  */
 export const UploadTicketPayloadSchema = z.object({
+  expiresAt: z.number().openapi({
+    description: 'Token expiration timestamp (Unix ms)',
+  }),
   ticketId: z.string().openapi({
     description: 'Unique ticket identifier',
   }),
   token: z.string().openapi({
     description: 'Signed upload token - include this in the upload request',
-  }),
-  expiresAt: z.number().openapi({
-    description: 'Token expiration timestamp (Unix ms)',
   }),
   uploadUrl: z.string().openapi({
     description: 'URL to upload the file to',
@@ -264,8 +264,8 @@ export const UploadTicketResponseSchema = createApiResponseSchema(
  */
 export const UploadWithTicketQuerySchema = z.object({
   token: z.string().min(1).openapi({
-    param: { name: 'token', in: 'query' },
     description: 'Upload ticket token from requestUploadTicket',
+    param: { in: 'query', name: 'token' },
   }),
 }).openapi('UploadWithTicketQuery');
 

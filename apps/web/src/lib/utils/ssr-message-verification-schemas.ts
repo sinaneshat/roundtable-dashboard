@@ -38,16 +38,16 @@ const MetadataValueSchema = z.union([
 ]);
 
 export const ChatMessageSelectSchema = z.object({
-  id: z.string(),
-  threadId: z.string(),
-  participantId: z.string().nullable(),
-  role: z.string(),
   content: z.string().nullable(),
-  parts: z.array(MessagePartSchema),
-  status: z.string(),
-  metadata: z.record(z.string(), MetadataValueSchema).nullable(),
-  roundNumber: z.number().nullable(),
   createdAt: z.string(),
+  id: z.string(),
+  metadata: z.record(z.string(), MetadataValueSchema).nullable(),
+  participantId: z.string().nullable(),
+  parts: z.array(MessagePartSchema),
+  role: z.string(),
+  roundNumber: z.number().nullable(),
+  status: z.string(),
+  threadId: z.string(),
   updatedAt: z.string(),
 }).strict();
 

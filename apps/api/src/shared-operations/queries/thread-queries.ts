@@ -26,13 +26,13 @@ export async function getThreadById<T extends keyof typeof tables.chatThread.$in
 ) {
   if (columns && columns.length > 0) {
     const columnSelect = Object.fromEntries(columns.map(c => [c, true]));
-    return db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, threadId),
+    return await db.query.chatThread.findFirst({
       columns: columnSelect,
+      where: eq(tables.chatThread.id, threadId),
     });
   }
 
-  return db.query.chatThread.findFirst({
+  return await db.query.chatThread.findFirst({
     where: eq(tables.chatThread.id, threadId),
   });
 }
@@ -52,14 +52,14 @@ export async function getThreadsByProject(
       )
     : eq(tables.chatThread.projectId, projectId);
 
-  return db.query.chatThread.findMany({
-    where: whereClause,
-    orderBy: [desc(tables.chatThread.lastMessageAt)],
-    limit: options?.limit ?? 10,
+  return await db.query.chatThread.findMany({
     columns: {
       id: true,
       title: true,
     },
+    limit: options?.limit ?? 10,
+    orderBy: [desc(tables.chatThread.lastMessageAt)],
+    where: whereClause,
   });
 }
 
@@ -74,14 +74,15 @@ export async function getThreadWithParticipantCount(
     where: eq(tables.chatThread.id, threadId),
     with: {
       participants: {
-        where: eq(tables.chatParticipant.isEnabled, true),
         columns: { id: true },
+        where: eq(tables.chatParticipant.isEnabled, true),
       },
     },
   });
 
-  if (!thread)
+  if (!thread) {
     return null;
+  }
 
   return {
     ...thread,
@@ -97,14 +98,14 @@ export async function getThreadsByUser(
   db: DbInstance,
   options?: { limit?: number },
 ) {
-  return db.query.chatThread.findMany({
-    where: eq(tables.chatThread.userId, userId),
-    orderBy: [desc(tables.chatThread.lastMessageAt)],
-    limit: options?.limit ?? 10,
+  return await db.query.chatThread.findMany({
     columns: {
       id: true,
-      title: true,
       lastMessageAt: true,
+      title: true,
     },
+    limit: options?.limit ?? 10,
+    orderBy: [desc(tables.chatThread.lastMessageAt)],
+    where: eq(tables.chatThread.userId, userId),
   });
 }

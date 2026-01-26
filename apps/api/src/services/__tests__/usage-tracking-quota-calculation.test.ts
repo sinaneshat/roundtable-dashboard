@@ -44,22 +44,6 @@ vi.mock('@/db', async () => {
   return {
     ...actual,
     getDbAsync: vi.fn(() => ({
-      select: vi.fn(() => ({
-        from: vi.fn(() => ({
-          where: vi.fn(() => ({
-            limit: vi.fn(() => {
-              const userId = Array.from(mockUsageRecords.keys())[0];
-              const record = mockUsageRecords.get(userId);
-              return record ? [record] : [];
-            }),
-            $withCache: vi.fn((_config) => {
-              const userId = Array.from(mockUsageRecords.keys())[0];
-              const record = mockUsageRecords.get(userId);
-              return record ? [record] : [];
-            }),
-          })),
-        })),
-      })),
       insert: vi.fn(() => ({
         values: vi.fn(() => ({
           onConflictDoNothing: vi.fn(() => ({
@@ -73,12 +57,18 @@ vi.mock('@/db', async () => {
           }),
         })),
       })),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({
           where: vi.fn(() => ({
-            returning: vi.fn(() => {
-              const updatedRecords = Array.from(mockUsageRecords.values());
-              return updatedRecords;
+            $withCache: vi.fn((_config) => {
+              const userId = Array.from(mockUsageRecords.keys())[0];
+              const record = mockUsageRecords.get(userId);
+              return record ? [record] : [];
+            }),
+            limit: vi.fn(() => {
+              const userId = Array.from(mockUsageRecords.keys())[0];
+              const record = mockUsageRecords.get(userId);
+              return record ? [record] : [];
             }),
           })),
         })),
@@ -89,6 +79,16 @@ vi.mock('@/db', async () => {
           update: vi.fn(),
         });
       }),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({
+          where: vi.fn(() => ({
+            returning: vi.fn(() => {
+              const updatedRecords = Array.from(mockUsageRecords.values());
+              return updatedRecords;
+            }),
+          })),
+        })),
+      })),
     })),
   };
 });
@@ -313,10 +313,10 @@ describe('quota Calculation and Tracking', () => {
   describe('usage History Tracking', () => {
     it('tracks cumulative usage counters', () => {
       const usageHistory = {
-        threadsCreated: 5,
-        messagesCreated: 250,
-        customRolesCreated: 3,
         analysisGenerated: 15,
+        customRolesCreated: 3,
+        messagesCreated: 250,
+        threadsCreated: 5,
       };
 
       expect(usageHistory.threadsCreated).toBe(5);
@@ -339,13 +339,13 @@ describe('quota Calculation and Tracking', () => {
     it('stores snapshot at end of billing period', () => {
       const periodEnd = new Date('2024-01-31T23:59:59Z');
       const snapshot = {
-        periodStart: new Date('2024-01-01T00:00:00Z'),
-        periodEnd,
-        threadsCreated: 5,
-        messagesCreated: 250,
-        customRolesCreated: 3,
         analysisGenerated: 15,
+        customRolesCreated: 3,
+        messagesCreated: 250,
+        periodEnd,
+        periodStart: new Date('2024-01-01T00:00:00Z'),
         subscriptionTier: SubscriptionTiers.PRO as SubscriptionTier,
+        threadsCreated: 5,
       };
 
       expect(snapshot.periodEnd).toEqual(periodEnd);
@@ -354,13 +354,13 @@ describe('quota Calculation and Tracking', () => {
 
     it('resets counters at start of new billing period', () => {
       const oldPeriodUsage = {
-        threadsCreated: 100,
         messagesCreated: 5000,
+        threadsCreated: 100,
       };
 
       const newPeriodUsage = {
-        threadsCreated: 0,
         messagesCreated: 0,
+        threadsCreated: 0,
       };
 
       expect(newPeriodUsage.threadsCreated).toBe(0);
@@ -454,16 +454,16 @@ describe('quota Calculation and Tracking', () => {
     describe('period History Archival', () => {
       it('creates history record with complete usage data', () => {
         const historyRecord = {
-          userId: 'user_123',
-          periodStart: new Date('2024-03-01T00:00:00Z'),
-          periodEnd: new Date('2024-03-31T23:59:59Z'),
-          threadsCreated: 15,
-          messagesCreated: 1200,
-          customRolesCreated: 5,
           analysisGenerated: 30,
-          subscriptionTier: SubscriptionTiers.PRO as SubscriptionTier,
-          isAnnual: false,
           createdAt: new Date(),
+          customRolesCreated: 5,
+          isAnnual: false,
+          messagesCreated: 1200,
+          periodEnd: new Date('2024-03-31T23:59:59Z'),
+          periodStart: new Date('2024-03-01T00:00:00Z'),
+          subscriptionTier: SubscriptionTiers.PRO as SubscriptionTier,
+          threadsCreated: 15,
+          userId: 'user_123',
         };
 
         expect(historyRecord.userId).toBe('user_123');
@@ -473,14 +473,14 @@ describe('quota Calculation and Tracking', () => {
 
       it('history record is immutable snapshot', () => {
         const snapshot = {
-          threadsCreated: 10,
           messagesCreated: 500,
+          threadsCreated: 10,
         };
 
         // Usage continues in new period
         const currentUsage = {
-          threadsCreated: 2,
           messagesCreated: 100,
+          threadsCreated: 2,
         };
 
         // Snapshot remains unchanged
@@ -490,8 +490,8 @@ describe('quota Calculation and Tracking', () => {
 
       it('maintains tier information in history', () => {
         const historyRecord = {
-          subscriptionTier: SubscriptionTiers.PRO as SubscriptionTier,
           isAnnual: true,
+          subscriptionTier: SubscriptionTiers.PRO as SubscriptionTier,
         };
 
         // Can look up historical quotas
@@ -539,13 +539,13 @@ describe('quota Calculation and Tracking', () => {
 
       it('maintains usage counters during upgrade', () => {
         const usageBeforeUpgrade = {
-          threadsCreated: 1,
           messagesCreated: 50,
+          threadsCreated: 1,
         };
 
         const usageAfterUpgrade = {
-          threadsCreated: 1, // Same usage
           messagesCreated: 50, // Same usage
+          threadsCreated: 1, // Same usage
         };
 
         expect(usageAfterUpgrade.threadsCreated).toBe(usageBeforeUpgrade.threadsCreated);
@@ -571,8 +571,8 @@ describe('quota Calculation and Tracking', () => {
 
         const graceInfo = {
           currentTier,
-          pendingTier,
           effectiveDate: periodEnd,
+          pendingTier,
         };
 
         expect(graceInfo.currentTier).toBe(SubscriptionTiers.PRO);
@@ -654,11 +654,11 @@ describe('quota Calculation and Tracking', () => {
   describe('integration: Complete Usage Lifecycle', () => {
     it('new user starts with zero usage', () => {
       const newUserUsage = {
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        customRolesCreated: 0,
+        messagesCreated: 0,
         subscriptionTier: SubscriptionTiers.FREE as SubscriptionTier,
+        threadsCreated: 0,
       };
 
       expect(newUserUsage.threadsCreated).toBe(0);
@@ -680,8 +680,8 @@ describe('quota Calculation and Tracking', () => {
 
     it('usage persists across sessions', () => {
       const persistedUsage = {
-        threadsCreated: 5,
         messagesCreated: 250,
+        threadsCreated: 5,
       };
 
       // Simulate loading from database

@@ -43,10 +43,10 @@ import { invalidationPatterns } from '@/lib/data/query-keys';
  */
 export function useNavigationReset() {
   // Batch store state and actions with useShallow for performance
-  const { resetToNewChat, thread, createdThreadId } = useChatStore(useShallow(s => ({
+  const { createdThreadId, resetToNewChat, thread } = useChatStore(useShallow(s => ({
+    createdThreadId: s.createdThreadId,
     resetToNewChat: s.resetToNewChat,
     thread: s.thread,
-    createdThreadId: s.createdThreadId,
   })));
   const { pathname } = useLocation();
   const previousPathnameRef = useRef(pathname);
@@ -54,10 +54,10 @@ export function useNavigationReset() {
 
   // Read from cookie-persisted model preferences store
   const preferences = useModelPreferencesStore(useShallow(s => ({
-    selectedModelIds: s.selectedModelIds,
+    enableWebSearch: s.enableWebSearch,
     modelOrder: s.modelOrder,
     selectedMode: s.selectedMode,
-    enableWebSearch: s.enableWebSearch,
+    selectedModelIds: s.selectedModelIds,
   })));
 
   // Shared reset logic - invalidate queries and reset store

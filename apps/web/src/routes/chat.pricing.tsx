@@ -36,8 +36,8 @@ function PricingLoadingSkeleton() {
 }
 
 export const Route = createFileRoute('/chat/pricing')({
-  // ✅ PUBLIC PAGE: Uses session from root context (already cached)
-  // No duplicate getSession() call - shows different UI for logged-in vs guest
+  component: PricingPage,
+  validateSearch: pricingSearchSchema,
   loader: async ({ context }) => {
     const { queryClient, session } = context;
 
@@ -56,13 +56,8 @@ export const Route = createFileRoute('/chat/pricing')({
 
     return {};
   },
-  validateSearch: pricingSearchSchema,
-  component: PricingPage,
-  pendingComponent: PricingLoadingSkeleton,
-  preload: true,
-  headers: () => ({
-    'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
-  }),
+  // ✅ PUBLIC PAGE: Uses session from root context (already cached)
+  // No duplicate getSession() call - shows different UI for logged-in vs guest
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -87,6 +82,11 @@ export const Route = createFileRoute('/chat/pricing')({
       ],
     };
   },
+  pendingComponent: PricingLoadingSkeleton,
+  preload: true,
+  headers: () => ({
+    'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+  }),
 });
 
 function PricingPage() {

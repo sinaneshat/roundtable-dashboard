@@ -20,18 +20,18 @@ type TrendSuggestionCardProps = {
 };
 
 const PLATFORM_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  instagram: Icons.instagram,
   reddit: Icons.reddit,
   twitter: Icons.twitter,
-  instagram: Icons.instagram,
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
+  instagram: 'bg-pink-500/10 text-pink-600',
   reddit: 'bg-orange-500/10 text-orange-600',
   twitter: 'bg-blue-400/10 text-blue-500',
-  instagram: 'bg-pink-500/10 text-pink-600',
 };
 
-export function TrendSuggestionCard({ index, disabled }: TrendSuggestionCardProps) {
+export function TrendSuggestionCard({ disabled, index }: TrendSuggestionCardProps) {
   const t = useTranslations();
   const [showReasoning, setShowReasoning] = useState(false);
   const { control, watch } = useFormContext<TrendDiscoveryFormValues>();

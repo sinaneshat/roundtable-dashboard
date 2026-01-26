@@ -32,18 +32,18 @@ describe('round orchestration service', () => {
       );
 
       expect(result).toMatchObject({
-        threadId: 'thread-123',
+        attachmentIds: ['attachment-1', 'attachment-2'],
+        completedParticipants: 0,
+        error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
         roundNumber: 1,
         status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
+        threadId: 'thread-123',
         totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        error: null,
         triggeredParticipants: [],
-        attachmentIds: ['attachment-1', 'attachment-2'],
       });
 
       expect(result.startedAt).toBeDefined();
@@ -60,8 +60,8 @@ describe('round orchestration service', () => {
         expect.objectContaining({
           logType: 'operation',
           operationName: 'initializeRoundExecution',
-          threadId: 'thread-123',
           roundNumber: 1,
+          threadId: 'thread-123',
           totalParticipants: 3,
         }),
       );
@@ -80,7 +80,7 @@ describe('round orchestration service', () => {
       );
 
       expect(result.attachmentIds).toBeUndefined();
-      expect(mockKV.put).toHaveBeenCalled();
+      expect(mockKV.put).toHaveBeenCalledWith();
     });
 
     it('handles missing KV gracefully', async () => {
@@ -95,10 +95,10 @@ describe('round orchestration service', () => {
       );
 
       expect(result).toMatchObject({
-        threadId: 'thread-789',
+        phase: RoundExecutionPhases.PARTICIPANTS,
         roundNumber: 1,
         status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
+        threadId: 'thread-789',
         totalParticipants: 3,
       });
     });
@@ -108,21 +108,21 @@ describe('round orchestration service', () => {
     it('retrieves existing round execution state from KV', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 1,
         error: null,
-        triggeredParticipants: [0],
-        recoveryAttempts: 0,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
+        triggeredParticipants: [0],
       };
 
       mockKV.get.mockResolvedValue(existingState);
@@ -216,18 +216,18 @@ describe('round orchestration service', () => {
     it('marks participant as started and adds to triggered list', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [],
       };
 
@@ -248,8 +248,9 @@ describe('round orchestration service', () => {
       );
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({ 0: ParticipantStreamStatuses.ACTIVE });
       expect(updatedState.triggeredParticipants).toEqual([0]);
@@ -258,18 +259,18 @@ describe('round orchestration service', () => {
     it('does not duplicate participant in triggered list', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0],
       };
 
@@ -284,8 +285,9 @@ describe('round orchestration service', () => {
       );
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.triggeredParticipants).toEqual([0]);
     });
@@ -310,18 +312,18 @@ describe('round orchestration service', () => {
     it('marks participant as completed and updates counts', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0],
       };
 
@@ -340,8 +342,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(false);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({
         0: ParticipantStreamStatuses.COMPLETED,
@@ -352,12 +355,12 @@ describe('round orchestration service', () => {
       expect(logger.info).toHaveBeenCalledWith(
         'Marked participant completed',
         expect.objectContaining({
+          allParticipantsComplete: false,
+          completedParticipants: 1,
           logType: 'operation',
           operationName: 'markParticipantCompleted',
           participantIndex: 0,
-          completedParticipants: 1,
           totalParticipants: 3,
-          allParticipantsComplete: false,
         }),
       );
     });
@@ -365,18 +368,18 @@ describe('round orchestration service', () => {
     it('transitions to moderator phase when all participants complete', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 1,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 
@@ -393,8 +396,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(true);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.completedParticipants).toBe(2);
       expect(updatedState.phase).toBe(RoundExecutionPhases.MODERATOR);
@@ -403,21 +407,21 @@ describe('round orchestration service', () => {
     it('handles mix of completed and failed participants', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
+        completedAt: null,
         completedParticipants: 1,
+        error: null,
         failedParticipants: 1,
+        moderatorStatus: null,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.FAILED,
         },
-        moderatorStatus: null,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: null,
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0, 1, 2],
       };
 
@@ -434,8 +438,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(true);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.completedParticipants).toBe(2);
       expect(updatedState.failedParticipants).toBe(1);
@@ -463,18 +468,18 @@ describe('round orchestration service', () => {
     it('marks participant as failed and updates counts', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.ACTIVE },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0],
       };
 
@@ -494,8 +499,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(false);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.participantStatuses).toEqual({
         0: ParticipantStreamStatuses.FAILED,
@@ -507,11 +513,11 @@ describe('round orchestration service', () => {
       expect(logger.warn).toHaveBeenCalledWith(
         'Marked participant failed',
         expect.objectContaining({
+          error: 'API rate limit exceeded',
+          failedParticipants: 1,
           logType: 'operation',
           operationName: 'markParticipantFailed',
           participantIndex: 0,
-          error: 'API rate limit exceeded',
-          failedParticipants: 1,
         }),
       );
     });
@@ -519,18 +525,18 @@ describe('round orchestration service', () => {
     it('transitions to moderator phase when all participants done (with failures)', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 1,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 
@@ -548,8 +554,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(true);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.phase).toBe(RoundExecutionPhases.MODERATOR);
     });
@@ -557,18 +564,18 @@ describe('round orchestration service', () => {
     it('sets error when all participants fail', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 1,
-        participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 1,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 
@@ -586,8 +593,9 @@ describe('round orchestration service', () => {
       expect(result.allParticipantsComplete).toBe(true);
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.failedParticipants).toBe(2);
       expect(updatedState.error).toBe('Complete failure');
@@ -627,23 +635,23 @@ describe('round orchestration service', () => {
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.NOT_STARTED,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
         completedParticipants: 0,
+        error: null,
         failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
         hasModeratorMessage: false,
         isComplete: false,
-        error: null,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        status: RoundExecutionStatuses.NOT_STARTED,
+        totalParticipants: 3,
       });
     });
 
@@ -652,21 +660,21 @@ describe('round orchestration service', () => {
       const mockKV = createMockKV();
 
       const kvState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
+        completedAt: null,
         completedParticipants: 1,
+        error: null,
         failedParticipants: 0,
+        moderatorStatus: null,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.ACTIVE,
         },
-        moderatorStatus: null,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: null,
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0, 1],
       };
 
@@ -679,29 +687,29 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
         completedParticipants: 1,
+        isComplete: false,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
         },
-        isComplete: false,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 3,
       });
     });
 
@@ -717,33 +725,33 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
         {
           id: 'thread-123_r1_p1',
-          participantId: 'p2',
           metadata: {},
+          participantId: 'p2',
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.MODERATOR,
-        totalParticipants: 2,
         completedParticipants: 2,
-        moderatorStatus: ParticipantStreamStatuses.PENDING,
         hasModeratorMessage: false,
         isComplete: false,
+        moderatorStatus: ParticipantStreamStatuses.PENDING,
+        phase: RoundExecutionPhases.MODERATOR,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 2,
       });
     });
 
@@ -759,38 +767,38 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
         {
           id: 'thread-123_r1_p1',
-          participantId: 'p2',
           metadata: {},
+          participantId: 'p2',
         },
         {
           id: 'thread-123_r1_moderator',
-          participantId: null,
           metadata: { isModerator: true },
+          participantId: null,
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.COMPLETED,
-        phase: RoundExecutionPhases.COMPLETE,
-        totalParticipants: 2,
         completedParticipants: 2,
-        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
         hasModeratorMessage: true,
         isComplete: true,
+        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
+        phase: RoundExecutionPhases.COMPLETE,
+        status: RoundExecutionStatuses.COMPLETED,
+        totalParticipants: 2,
       });
     });
 
@@ -803,26 +811,26 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.COMPLETED,
-        phase: RoundExecutionPhases.COMPLETE,
-        totalParticipants: 1,
         completedParticipants: 1,
         isComplete: true,
+        phase: RoundExecutionPhases.COMPLETE,
+        status: RoundExecutionStatuses.COMPLETED,
+        totalParticipants: 1,
       });
     });
 
@@ -839,26 +847,26 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.INCOMPLETE,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
         completedParticipants: 1,
         isComplete: false,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        status: RoundExecutionStatuses.INCOMPLETE,
+        totalParticipants: 3,
       });
     });
 
@@ -867,22 +875,22 @@ describe('round orchestration service', () => {
       const mockKV = createMockKV();
 
       const kvState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
+        completedAt: null,
         completedParticipants: 2,
+        error: 'Participant 1 failed',
         failedParticipants: 1,
+        moderatorStatus: null,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.FAILED,
           2: ParticipantStreamStatuses.COMPLETED,
         },
-        moderatorStatus: null,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: 'Participant 1 failed',
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [0, 1, 2],
       };
 
@@ -895,31 +903,31 @@ describe('round orchestration service', () => {
       mockDb.query.chatMessage.findMany.mockResolvedValue([
         {
           id: 'thread-123_r1_p0',
-          participantId: 'p1',
           metadata: {},
+          participantId: 'p1',
         },
         {
           id: 'thread-123_r1_p2',
-          participantId: 'p3',
           metadata: {},
+          participantId: 'p3',
         },
       ]);
 
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
+        completedParticipants: 2,
+        error: 'Participant 1 failed',
+        failedParticipants: 1,
         status: RoundExecutionStatuses.RUNNING,
         totalParticipants: 3,
-        completedParticipants: 2,
-        failedParticipants: 1,
-        error: 'Participant 1 failed',
       });
     });
 
@@ -934,18 +942,18 @@ describe('round orchestration service', () => {
       const env = createMockApiEnv({ KV: mockKV });
 
       const result = await roundOrchestrationService.computeRoundStatus({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        env,
         db: mockDb as MockDrizzleDb,
+        env,
+        roundNumber: 1,
+        threadId: 'thread-123',
       });
 
       expect(result).toMatchObject({
-        status: RoundExecutionStatuses.COMPLETED,
-        phase: RoundExecutionPhases.COMPLETE,
-        totalParticipants: 0,
         completedParticipants: 0,
         isComplete: true,
+        phase: RoundExecutionPhases.COMPLETE,
+        status: RoundExecutionStatuses.COMPLETED,
+        totalParticipants: 0,
       });
     });
   });
@@ -954,21 +962,21 @@ describe('round orchestration service', () => {
     it('marks moderator as completed and round as complete', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.MODERATOR,
-        totalParticipants: 2,
+        completedAt: null,
         completedParticipants: 2,
+        error: null,
         failedParticipants: 0,
+        moderatorStatus: ParticipantStreamStatuses.ACTIVE,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
         },
-        moderatorStatus: ParticipantStreamStatuses.ACTIVE,
+        phase: RoundExecutionPhases.MODERATOR,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: null,
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 
@@ -984,8 +992,9 @@ describe('round orchestration service', () => {
       );
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.moderatorStatus).toBe(ParticipantStreamStatuses.COMPLETED);
       expect(updatedState.phase).toBe(RoundExecutionPhases.COMPLETE);
@@ -997,8 +1006,8 @@ describe('round orchestration service', () => {
         expect.objectContaining({
           logType: 'operation',
           operationName: 'markModeratorCompleted',
-          threadId: 'thread-123',
           roundNumber: 1,
+          threadId: 'thread-123',
         }),
       );
     });
@@ -1008,21 +1017,21 @@ describe('round orchestration service', () => {
     it('marks moderator as failed but round as completed', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.MODERATOR,
-        totalParticipants: 2,
+        completedAt: null,
         completedParticipants: 2,
+        error: null,
         failedParticipants: 0,
+        moderatorStatus: ParticipantStreamStatuses.ACTIVE,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
         },
-        moderatorStatus: ParticipantStreamStatuses.ACTIVE,
+        phase: RoundExecutionPhases.MODERATOR,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: null,
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 
@@ -1039,8 +1048,9 @@ describe('round orchestration service', () => {
       );
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.moderatorStatus).toBe(ParticipantStreamStatuses.FAILED);
       expect(updatedState.phase).toBe(RoundExecutionPhases.COMPLETE);
@@ -1051,11 +1061,11 @@ describe('round orchestration service', () => {
       expect(logger.warn).toHaveBeenCalledWith(
         'Marked moderator failed',
         expect.objectContaining({
+          error: 'Moderator API error',
           logType: 'operation',
           operationName: 'markModeratorFailed',
-          threadId: 'thread-123',
           roundNumber: 1,
-          error: 'Moderator API error',
+          threadId: 'thread-123',
         }),
       );
     });
@@ -1065,18 +1075,18 @@ describe('round orchestration service', () => {
     it('marks entire round execution as failed', async () => {
       const mockKV = createMockKV();
       const existingState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
+        failedParticipants: 0,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
         triggeredParticipants: [],
       };
 
@@ -1093,8 +1103,9 @@ describe('round orchestration service', () => {
       );
 
       const mockCall = mockKV.put.mock.calls[0];
-      if (!mockCall)
+      if (!mockCall) {
         throw new Error('KV put not called');
+      }
       const updatedState = JSON.parse(mockCall[1] as string);
       expect(updatedState.status).toBe(RoundExecutionStatuses.FAILED);
       expect(updatedState.error).toBe('Critical system error');
@@ -1103,11 +1114,11 @@ describe('round orchestration service', () => {
       expect(logger.error).toHaveBeenCalledWith(
         'Marked round execution as failed',
         expect.objectContaining({
+          error: 'Critical system error',
           logType: 'operation',
           operationName: 'markRoundFailed',
-          threadId: 'thread-123',
           roundNumber: 1,
-          error: 'Critical system error',
+          threadId: 'thread-123',
         }),
       );
     });
@@ -1117,21 +1128,21 @@ describe('round orchestration service', () => {
     it('returns state when round is running', async () => {
       const mockKV = createMockKV();
       const runningState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 1,
         error: null,
-        triggeredParticipants: [0],
-        recoveryAttempts: 0,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 3,
+        triggeredParticipants: [0],
       };
 
       mockKV.get.mockResolvedValue(runningState);
@@ -1149,21 +1160,21 @@ describe('round orchestration service', () => {
     it('returns null when round is completed', async () => {
       const mockKV = createMockKV();
       const completedState = {
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.COMPLETED,
-        phase: RoundExecutionPhases.COMPLETE,
-        totalParticipants: 2,
+        completedAt: new Date().toISOString(),
         completedParticipants: 2,
+        error: null,
         failedParticipants: 0,
+        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
         },
-        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
+        phase: RoundExecutionPhases.COMPLETE,
+        roundNumber: 1,
         startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-        error: null,
+        status: RoundExecutionStatuses.COMPLETED,
+        threadId: 'thread-123',
+        totalParticipants: 2,
         triggeredParticipants: [0, 1],
       };
 

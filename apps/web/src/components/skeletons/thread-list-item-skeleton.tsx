@@ -12,10 +12,10 @@ type ThreadListItemSkeletonProps = {
 } & ComponentProps<'div'>;
 
 export function ThreadListItemSkeleton({
-  count = 1,
   animated = false,
-  widthVariant,
   className,
+  count = 1,
+  widthVariant,
   ...props
 }: ThreadListItemSkeletonProps) {
   if (count === 1) {
@@ -43,8 +43,8 @@ export function ThreadListItemSkeleton({
           key={`thread-skeleton-${i}`}
           className={cn('h-5 rounded-full', !animated && 'animate-none')}
           style={{
-            width: getSkeletonWidth(i),
             opacity: getSkeletonOpacity(i),
+            width: getSkeletonWidth(i),
           }}
         />
       ))}

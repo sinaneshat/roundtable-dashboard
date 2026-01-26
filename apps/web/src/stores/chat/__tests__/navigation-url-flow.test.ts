@@ -68,12 +68,15 @@ function shouldNavigateToThread(
   hasAiSlug: boolean,
   firstModeratorCompleted: boolean,
 ): boolean {
-  if (!isActive)
+  if (!isActive) {
     return false;
-  if (showInitialUI)
+  }
+  if (showInitialUI) {
     return false;
-  if (!hasUpdatedThread)
+  }
+  if (!hasUpdatedThread) {
     return false;
+  }
 
   return !hasNavigated
     && hasAiSlug
@@ -85,7 +88,7 @@ function shouldNavigateToThread(
  * Extracts logic from flow-controller.ts:203-207
  */
 function isFirstModeratorCompleted(
-  messages: Array<{ id: string; metadata?: { isModerator?: boolean; roundNumber?: number } }>,
+  messages: { id: string; metadata?: { isModerator?: boolean; roundNumber?: number } }[],
 ): boolean {
   const moderatorMessage = messages.find(
     m => m.metadata?.isModerator === true && m.metadata?.roundNumber === 0,
@@ -107,7 +110,7 @@ describe('slug Polling Lifecycle', () => {
         false, // hasUpdatedThread
       );
 
-      expect(shouldPoll).toBe(true);
+      expect(shouldPoll).toBeTruthy();
     });
 
     it('does NOT start polling when showInitialUI=true (chat not started)', () => {
@@ -118,7 +121,7 @@ describe('slug Polling Lifecycle', () => {
         false,
       );
 
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
 
     it('does NOT start polling when createdThreadId is null (no thread created)', () => {
@@ -129,7 +132,7 @@ describe('slug Polling Lifecycle', () => {
         false,
       );
 
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
 
     it('does NOT start polling when hasUpdatedThread=true (URL already updated)', () => {
@@ -140,7 +143,7 @@ describe('slug Polling Lifecycle', () => {
         true, // hasUpdatedThread=true
       );
 
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
 
     it('does NOT start polling when controller not active (navigated away)', () => {
@@ -151,7 +154,7 @@ describe('slug Polling Lifecycle', () => {
         false,
       );
 
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
   });
 
@@ -160,24 +163,24 @@ describe('slug Polling Lifecycle', () => {
       // Initial state - polling active
       let hasUpdatedThread = false;
       const initialPoll = shouldStartSlugPolling(true, false, 'thread-123', hasUpdatedThread);
-      expect(initialPoll).toBe(true);
+      expect(initialPoll).toBeTruthy();
 
       // AI slug ready - set hasUpdatedThread=true
       hasUpdatedThread = true;
       const afterUpdate = shouldStartSlugPolling(true, false, 'thread-123', hasUpdatedThread);
-      expect(afterUpdate).toBe(false);
+      expect(afterUpdate).toBeFalsy();
     });
 
     it('stops polling when controller becomes inactive (component unmount)', () => {
       // Initial state - polling active
       let isActive = true;
       const initialPoll = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      expect(initialPoll).toBe(true);
+      expect(initialPoll).toBeTruthy();
 
       // Component unmounts - controller inactive
       isActive = false;
       const afterUnmount = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      expect(afterUnmount).toBe(false);
+      expect(afterUnmount).toBeFalsy();
     });
 
     it('stops polling when navigated away (screenMode changes)', () => {
@@ -185,13 +188,13 @@ describe('slug Polling Lifecycle', () => {
       let screenMode = ScreenModes.OVERVIEW;
       const isActive = screenMode === ScreenModes.OVERVIEW;
       const initialPoll = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      expect(initialPoll).toBe(true);
+      expect(initialPoll).toBeTruthy();
 
       // Navigate to THREAD screen
       screenMode = ScreenModes.THREAD;
       const newIsActive = screenMode === ScreenModes.OVERVIEW;
       const afterNavigation = shouldStartSlugPolling(newIsActive, false, 'thread-123', false);
-      expect(afterNavigation).toBe(false);
+      expect(afterNavigation).toBeFalsy();
     });
   });
 
@@ -201,29 +204,29 @@ describe('slug Polling Lifecycle', () => {
 
       // Before chat starts
       const beforeStart = shouldStartSlugPolling(true, true, threadId, false);
-      expect(beforeStart).toBe(false);
+      expect(beforeStart).toBeFalsy();
 
       // After chat starts
       const afterStart = shouldStartSlugPolling(true, false, threadId, false);
-      expect(afterStart).toBe(true);
+      expect(afterStart).toBeTruthy();
     });
 
     it('polling ON → OFF when slug detected (hasUpdatedThread: false → true)', () => {
       // Polling active
       const beforeSlug = shouldStartSlugPolling(true, false, 'thread-123', false);
-      expect(beforeSlug).toBe(true);
+      expect(beforeSlug).toBeTruthy();
 
       // Slug detected
       const afterSlug = shouldStartSlugPolling(true, false, 'thread-123', true);
-      expect(afterSlug).toBe(false);
+      expect(afterSlug).toBeFalsy();
     });
 
     it('handles rapid state changes without re-enabling polling', () => {
       const states = [
-        { showInitialUI: false, hasUpdatedThread: false, expected: true }, // Polling starts
-        { showInitialUI: false, hasUpdatedThread: true, expected: false }, // Polling stops
-        { showInitialUI: true, hasUpdatedThread: true, expected: false }, // Reset triggered
-        { showInitialUI: false, hasUpdatedThread: true, expected: false }, // Still stopped
+        { expected: true, hasUpdatedThread: false, showInitialUI: false }, // Polling starts
+        { expected: false, hasUpdatedThread: true, showInitialUI: false }, // Polling stops
+        { expected: false, hasUpdatedThread: true, showInitialUI: true }, // Reset triggered
+        { expected: false, hasUpdatedThread: true, showInitialUI: false }, // Still stopped
       ];
 
       states.forEach((state, _index) => {
@@ -247,34 +250,34 @@ describe('uRL Replacement vs Navigation Timing', () => {
   describe('window.history.replaceState Triggers', () => {
     it('triggers URL update when AI slug ready AND hasUpdatedThread=false', () => {
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'ai-generated-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-generated-slug' },
         false,
       );
 
-      expect(shouldUpdate).toBe(true);
+      expect(shouldUpdate).toBeTruthy();
     });
 
     it('does NOT trigger if slugData is null', () => {
       const shouldUpdate = shouldUpdateUrl(null, false);
-      expect(shouldUpdate).toBe(false);
+      expect(shouldUpdate).toBeFalsy();
     });
 
     it('does NOT trigger if isAiGeneratedTitle=false (initial slug)', () => {
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'initial-slug', isAiGeneratedTitle: false },
+        { isAiGeneratedTitle: false, slug: 'initial-slug' },
         false,
       );
 
-      expect(shouldUpdate).toBe(false);
+      expect(shouldUpdate).toBeFalsy();
     });
 
     it('does NOT trigger if hasUpdatedThread=true (already updated)', () => {
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'ai-generated-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-generated-slug' },
         true,
       );
 
-      expect(shouldUpdate).toBe(false);
+      expect(shouldUpdate).toBeFalsy();
     });
   });
 
@@ -330,7 +333,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
         true, // firstModeratorCompleted
       );
 
-      expect(canNavigate1).toBe(false);
+      expect(canNavigate1).toBeFalsy();
 
       // After URL update
       const canNavigate2 = shouldNavigateToThread(
@@ -342,7 +345,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
         true,
       );
 
-      expect(canNavigate2).toBe(true);
+      expect(canNavigate2).toBeTruthy();
     });
 
     it('navigation waits for firstModeratorCompleted=true', () => {
@@ -355,7 +358,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
         false, // firstModeratorCompleted - NOT ready
       );
 
-      expect(canNavigate1).toBe(false);
+      expect(canNavigate1).toBeFalsy();
 
       // After moderator complete
       const canNavigate2 = shouldNavigateToThread(
@@ -367,7 +370,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
         true, // firstModeratorCompleted - NOW ready
       );
 
-      expect(canNavigate2).toBe(true);
+      expect(canNavigate2).toBeTruthy();
     });
 
     it('navigation waits for hasAiSlug=true', () => {
@@ -380,7 +383,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
         true,
       );
 
-      expect(canNavigate1).toBe(false);
+      expect(canNavigate1).toBeFalsy();
 
       // After AI slug ready
       const canNavigate2 = shouldNavigateToThread(
@@ -392,27 +395,27 @@ describe('uRL Replacement vs Navigation Timing', () => {
         true,
       );
 
-      expect(canNavigate2).toBe(true);
+      expect(canNavigate2).toBeTruthy();
     });
 
     it('navigation requires ALL three prerequisites', () => {
       // Only hasUpdatedThread
-      expect(shouldNavigateToThread(true, false, true, false, false, false)).toBe(false);
+      expect(shouldNavigateToThread(true, false, true, false, false, false)).toBeFalsy();
 
       // Only hasAiSlug
-      expect(shouldNavigateToThread(true, false, false, false, true, false)).toBe(false);
+      expect(shouldNavigateToThread(true, false, false, false, true, false)).toBeFalsy();
 
       // Only firstModeratorCompleted
-      expect(shouldNavigateToThread(true, false, false, false, false, true)).toBe(false);
+      expect(shouldNavigateToThread(true, false, false, false, false, true)).toBeFalsy();
 
       // All three
-      expect(shouldNavigateToThread(true, false, true, false, true, true)).toBe(true);
+      expect(shouldNavigateToThread(true, false, true, false, true, true)).toBeTruthy();
     });
   });
 
   describe('execution Order Verification', () => {
     it('correct order: polling → URL update → navigation', () => {
-      const timeline: Array<{ step: string; time: number }> = [];
+      const timeline: { step: string; time: number }[] = [];
       const startTime = Date.now();
 
       // Step 1: Polling starts immediately
@@ -423,7 +426,7 @@ describe('uRL Replacement vs Navigation Timing', () => {
 
       // Step 2: AI slug ready - URL update
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         false,
       );
       if (shouldUpdate) {
@@ -456,21 +459,21 @@ describe('flag Coordination Race Conditions', () => {
     it('prevents polling after URL update', () => {
       // Before URL update - polling active
       const beforeUpdate = shouldStartSlugPolling(true, false, 'thread-123', false);
-      expect(beforeUpdate).toBe(true);
+      expect(beforeUpdate).toBeTruthy();
 
       // After URL update - hasUpdatedThread=true, polling stops
       const afterUpdate = shouldStartSlugPolling(true, false, 'thread-123', true);
-      expect(afterUpdate).toBe(false);
+      expect(afterUpdate).toBeFalsy();
     });
 
     it('gates navigation - requires hasUpdatedThread=true', () => {
       // hasUpdatedThread=false - navigation blocked
       const canNavigateBefore = shouldNavigateToThread(true, false, false, false, true, true);
-      expect(canNavigateBefore).toBe(false);
+      expect(canNavigateBefore).toBeFalsy();
 
       // hasUpdatedThread=true - navigation allowed
       const canNavigateAfter = shouldNavigateToThread(true, false, true, false, true, true);
-      expect(canNavigateAfter).toBe(true);
+      expect(canNavigateAfter).toBeTruthy();
     });
 
     it('coordinate with URL update trigger', () => {
@@ -478,20 +481,20 @@ describe('flag Coordination Race Conditions', () => {
 
       // URL update should happen
       const shouldUpdate1 = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         hasUpdatedThread,
       );
-      expect(shouldUpdate1).toBe(true);
+      expect(shouldUpdate1).toBeTruthy();
 
       // After update - set flag
       hasUpdatedThread = true;
 
       // URL update should NOT happen again
       const shouldUpdate2 = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         hasUpdatedThread,
       );
-      expect(shouldUpdate2).toBe(false);
+      expect(shouldUpdate2).toBeFalsy();
     });
   });
 
@@ -499,11 +502,11 @@ describe('flag Coordination Race Conditions', () => {
     it('prevents duplicate router.push calls', () => {
       // First navigation attempt
       const canNavigate1 = shouldNavigateToThread(true, false, true, false, true, true);
-      expect(canNavigate1).toBe(true);
+      expect(canNavigate1).toBeTruthy();
 
       // After navigation - hasNavigated=true
       const canNavigate2 = shouldNavigateToThread(true, false, true, true, true, true);
-      expect(canNavigate2).toBe(false);
+      expect(canNavigate2).toBeFalsy();
     });
 
     it('resets when showInitialUI=true (new chat)', () => {
@@ -514,29 +517,29 @@ describe('flag Coordination Race Conditions', () => {
       };
 
       const states: NavState[] = [
-        { showInitialUI: false, hasNavigated: false }, // Chat started
-        { showInitialUI: false, hasNavigated: true }, // Navigated to thread
-        { showInitialUI: true, hasNavigated: false }, // Reset to new chat
+        { hasNavigated: false, showInitialUI: false }, // Chat started
+        { hasNavigated: true, showInitialUI: false }, // Navigated to thread
+        { hasNavigated: false, showInitialUI: true }, // Reset to new chat
       ];
 
       // When showInitialUI=true, hasNavigated should reset to false
       const resetState = states[2];
-      expect(resetState?.showInitialUI).toBe(true);
-      expect(resetState?.hasNavigated).toBe(false);
+      expect(resetState?.showInitialUI).toBeTruthy();
+      expect(resetState?.hasNavigated).toBeFalsy();
     });
 
     it('checked AFTER hasUpdatedThread in navigation logic', () => {
       // hasUpdatedThread=false - navigation blocked even if hasNavigated=false
       const blockedByUpdate = shouldNavigateToThread(true, false, false, false, true, true);
-      expect(blockedByUpdate).toBe(false);
+      expect(blockedByUpdate).toBeFalsy();
 
       // hasUpdatedThread=true, hasNavigated=false - navigation allowed
       const allowedByUpdate = shouldNavigateToThread(true, false, true, false, true, true);
-      expect(allowedByUpdate).toBe(true);
+      expect(allowedByUpdate).toBeTruthy();
 
       // hasUpdatedThread=true, hasNavigated=true - navigation blocked by flag
       const blockedByFlag = shouldNavigateToThread(true, false, true, true, true, true);
-      expect(blockedByFlag).toBe(false);
+      expect(blockedByFlag).toBeFalsy();
     });
   });
 
@@ -552,18 +555,19 @@ describe('flag Coordination Race Conditions', () => {
       // Atomic update simulation
       const updateUrl = (slugData: UrlUpdateState['slugData']) => {
         states.push({
-          slugData,
           hasUpdatedThread: true, // Set atomically
+          slugData,
         });
       };
 
-      updateUrl({ slug: 'ai-slug', isAiGeneratedTitle: true });
+      updateUrl({ isAiGeneratedTitle: true, slug: 'ai-slug' });
 
       const state0 = states[0];
-      if (!state0)
+      if (!state0) {
         throw new Error('expected state at index 0');
-      expect(state0.hasUpdatedThread).toBe(true);
-      expect(state0.slugData?.isAiGeneratedTitle).toBe(true);
+      }
+      expect(state0.hasUpdatedThread).toBeTruthy();
+      expect(state0.slugData?.isAiGeneratedTitle).toBeTruthy();
     });
 
     it('navigation and hasNavigated update are atomic', () => {
@@ -577,17 +581,18 @@ describe('flag Coordination Race Conditions', () => {
       // Atomic navigation simulation
       const navigate = (slug: string) => {
         states.push({
-          navigatedTo: `/chat/${slug}`,
           hasNavigated: true, // Set atomically
+          navigatedTo: `/chat/${slug}`,
         });
       };
 
       navigate('ai-slug');
 
       const navState0 = states[0];
-      if (!navState0)
+      if (!navState0) {
         throw new Error('expected nav state at index 0');
-      expect(navState0.hasNavigated).toBe(true);
+      }
+      expect(navState0.hasNavigated).toBeTruthy();
       expect(navState0.navigatedTo).toBe('/chat/ai-slug');
     });
   });
@@ -602,17 +607,18 @@ describe('flag Coordination Race Conditions', () => {
       updates.push(true); // Duplicate detection (should not re-update)
 
       // Last value should be true
-      expect(updates[updates.length - 1]).toBe(true);
+      expect(updates[updates.length - 1]).toBeTruthy();
 
       // Duplicate should not trigger re-update
       const lastUpdate = updates[updates.length - 1];
-      if (lastUpdate === undefined)
+      if (lastUpdate === undefined) {
         throw new Error('expected last update value');
+      }
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         lastUpdate,
       );
-      expect(shouldUpdate).toBe(false);
+      expect(shouldUpdate).toBeFalsy();
     });
 
     it('handles overlapping flag transitions', () => {
@@ -622,9 +628,9 @@ describe('flag Coordination Race Conditions', () => {
       };
 
       const transitions: CombinedState[] = [
-        { hasUpdatedThread: false, hasNavigated: false }, // Initial
-        { hasUpdatedThread: true, hasNavigated: false }, // URL updated
-        { hasUpdatedThread: true, hasNavigated: true }, // Navigated
+        { hasNavigated: false, hasUpdatedThread: false }, // Initial
+        { hasNavigated: false, hasUpdatedThread: true }, // URL updated
+        { hasNavigated: true, hasUpdatedThread: true }, // Navigated
       ];
 
       // Verify flags only move forward (never reset during a session)
@@ -641,12 +647,12 @@ describe('flag Coordination Race Conditions', () => {
       const updatedThreadAfterFirst = transitions.slice(
         transitions.findIndex(t => t.hasUpdatedThread),
       );
-      expect(updatedThreadAfterFirst.every(t => t.hasUpdatedThread || !updatedThreadAfterFirst.length)).toBe(true);
+      expect(updatedThreadAfterFirst.every(t => t.hasUpdatedThread || !updatedThreadAfterFirst.length)).toBeTruthy();
 
       const navigatedAfterFirst = transitions.slice(
         transitions.findIndex(t => t.hasNavigated),
       );
-      expect(navigatedAfterFirst.every(t => t.hasNavigated || !navigatedAfterFirst.length)).toBe(true);
+      expect(navigatedAfterFirst.every(t => t.hasNavigated || !navigatedAfterFirst.length)).toBeTruthy();
     });
   });
 });
@@ -668,7 +674,7 @@ describe('navigation During Component Unmount', () => {
         true,
         false, // moderator not complete
       );
-      expect(canNavigate1).toBe(false);
+      expect(canNavigate1).toBeFalsy();
 
       // Component unmounts
       isActive = false;
@@ -682,21 +688,21 @@ describe('navigation During Component Unmount', () => {
         true,
         true, // moderator complete
       );
-      expect(canNavigate2).toBe(false);
+      expect(canNavigate2).toBeFalsy();
     });
 
     it('stops polling when component unmounts', () => {
       // Polling active
       let isActive = true;
       const polling1 = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      expect(polling1).toBe(true);
+      expect(polling1).toBeTruthy();
 
       // Component unmounts
       isActive = false;
 
       // Polling stops
       const polling2 = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      expect(polling2).toBe(false);
+      expect(polling2).toBeFalsy();
     });
 
     it('prevents URL update after unmount', () => {
@@ -706,13 +712,13 @@ describe('navigation During Component Unmount', () => {
       // Even with valid slug data, update should not happen if inactive
       // (In real implementation, effect cleanup would prevent this)
       const shouldUpdate = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         false,
       );
 
       // If component is inactive, the effect won't run
       // This test documents the expected behavior
-      expect(shouldUpdate).toBe(true); // Logic would allow it
+      expect(shouldUpdate).toBeTruthy(); // Logic would allow it
       // But effect guard (if (!isActive) return) prevents execution
     });
   });
@@ -758,8 +764,9 @@ describe('navigation During Component Unmount', () => {
       const navigationAttempts: string[] = [];
 
       const attemptNavigation = (isActive: boolean) => {
-        if (!isActive)
+        if (!isActive) {
           return;
+        }
         navigationAttempts.push('NAVIGATE');
       };
 
@@ -783,7 +790,7 @@ describe('navigation During Component Unmount', () => {
       clearTimeout(timeoutId);
       timeoutCleared = true;
 
-      expect(timeoutCleared).toBe(true);
+      expect(timeoutCleared).toBeTruthy();
     });
 
     it('prevents infinite polling loops', () => {
@@ -819,79 +826,79 @@ describe('moderator Completion Detection', () => {
   describe('isFirstModeratorCompleted', () => {
     it('returns true when moderator message exists for round 0', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Answer',
-          roundNumber: 0,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         {
           id: 'moderator-r0',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Moderator analysis' }],
           metadata: {
             isModerator: true,
             roundNumber: 0,
           },
+          parts: [{ text: 'Moderator analysis', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       const completed = isFirstModeratorCompleted(messages);
-      expect(completed).toBe(true);
+      expect(completed).toBeTruthy();
     });
 
     it('returns false when no moderator message exists', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Answer',
-          roundNumber: 0,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
       const completed = isFirstModeratorCompleted(messages);
-      expect(completed).toBe(false);
+      expect(completed).toBeFalsy();
     });
 
     it('returns false when moderator is for round 1, not round 0', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         {
           id: 'moderator-r1',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Moderator analysis' }],
           metadata: {
             isModerator: true,
             roundNumber: 1, // Round 1, not 0
           },
+          parts: [{ text: 'Moderator analysis', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       const completed = isFirstModeratorCompleted(messages);
-      expect(completed).toBe(false);
+      expect(completed).toBeFalsy();
     });
 
     it('returns false when message has isModerator=false', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         {
           id: 'not-moderator-r0',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Not moderator' }],
           metadata: {
             isModerator: false,
             roundNumber: 0,
           },
+          parts: [{ text: 'Not moderator', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       const completed = isFirstModeratorCompleted(messages);
-      expect(completed).toBe(false);
+      expect(completed).toBeFalsy();
     });
   });
 });
@@ -903,7 +910,7 @@ describe('moderator Completion Detection', () => {
 describe('edge Cases and Integration Scenarios', () => {
   describe('rapid State Transitions', () => {
     it('handles rapid mount/unmount cycles', () => {
-      const cycles: Array<{ isActive: boolean; shouldPoll: boolean }> = [];
+      const cycles: { isActive: boolean; shouldPoll: boolean }[] = [];
 
       // Rapid cycles
       for (let i = 0; i < 10; i++) {
@@ -943,12 +950,13 @@ describe('edge Cases and Integration Scenarios', () => {
       let hasNavigated = false;
 
       const polling = shouldStartSlugPolling(true, showInitialUI, 'thread-123', hasUpdatedThread);
-      if (polling)
+      if (polling) {
         flowLog.push('POLLING_STARTED');
+      }
 
       // Step 2: AI slug ready - URL update
       const urlUpdate = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         hasUpdatedThread,
       );
       if (urlUpdate) {
@@ -983,13 +991,14 @@ describe('edge Cases and Integration Scenarios', () => {
       // Step 1: Chat starts
       let isActive = true;
       const polling = shouldStartSlugPolling(isActive, false, 'thread-123', false);
-      if (polling)
+      if (polling) {
         flowLog.push('POLLING_STARTED');
+      }
 
       // Step 2: URL update
       let hasUpdatedThread = false;
       const urlUpdate = shouldUpdateUrl(
-        { slug: 'ai-slug', isAiGeneratedTitle: true },
+        { isAiGeneratedTitle: true, slug: 'ai-slug' },
         hasUpdatedThread,
       );
       if (urlUpdate) {
@@ -1021,23 +1030,23 @@ describe('edge Cases and Integration Scenarios', () => {
   describe('error Recovery Scenarios', () => {
     it('handles missing slug data gracefully', () => {
       const shouldUpdate = shouldUpdateUrl(null, false);
-      expect(shouldUpdate).toBe(false);
+      expect(shouldUpdate).toBeFalsy();
     });
 
     it('handles missing thread ID gracefully', () => {
       const shouldPoll = shouldStartSlugPolling(true, false, null, false);
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
 
     it('handles navigation with incomplete prerequisites', () => {
       // Missing hasUpdatedThread
-      expect(shouldNavigateToThread(true, false, false, false, true, true)).toBe(false);
+      expect(shouldNavigateToThread(true, false, false, false, true, true)).toBeFalsy();
 
       // Missing hasAiSlug
-      expect(shouldNavigateToThread(true, false, true, false, false, true)).toBe(false);
+      expect(shouldNavigateToThread(true, false, true, false, false, true)).toBeFalsy();
 
       // Missing moderator
-      expect(shouldNavigateToThread(true, false, true, false, true, false)).toBe(false);
+      expect(shouldNavigateToThread(true, false, true, false, true, false)).toBeFalsy();
     });
   });
 });

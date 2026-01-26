@@ -20,11 +20,12 @@ type JobDetailDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProps) {
+export function JobDetailDialog({ job, onOpenChange, open }: JobDetailDialogProps) {
   const t = useTranslations();
 
-  if (!job)
+  if (!job) {
     return null;
+  }
 
   const statusConfig = getJobStatusConfig(job.status);
   const errorMessage = getJobErrorMessage(job);

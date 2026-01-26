@@ -25,6 +25,18 @@ import { isTransientError } from '@/lib/utils/error-metadata-builders';
 import { isObject } from '@/lib/utils/type-guards';
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Helper to access index signature properties safely
+ * Required for noPropertyAccessFromIndexSignature TypeScript option
+ */
+function getObjectProp<T>(obj: Record<string, unknown>, key: string): T | undefined {
+  return obj[key] as T | undefined;
+}
+
+// ============================================================================
 // TYPE DEFINITIONS (Zod Schemas - Single Source of Truth)
 // ============================================================================
 
@@ -33,13 +45,13 @@ import { isObject } from '@/lib/utils/type-guards';
  * Provides comprehensive error context for storage and display
  */
 export const ExtractedErrorMetadataSchema = z.object({
-  hasError: z.boolean(),
-  openRouterError: z.string().optional(),
   errorCategory: ErrorCategorySchema.optional(),
   errorMessage: z.string().optional(),
-  providerMessage: z.string().optional(),
-  isTransientError: z.boolean(),
+  hasError: z.boolean(),
   isPartialResponse: z.boolean(),
+  isTransientError: z.boolean(),
+  openRouterError: z.string().optional(),
+  providerMessage: z.string().optional(),
 }).strict();
 
 export type ExtractedErrorMetadata = z.infer<typeof ExtractedErrorMetadataSchema>;
@@ -48,8 +60,8 @@ export type ExtractedErrorMetadata = z.infer<typeof ExtractedErrorMetadataSchema
  * Provider error extraction result
  */
 export const ProviderErrorResultSchema = z.object({
-  rawError: z.string().optional(),
   category: ErrorCategorySchema.optional(),
+  rawError: z.string().optional(),
 }).strict();
 
 export type ProviderErrorResult = z.infer<typeof ProviderErrorResultSchema>;
@@ -101,20 +113,24 @@ export function extractProviderError(
   // Check providerMetadata with type guard
   if (isObject(providerMetadata)) {
     // Extract error field (string or object)
-    if (providerMetadata.error) {
+    const providerError = getObjectProp<unknown>(providerMetadata, 'error');
+    if (providerError) {
       rawError
-        = typeof providerMetadata.error === 'string'
-          ? providerMetadata.error
-          : JSON.stringify(providerMetadata.error);
+        = typeof providerError === 'string'
+          ? providerError
+          : JSON.stringify(providerError);
     }
 
     // Check errorMessage field as fallback
-    if (!rawError && providerMetadata.errorMessage) {
-      rawError = String(providerMetadata.errorMessage);
+    const errorMessage = getObjectProp<unknown>(providerMetadata, 'errorMessage');
+    if (!rawError && errorMessage) {
+      rawError = String(errorMessage);
     }
 
     // Detect content moderation errors
-    if (providerMetadata.moderation || providerMetadata.contentFilter) {
+    const moderation = getObjectProp<unknown>(providerMetadata, 'moderation');
+    const contentFilter = getObjectProp<unknown>(providerMetadata, 'contentFilter');
+    if (moderation || contentFilter) {
       category = ErrorCategories.CONTENT_FILTER;
       rawError = rawError || 'Content was filtered by safety systems';
     }
@@ -122,11 +138,12 @@ export function extractProviderError(
 
   // Check response with type guard
   if (!rawError && isObject(response)) {
-    if (response.error) {
+    const responseError = getObjectProp<unknown>(response, 'error');
+    if (responseError) {
       rawError
-        = typeof response.error === 'string'
-          ? response.error
-          : JSON.stringify(response.error);
+        = typeof responseError === 'string'
+          ? responseError
+          : JSON.stringify(responseError);
     }
   }
 
@@ -135,7 +152,7 @@ export function extractProviderError(
     category = categorizeError(rawError);
   }
 
-  return { rawError, category };
+  return { category, rawError };
 }
 
 // ============================================================================
@@ -175,12 +192,12 @@ export function buildEmptyResponseError(
   const params = typeof inputTokensOrParams === 'object'
     ? inputTokensOrParams
     : {
+        finishReason: finishReason ?? 'unknown',
         inputTokens: inputTokensOrParams,
         outputTokens: outputTokens ?? 0,
-        finishReason: finishReason ?? 'unknown',
       };
 
-  const { inputTokens, outputTokens: outTokens, finishReason: reason } = params;
+  const { finishReason: reason, inputTokens, outputTokens: outTokens } = params;
   // Build base statistics for all error messages
   const baseStats = `Input: ${inputTokens} tokens, Output: ${outTokens} tokens, Status: ${reason}`;
 
@@ -222,12 +239,12 @@ export function buildEmptyResponseError(
   }
 
   return {
-    hasError: true,
     errorCategory,
     errorMessage,
-    providerMessage,
-    isTransientError: isTransientErrorFlag,
+    hasError: true,
     isPartialResponse: false, // Empty response = no partial content
+    isTransientError: isTransientErrorFlag,
+    providerMessage,
   };
 }
 
@@ -250,10 +267,12 @@ type ExtractErrorMetadataParams = {
 function isExtractErrorMetadataParams(
   value: unknown,
 ): value is ExtractErrorMetadataParams {
+  if (!isObject(value)) {
+    return false;
+  }
+  const finishReason = getObjectProp<unknown>(value, 'finishReason');
   return (
-    isObject(value)
-    && 'finishReason' in value
-    && typeof value.finishReason === 'string'
+    typeof finishReason === 'string'
     && 'providerMetadata' in value
     && 'response' in value
   );
@@ -293,25 +312,25 @@ export function extractErrorMetadata(
   const params = isExtractErrorMetadataParams(providerMetadataOrParams)
     ? providerMetadataOrParams
     : {
-        providerMetadata: providerMetadataOrParams,
-        response: response ?? null,
         finishReason: finishReason ?? 'unknown',
-        usage,
-        text,
+        providerMetadata: providerMetadataOrParams,
         reasoning,
+        response: response ?? null,
+        text,
+        usage,
       };
 
   const {
-    providerMetadata,
-    response: resp,
     finishReason: reason,
-    usage: usageData,
-    text: textData,
+    providerMetadata,
     reasoning: reasoningData,
+    response: resp,
+    text: textData,
+    usage: usageData,
   } = params;
 
   // Extract provider-specific errors
-  const { rawError, category: providerCategory } = extractProviderError(
+  const { category: providerCategory, rawError } = extractProviderError(
     providerMetadata,
     resp,
   );
@@ -353,8 +372,8 @@ export function extractErrorMetadata(
     // No error detected
     return {
       hasError: false,
-      isTransientError: false,
       isPartialResponse: false,
+      isTransientError: false,
     };
   }
 
@@ -363,13 +382,13 @@ export function extractErrorMetadata(
     const errorCategory = providerCategory || categorizeError(rawError);
 
     return {
-      hasError: true,
-      openRouterError: rawError,
       errorCategory,
       errorMessage: rawError,
-      providerMessage: rawError,
-      isTransientError: isTransientError(errorCategory, reason),
+      hasError: true,
       isPartialResponse: hasGeneratedContent || outputTokens > 0, // Partial = error with some content
+      isTransientError: isTransientError(errorCategory, reason),
+      openRouterError: rawError,
+      providerMessage: rawError,
     };
   }
 

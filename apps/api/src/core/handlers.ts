@@ -157,16 +157,16 @@ function createPerformanceTracker(): PerformanceTracker {
   const marks: PerformanceMarks = new Map();
 
   return {
-    startTime,
-    getElapsed: () => Date.now() - startTime,
     getDuration: () => Date.now() - startTime,
+    getElapsed: () => Date.now() - startTime,
+    getMarks: () => new Map(marks),
     mark: (label: string) => {
       const time = Date.now() - startTime;
       marks.set(label, time);
       return { label, time };
     },
-    getMarks: () => new Map(marks),
     now: () => Date.now(),
+    startTime,
   };
 }
 
@@ -333,6 +333,13 @@ type ValidatedData<
 
 /**
  * Validate request data using our unified validation system
+ *
+ * ✅ JUSTIFIED TYPE ASSERTIONS: The casts here are required because:
+ * 1. validateWithSchema returns z.infer<T> but TypeScript loses the connection
+ *    between result.data and the generic type parameter TBody/TQuery/TParams
+ * 2. The conditional types ValidatedBody/Query/Params use [T] extends [never]
+ *    pattern which TypeScript cannot unify with runtime validation results
+ * 3. All casts occur AFTER successful Zod validation, guaranteeing runtime safety
  */
 async function validateRequest<
   TBody extends z.ZodSchema,
@@ -363,19 +370,21 @@ async function validateRequest<
         // 🔍 DEBUG: Log validation errors
         console.error('[HANDLER-VALIDATE] Validation failed:', result.errors.slice(0, 5));
         throw HTTPExceptionFactory.unprocessableEntity({
-          message: 'Request body validation failed',
           details: { detailType: 'validation', validationErrors: result.errors },
+          message: 'Request body validation failed',
         });
       }
 
+      // ✅ JUSTIFIED: result.data is z.infer<TBody> after successful validation
       validated.body = result.data as ValidatedBody;
     } catch (error) {
-      if (error instanceof HTTPException)
+      if (error instanceof HTTPException) {
         throw error;
+      }
 
       throw HTTPExceptionFactory.unprocessableEntity({
-        message: 'Invalid request body format',
         details: { detailType: 'validation', validationErrors: [{ field: 'body', message: 'Unable to parse request body' }] },
+        message: 'Invalid request body format',
       });
     }
   }
@@ -388,11 +397,12 @@ async function validateRequest<
 
     if (!result.success) {
       throw HTTPExceptionFactory.unprocessableEntity({
-        message: 'Query parameter validation failed',
         details: { detailType: 'validation', validationErrors: result.errors },
+        message: 'Query parameter validation failed',
       });
     }
 
+    // ✅ JUSTIFIED: result.data is z.infer<TQuery> after successful validation
     validated.query = result.data as ValidatedQuery;
   }
 
@@ -403,14 +413,16 @@ async function validateRequest<
 
     if (!result.success) {
       throw HTTPExceptionFactory.unprocessableEntity({
-        message: 'Path parameter validation failed',
         details: { detailType: 'validation', validationErrors: result.errors },
+        message: 'Path parameter validation failed',
       });
     }
 
+    // ✅ JUSTIFIED: result.data is z.infer<TParams> after successful validation
     validated.params = result.data as ValidatedParams;
   }
 
+  // ✅ JUSTIFIED: All fields are validated; object matches ValidatedData shape
   return validated as ValidatedData<TBody, TQuery, TParams>;
 }
 
@@ -473,16 +485,16 @@ export function createHandler<
         }
 
         return {
-          user,
-          session,
           requestId: requestId || '',
+          session,
+          user,
         } as AuthenticatedContext;
       };
 
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
-        validated,
         auth: authFn,
+        validated,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute handler implementation
@@ -647,16 +659,16 @@ export function createHandlerWithBatch<
         }
 
         return {
-          user,
-          session,
           requestId: requestId || '',
+          session,
+          user,
         } as AuthenticatedContext;
       };
 
       // Create enhanced context
       const enhancedContext = Object.assign(c, {
-        validated,
         auth: authFn,
+        validated,
       }) as HandlerContext<TEnv, TBody, TQuery, TParams>;
 
       // Execute implementation with D1 batch operations
@@ -677,16 +689,17 @@ export function createHandlerWithBatch<
           // Validate batch size limit
           if (statements.length >= batchMetrics.maxBatchSize) {
             throw new AppError({
-              message: `Batch size limit exceeded. Maximum ${batchMetrics.maxBatchSize} operations allowed per batch.`,
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
+              details: { currentSize: statements.length, detailType: 'batch' },
+              message: `Batch size limit exceeded. Maximum ${batchMetrics.maxBatchSize} operations allowed per batch.`,
               statusCode: HttpStatusCodes.BAD_REQUEST,
-              details: { detailType: 'batch', currentSize: statements.length },
             });
           }
 
           statements.push(statement);
           batchMetrics.addedCount++;
         },
+        db,
         execute: async (): Promise<unknown[]> => {
           if (statements.length === 0) {
             return [];
@@ -697,8 +710,8 @@ export function createHandlerWithBatch<
             validateBatchSize(statements.length, batchMetrics.maxBatchSize);
           } catch (error) {
             throw new AppError({
-              message: getErrorMessage(error),
               code: 'BATCH_SIZE_EXCEEDED' as ErrorCode,
+              message: getErrorMessage(error),
               statusCode: HttpStatusCodes.BAD_REQUEST,
             });
           }
@@ -719,21 +732,20 @@ export function createHandlerWithBatch<
             // Enhance error with batch context
             if (error instanceof Error) {
               throw new AppError({
-                message: `D1 batch operation failed: ${error.message}`,
                 code: 'BATCH_FAILED' as ErrorCode,
-                statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
                 details: {
                   detailType: 'batch',
-                  statementCount: statements.length,
                   originalError: error.message,
+                  statementCount: statements.length,
                 },
+                message: `D1 batch operation failed: ${error.message}`,
+                statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
               });
             }
 
             throw error;
           }
         },
-        db,
       };
 
       // Execute the handler implementation

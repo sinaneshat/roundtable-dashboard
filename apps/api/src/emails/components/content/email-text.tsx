@@ -14,10 +14,6 @@ type EmailTextProps = {
 };
 
 const sizeStyles: Record<string, CSSProperties> = {
-  sm: {
-    fontSize: typography.fontSize.xs,
-    lineHeight: '16px',
-  },
   base: {
     fontSize: typography.fontSize.sm,
     lineHeight: '24px',
@@ -26,40 +22,44 @@ const sizeStyles: Record<string, CSSProperties> = {
     fontSize: typography.fontSize.base,
     lineHeight: '26px',
   },
+  sm: {
+    fontSize: typography.fontSize.xs,
+    lineHeight: '16px',
+  },
 };
 
 const weightStyles: Record<string, CSSProperties> = {
-  normal: { fontWeight: typography.fontWeight.normal },
-  medium: { fontWeight: typography.fontWeight.medium },
-  semibold: { fontWeight: typography.fontWeight.semibold },
   bold: { fontWeight: typography.fontWeight.bold },
+  medium: { fontWeight: typography.fontWeight.medium },
+  normal: { fontWeight: typography.fontWeight.normal },
+  semibold: { fontWeight: typography.fontWeight.semibold },
 };
 
 const colorStyles: Record<string, CSSProperties> = {
+  error: { color: colors.destructive },
+  muted: { color: colors.textMuted },
   primary: { color: colors.foreground },
   secondary: { color: colors.mutedForeground },
-  muted: { color: colors.textMuted },
   white: { color: colors.white },
-  error: { color: colors.destructive },
 };
 
 const alignStyles: Record<string, CSSProperties> = {
-  left: { textAlign: 'left' },
   center: { textAlign: 'center' },
+  left: { textAlign: 'left' },
   right: { textAlign: 'right' },
 };
 
 export function EmailText({
-  children,
-  size = 'base',
-  weight = 'normal',
-  color = 'primary',
   align = 'left',
+  children,
+  color = 'primary',
+  size = 'base',
   style,
+  weight = 'normal',
 }: EmailTextProps) {
   const combinedStyle: CSSProperties = {
-    margin: '0',
     fontFamily: typography.fontFamily,
+    margin: '0',
     ...sizeStyles[size],
     ...weightStyles[weight],
     ...colorStyles[color],

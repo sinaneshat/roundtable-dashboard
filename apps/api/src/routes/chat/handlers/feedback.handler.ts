@@ -22,13 +22,13 @@ import {
 export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: RoundFeedbackParamSchema,
-    validateBody: RoundFeedbackRequestSchema,
     operationName: 'setRoundFeedback',
+    validateBody: RoundFeedbackRequestSchema,
+    validateParams: RoundFeedbackParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId, roundNumber: roundNumberStr } = c.validated.params;
+    const { roundNumber: roundNumberStr, threadId } = c.validated.params;
     const { feedbackType } = c.validated.body;
     const roundNumber = Number.parseInt(roundNumberStr, 10);
     const db = await getDbAsync();
@@ -48,13 +48,13 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
           .where(eq(tables.chatRoundFeedback.id, existingFeedback.id));
       }
       result = {
-        id: existingFeedback?.id || ulid(),
-        threadId,
-        userId: user.id,
-        roundNumber,
-        feedbackType: null,
         createdAt: existingFeedback?.createdAt || new Date(),
+        feedbackType: null,
+        id: existingFeedback?.id || ulid(),
+        roundNumber,
+        threadId,
         updatedAt: new Date(),
+        userId: user.id,
       };
     } else if (existingFeedback) {
       const [updated] = await db
@@ -76,13 +76,13 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
       const [created] = await db
         .insert(tables.chatRoundFeedback)
         .values({
-          id: ulid(),
-          threadId,
-          userId: user.id,
-          roundNumber,
-          feedbackType,
           createdAt: new Date(),
+          feedbackType,
+          id: ulid(),
+          roundNumber,
+          threadId,
           updatedAt: new Date(),
+          userId: user.id,
         })
         .returning();
       if (!created) {
@@ -103,8 +103,8 @@ export const setRoundFeedbackHandler: RouteHandler<typeof setRoundFeedbackRoute,
 export const getThreadFeedbackHandler: RouteHandler<typeof getThreadFeedbackRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getThreadFeedback',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -112,11 +112,11 @@ export const getThreadFeedbackHandler: RouteHandler<typeof getThreadFeedbackRout
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);
     const feedbackList = await db.query.chatRoundFeedback.findMany({
+      orderBy: (table, { asc }) => [asc(table.roundNumber)],
       where: and(
         eq(tables.chatRoundFeedback.threadId, threadId),
         eq(tables.chatRoundFeedback.userId, user.id),
       ),
-      orderBy: (table, { asc }) => [asc(table.roundNumber)],
     });
     return Responses.ok(
       c,

@@ -29,32 +29,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * These MUST match the values in stale-times.ts
  */
 const EXPECTED_STALE_TIMES = {
+  feedback: Infinity, // Never auto-refetch - invalidated only on mutation
   preSearch: Infinity, // Never auto-refetch
   threadChangelog: Infinity, // Never auto-refetch
-  feedback: Infinity, // Never auto-refetch - invalidated only on mutation
 } as const;
 
 /**
  * Expected refetch behavior for SSR queries
  */
 const EXPECTED_REFETCH_SETTINGS = {
-  preSearch: {
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchIntervalInBackground: false,
-  },
   changelog: {
     // Uses global defaults (all disabled)
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   },
   feedback: {
     // Uses global defaults (all disabled)
     refetchOnMount: false,
-    refetchOnWindowFocus: false,
     refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  },
+  preSearch: {
+    refetchIntervalInBackground: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
   },
 } as const;
 
@@ -126,8 +126,8 @@ describe('sSR Prefetch - No Client Refetch', () => {
       tracker.track({
         endpoint: '/api/v1/chat/threads/{id}/pre-searches',
         method: 'GET',
-        source: 'server',
         reason: 'SSR prefetch in page.tsx',
+        source: 'server',
       });
 
       // Simulate: Client mounts with data already in cache
@@ -137,19 +137,19 @@ describe('sSR Prefetch - No Client Refetch', () => {
         .filter(c => c.endpoint.includes('pre-searches'));
 
       expect(clientCallsAfterMount).toHaveLength(0);
-      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnMount).toBe(false);
+      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnMount).toBeFalsy();
     });
 
     it('should NOT refetch on window focus', () => {
-      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnWindowFocus).toBe(false);
+      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnWindowFocus).toBeFalsy();
     });
 
     it('should NOT refetch on reconnect', () => {
-      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnReconnect).toBe(false);
+      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchOnReconnect).toBeFalsy();
     });
 
     it('should NOT poll in background', () => {
-      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchIntervalInBackground).toBe(false);
+      expect(EXPECTED_REFETCH_SETTINGS.preSearch.refetchIntervalInBackground).toBeFalsy();
     });
 
     it('should only poll when pre-search status is PENDING', () => {
@@ -163,7 +163,7 @@ describe('sSR Prefetch - No Client Refetch', () => {
       const hasPending = mockPreSearches.some(ps => ps.status === 'pending');
       const shouldPoll = hasPending ? 500 : false;
 
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
   });
 
@@ -177,8 +177,8 @@ describe('sSR Prefetch - No Client Refetch', () => {
       tracker.track({
         endpoint: '/api/v1/chat/threads/{id}/changelog',
         method: 'GET',
-        source: 'server',
         reason: 'SSR prefetch in page.tsx',
+        source: 'server',
       });
 
       // Client should NOT make additional calls
@@ -192,16 +192,16 @@ describe('sSR Prefetch - No Client Refetch', () => {
       // Changelog invalidation is triggered in useUpdateThreadMutation.onSuccess
       // ONLY when these specific fields change:
       const configChanges = {
-        participants: false,
-        mode: false,
         enableWebSearch: false,
+        mode: false,
+        participants: false,
       };
 
       const shouldInvalidate = configChanges.participants
         || configChanges.mode
         || configChanges.enableWebSearch;
 
-      expect(shouldInvalidate).toBe(false);
+      expect(shouldInvalidate).toBeFalsy();
 
       // If participants change, THEN invalidate
       configChanges.participants = true;
@@ -209,7 +209,7 @@ describe('sSR Prefetch - No Client Refetch', () => {
         || configChanges.mode
         || configChanges.enableWebSearch;
 
-      expect(shouldInvalidateNow).toBe(true);
+      expect(shouldInvalidateNow).toBeTruthy();
     });
   });
 
@@ -242,8 +242,8 @@ describe('sSR Prefetch - No Client Refetch', () => {
       tracker.track({
         endpoint: '/api/v1/chat/threads/{id}/feedback',
         method: 'GET',
-        source: 'server',
         reason: 'Prefetched in page.tsx',
+        source: 'server',
       });
 
       // After user submits round 2, feedback should NOT refetch
@@ -359,15 +359,15 @@ describe('round Submission - API Call Budget', () => {
       tracker.track({
         endpoint: '/api/v1/chat',
         method: 'POST',
-        source: 'client',
         reason: `Participant ${i} streaming`,
+        source: 'client',
       });
     }
     tracker.track({
       endpoint: '/api/v1/chat/threads/xyz/rounds/1/moderator',
       method: 'POST',
-      source: 'client',
       reason: 'Moderator summarization',
+      source: 'client',
     });
 
     // Verify call count
@@ -420,21 +420,24 @@ describe('navigation Reset - Correct Invalidation', () => {
 
     // Navigate to /chat triggers invalidation (navigation-reset.ts)
     const scenario0 = invalidationScenarios[0];
-    if (!scenario0)
+    if (!scenario0) {
       throw new Error('Expected scenario 0');
-    expect(scenario0.shouldInvalidate).toBe(true);
+    }
+    expect(scenario0.shouldInvalidate).toBeTruthy();
 
     // Round submission does NOT trigger invalidation
     const scenario1 = invalidationScenarios[1];
-    if (!scenario1)
+    if (!scenario1) {
       throw new Error('Expected scenario 1');
-    expect(scenario1.shouldInvalidate).toBe(false);
+    }
+    expect(scenario1.shouldInvalidate).toBeFalsy();
 
     // Feedback mutation triggers invalidation (chat-mutations.ts)
     const scenario2 = invalidationScenarios[2];
-    if (!scenario2)
+    if (!scenario2) {
       throw new Error('Expected scenario 2');
-    expect(scenario2.shouldInvalidate).toBe(true);
+    }
+    expect(scenario2.shouldInvalidate).toBeTruthy();
   });
 });
 
@@ -454,7 +457,7 @@ describe('sidebar Chat List - No Prefetching', () => {
     const initialPrefetchState = false;
     const prefetchProp = initialPrefetchState ? null : false;
 
-    expect(prefetchProp).toBe(false);
+    expect(prefetchProp).toBeFalsy();
   });
 
   it('should only enable prefetch on hover (user intent)', () => {
@@ -462,11 +465,11 @@ describe('sidebar Chat List - No Prefetching', () => {
     let shouldPrefetch = false;
 
     // Initial render - no prefetch
-    expect(shouldPrefetch ? null : false).toBe(false);
+    expect(shouldPrefetch ? null : false).toBeFalsy();
 
     // User hovers - enable prefetch
     shouldPrefetch = true;
-    expect(shouldPrefetch ? null : false).toBe(null); // null = use default prefetch behavior
+    expect(shouldPrefetch ? null : false).toBeNull(); // null = use default prefetch behavior
   });
 
   it('should NOT prefetch thread details for all sidebar items on load', () => {
@@ -541,8 +544,8 @@ describe('query Cache Hydration - SSR to Client', () => {
      * - Client hooks read from cache, not network
      */
     const serverPrefetchedData = {
-      success: true,
       data: { items: [{ roundNumber: 0, status: 'complete' }] },
+      success: true,
     };
 
     // After hydration, client should have this data
@@ -587,9 +590,9 @@ describe('stale Time Consistency - Server/Client Match', () => {
 
   it('should document staleTime values for reference', () => {
     const staleTimeReference = {
+      feedback: 'Infinity - invalidated only on mutation',
       preSearch: 'Infinity - ONE-WAY DATA FLOW pattern',
       threadChangelog: 'Infinity - ONE-WAY DATA FLOW pattern',
-      feedback: 'Infinity - invalidated only on mutation',
     };
 
     // These should match actual values in stale-times.ts
@@ -623,7 +626,7 @@ describe('overview Screen - No Wasteful API Calls on Thread Creation', () => {
     // Simulates the condition in ChatView.tsx
     const changelogEnabled = mode === 'thread' && Boolean(effectiveThreadId);
 
-    expect(changelogEnabled).toBe(false);
+    expect(changelogEnabled).toBeFalsy();
   });
 
   it('pre-search orchestrator should NOT be enabled on overview screen', () => {
@@ -634,7 +637,7 @@ describe('overview Screen - No Wasteful API Calls on Thread Creation', () => {
     // Simulates the condition in screen-initialization.ts
     const preSearchEnabled = mode === 'thread' && Boolean(threadId) && enableOrchestrator;
 
-    expect(preSearchEnabled).toBe(false);
+    expect(preSearchEnabled).toBeFalsy();
   });
 
   it('stream resume should be disabled for newly created threads', () => {
@@ -644,7 +647,7 @@ describe('overview Screen - No Wasteful API Calls on Thread Creation', () => {
     // Simulates the condition in use-multi-participant-chat.ts
     const resumeEnabled = !!useChatId && !isNewlyCreatedThread;
 
-    expect(resumeEnabled).toBe(false);
+    expect(resumeEnabled).toBeFalsy();
   });
 
   it('stream resume should be enabled for existing threads (page refresh)', () => {
@@ -654,7 +657,7 @@ describe('overview Screen - No Wasteful API Calls on Thread Creation', () => {
     // Simulates the condition for existing threads
     const resumeEnabled = !!useChatId && !isNewlyCreatedThread;
 
-    expect(resumeEnabled).toBe(true);
+    expect(resumeEnabled).toBeTruthy();
   });
 
   it('should document expected API calls on overview thread creation', () => {
@@ -675,15 +678,15 @@ describe('overview Screen - No Wasteful API Calls on Thread Creation', () => {
      */
     const expectedCalls = {
       createThread: 1,
-      participantStreaming: 2,
       moderator: 1,
+      participantStreaming: 2,
     };
 
     const notExpectedCalls = {
       changelog: 0,
+      feedback: 0,
       preSearches: 0,
       stream: 0,
-      feedback: 0,
     };
 
     const totalExpected = Object.values(expectedCalls).reduce((a, b) => a + b, 0);

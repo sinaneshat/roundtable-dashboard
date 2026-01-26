@@ -10,12 +10,12 @@ import { getAllModels, getModelById } from '@/services/models';
 // ============================================================================
 
 export const ModelCapabilitiesSchema = z.object({
-  structuredOutput: z.boolean(),
-  streaming: z.boolean(),
   functionCalling: z.boolean(),
-  vision: z.boolean(),
   jsonModeQuality: JsonModeQualitySchema,
   knownIssues: z.array(z.string()).optional(),
+  streaming: z.boolean(),
+  structuredOutput: z.boolean(),
+  vision: z.boolean(),
 }).strict();
 
 export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
@@ -26,8 +26,8 @@ export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 
 const JSON_QUALITY_ORDER: Record<JsonModeQuality, number> = {
   excellent: 3,
-  good: 2,
   fair: 1,
+  good: 2,
   poor: 0,
 } as const;
 
@@ -41,23 +41,23 @@ export function getModelCapabilities(modelId: string): ModelCapabilities {
 
   if (!model) {
     return {
-      structuredOutput: false,
-      streaming: false,
       functionCalling: false,
-      vision: false,
       jsonModeQuality: JsonModeQualities.POOR,
       knownIssues: ['Unknown model - capabilities not verified'],
+      streaming: false,
+      structuredOutput: false,
+      vision: false,
     };
   }
 
   return {
-    structuredOutput: model.capabilities.tools,
-    streaming: model.capabilities.streaming,
     functionCalling: model.capabilities.tools,
-    vision: model.capabilities.vision,
     jsonModeQuality: model.capabilities.tools
       ? (model.category === 'reasoning' ? JsonModeQualities.EXCELLENT : JsonModeQualities.GOOD)
       : JsonModeQualities.POOR,
+    streaming: model.capabilities.streaming,
+    structuredOutput: model.capabilities.tools,
+    vision: model.capabilities.vision,
   };
 }
 

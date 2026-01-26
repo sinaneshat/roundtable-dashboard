@@ -14,9 +14,9 @@ type ChatAutoModeToggleProps = {
 
 export const ChatAutoModeToggle = memo(({
   autoMode,
-  onAutoModeChange,
-  isAnalyzing = false,
   disabled = false,
+  isAnalyzing = false,
+  onAutoModeChange,
 }: ChatAutoModeToggleProps) => {
   const t = useTranslations();
 
@@ -74,7 +74,7 @@ export const ChatAutoModeToggle = memo(({
               'border border-purple-500/30',
             )}
             initial={false}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            transition={{ damping: 30, stiffness: 400, type: 'spring' }}
           />
         )}
         <motion.div
@@ -91,8 +91,8 @@ export const ChatAutoModeToggle = memo(({
             transition={{
               rotate: {
                 duration: 1,
-                repeat: isAnalyzing ? Infinity : 0,
                 ease: 'linear',
+                repeat: isAnalyzing ? Infinity : 0,
               },
               scale: {
                 duration: 0.4,
@@ -138,7 +138,7 @@ export const ChatAutoModeToggle = memo(({
             layoutId="auto-mode-pill"
             className="absolute inset-0 rounded-lg bg-muted/50 border border-border/50"
             initial={false}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            transition={{ damping: 30, stiffness: 400, type: 'spring' }}
           />
         )}
         <span className="relative z-10">{t('chat.autoMode.manualLabel')}</span>

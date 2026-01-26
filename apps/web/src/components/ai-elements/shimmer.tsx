@@ -7,13 +7,13 @@ type TextShimmerProps = {
 };
 
 const SHIMMER_ANIMATION = {
-  INITIAL_OPACITY: 0.5,
-  PEAK_OPACITY: 1,
-  OPACITY_SEQUENCE: [0.5, 1, 0.5] as const,
-  DURATION: 0.5,
   DELAY_PER_CHAR: 0.05,
-  REPEAT_DELAY: 2,
+  DURATION: 0.5,
+  INITIAL_OPACITY: 0.5,
   NON_BREAKING_SPACE: '\u00A0',
+  OPACITY_SEQUENCE: [0.5, 1, 0.5] as const,
+  PEAK_OPACITY: 1,
+  REPEAT_DELAY: 2,
 } as const;
 
 function TextShimmerComponent({
@@ -32,12 +32,12 @@ function TextShimmerComponent({
             opacity: [...SHIMMER_ANIMATION.OPACITY_SEQUENCE],
           }}
           transition={{
-            duration: SHIMMER_ANIMATION.DURATION,
-            repeat: Infinity,
-            repeatType: 'loop',
             delay: i * SHIMMER_ANIMATION.DELAY_PER_CHAR,
+            duration: SHIMMER_ANIMATION.DURATION,
             ease: 'easeInOut',
+            repeat: Infinity,
             repeatDelay: SHIMMER_ANIMATION.REPEAT_DELAY,
+            repeatType: 'loop',
           }}
         >
           {char === ' ' ? SHIMMER_ANIMATION.NON_BREAKING_SPACE : char}

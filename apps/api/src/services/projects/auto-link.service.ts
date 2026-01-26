@@ -34,61 +34,65 @@ export type AutoLinkParams = {
  * Runs in background via waitUntil when executionCtx is provided.
  */
 export async function autoLinkUploadsToProject(params: AutoLinkParams): Promise<void> {
-  const { db, projectId, uploadIds, userId, r2Bucket, executionCtx, threadId } = params;
+  const { db, executionCtx, projectId, r2Bucket, threadId, uploadIds, userId } = params;
 
-  if (uploadIds.length === 0)
+  if (uploadIds.length === 0) {
     return;
+  }
 
   // 1. Verify project exists
   const project = await db.query.chatProject.findFirst({
-    where: eq(tables.chatProject.id, projectId),
     columns: { id: true },
+    where: eq(tables.chatProject.id, projectId),
   });
-  if (!project)
+  if (!project) {
     return;
+  }
 
   // 2. Get upload details
   const uploads = await db.query.upload.findMany({
+    columns: { filename: true, id: true, r2Key: true },
     where: inArray(tables.upload.id, uploadIds),
-    columns: { id: true, filename: true, r2Key: true },
   });
-  if (uploads.length === 0)
+  if (uploads.length === 0) {
     return;
+  }
 
   // 3. Filter out already-linked uploads (avoid duplicates)
   const existing = await db.query.projectAttachment.findMany({
+    columns: { uploadId: true },
     where: and(
       eq(tables.projectAttachment.projectId, projectId),
       inArray(tables.projectAttachment.uploadId, uploadIds),
     ),
-    columns: { uploadId: true },
   });
   const existingSet = new Set(existing.map(a => a.uploadId));
   const newUploads = uploads.filter(u => !existingSet.has(u.id));
-  if (newUploads.length === 0)
+  if (newUploads.length === 0) {
     return;
+  }
 
   // 4. Create project attachments + copy files to project R2 folder
   const now = new Date();
   const attachments = newUploads.map(upload => ({
-    id: ulid(),
-    projectId,
-    uploadId: upload.id,
     addedBy: userId,
+    createdAt: now,
+    id: ulid(),
     indexStatus: DEFAULT_PROJECT_INDEX_STATUS,
+    projectId,
     ragMetadata: {
       context: 'Auto-linked from chat upload',
       projectR2Key: generateProjectFileR2Key(projectId, upload.filename),
       sourceThreadId: threadId,
     },
-    createdAt: now,
     updatedAt: now,
+    uploadId: upload.id,
   }));
 
   const runTask = async () => {
     // Copy files to project folder (for AI Search)
-    await Promise.all(newUploads.map(upload =>
-      copyFile(
+    await Promise.all(newUploads.map(async upload =>
+      await copyFile(
         r2Bucket,
         upload.r2Key,
         generateProjectFileR2Key(projectId, upload.filename),
@@ -102,8 +106,8 @@ export async function autoLinkUploadsToProject(params: AutoLinkParams): Promise<
 
     // Deduct credits for each file linked
     try {
-      await Promise.all(newUploads.map(upload =>
-        deductCreditsForAction(userId, 'projectFileLink', {
+      await Promise.all(newUploads.map(async upload =>
+        await deductCreditsForAction(userId, 'projectFileLink', {
           description: `File linked: ${upload.filename}`,
         }).catch(() => {}), // Silent failure - don't block the flow
       ));

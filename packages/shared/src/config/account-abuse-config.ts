@@ -6,6 +6,6 @@
  */
 
 export const ACCOUNT_ABUSE_CONFIG = {
-  MAX_DELETION_COUNT: 3,
   ERROR_MESSAGE: 'You have been deleting and creating new accounts too many times. Use a different email or contact support@roundtable.chat',
+  MAX_DELETION_COUNT: 3,
 } as const;

@@ -98,89 +98,89 @@ export default function ChatOverviewScreen() {
 
   const {
     _hasHydrated: preferencesHydrated,
+    enableWebSearch: persistedWebSearch,
     modelOrder: persistedModelOrder,
     selectedMode: persistedMode,
-    enableWebSearch: persistedWebSearch,
     selectedModelIds: persistedModelIds,
-    setSelectedModelIds: setPersistedModelIds,
+    setEnableWebSearch: setPersistedWebSearch,
     setModelOrder: setPersistedModelOrder,
     setSelectedMode: setPersistedMode,
-    setEnableWebSearch: setPersistedWebSearch,
+    setSelectedModelIds: setPersistedModelIds,
     syncWithAccessibleModels,
   } = useModelPreferencesStore(useShallow(s => ({
     _hasHydrated: s._hasHydrated,
+    enableWebSearch: s.enableWebSearch,
     modelOrder: s.modelOrder,
     selectedMode: s.selectedMode,
-    enableWebSearch: s.enableWebSearch,
     selectedModelIds: s.selectedModelIds,
-    setSelectedModelIds: s.setSelectedModelIds,
+    setEnableWebSearch: s.setEnableWebSearch,
     setModelOrder: s.setModelOrder,
     setSelectedMode: s.setSelectedMode,
-    setEnableWebSearch: s.setEnableWebSearch,
+    setSelectedModelIds: s.setSelectedModelIds,
     syncWithAccessibleModels: s.syncWithAccessibleModels,
   })));
 
-  const { isStreaming, error: streamError, isModeratorStreaming } = useChatStore(
+  const { error: streamError, isModeratorStreaming, isStreaming } = useChatStore(
     useShallow(s => ({
-      isStreaming: s.isStreaming,
       error: s.error,
       isModeratorStreaming: s.isModeratorStreaming,
+      isStreaming: s.isStreaming,
     })),
   );
 
-  const { thread: currentThread, participants: contextParticipants } = useChatStore(
+  const { participants: contextParticipants, thread: currentThread } = useChatStore(
     useShallow(s => ({
-      thread: s.thread,
       participants: s.participants,
+      thread: s.thread,
     })),
   );
 
-  const { showInitialUI, isCreatingThread, createdThreadId, waitingToStartStreaming } = useChatStore(
+  const { createdThreadId, isCreatingThread, showInitialUI, waitingToStartStreaming } = useChatStore(
     useShallow(s => ({
-      showInitialUI: s.showInitialUI,
-      isCreatingThread: s.isCreatingThread,
       createdThreadId: s.createdThreadId,
+      isCreatingThread: s.isCreatingThread,
+      showInitialUI: s.showInitialUI,
       waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
   const {
+    addParticipant,
+    autoMode,
+    enableWebSearch,
     inputValue,
+    isAnalyzingPrompt,
+    messages,
+    preSearches,
+    removeParticipant,
+    resetToOverview,
     selectedMode,
     selectedParticipants,
-    enableWebSearch,
-    preSearches,
-    messages,
-    autoMode,
-    isAnalyzingPrompt,
+    setAutoMode,
+    setEnableWebSearch,
     setInputValue,
     setSelectedMode,
     setSelectedParticipants,
-    addParticipant,
-    removeParticipant,
     updateParticipant,
-    setEnableWebSearch,
-    setAutoMode,
-    resetToOverview,
   } = useChatStore(
     useShallow(s => ({
+      addParticipant: s.addParticipant,
+      autoMode: s.autoMode,
+      enableWebSearch: s.enableWebSearch,
       inputValue: s.inputValue,
+      isAnalyzingPrompt: s.isAnalyzingPrompt,
+      messages: s.messages,
+      preSearches: s.preSearches,
+      removeParticipant: s.removeParticipant,
+      resetToOverview: s.resetToOverview,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
-      enableWebSearch: s.enableWebSearch,
-      preSearches: s.preSearches,
-      messages: s.messages,
-      autoMode: s.autoMode,
-      isAnalyzingPrompt: s.isAnalyzingPrompt,
+      setAutoMode: s.setAutoMode,
+      setEnableWebSearch: s.setEnableWebSearch,
       setInputValue: s.setInputValue,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
-      addParticipant: s.addParticipant,
-      removeParticipant: s.removeParticipant,
       updateParticipant: s.updateParticipant,
-      setEnableWebSearch: s.setEnableWebSearch,
-      setAutoMode: s.setAutoMode,
-      resetToOverview: s.resetToOverview,
     })),
   );
 
@@ -221,8 +221,9 @@ export default function ChatOverviewScreen() {
       return [];
     }
     return customRolesData.pages.flatMap((page) => {
-      if (!page?.success)
+      if (!page?.success) {
         return [];
+      }
       return page.data.items;
     });
   }, [customRolesData?.pages]);
@@ -242,8 +243,9 @@ export default function ChatOverviewScreen() {
   );
 
   const accessibleModelIds = useMemo(() => {
-    if (allEnabledModels.length === 0)
+    if (allEnabledModels.length === 0) {
       return [];
+    }
     return allEnabledModels
       .filter((m: Model) => m.is_accessible_to_user)
       .map((m: Model) => m.id);
@@ -263,8 +265,8 @@ export default function ChatOverviewScreen() {
         return validIds.map((modelId, index) => ({
           id: modelId,
           modelId,
-          role: '',
           priority: index,
+          role: '',
         }));
       }
     }
@@ -276,8 +278,8 @@ export default function ChatOverviewScreen() {
         .map((mr, index) => ({
           id: mr.modelId,
           modelId: mr.modelId,
-          role: mr.role,
           priority: index,
+          role: mr.role,
         }));
 
       if (presetParticipants.length > 0) {
@@ -290,8 +292,8 @@ export default function ChatOverviewScreen() {
       return defaultIds.map((modelId: string, index: number) => ({
         id: modelId,
         modelId,
-        role: '',
         priority: index,
+        role: '',
       }));
     }
 
@@ -299,8 +301,8 @@ export default function ChatOverviewScreen() {
       return [{
         id: defaultModelId,
         modelId: defaultModelId,
-        role: '',
         priority: 0,
+        role: '',
       }];
     }
 
@@ -308,12 +310,12 @@ export default function ChatOverviewScreen() {
   }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
   const orderedModels = useOrderedModels({
-    selectedParticipants,
     allEnabledModels,
     modelOrder,
+    selectedParticipants,
   });
 
-  const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
+  const { fileIncompatibleModelIds, incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
     const visionIncompatible = new Set<string>();
     const fileIncompatible = new Set<string>();
@@ -352,11 +354,11 @@ export default function ChatOverviewScreen() {
     if (filesToCheck.length > 0) {
       // Map models to the shape expected by getDetailedIncompatibleModelIds
       const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
       const detailed = getDetailedIncompatibleModelIds(modelsWithCapabilities, filesToCheck);
       for (const id of detailed.incompatibleIds) {
@@ -371,9 +373,9 @@ export default function ChatOverviewScreen() {
     }
 
     return {
+      fileIncompatibleModelIds: fileIncompatible,
       incompatibleModelIds: incompatible,
       visionIncompatibleModelIds: visionIncompatible,
-      fileIncompatibleModelIds: fileIncompatible,
     };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
@@ -386,10 +388,10 @@ export default function ChatOverviewScreen() {
   const overviewActions = useOverviewActions();
 
   const initStateRef = useRef({
-    persistedDefaults: false,
-    syncedModels: false,
     modelOrder: false,
     participants: false,
+    persistedDefaults: false,
+    syncedModels: false,
     threadActions: false,
   });
 
@@ -599,7 +601,7 @@ export default function ChatOverviewScreen() {
       if (reindexed.length < MIN_PARTICIPANTS_REQUIRED && reindexed.length > 0) {
         toastManager.error(
           t('chat.models.belowMinimum'),
-          t('chat.models.belowMinimumDescription', { min: MIN_PARTICIPANTS_REQUIRED, current: reindexed.length }),
+          t('chat.models.belowMinimumDescription', { current: reindexed.length, min: MIN_PARTICIPANTS_REQUIRED }),
         );
       }
     }
@@ -629,14 +631,14 @@ export default function ChatOverviewScreen() {
   );
 
   useScreenInitialization({
-    mode: ScreenModes.OVERVIEW,
-    thread: shouldInitializeThread ? currentThread : null,
-    participants: shouldInitializeThread ? contextParticipants : [],
     chatMode: selectedMode,
     enableOrchestrator: !isStreaming
       && !isModeratorStreaming
       && !hasActivePreSearch
       && shouldInitializeThread,
+    mode: ScreenModes.OVERVIEW,
+    participants: shouldInitializeThread ? contextParticipants : [],
+    thread: shouldInitializeThread ? currentThread : null,
   });
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
@@ -677,10 +679,10 @@ export default function ChatOverviewScreen() {
       chatAttachments.clearAttachments();
 
       initStateRef.current = {
-        persistedDefaults: false,
-        syncedModels: false,
         modelOrder: false,
         participants: false,
+        persistedDefaults: false,
+        syncedModels: false,
         threadActions: false,
       };
     } else {
@@ -712,10 +714,10 @@ export default function ChatOverviewScreen() {
                 throw new Error('Upload ID is required for completed attachments');
               }
               return {
-                uploadId: att.uploadId,
                 filename: att.file.name,
                 mimeType: att.file.type,
                 previewUrl: att.preview?.url,
+                uploadId: att.uploadId,
               };
             });
           await formActions.handleUpdateThreadAndSend(existingThreadId, attachmentIds, attachmentInfos);
@@ -748,10 +750,10 @@ export default function ChatOverviewScreen() {
 
           // Consolidated auto mode analysis - updates both chat store and preferences
           await analyzeAndApply({
-            prompt: inputValue.trim(),
-            hasImageFiles,
-            hasDocumentFiles,
             accessibleModelIds: accessibleSet,
+            hasDocumentFiles,
+            hasImageFiles,
+            prompt: inputValue.trim(),
           });
         }
 
@@ -769,10 +771,10 @@ export default function ChatOverviewScreen() {
                 throw new Error('Upload ID is required for completed attachments');
               }
               return {
-                uploadId: att.uploadId,
                 filename: att.file.name,
                 mimeType: att.file.type,
                 previewUrl: att.preview?.url,
+                uploadId: att.uploadId,
               };
             });
           await formActions.handleCreateThread(attachmentIds, attachmentInfos);
@@ -810,8 +812,8 @@ export default function ChatOverviewScreen() {
       const newParticipant: ParticipantConfig = {
         id: modelId,
         modelId,
-        role: '',
         priority: 0,
+        role: '',
       };
       addParticipant(newParticipant);
       const currentParticipants = storeApi.getState().selectedParticipants;
@@ -820,11 +822,11 @@ export default function ChatOverviewScreen() {
   }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi, t]);
 
   const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
-    updateParticipant(modelId, { role, customRoleId });
+    updateParticipant(modelId, { customRoleId, role });
   }, [updateParticipant]);
 
   const handleClearRole = useCallback(
-    (modelId: string) => updateParticipant(modelId, { role: '', customRoleId: undefined }),
+    (modelId: string) => updateParticipant(modelId, { customRoleId: undefined, role: '' }),
     [updateParticipant],
   );
 
@@ -911,23 +913,23 @@ export default function ChatOverviewScreen() {
     // isModelsLoading differs SSR/client but shouldn't block showing ready UI
     const status: ChatStatus = isOperationBlocked ? 'submitted' : 'ready';
     return {
-      value: inputValue,
-      onChange: setInputValue,
-      onSubmit: handlePromptSubmit,
-      status,
-      placeholder: t('chat.input.placeholder'),
-      participants: selectedParticipants,
-      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
-      attachments: chatAttachments.attachments,
-      onAddAttachments: chatAttachments.addFiles,
-      onRemoveAttachment: chatAttachments.removeAttachment,
-      enableAttachments: !isOperationBlocked,
       attachmentClickRef,
-      toolbar: chatInputToolbar,
+      attachments: chatAttachments.attachments,
+      autoMode, // Skip visual validation in auto mode
+      enableAttachments: !isOperationBlocked,
+      isModelsLoading, // Pass loading state for internal UI updates
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
-      isModelsLoading, // Pass loading state for internal UI updates
-      autoMode, // Skip visual validation in auto mode
+      onAddAttachments: chatAttachments.addFiles,
+      onChange: setInputValue,
+      onRemoveAttachment: chatAttachments.removeAttachment,
+      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
+      onSubmit: handlePromptSubmit,
+      participants: selectedParticipants,
+      placeholder: t('chat.input.placeholder'),
+      status,
+      toolbar: chatInputToolbar,
+      value: inputValue,
     };
   }, [
     inputValue,
@@ -973,13 +975,13 @@ export default function ChatOverviewScreen() {
                           transition={{
                             rotate: {
                               duration: 60,
-                              repeat: Infinity,
                               ease: 'linear',
+                              repeat: Infinity,
                             },
                             scale: {
                               duration: 4,
-                              repeat: Infinity,
                               ease: 'easeInOut',
+                              repeat: Infinity,
                             },
                           }}
                           style={{ willChange: 'transform' }}
@@ -1060,8 +1062,8 @@ export default function ChatOverviewScreen() {
           {showChatView && (
             <ChatView
               user={{
-                name: sessionUser?.name || 'You',
                 image: sessionUser?.image || null,
+                name: sessionUser?.name || 'You',
               }}
               mode={ScreenModes.OVERVIEW}
               onSubmit={handlePromptSubmit}
@@ -1105,10 +1107,10 @@ export default function ChatOverviewScreen() {
           selectedCount={selectedParticipants.length}
           maxModels={userTierConfig.max_models}
           userTierInfo={{
-            tier_name: userTierConfig.tier_name,
-            max_models: userTierConfig.max_models,
-            current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
+            current_tier: userTierConfig.tier,
+            max_models: userTierConfig.max_models,
+            tier_name: userTierConfig.tier_name,
           }}
           visionIncompatibleModelIds={visionIncompatibleModelIds}
           fileIncompatibleModelIds={fileIncompatibleModelIds}

@@ -23,25 +23,32 @@ import { user } from './auth';
 export const userChatUsage = sqliteTable(
   'user_chat_usage',
   {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .unique()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
+    // ============================================================================
+    // TIMESTAMPS
+    // ============================================================================
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 
+    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp_ms' }).notNull(),
     // ============================================================================
     // BILLING PERIOD TRACKING
     // ============================================================================
     currentPeriodStart: integer('current_period_start', { mode: 'timestamp_ms' }).notNull(),
-    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp_ms' }).notNull(),
+
+    customRolesCreated: integer('custom_roles_created').notNull().default(0),
+    id: text('id').primaryKey(),
+    // Billing frequency affects some quota calculations
+    isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
+    messagesCreated: integer('messages_created').notNull().default(0),
 
     // ============================================================================
-    // USAGE COUNTERS (Cumulative - never decremented)
+    // PENDING TIER CHANGES (for scheduled downgrades at period end)
     // ============================================================================
-    threadsCreated: integer('threads_created').notNull().default(0),
-    messagesCreated: integer('messages_created').notNull().default(0),
-    customRolesCreated: integer('custom_roles_created').notNull().default(0),
-    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
+    pendingTierChange: text('pending_tier_change', {
+      enum: SUBSCRIPTION_TIERS,
+    }),
+
+    pendingTierIsAnnual: integer('pending_tier_is_annual', { mode: 'boolean' }),
 
     // ============================================================================
     // SUBSCRIPTION IDENTIFICATION
@@ -53,33 +60,26 @@ export const userChatUsage = sqliteTable(
     })
       .notNull()
       .default(DEFAULT_SUBSCRIPTION_TIER),
-
-    // Billing frequency affects some quota calculations
-    isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
-
     // ============================================================================
-    // PENDING TIER CHANGES (for scheduled downgrades at period end)
+    // USAGE COUNTERS (Cumulative - never decremented)
     // ============================================================================
-    pendingTierChange: text('pending_tier_change', {
-      enum: SUBSCRIPTION_TIERS,
-    }),
-    pendingTierIsAnnual: integer('pending_tier_is_annual', { mode: 'boolean' }),
+    threadsCreated: integer('threads_created').notNull().default(0),
 
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+
+    userId: text('user_id')
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: 'cascade' }),
     // ============================================================================
     // OPTIMISTIC LOCKING (for concurrent updates)
     // ============================================================================
     // Version column prevents lost updates in concurrent scenarios
     // Increment on every update and check version matches before committing
     version: integer('version').notNull().default(1),
-
-    // ============================================================================
-    // TIMESTAMPS
-    // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
   },
   table => [
     // Indexes for query performance
@@ -126,30 +126,30 @@ export const userChatUsage = sqliteTable(
 export const userChatUsageHistory = sqliteTable(
   'user_chat_usage_history',
   {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
+    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
+    // Timestamp
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 
+    customRolesCreated: integer('custom_roles_created').notNull().default(0),
+    id: text('id').primaryKey(),
+
+    isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
+    messagesCreated: integer('messages_created').notNull().default(0),
+    periodEnd: integer('period_end', { mode: 'timestamp_ms' }).notNull(),
     // Period this snapshot represents
     periodStart: integer('period_start', { mode: 'timestamp_ms' }).notNull(),
-    periodEnd: integer('period_end', { mode: 'timestamp_ms' }).notNull(),
-
-    // Usage stats during this period (COUNTERS ONLY)
-    threadsCreated: integer('threads_created').notNull().default(0),
-    messagesCreated: integer('messages_created').notNull().default(0),
-    customRolesCreated: integer('custom_roles_created').notNull().default(0),
-    analysisGenerated: integer('analysis_generated').notNull().default(0), // Round summaries generated
 
     // Subscription info at time of period (IDENTIFIER ONLY, not limits)
     // Use this tier to look up historical limits from TIER_QUOTAS in code
     subscriptionTier: text('subscription_tier', {
       enum: SUBSCRIPTION_TIERS,
     }).notNull(),
-    isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
+    // Usage stats during this period (COUNTERS ONLY)
+    threadsCreated: integer('threads_created').notNull().default(0),
 
-    // Timestamp
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
   },
   table => [
     // Indexes for query performance

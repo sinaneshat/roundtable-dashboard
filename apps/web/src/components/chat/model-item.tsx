@@ -13,7 +13,7 @@ import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
 
-const REORDER_ITEM_STYLE = { position: 'relative', borderRadius: '0.75rem' } as const;
+const REORDER_ITEM_STYLE = { borderRadius: '0.75rem', position: 'relative' } as const;
 
 type PendingRoleConfig = {
   role: string;
@@ -29,8 +29,8 @@ type RoleBadgeDisplayProps = {
 
 function RoleBadgeDisplay({
   displayRole,
-  onOpenRolePanel,
   onClearRole,
+  onOpenRolePanel,
   tModels: t,
 }: RoleBadgeDisplayProps) {
   return (
@@ -102,19 +102,19 @@ type ModelItemProps = {
 };
 
 export const ModelItem = memo(({
-  orderedModel,
-  onToggle,
-  onClearRole,
-  selectedCount,
-  maxModels,
   enableDrag = true,
-  onOpenRolePanel,
-  isVisionIncompatible = false,
   isFileIncompatible = false,
-  pendingRole,
+  isVisionIncompatible = false,
+  maxModels,
+  onClearRole,
+  onDragEndCustom,
   onDragMove,
   onDragStartCustom,
-  onDragEndCustom,
+  onOpenRolePanel,
+  onToggle,
+  orderedModel,
+  pendingRole,
+  selectedCount,
 }: ModelItemProps) => {
   const t = useTranslations();
   const dragControls = useDragControls();

@@ -21,6 +21,30 @@ type DbInstance = Awaited<ReturnType<typeof getDbAsync>>;
  */
 export const CachePatterns = {
   /**
+   * Invalidate caches after credit balance change (purchase/usage)
+   *
+   * @example
+   * ```ts
+   * await CachePatterns.creditMutation(db, userId);
+   * ```
+   */
+  async creditMutation(db: DbInstance, userId: string): Promise<void> {
+    await invalidateCreditBalanceCache(db, userId);
+  },
+
+  /**
+   * Invalidate caches after message mutation (send/edit/delete)
+   *
+   * @example
+   * ```ts
+   * await CachePatterns.messageMutation(db, threadId);
+   * ```
+   */
+  async messageMutation(db: DbInstance, threadId: string): Promise<void> {
+    await invalidateMessagesCache(db, threadId);
+  },
+
+  /**
    * Invalidate caches after project mutation (create/update/delete)
    *
    * @example
@@ -30,26 +54,6 @@ export const CachePatterns = {
    */
   async projectMutation(db: DbInstance, userId: string): Promise<void> {
     await invalidateSidebarCache(db, userId);
-  },
-
-  /**
-   * Invalidate caches after thread mutation (create/update/delete)
-   *
-   * @example
-   * ```ts
-   * await CachePatterns.threadMutation(db, userId, threadId, slug);
-   * ```
-   */
-  async threadMutation(
-    db: DbInstance,
-    userId: string,
-    threadId?: string,
-    slug?: string,
-  ): Promise<void> {
-    await Promise.all([
-      invalidateThreadCache(db, userId, threadId, slug),
-      invalidateSidebarCache(db, userId),
-    ]);
   },
 
   /**
@@ -75,27 +79,23 @@ export const CachePatterns = {
   },
 
   /**
-   * Invalidate caches after message mutation (send/edit/delete)
+   * Invalidate caches after thread mutation (create/update/delete)
    *
    * @example
    * ```ts
-   * await CachePatterns.messageMutation(db, threadId);
+   * await CachePatterns.threadMutation(db, userId, threadId, slug);
    * ```
    */
-  async messageMutation(db: DbInstance, threadId: string): Promise<void> {
-    await invalidateMessagesCache(db, threadId);
-  },
-
-  /**
-   * Invalidate caches after credit balance change (purchase/usage)
-   *
-   * @example
-   * ```ts
-   * await CachePatterns.creditMutation(db, userId);
-   * ```
-   */
-  async creditMutation(db: DbInstance, userId: string): Promise<void> {
-    await invalidateCreditBalanceCache(db, userId);
+  async threadMutation(
+    db: DbInstance,
+    userId: string,
+    threadId?: string,
+    slug?: string,
+  ): Promise<void> {
+    await Promise.all([
+      invalidateThreadCache(db, userId, threadId, slug),
+      invalidateSidebarCache(db, userId),
+    ]);
   },
 };
 
@@ -111,8 +111,8 @@ export const CachePatterns = {
  * }
  * ```
  */
-export function deferredCacheInvalidation(fn: () => Promise<void>): Promise<void> {
-  return fn().catch((err) => {
+export async function deferredCacheInvalidation(fn: () => Promise<void>): Promise<void> {
+  return await fn().catch((err) => {
     console.error('[Cache] Deferred invalidation failed:', err);
   });
 }

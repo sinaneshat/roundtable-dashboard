@@ -29,8 +29,9 @@ function simulateUseThreadTimeline(
       messagesByRound.set(roundNumber, []);
     }
     const roundMessages = messagesByRound.get(roundNumber);
-    if (!roundMessages)
+    if (!roundMessages) {
       throw new Error('expected round messages array');
+    }
 
     roundMessages.push(message);
   });
@@ -38,10 +39,12 @@ function simulateUseThreadTimeline(
   // Sort messages within each round
   messagesByRound.forEach((roundMessages) => {
     roundMessages.sort((a, b) => {
-      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
         return -1;
-      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+      }
+      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
         return 1;
+      }
       return 0;
     });
   });
@@ -54,8 +57,9 @@ function simulateUseThreadTimeline(
       changelogByRound.set(roundNumber, []);
     }
     const roundChangelog = changelogByRound.get(roundNumber);
-    if (!roundChangelog)
+    if (!roundChangelog) {
       throw new Error('expected round changelog array');
+    }
 
     roundChangelog.push(change);
   });
@@ -94,10 +98,10 @@ function simulateUseThreadTimeline(
 
     if (shouldShowChangelog) {
       timeline.push({
-        type: 'changelog',
         data: roundChangelog,
         key: `round-${roundNumber}-changelog`,
         roundNumber,
+        type: 'changelog',
       });
     }
 
@@ -107,19 +111,19 @@ function simulateUseThreadTimeline(
 
     if (hasPreSearch && !hasMessages) {
       timeline.push({
-        type: 'pre-search',
         data: roundPreSearch,
         key: `round-${roundNumber}-pre-search`,
         roundNumber,
+        type: 'pre-search',
       });
     }
 
     if (hasMessages) {
       timeline.push({
-        type: 'messages',
         data: roundMessages,
         key: `round-${roundNumber}-messages`,
         roundNumber,
+        type: 'messages',
       });
     }
   });
@@ -131,33 +135,33 @@ function simulateUseThreadTimeline(
 function createUserMessage(roundNumber: number, text: string, isOptimistic = false): UIMessage {
   return {
     id: isOptimistic ? `optimistic-user-${roundNumber}-${Date.now()}` : `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
       ...(isOptimistic ? { isOptimistic: true } : {}),
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createAssistantMessage(roundNumber: number, participantIndex: number): UIMessage {
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: `Response from participant ${participantIndex}` }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
-      model: 'gpt-4o',
       finishReason: 'stop',
       hasError: false,
-      isTransient: false,
       isPartialResponse: false,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      isTransient: false,
+      model: 'gpt-4o',
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text: `Response from participant ${participantIndex}`, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -206,7 +210,7 @@ describe('non-Initial Round Timeline Item Creation', () => {
       const round1Messages = (round1Item?.type === 'messages' ? round1Item.data : []) as UIMessage[];
       const userMessage = round1Messages.find(m => m.role === MessageRoles.USER);
       expect(userMessage).toBeDefined();
-      expect(userMessage?.parts[0]).toEqual({ type: 'text', text: 'Second question' });
+      expect(userMessage?.parts[0]).toEqual({ text: 'Second question', type: 'text' });
     });
 
     it('should order timeline items by round number', () => {
@@ -232,15 +236,15 @@ describe('non-Initial Round Timeline Item Creation', () => {
       ];
 
       const preSearches: StoredPreSearch[] = [{
-        id: 'presearch-1',
-        threadId: 'thread-1',
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-1',
+        userQuery: 'Search query',
       }];
 
       const timeline = simulateUseThreadTimeline(messages, [], preSearches);
@@ -259,15 +263,15 @@ describe('non-Initial Round Timeline Item Creation', () => {
       ];
 
       const preSearches: StoredPreSearch[] = [{
-        id: 'presearch-1',
-        threadId: 'thread-1',
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-1',
+        userQuery: 'Search query',
       }];
 
       const timeline = simulateUseThreadTimeline(messages, [], preSearches);

@@ -34,13 +34,13 @@ type WebSearchConfigurationDisplayProps = {
 const EMPTY_RESULTS: WebSearchResultItem[] = [];
 
 export function WebSearchConfigurationDisplay({
+  className,
+  isStreamingPlan = false,
   queries,
   results,
+  searchPlan,
   totalResults,
   totalTime,
-  searchPlan,
-  isStreamingPlan = false,
-  className,
 }: WebSearchConfigurationDisplayProps) {
   const t = useTranslations();
 

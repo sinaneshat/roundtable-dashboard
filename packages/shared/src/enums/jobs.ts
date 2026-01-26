@@ -24,10 +24,10 @@ export const AutomatedJobStatusSchema = z.enum(AUTOMATED_JOB_STATUSES).openapi({
 export type AutomatedJobStatus = z.infer<typeof AutomatedJobStatusSchema>;
 
 export const AutomatedJobStatuses = {
-  PENDING: 'pending' as const,
-  RUNNING: 'running' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
+  PENDING: 'pending' as const,
+  RUNNING: 'running' as const,
 } as const;
 
 export const DEFAULT_AUTOMATED_JOB_STATUS = AutomatedJobStatuses.PENDING;
@@ -37,10 +37,10 @@ export const DEFAULT_AUTOMATED_JOB_STATUS = AutomatedJobStatuses.PENDING;
 // ============================================================================
 
 export const AUTOMATED_JOB_STATUS_TO_BADGE_VARIANT: Record<AutomatedJobStatus, BadgeVariant> = {
-  pending: BadgeVariants.OUTLINE,
-  running: BadgeVariants.DEFAULT,
   completed: BadgeVariants.SECONDARY,
   failed: BadgeVariants.DESTRUCTIVE,
+  pending: BadgeVariants.OUTLINE,
+  running: BadgeVariants.DEFAULT,
 };
 
 export function getJobStatusBadgeVariant(status: AutomatedJobStatus): BadgeVariant {

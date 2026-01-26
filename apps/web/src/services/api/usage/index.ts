@@ -6,6 +6,8 @@
  */
 
 export {
+  getPlanTypeFromUsageStats,
   type GetUsageStatsResponse,
   getUserUsageStatsService,
+  isUsageStatsSuccess,
 } from './usage';

@@ -41,7 +41,7 @@ export function buildSearchContextWithCitations(
   const preSearchMessages = filterDbToPreSearchMessages(allMessages);
 
   if (preSearchMessages.length === 0) {
-    return { formattedPrompt: '', citableSources, sourceMap };
+    return { citableSources, formattedPrompt: '', sourceMap };
   }
 
   const { currentRoundNumber, includeFullResults = true } = options;
@@ -51,8 +51,9 @@ export function buildSearchContextWithCitations(
 
   for (const preSearchMsg of preSearchMessages) {
     const validatedData = extractValidatedPreSearchData(preSearchMsg);
-    if (!validatedData)
+    if (!validatedData) {
       continue;
+    }
 
     const msgRoundNumber = getRoundNumber(preSearchMsg.metadata) || 0;
     const isCurrentRound = msgRoundNumber === currentRoundNumber;
@@ -104,7 +105,7 @@ export function buildSearchContextWithCitations(
     );
   }
 
-  return { formattedPrompt: contextParts.join(''), citableSources, sourceMap };
+  return { citableSources, formattedPrompt: contextParts.join(''), sourceMap };
 }
 
 /**
@@ -127,29 +128,30 @@ function buildCurrentRoundSearchContextWithCitations(
 
     for (let resultIndex = 0; resultIndex < searchResult.results.length; resultIndex++) {
       const result = searchResult.results[resultIndex];
-      if (!result)
+      if (!result) {
         continue;
+      }
 
       const citationId = generateSearchCitationId(queryIndex, resultIndex);
 
       // Add to citable sources
       const rawData = result.rawContent || result.fullContent || result.content || result.excerpt || '';
       sources.push({
-        id: citationId,
-        type: CitationSourceTypes.SEARCH,
-        sourceId: `${queryIndex}_${resultIndex}`,
-        title: result.title,
         content: rawData.slice(0, 500),
+        id: citationId,
         metadata: {
-          url: result.url,
+          author: result.metadata?.author ?? undefined,
+          description: result.metadata?.description ?? undefined,
           domain: result.domain ?? undefined,
           publishedDate: result.publishedDate ?? undefined,
           query: searchResult.query,
-          author: result.metadata?.author ?? undefined,
-          wordCount: result.metadata?.wordCount ?? undefined,
           readingTime: result.metadata?.readingTime ?? undefined,
-          description: result.metadata?.description ?? undefined,
+          url: result.url,
+          wordCount: result.metadata?.wordCount ?? undefined,
         },
+        sourceId: `${queryIndex}_${resultIndex}`,
+        title: result.title,
+        type: CitationSourceTypes.SEARCH,
       });
 
       // Build context with citation ID
@@ -164,14 +166,18 @@ function buildCurrentRoundSearchContextWithCitations(
 
       if (result.metadata) {
         const meta: string[] = [];
-        if (result.metadata.author)
+        if (result.metadata.author) {
           meta.push(`Author: ${result.metadata.author}`);
-        if (result.metadata.wordCount)
+        }
+        if (result.metadata.wordCount) {
           meta.push(`${result.metadata.wordCount.toLocaleString()} words`);
-        if (result.metadata.readingTime)
+        }
+        if (result.metadata.readingTime) {
           meta.push(`${result.metadata.readingTime} min read`);
-        if (result.metadata.description)
+        }
+        if (result.metadata.description) {
           meta.push(`Description: ${result.metadata.description}`);
+        }
         if (meta.length > 0) {
           parts.push(`**Metadata:** ${meta.join(' | ')}\n`);
         }
@@ -192,15 +198,18 @@ function buildCurrentRoundSearchContextWithCitations(
 function extractValidatedPreSearchData(
   message: ChatMessage,
 ): ValidatedPreSearchData | null {
-  if (!message.metadata)
+  if (!message.metadata) {
     return null;
+  }
 
-  if (!isPreSearchMessageMetadata(message.metadata))
+  if (!isPreSearchMessageMetadata(message.metadata)) {
     return null;
+  }
 
   const validation = DbPreSearchDataSchema.safeParse(message.metadata.preSearch);
-  if (!validation.success)
+  if (!validation.success) {
     return null;
+  }
 
   return validation.data;
 }

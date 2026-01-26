@@ -15,27 +15,23 @@ import {
 } from '@/lib/data/query-options';
 
 export const Route = createFileRoute('/_protected')({
-  // ✅ LAYOUT ROUTE CACHING: Prevent loader re-runs on child route navigations
-  // Layout data (models, subscriptions, usage, threads) is cached by TanStack Query
-  // Route staleTime prevents the loader from executing unnecessarily
-  // This stops the pendingComponent from flashing on every /chat/* navigation
-  staleTime: 5 * 60 * 1000, // 5 minutes - layout data rarely needs refresh
-
   // ✅ AUTH CHECK: Uses session from root context (SSR or client)
   // Root beforeLoad fetches session on server via cookies
   // Redirects to sign-in if not authenticated (works on both server and client)
-  beforeLoad: async ({ location, context }) => {
+  beforeLoad: async ({ context, location }) => {
     const { session } = context;
 
     if (!session) {
       throw redirect({
-        to: '/auth/sign-in',
         search: { redirect: location.href },
+        to: '/auth/sign-in',
       });
     }
 
     return { session };
   },
+
+  component: ProtectedLayout,
   loader: async ({ context }) => {
     const { queryClient, session } = context;
 
@@ -61,7 +57,11 @@ export const Route = createFileRoute('/_protected')({
 
     return {};
   },
-  component: ProtectedLayout,
+  // ✅ LAYOUT ROUTE CACHING: Prevent loader re-runs on child route navigations
+  // Layout data (models, subscriptions, usage, threads) is cached by TanStack Query
+  // Route staleTime prevents the loader from executing unnecessarily
+  // This stops the pendingComponent from flashing on every /chat/* navigation
+  staleTime: 5 * 60 * 1000, // 5 minutes - layout data rarely needs refresh
   // NO pendingComponent - layout shell (sidebar, header) should remain stable
   // Each child route has its own pendingComponent for content-specific loading states
   // This prevents layout-level skeleton from overriding page-specific skeletons

@@ -22,13 +22,13 @@ const mockWrapLanguageModel = vi.fn();
 const mockExtractReasoningMiddleware = vi.fn();
 
 vi.mock('ai', () => ({
-  streamText: (...args: unknown[]) => mockStreamText(...args),
-  smoothStream: (...args: unknown[]) => mockSmoothStream(...args),
-  wrapLanguageModel: (...args: unknown[]) => mockWrapLanguageModel(...args),
   extractReasoningMiddleware: (...args: unknown[]) => mockExtractReasoningMiddleware(...args),
   RetryError: {
     isInstance: (error: unknown) => error instanceof Error && error.name === 'RetryError',
   },
+  smoothStream: (...args: unknown[]) => mockSmoothStream(...args),
+  streamText: (...args: unknown[]) => mockStreamText(...args),
+  wrapLanguageModel: (...args: unknown[]) => mockWrapLanguageModel(...args),
 }));
 
 // ============================================================================
@@ -61,35 +61,35 @@ function createParticipantTelemetryConfig(
   },
 ): StreamTextTelemetryConfig {
   return {
-    isEnabled: true,
     functionId: `chat.thread.${threadId}.participant.${participantIndex}`,
-    recordInputs: true,
-    recordOutputs: true,
+    isEnabled: true,
     metadata: {
-      thread_id: threadId,
-      round_number: roundNumber,
       conversation_mode: 'council',
+      estimated_input_tokens: 1500,
+      has_custom_system_prompt: false,
+      input_cost_per_million: 2.5,
+      is_first_participant: participantIndex === 0,
+      is_reasoning_model: false,
+      is_regeneration: options?.isRegeneration || false,
+      max_output_tokens: 8192,
+      model_context_length: 128000,
+      model_id: options?.modelId || ModelIds.OPENAI_GPT_4O_MINI,
+      model_name: 'GPT-4o',
+      output_cost_per_million: 10.0,
       participant_id: `participant_${participantIndex}`,
       participant_index: participantIndex,
       participant_role: options?.participantRole || 'AI Analyst',
-      is_first_participant: participantIndex === 0,
+      rag_enabled: options?.ragEnabled || false,
+      reasoning_enabled: options?.reasoningEnabled || false,
+      round_number: roundNumber,
+      thread_id: threadId,
       total_participants: options?.totalParticipants || 3,
-      model_id: options?.modelId || ModelIds.OPENAI_GPT_4O_MINI,
-      model_name: 'GPT-4o',
-      model_context_length: 128000,
-      max_output_tokens: 8192,
       user_id: options?.userId || 'user_123',
       user_tier: options?.userTier || 'free',
-      is_regeneration: options?.isRegeneration || false,
-      rag_enabled: options?.ragEnabled || false,
-      has_custom_system_prompt: false,
-      is_reasoning_model: false,
-      reasoning_enabled: options?.reasoningEnabled || false,
-      estimated_input_tokens: 1500,
       uses_dynamic_pricing: true,
-      input_cost_per_million: 2.5,
-      output_cost_per_million: 10.0,
     },
+    recordInputs: true,
+    recordOutputs: true,
   };
 }
 
@@ -102,23 +102,23 @@ function createModeratorTelemetryConfig(
   },
 ): StreamTextTelemetryConfig {
   return {
-    isEnabled: true,
     functionId: `chat.thread.${threadId}.moderator`,
-    recordInputs: true,
-    recordOutputs: true,
+    isEnabled: true,
     metadata: {
-      thread_id: threadId,
-      round_number: roundNumber,
       conversation_mode: 'council',
+      is_moderator: true,
+      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
+      model_name: 'Claude Sonnet 4',
+      participant_count: options?.participantCount || 3,
       participant_id: 'moderator',
       participant_index: MODERATOR_PARTICIPANT_INDEX,
       participant_role: 'AI Moderator',
-      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
-      model_name: 'Claude Sonnet 4',
-      is_moderator: true,
-      participant_count: options?.participantCount || 3,
+      round_number: roundNumber,
+      thread_id: threadId,
       user_id: options?.userId || 'user_123',
     },
+    recordInputs: true,
+    recordOutputs: true,
   };
 }
 
@@ -139,18 +139,18 @@ describe('aI SDK streamText Telemetry', () => {
     it('should create valid telemetry config for first participant', () => {
       const config = createParticipantTelemetryConfig('thread_abc', 0, 0);
 
-      expect(config.isEnabled).toBe(true);
+      expect(config.isEnabled).toBeTruthy();
       expect(config.functionId).toBe('chat.thread.thread_abc.participant.0');
-      expect(config.recordInputs).toBe(true);
-      expect(config.recordOutputs).toBe(true);
-      expect(config.metadata.is_first_participant).toBe(true);
+      expect(config.recordInputs).toBeTruthy();
+      expect(config.recordOutputs).toBeTruthy();
+      expect(config.metadata.is_first_participant).toBeTruthy();
       expect(config.metadata.participant_index).toBe(0);
     });
 
     it('should mark non-first participants correctly', () => {
       const config = createParticipantTelemetryConfig('thread_abc', 0, 2);
 
-      expect(config.metadata.is_first_participant).toBe(false);
+      expect(config.metadata.is_first_participant).toBeFalsy();
       expect(config.metadata.participant_index).toBe(2);
     });
 
@@ -186,7 +186,7 @@ describe('aI SDK streamText Telemetry', () => {
         isRegeneration: true,
       });
 
-      expect(config.metadata.is_regeneration).toBe(true);
+      expect(config.metadata.is_regeneration).toBeTruthy();
     });
 
     it('should track RAG context usage', () => {
@@ -194,7 +194,7 @@ describe('aI SDK streamText Telemetry', () => {
         ragEnabled: true,
       });
 
-      expect(config.metadata.rag_enabled).toBe(true);
+      expect(config.metadata.rag_enabled).toBeTruthy();
     });
 
     it('should track reasoning model configuration', () => {
@@ -202,13 +202,13 @@ describe('aI SDK streamText Telemetry', () => {
         reasoningEnabled: true,
       });
 
-      expect(config.metadata.reasoning_enabled).toBe(true);
+      expect(config.metadata.reasoning_enabled).toBeTruthy();
     });
 
     it('should include pricing metadata for cost tracking', () => {
       const config = createParticipantTelemetryConfig('thread_abc', 0, 0);
 
-      expect(config.metadata.uses_dynamic_pricing).toBe(true);
+      expect(config.metadata.uses_dynamic_pricing).toBeTruthy();
       expect(config.metadata.input_cost_per_million).toBe(2.5);
       expect(config.metadata.output_cost_per_million).toBe(10.0);
     });
@@ -226,9 +226,9 @@ describe('aI SDK streamText Telemetry', () => {
     it('should create valid telemetry config for moderator', () => {
       const config = createModeratorTelemetryConfig('thread_abc', 0);
 
-      expect(config.isEnabled).toBe(true);
+      expect(config.isEnabled).toBeTruthy();
       expect(config.functionId).toBe('chat.thread.thread_abc.moderator');
-      expect(config.metadata.is_moderator).toBe(true);
+      expect(config.metadata.is_moderator).toBeTruthy();
       expect(config.metadata.participant_index).toBe(MODERATOR_PARTICIPANT_INDEX);
     });
 
@@ -313,8 +313,8 @@ describe('smooth Stream Transformation', () => {
   describe('smoothStream Configuration', () => {
     it('should configure smoothStream with word chunking', () => {
       const smoothStreamConfig = {
-        delayInMs: 20,
         chunking: 'word' as const,
+        delayInMs: 20,
       };
 
       expect(smoothStreamConfig.delayInMs).toBe(20);
@@ -322,7 +322,7 @@ describe('smooth Stream Transformation', () => {
     });
 
     it('should use 20ms delay for natural streaming UX', () => {
-      const config = { delayInMs: 20, chunking: 'word' as const };
+      const config = { chunking: 'word' as const, delayInMs: 20 };
 
       expect(config.delayInMs).toBe(20);
       // 20ms is optimal for word-by-word streaming
@@ -357,7 +357,7 @@ describe('smooth Stream Transformation', () => {
           || modelId.includes('deepseek')
           || modelId.includes('gemini');
 
-        expect(needsSmoothStream).toBe(true);
+        expect(needsSmoothStream).toBeTruthy();
       },
     );
 
@@ -368,7 +368,7 @@ describe('smooth Stream Transformation', () => {
           || modelId.includes('deepseek')
           || modelId.includes('gemini');
 
-        expect(needsSmoothStream).toBe(false);
+        expect(needsSmoothStream).toBeFalsy();
       },
     );
   });
@@ -390,8 +390,8 @@ describe('reasoning Model Telemetry', () => {
 
     it('should track reasoning duration in telemetry', () => {
       const reasoningMetrics = {
-        reasoningStartTime: Date.now(),
         reasoningDurationSeconds: 5,
+        reasoningStartTime: Date.now(),
       };
 
       expect(reasoningMetrics.reasoningDurationSeconds).toBeTypeOf('number');
@@ -402,14 +402,14 @@ describe('reasoning Model Telemetry', () => {
       const reasoningContent = '[REDACTED]';
       const isOnlyRedactedReasoning = /^\[REDACTED\]$/i.test(reasoningContent.trim());
 
-      expect(isOnlyRedactedReasoning).toBe(true);
+      expect(isOnlyRedactedReasoning).toBeTruthy();
     });
 
     it('should detect valid reasoning content', () => {
       const reasoningContent = 'Let me think about this step by step...';
       const isOnlyRedactedReasoning = /^\[REDACTED\]$/i.test(reasoningContent.trim());
 
-      expect(isOnlyRedactedReasoning).toBe(false);
+      expect(isOnlyRedactedReasoning).toBeFalsy();
     });
   });
 
@@ -494,7 +494,7 @@ describe('stream Resumption and Buffering', () => {
     type StreamBufferState = 'active' | 'completed' | 'failed';
 
     it('should transition through valid buffer states', () => {
-      const validTransitions: Array<[StreamBufferState, StreamBufferState]> = [
+      const validTransitions: [StreamBufferState, StreamBufferState][] = [
         ['active', 'completed'],
         ['active', 'failed'],
       ];
@@ -530,7 +530,7 @@ describe('stream Resumption and Buffering', () => {
 
       const isAbortError = abortError.name === 'AbortError';
 
-      expect(isAbortError).toBe(true);
+      expect(isAbortError).toBeTruthy();
     });
 
     it('should detect abort error from cause', () => {
@@ -541,7 +541,7 @@ describe('stream Resumption and Buffering', () => {
         = wrapperError.cause instanceof DOMException
           && (wrapperError.cause as DOMException).name === 'AbortError';
 
-      expect(isAbortError).toBe(true);
+      expect(isAbortError).toBeTruthy();
     });
   });
 });
@@ -556,7 +556,7 @@ describe('streaming Error Telemetry', () => {
       const validationErrorStatus = 400;
       const shouldRetry = validationErrorStatus !== 400;
 
-      expect(shouldRetry).toBe(false);
+      expect(shouldRetry).toBeFalsy();
     });
 
     it('should identify non-retryable auth errors', () => {
@@ -564,7 +564,7 @@ describe('streaming Error Telemetry', () => {
 
       for (const status of authErrorStatuses) {
         const shouldRetry = status !== 401 && status !== 403;
-        expect(shouldRetry).toBe(false);
+        expect(shouldRetry).toBeFalsy();
       }
     });
 
@@ -572,7 +572,7 @@ describe('streaming Error Telemetry', () => {
       const rateLimitStatus = 429;
       const shouldRetry = rateLimitStatus === 429;
 
-      expect(shouldRetry).toBe(true);
+      expect(shouldRetry).toBeTruthy();
     });
 
     it('should identify retryable server errors', () => {
@@ -580,7 +580,7 @@ describe('streaming Error Telemetry', () => {
 
       for (const status of serverErrorStatuses) {
         const shouldRetry = status >= 500;
-        expect(shouldRetry).toBe(true);
+        expect(shouldRetry).toBeTruthy();
       }
     });
   });
@@ -590,7 +590,7 @@ describe('streaming Error Telemetry', () => {
       const errorName = 'AI_TypeValidationError';
       const shouldRetry = errorName !== 'AI_TypeValidationError';
 
-      expect(shouldRetry).toBe(false);
+      expect(shouldRetry).toBeFalsy();
     });
 
     it('should detect logprobs validation errors for suppression', () => {
@@ -599,20 +599,20 @@ describe('streaming Error Telemetry', () => {
         = errorMessage.includes('logprobs')
           && errorMessage.includes('validation');
 
-      expect(isLogprobsError).toBe(true);
+      expect(isLogprobsError).toBeTruthy();
     });
   });
 
   describe('error Metadata for Telemetry', () => {
     it('should structure error metadata for OTEL spans', () => {
       const errorMetadata = {
+        errorMessage: 'Model rate limited',
         errorName: 'StreamError',
         errorType: 'provider_error',
-        errorMessage: 'Model rate limited',
         isTransient: true,
-        shouldRetry: true,
-        participantId: 'participant_1',
         modelId: ModelIds.OPENAI_GPT_4O_MINI,
+        participantId: 'participant_1',
+        shouldRetry: true,
         traceId: 'trace_abc123',
       };
 
@@ -623,15 +623,15 @@ describe('streaming Error Telemetry', () => {
 
     it('should include retry exhaustion info', () => {
       const retryExhaustedMetadata = {
-        errorName: 'RetryError',
-        errorType: 'retry_exhausted',
         errorCategory: 'provider_rate_limit',
         errorMessage: 'Maximum retries exceeded',
+        errorName: 'RetryError',
+        errorType: 'retry_exhausted',
         isTransient: true,
         shouldRetry: false,
       };
 
-      expect(retryExhaustedMetadata.shouldRetry).toBe(false);
+      expect(retryExhaustedMetadata.shouldRetry).toBeFalsy();
       expect(retryExhaustedMetadata.errorType).toBe('retry_exhausted');
     });
   });
@@ -645,17 +645,17 @@ describe('postHog LLM Tracking Telemetry', () => {
   describe('tracking Context', () => {
     it('should create complete tracking context', () => {
       const trackingContext = {
-        userId: 'user_123',
-        sessionId: 'session_abc',
-        threadId: 'thread_xyz',
-        roundNumber: 1,
+        isRegeneration: false,
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
+        modelName: 'GPT-4o',
         participantId: 'participant_1',
         participantIndex: 0,
         participantRole: 'AI Analyst',
-        modelId: ModelIds.OPENAI_GPT_4O_MINI,
-        modelName: 'GPT-4o',
+        roundNumber: 1,
+        sessionId: 'session_abc',
+        threadId: 'thread_xyz',
         threadMode: 'council',
-        isRegeneration: false,
+        userId: 'user_123',
         userTier: 'pro',
       };
 
@@ -668,15 +668,15 @@ describe('postHog LLM Tracking Telemetry', () => {
   describe('usage Metrics', () => {
     it('should track token usage from AI SDK v6', () => {
       const usage = {
-        inputTokens: 1500,
-        outputTokens: 800,
-        totalTokens: 2300,
         inputTokenDetails: {
           cachedTokens: 500,
         },
+        inputTokens: 1500,
         outputTokenDetails: {
           reasoningTokens: 200,
         },
+        outputTokens: 800,
+        totalTokens: 2300,
       };
 
       expect(usage.inputTokens).toBeTypeOf('number');

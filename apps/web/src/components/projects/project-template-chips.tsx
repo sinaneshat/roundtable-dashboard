@@ -24,9 +24,9 @@ export function ProjectTemplateChips({ onSelect }: ProjectTemplateChipsProps) {
           type="button"
           variant={ComponentVariants.OUTLINE}
           onClick={() => onSelect({
-            name: t(getTemplateTranslationKey(template.key)),
-            icon: template.icon,
             color: template.color,
+            icon: template.icon,
+            name: t(getTemplateTranslationKey(template.key)),
           })}
           className="h-auto px-3 py-1.5 rounded-full bg-muted/80 hover:bg-muted"
           startIcon={(

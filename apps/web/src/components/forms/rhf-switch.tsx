@@ -21,12 +21,12 @@ type RHFSwitchProps<TFieldValues extends FieldValues = FieldValues> = {
 };
 
 export function RHFSwitch<TFieldValues extends FieldValues = FieldValues>({
-  name,
-  title,
-  description,
   className,
-  required,
+  description,
   disabled = false,
+  name,
+  required,
+  title,
 }: RHFSwitchProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

@@ -158,7 +158,7 @@ describe('attachment Variations', () => {
     store.getState().setPendingAttachmentIds(null);
     store.getState().setStreamingRoundNumber(1);
 
-    expect(store.getState().pendingAttachmentIds).toBe(null);
+    expect(store.getState().pendingAttachmentIds).toBeNull();
   });
 
   it('should handle round 0 without attachments, round 1 with', () => {
@@ -169,7 +169,7 @@ describe('attachment Variations', () => {
 
     // Round 0 without attachments
     store.getState().setStreamingRoundNumber(0);
-    expect(store.getState().pendingAttachmentIds).toBe(null);
+    expect(store.getState().pendingAttachmentIds).toBeNull();
     store.getState().completeStreaming();
 
     // Round 1 with attachments
@@ -212,11 +212,11 @@ describe('participant Count Variations', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     const p0Message = createTestAssistantMessage({
-      id: `${thread.id}_r0_p0`,
       content: 'Solo response',
-      roundNumber: 0,
+      id: `${thread.id}_r0_p0`,
       participantId: participants[0]?.id ?? 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
     store.getState().setMessages([p0Message]);
 
@@ -227,7 +227,7 @@ describe('participant Count Variations', () => {
     store.getState().setIsStreaming(false);
     store.getState().setIsModeratorStreaming(true);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
   });
 
   it('should handle 2 participants', () => {
@@ -277,8 +277,8 @@ describe('participant Count Variations', () => {
 
     const messages = [
       createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Question',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       }),
     ];
@@ -286,11 +286,11 @@ describe('participant Count Variations', () => {
     // Add all 5 participant messages
     for (let i = 0; i < 5; i++) {
       messages.push(createTestAssistantMessage({
-        id: `${thread.id}_r0_p${i}`,
         content: `P${i} response`,
-        roundNumber: 0,
+        id: `${thread.id}_r0_p${i}`,
         participantId: participants[i]?.id ?? `participant-${i}`,
         participantIndex: i,
+        roundNumber: 0,
       }));
     }
 
@@ -333,13 +333,13 @@ describe('error Recovery', () => {
       const thread = createMockThread();
 
       const p0ErrorMessage = createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'Partial response...',
-        roundNumber: 0,
+        finishReason: FinishReasons.ERROR,
+        hasError: true,
+        id: `${thread.id}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        hasError: true,
-        finishReason: FinishReasons.ERROR,
+        roundNumber: 0,
       });
 
       store.getState().setMessages([p0ErrorMessage]);
@@ -362,7 +362,7 @@ describe('error Recovery', () => {
       store.getState().setIsModeratorStreaming(false);
 
       expect(store.getState().error?.message).toBe('Moderator stream failed');
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
   });
 
@@ -389,7 +389,7 @@ describe('error Recovery', () => {
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(0);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
   });
 
@@ -403,7 +403,7 @@ describe('error Recovery', () => {
 
       // Clear on retry
       store.getState().setError(null);
-      expect(store.getState().error).toBe(null);
+      expect(store.getState().error).toBeNull();
     });
 
     it('should allow regeneration after error', () => {
@@ -416,7 +416,7 @@ describe('error Recovery', () => {
       store.getState().setIsRegenerating(true);
       store.getState().setRegeneratingRoundNumber(0);
 
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
       expect(store.getState().regeneratingRoundNumber).toBe(0);
     });
   });
@@ -439,12 +439,13 @@ describe('stop Button Scenarios', () => {
 
       // User clicks stop
       const stopFn = store.getState().chatStop;
-      if (stopFn)
+      if (stopFn) {
         stopFn();
+      }
       store.getState().setIsStreaming(false);
 
-      expect(mockStop).toHaveBeenCalled();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(mockStop).toHaveBeenCalledWith();
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should preserve partial P0 message after stop', () => {
@@ -453,12 +454,12 @@ describe('stop Button Scenarios', () => {
 
       // P0 was streaming with partial content
       const partialMessage = createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'Partial response that was interrupted...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${thread.id}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       store.getState().setMessages([partialMessage]);
@@ -495,12 +496,13 @@ describe('stop Button Scenarios', () => {
 
       // User clicks stop
       const stopFn = store.getState().chatStop;
-      if (stopFn)
+      if (stopFn) {
         stopFn();
+      }
       store.getState().setIsModeratorStreaming(false);
 
-      expect(mockStop).toHaveBeenCalled();
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(mockStop).toHaveBeenCalledWith();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
 
     it('should preserve partial moderator message after stop', () => {
@@ -508,10 +510,10 @@ describe('stop Button Scenarios', () => {
       const thread = createMockThread();
 
       const partialModerator = createTestModeratorMessage({
-        id: `${thread.id}_r0_moderator`,
         content: 'Partial summary...',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${thread.id}_r0_moderator`,
+        roundNumber: 0,
       });
 
       store.getState().setMessages([partialModerator]);
@@ -567,20 +569,20 @@ describe('complex Multi-Round Scenarios', () => {
     store.getState().setIsStreaming(true);
 
     const r1Messages = [
-      createTestUserMessage({ id: `${thread.id}_r1_user`, content: 'R1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'R1', id: `${thread.id}_r1_user`, roundNumber: 1 }),
       createTestAssistantMessage({
-        id: `${thread.id}_r1_p0`,
         content: 'R1P0',
-        roundNumber: 1,
+        id: `${thread.id}_r1_p0`,
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
     store.getState().setMessages(r1Messages);
     store.getState().completeStreaming();
 
-    expect(store.getState().error).toBe(null);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().error).toBeNull();
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should handle config changes between rounds', () => {

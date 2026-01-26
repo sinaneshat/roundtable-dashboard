@@ -178,52 +178,56 @@ export function extractMessageMetadata(
 // ============================================================================
 
 /**
+ * Type guard: Check if value is a non-null object
+ */
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
  * Extract createdAt from a message or its metadata
  * Returns ISO string or null if not available
  *
  * **REPLACES**: `(m as { createdAt?: Date | string }).createdAt`
  *
- * ✅ ZOD-FIRST PATTERN: Uses safeParse for type-safe extraction
+ * ✅ TYPE-SAFE: Uses type guards instead of .passthrough()
  * Handles Date objects, ISO strings, and metadata.createdAt field
  *
  * @param message - Message object (UIMessage, ApiMessage, or extended type)
  * @returns ISO date string or null
  */
 export function getCreatedAt(message: unknown): string | null {
-  // Minimal schema for createdAt field extraction
-  // NOTE: Using passthrough() intentionally - this extracts specific fields from various message shapes
-  const MessageCreatedAtSchema = z.object({
-    createdAt: z.union([z.string().datetime(), z.date()]).optional(),
-    metadata: z.object({
-      createdAt: z.string().datetime().optional(),
-    })
-      // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
-      .passthrough()
-      .optional(),
-  })
-    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
-    .passthrough();
-
-  const result = MessageCreatedAtSchema.safeParse(message);
-  if (!result.success) {
+  if (!isObject(message)) {
     return null;
   }
 
   // 1. Check direct createdAt property (ApiMessage or extended UIMessage)
-  if (result.data.createdAt !== undefined) {
-    if (result.data.createdAt instanceof Date) {
-      return result.data.createdAt.toISOString();
+  if ('createdAt' in message && message.createdAt !== undefined) {
+    if (message.createdAt instanceof Date) {
+      return message.createdAt.toISOString();
     }
-    return result.data.createdAt;
+    if (typeof message.createdAt === 'string') {
+      return message.createdAt;
+    }
   }
 
   // 2. Check metadata.createdAt (our custom metadata field)
-  if (result.data.metadata?.createdAt) {
-    return result.data.metadata.createdAt;
+  if ('metadata' in message && isObject(message.metadata)) {
+    if ('createdAt' in message.metadata && typeof message.metadata.createdAt === 'string') {
+      return message.metadata.createdAt;
+    }
   }
 
   return null;
 }
+
+/**
+ * Minimal schema for roundNumber extraction
+ * Used as fallback when full validation fails during streaming
+ */
+const PartialRoundNumberSchema = z.object({
+  roundNumber: z.number().int().nonnegative(),
+});
 
 /**
  * Extract roundNumber from metadata (all message types have this)
@@ -243,16 +247,22 @@ export function getRoundNumber(metadata: unknown): number | null {
 
   // ✅ FALLBACK: Minimal schema for roundNumber extraction only
   // Handles cases where metadata has roundNumber but fails full validation
-  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
-  const PartialRoundNumberSchema = z.object({
-    roundNumber: z.number().int().nonnegative(),
-  })
-    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
-    .passthrough();
+  // Uses .partial() to make fields optional for flexible extraction
+  const partialResult = PartialRoundNumberSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.roundNumber !== undefined) {
+    return partialResult.data.roundNumber;
+  }
 
-  const partialResult = PartialRoundNumberSchema.safeParse(metadata);
-  return partialResult.success ? partialResult.data.roundNumber : null;
+  return null;
 }
+
+/**
+ * Minimal schema for participantId extraction
+ * Used as fallback when full validation fails during streaming
+ */
+const PartialParticipantIdSchema = z.object({
+  participantId: z.string().min(1),
+});
 
 /**
  * Extract participantId from metadata (only participant messages)
@@ -274,18 +284,22 @@ export function getParticipantId(metadata: unknown): string | null {
 
   // ✅ FALLBACK: Minimal schema for participantId extraction only
   // Handles streaming race conditions where full schema validation fails
-  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
-  const PartialParticipantIdSchema = z.object({
-    participantId: z.string().min(1),
-  })
-    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
-    .passthrough();
+  // Uses .partial() to make fields optional for flexible extraction
+  const partialResult = PartialParticipantIdSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.participantId) {
+    return partialResult.data.participantId;
+  }
 
-  const partialResult = PartialParticipantIdSchema.safeParse(metadata);
-  return partialResult.success && partialResult.data.participantId
-    ? partialResult.data.participantId
-    : null;
+  return null;
 }
+
+/**
+ * Minimal schema for participantIndex extraction
+ * Used as fallback when full validation fails during streaming
+ */
+const PartialParticipantIndexSchema = z.object({
+  participantIndex: z.number().int().nonnegative(),
+});
 
 /**
  * Extract participantIndex from metadata (only participant messages)
@@ -307,17 +321,13 @@ export function getParticipantIndex(metadata: unknown): number | null {
 
   // ✅ FALLBACK: Minimal schema for participantIndex extraction only
   // Handles streaming race conditions where full schema validation fails
-  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
-  const PartialParticipantIndexSchema = z.object({
-    participantIndex: z.number().int().nonnegative(),
-  })
-    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
-    .passthrough();
+  // Uses .partial() to make fields optional for flexible extraction
+  const partialResult = PartialParticipantIndexSchema.partial().safeParse(metadata);
+  if (partialResult.success && partialResult.data.participantIndex !== undefined) {
+    return partialResult.data.participantIndex;
+  }
 
-  const partialResult = PartialParticipantIndexSchema.safeParse(metadata);
-  return partialResult.success && typeof partialResult.data.participantIndex === 'number'
-    ? partialResult.data.participantIndex
-    : null;
+  return null;
 }
 
 /**
@@ -755,10 +765,10 @@ export function hasParticipantEnrichment(metadata: unknown): boolean {
  * Used to validate the enriched metadata result
  */
 const ParticipantEnrichmentSchema = z.object({
+  model: z.string().min(1),
   participantId: z.string().min(1),
   participantIndex: z.number().int().nonnegative(),
   participantRole: z.string().nullable().optional(),
-  model: z.string().min(1),
 }).strict();
 
 /**
@@ -785,10 +795,10 @@ export function enrichMessageWithParticipant(
 ): DbMessageMetadata {
   // Validate participant input first
   const enrichmentResult = ParticipantEnrichmentSchema.safeParse({
+    model: participant.modelId,
     participantId: participant.id,
     participantIndex: participant.index,
     participantRole: participant.role,
-    model: participant.modelId,
   });
 
   if (!enrichmentResult.success) {

@@ -6,10 +6,9 @@ import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
-import type { SyncAfterCheckoutResponse } from '@/services/api';
-import type { Subscription } from '@/services/api/billing/subscriptions';
-
-type ApiResponse<T> = { success: boolean; data?: T };
+import { getSyncedTierChange, getSyncPurchaseType } from '@/services/api/billing/checkout';
+import { getSubscriptionsFromResponse } from '@/services/api/billing/subscriptions';
+import { getPlanTypeFromUsageStats } from '@/services/api/usage';
 
 export function BillingSuccessClient() {
   const t = useTranslations();
@@ -18,17 +17,14 @@ export function BillingSuccessClient() {
   const subscriptionsQuery = useSubscriptionsQuery();
   const usageStatsQuery = useUsageStatsQuery();
 
-  type SubscriptionsResponse = { items?: Subscription[] };
-  type UsageStatsResponse = { plan?: { type?: string } };
-
-  const subscriptionData = subscriptionsQuery.data as ApiResponse<SubscriptionsResponse> | undefined;
-  const usageStats = usageStatsQuery.data as ApiResponse<UsageStatsResponse> | undefined;
+  // Type-safe extraction using utility functions from service layer
+  const subscriptions = getSubscriptionsFromResponse(subscriptionsQuery.data);
+  const usageStatsPlanType = getPlanTypeFromUsageStats(usageStatsQuery.data);
 
   // Derive active subscription from prefetched data (parent loader already fetched)
   const activeSubscription = useMemo(() => {
-    const items = subscriptionData?.data?.items;
-    return items?.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE) ?? null;
-  }, [subscriptionData]);
+    return subscriptions.find(sub => sub.status === StripeSubscriptionStatuses.ACTIVE) ?? null;
+  }, [subscriptions]);
 
   // Skip sync if already has active subscription (revisit scenario)
   const alreadyActivated = activeSubscription !== null;
@@ -40,10 +36,12 @@ export function BillingSuccessClient() {
 
   // Single useEffect - only fires if sync actually needed
   useEffect(() => {
-    if (alreadyActivated)
+    if (alreadyActivated) {
       return;
-    if (syncMutation.isPending || syncMutation.isSuccess || syncMutation.isError)
+    }
+    if (syncMutation.isPending || syncMutation.isSuccess || syncMutation.isError) {
       return;
+    }
     syncMutation.mutate(undefined);
   }, [alreadyActivated, syncMutation]);
 
@@ -53,9 +51,10 @@ export function BillingSuccessClient() {
     redirectPath: '/chat',
   });
 
-  // Get synced tier from mutation result
-  const mutationData = syncMutation.data as SyncAfterCheckoutResponse | undefined;
-  const syncedTier = mutationData?.data?.tierChange?.newTier;
+  // Get synced tier from mutation result using type-safe accessor
+  const tierChange = getSyncedTierChange(syncMutation.data);
+  const syncedTier = tierChange?.newTier;
+  const syncPurchaseType = getSyncPurchaseType(syncMutation.data);
 
   if (isLoading) {
     return (
@@ -84,7 +83,7 @@ export function BillingSuccessClient() {
   }
 
   // No purchase found (sync returned NONE and no existing subscription)
-  if (mutationData?.data?.purchaseType === PurchaseTypes.NONE && !alreadyActivated) {
+  if (syncPurchaseType === PurchaseTypes.NONE && !alreadyActivated) {
     return (
       <StatusPage
         variant={StatusVariants.ERROR}
@@ -102,7 +101,7 @@ export function BillingSuccessClient() {
 
   // Determine if user is on a paid plan - check multiple sources for resilience
   const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE)
-    || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID)
+    || (syncedTier === undefined && usageStatsPlanType === PlanTypes.PAID)
     || alreadyActivated;
   const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
 
@@ -111,8 +110,8 @@ export function BillingSuccessClient() {
 
   const activeUntilDate = activeSubscription?.currentPeriodEnd
     ? new Date(activeSubscription.currentPeriodEnd).toLocaleDateString('en-US', {
-        month: 'long',
         day: 'numeric',
+        month: 'long',
         year: 'numeric',
       })
     : null;

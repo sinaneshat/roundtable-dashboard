@@ -20,7 +20,7 @@ type MarkdownContentProps = {
   components?: Components;
 };
 
-function MarkdownContentComponent({ content, className, components }: MarkdownContentProps) {
+function MarkdownContentComponent({ className, components, content }: MarkdownContentProps) {
   return (
     <div className={cn('min-w-0', className)}>
       <ReactMarkdown components={components ?? streamdownComponents}>

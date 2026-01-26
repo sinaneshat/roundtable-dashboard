@@ -42,14 +42,14 @@ import { FileValidationResultSchema, useFileValidation } from './use-file-valida
  * Upload progress schema
  */
 export const UploadProgressSchema = z.object({
-  /** Bytes uploaded */
-  loaded: z.number(),
-  /** Total bytes */
-  total: z.number(),
-  /** Progress percentage (0-100) */
-  percent: z.number().min(0).max(100),
   /** Current part number (multipart only) */
   currentPart: z.number().optional(),
+  /** Bytes uploaded */
+  loaded: z.number(),
+  /** Progress percentage (0-100) */
+  percent: z.number().min(0).max(100),
+  /** Total bytes */
+  total: z.number(),
   /** Total parts (multipart only) */
   totalParts: z.number().optional(),
 });
@@ -58,32 +58,32 @@ export const UploadProgressSchema = z.object({
  * Upload item schema
  */
 export const UploadItemSchema = z.object({
-  /** Unique ID for this upload */
-  id: z.string(),
+  /** Completed at timestamp */
+  completedAt: z.date().optional(),
+  /** Created at timestamp */
+  createdAt: z.date(),
+  /** Error message if failed */
+  error: z.string().optional(),
   /** Original file */
   file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
-  /** Current status */
-  status: UploadStatusSchema,
-  /** Upload progress */
-  progress: UploadProgressSchema,
-  /** Validation result */
-  validation: FileValidationResultSchema.optional(),
+  /** Unique ID for this upload */
+  id: z.string(),
+  /** Multipart upload ID (for multipart uploads) */
+  multipartUploadId: z.string().optional(),
   /** Preview data */
   preview: FilePreviewSchema.optional(),
+  /** Upload progress */
+  progress: UploadProgressSchema,
+  /** Current status */
+  status: UploadStatusSchema,
   /** Upload strategy being used */
   strategy: UploadStrategySchema,
   /** Thread ID to associate with (optional) */
   threadId: z.string().optional(),
   /** Upload ID from backend (after creation) */
   uploadId: z.string().optional(),
-  /** Multipart upload ID (for multipart uploads) */
-  multipartUploadId: z.string().optional(),
-  /** Error message if failed */
-  error: z.string().optional(),
-  /** Created at timestamp */
-  createdAt: z.date(),
-  /** Completed at timestamp */
-  completedAt: z.date().optional(),
+  /** Validation result */
+  validation: FileValidationResultSchema.optional(),
 });
 
 // ============================================================================
@@ -94,34 +94,34 @@ export type UploadProgress = z.infer<typeof UploadProgressSchema>;
 export type UploadItem = z.infer<typeof UploadItemSchema>;
 
 export const UseFileUploadOptionsSchema = z.object({
-  /** Thread ID to associate uploads with */
-  threadId: z.string().optional(),
   /** Auto-start upload after file selection */
   autoUpload: z.boolean().optional(),
   /** Max concurrent uploads */
   maxConcurrent: z.number().optional(),
   /** Max retries per upload */
   maxRetries: z.number().optional(),
+  /** Thread ID to associate uploads with */
+  threadId: z.string().optional(),
 });
 
 /**
  * Upload state schema
  */
 const _UploadStateSchema = z.object({
-  /** Total items count */
-  total: z.number().int().nonnegative(),
-  /** Pending items count */
-  pending: z.number().int().nonnegative(),
-  /** Uploading items count */
-  uploading: z.number().int().nonnegative(),
   /** Completed items count */
   completed: z.number().int().nonnegative(),
   /** Failed items count */
   failed: z.number().int().nonnegative(),
-  /** Overall progress (0-100) */
-  overallProgress: z.number().min(0).max(100),
   /** Whether any upload is in progress */
   isUploading: z.boolean(),
+  /** Overall progress (0-100) */
+  overallProgress: z.number().min(0).max(100),
+  /** Pending items count */
+  pending: z.number().int().nonnegative(),
+  /** Total items count */
+  total: z.number().int().nonnegative(),
+  /** Uploading items count */
+  uploading: z.number().int().nonnegative(),
 });
 
 /**
@@ -178,7 +178,7 @@ function generateUploadId(): string {
 }
 
 function createInitialProgress(): UploadProgress {
-  return { loaded: 0, total: 0, percent: 0 };
+  return { loaded: 0, percent: 0, total: 0 };
 }
 
 // ============================================================================
@@ -219,13 +219,13 @@ function createInitialProgress(): UploadProgress {
  */
 export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUploadReturn {
   const {
-    threadId,
     autoUpload = false,
     maxConcurrent = 3,
     maxRetries = 3,
+    onAllComplete,
     onComplete,
     onError,
-    onAllComplete,
+    threadId,
   } = options;
 
   // State
@@ -239,7 +239,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
   // Hooks
   const validation = useFileValidation();
-  const { previews, addFiles: addPreviews, removePreview, clearPreviews } = useFilePreview();
+  const { addFiles: addPreviews, clearPreviews, previews, removePreview } = useFilePreview();
 
   // Mutations
   const uploadSingle = useSecureUploadMutation();
@@ -262,8 +262,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       abortControllersRef.current.set(item.id, abortController);
 
       updateItem(item.id, {
+        progress: { loaded: 0, percent: 0, total: item.file.size },
         status: UploadStatuses.UPLOADING,
-        progress: { loaded: 0, total: item.file.size, percent: 0 },
       });
 
       try {
@@ -275,10 +275,10 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
         if (result.success && result.data) {
           updateItem(item.id, {
+            completedAt: new Date(),
+            progress: { loaded: item.file.size, percent: 100, total: item.file.size },
             status: UploadStatuses.COMPLETED,
             uploadId: result.data.id,
-            progress: { loaded: item.file.size, total: item.file.size, percent: 100 },
-            completedAt: new Date(),
           });
 
           const updatedItem = itemsRef.current.find(i => i.id === item.id);
@@ -290,11 +290,12 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         }
       } catch (error) {
         // Handle abort gracefully - user cancelled, not an error
-        if (error instanceof Error && error.name === 'AbortError')
+        if (error instanceof Error && error.name === 'AbortError') {
           return;
+        }
         console.error('[File Upload] Single upload failed:', error);
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-        updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
+        updateItem(item.id, { error: errorMessage, status: UploadStatuses.FAILED });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
       } finally {
@@ -315,14 +316,14 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
       abortControllersRef.current.set(item.id, abortController);
 
       updateItem(item.id, {
-        status: UploadStatuses.UPLOADING,
         progress: {
-          loaded: 0,
-          total: file.size,
-          percent: 0,
           currentPart: 0,
+          loaded: 0,
+          percent: 0,
+          total: file.size,
           totalParts,
         },
+        status: UploadStatuses.UPLOADING,
       });
 
       try {
@@ -334,8 +335,8 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         const createResult = await createMultipart.mutateAsync({
           json: {
             filename: file.name,
-            mimeType: file.type,
             fileSize: file.size,
+            mimeType: file.type,
             threadId: item.threadId,
           },
         });
@@ -344,7 +345,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           throw new Error('Failed to create multipart upload');
         }
 
-        const { uploadId: multipartId, attachmentId: dbUploadId } = createResult.data;
+        const { attachmentId: dbUploadId, uploadId: multipartId } = createResult.data;
         updateItem(item.id, { multipartUploadId: multipartId, uploadId: dbUploadId });
 
         const parts: { partNumber: number; etag: string }[] = [];
@@ -366,12 +367,12 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           const partData = file.slice(start, end);
 
           const partResult = await uploadPart.mutateAsync({
+            body: partData,
             param: { id: dbUploadId },
             query: {
-              uploadId: multipartId,
               partNumber: partNumber.toString(),
+              uploadId: multipartId,
             },
-            body: partData,
             signal: abortController.signal,
           });
 
@@ -380,25 +381,25 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           }
 
           parts.push({
-            partNumber: partResult.data.partNumber,
             etag: partResult.data.etag,
+            partNumber: partResult.data.partNumber,
           });
 
           uploadedBytes += end - start;
           updateItem(item.id, {
             progress: {
-              loaded: uploadedBytes,
-              total: file.size,
-              percent: Math.round((uploadedBytes / file.size) * 100),
               currentPart: partNumber,
+              loaded: uploadedBytes,
+              percent: Math.round((uploadedBytes / file.size) * 100),
+              total: file.size,
               totalParts,
             },
           });
         }
 
         const completeResult = await completeMultipart.mutateAsync({
-          param: { id: dbUploadId },
           json: { parts },
+          param: { id: dbUploadId },
         });
 
         if (!completeResult.success) {
@@ -406,15 +407,15 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         }
 
         updateItem(item.id, {
-          status: UploadStatuses.COMPLETED,
+          completedAt: new Date(),
           progress: {
-            loaded: file.size,
-            total: file.size,
-            percent: 100,
             currentPart: totalParts,
+            loaded: file.size,
+            percent: 100,
+            total: file.size,
             totalParts,
           },
-          completedAt: new Date(),
+          status: UploadStatuses.COMPLETED,
         });
 
         const updatedItem = itemsRef.current.find(i => i.id === item.id);
@@ -453,7 +454,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
           }
         }
 
-        updateItem(item.id, { status: UploadStatuses.FAILED, error: errorMessage });
+        updateItem(item.id, { error: errorMessage, status: UploadStatuses.FAILED });
         onError?.(item, error instanceof Error ? error : new Error(errorMessage));
         throw error;
       } finally {
@@ -466,11 +467,13 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const startUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
-      if (!item || item.status !== UploadStatuses.PENDING)
+      if (!item || item.status !== UploadStatuses.PENDING) {
         return;
+      }
 
-      if (activeUploadsRef.current.size >= maxConcurrent)
+      if (activeUploadsRef.current.size >= maxConcurrent) {
         return;
+      }
 
       activeUploadsRef.current.add(id);
 
@@ -513,8 +516,9 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const cancelUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
-      if (!item)
+      if (!item) {
         return;
+      }
 
       // Abort the in-flight HTTP request immediately
       const abortController = abortControllersRef.current.get(id);
@@ -584,8 +588,9 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   const retryUpload = useCallback(
     async (id: string): Promise<void> => {
       const item = itemsRef.current.find(i => i.id === id);
-      if (!item || item.status !== UploadStatuses.FAILED)
+      if (!item || item.status !== UploadStatuses.FAILED) {
         return;
+      }
 
       const retryCount = retryCountRef.current.get(id) ?? 0;
       if (retryCount >= maxRetries) {
@@ -594,9 +599,9 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
       retryCountRef.current.set(id, retryCount + 1);
       updateItem(id, {
-        status: UploadStatuses.PENDING,
         error: undefined,
         progress: createInitialProgress(),
+        status: UploadStatuses.PENDING,
       });
 
       await startUpload(id);
@@ -614,28 +619,28 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
 
         if (!validationResult.valid) {
           newItems.push({
-            id,
+            createdAt: new Date(),
+            error: validationResult.error?.message,
             file,
-            status: UploadStatuses.FAILED,
+            id,
             progress: createInitialProgress(),
-            validation: validationResult,
+            status: UploadStatuses.FAILED,
             strategy: UploadStrategies.SINGLE,
             threadId,
-            error: validationResult.error?.message,
-            createdAt: new Date(),
+            validation: validationResult,
           });
           continue;
         }
 
         newItems.push({
-          id,
+          createdAt: new Date(),
           file,
+          id,
+          progress: { loaded: 0, percent: 0, total: file.size },
           status: UploadStatuses.PENDING,
-          progress: { loaded: 0, total: file.size, percent: 0 },
-          validation: validationResult,
           strategy: validationResult.uploadStrategy,
           threadId,
-          createdAt: new Date(),
+          validation: validationResult,
         });
       }
 
@@ -659,30 +664,30 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
   );
 
   const state = {
-    total: items.length,
-    pending: items.filter(i => i.status === UploadStatuses.PENDING).length,
-    uploading: items.filter(i => i.status === UploadStatuses.UPLOADING).length,
     completed: items.filter(i => i.status === UploadStatuses.COMPLETED).length,
     failed: items.filter(i => i.status === UploadStatuses.FAILED).length,
+    isUploading: items.some(i => i.status === UploadStatuses.UPLOADING || i.status === UploadStatuses.PENDING),
     overallProgress:
       items.length > 0
         ? Math.round(
             items.reduce((sum, item) => sum + item.progress.percent, 0) / items.length,
           )
         : 0,
-    isUploading: items.some(i => i.status === UploadStatuses.UPLOADING || i.status === UploadStatuses.PENDING),
+    pending: items.filter(i => i.status === UploadStatuses.PENDING).length,
+    total: items.length,
+    uploading: items.filter(i => i.status === UploadStatuses.UPLOADING).length,
   };
 
   return {
+    addFiles,
+    cancelUpload,
+    clearAll,
     items,
     previews,
-    addFiles,
-    startUpload,
-    startAllUploads,
-    cancelUpload,
     removeItem,
-    clearAll,
     retryUpload,
+    startAllUploads,
+    startUpload,
     state,
     validation,
   };
@@ -714,27 +719,27 @@ export type UseSingleFileUploadOptions = z.infer<typeof UseSingleFileUploadOptio
 
 /**
  * Return type schema for useSingleFileUpload hook
+ * Includes both state and function members
  */
 const _UseSingleFileUploadReturnSchema = z.object({
-  /** Current upload progress */
-  progress: UploadProgressSchema,
-  /** Current status */
-  status: UploadStatusSchema,
+  /** Cancel current upload */
+  cancel: z.custom<() => void>(),
   /** Error message */
   error: z.string().optional(),
+  /** Current upload progress */
+  progress: UploadProgressSchema,
+  /** Reset state */
+  reset: z.custom<() => void>(),
+  /** Current status */
+  status: UploadStatusSchema,
+  /** Upload a single file */
+  upload: z.custom<(file: File) => Promise<string | null>>(),
 });
 
 /**
- * Return type for useSingleFileUpload hook - inferred from schema + functions
+ * Return type for useSingleFileUpload hook - inferred from schema
  */
-export type UseSingleFileUploadReturn = z.infer<typeof _UseSingleFileUploadReturnSchema> & {
-  /** Upload a single file */
-  upload: (file: File) => Promise<string | null>;
-  /** Reset state */
-  reset: () => void;
-  /** Cancel current upload */
-  cancel: () => void;
-};
+export type UseSingleFileUploadReturn = z.infer<typeof _UseSingleFileUploadReturnSchema>;
 
 /**
  * Simplified hook for single file upload
@@ -752,7 +757,7 @@ export type UseSingleFileUploadReturn = z.infer<typeof _UseSingleFileUploadRetur
  * };
  */
 export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): UseSingleFileUploadReturn {
-  const { threadId: _threadId, onComplete, onError } = options;
+  const { onComplete, onError, threadId: _threadId } = options;
 
   const [progress, setProgress] = useState<UploadProgress>(() => createInitialProgress());
   const [status, setStatus] = useState<UploadStatus>(UploadStatuses.PENDING);
@@ -792,7 +797,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
       }
 
       setStatus(UploadStatuses.UPLOADING);
-      setProgress({ loaded: 0, total: file.size, percent: 0 });
+      setProgress({ loaded: 0, percent: 0, total: file.size });
       abortControllerRef.current = new AbortController();
 
       try {
@@ -802,7 +807,7 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
         });
 
         if (result.success && result.data) {
-          setProgress({ loaded: file.size, total: file.size, percent: 100 });
+          setProgress({ loaded: file.size, percent: 100, total: file.size });
           setStatus(UploadStatuses.COMPLETED);
           onComplete?.(result.data.id);
           return result.data.id;
@@ -828,11 +833,11 @@ export function useSingleFileUpload(options: UseSingleFileUploadOptions = {}): U
   );
 
   return {
-    upload,
-    progress,
-    status,
-    error,
-    reset,
     cancel,
+    error,
+    progress,
+    reset,
+    status,
+    upload,
   };
 }

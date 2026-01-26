@@ -9,8 +9,8 @@ type BreadcrumbSkeletonProps = {
 } & ComponentProps<'nav'>;
 
 export function BreadcrumbSkeleton({
-  count = 2,
   className,
+  count = 2,
   ...props
 }: BreadcrumbSkeletonProps) {
   const t = useTranslations();

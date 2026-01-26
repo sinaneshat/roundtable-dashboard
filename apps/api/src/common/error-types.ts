@@ -19,12 +19,12 @@ import * as z from 'zod';
  * Covers errors from streamText(), generateText(), and AI SDK operations
  */
 export const AISdkErrorSchema = z.object({
-  name: z.string().optional(),
-  message: z.string(),
-  statusCode: z.number().optional(),
-  responseBody: z.string().optional(),
   cause: z.unknown().optional(),
+  message: z.string(),
+  name: z.string().optional(),
+  responseBody: z.string().optional(),
   stack: z.string().optional(),
+  statusCode: z.number().optional(),
 });
 
 export type AISdkError = z.infer<typeof AISdkErrorSchema>;
@@ -35,13 +35,13 @@ export type AISdkError = z.infer<typeof AISdkErrorSchema>;
  * Internal only - used by extractNetworkError
  */
 const NetworkErrorSchema = z.object({
-  message: z.string(),
-  statusCode: z.number().optional(),
-  status: z.number().optional(),
-  statusText: z.string().optional(),
-  code: z.string().optional(),
   cause: z.unknown().optional(),
+  code: z.string().optional(),
+  message: z.string(),
   stack: z.string().optional(),
+  status: z.number().optional(),
+  statusCode: z.number().optional(),
+  statusText: z.string().optional(),
 });
 
 type NetworkError = z.infer<typeof NetworkErrorSchema>;
@@ -52,10 +52,10 @@ type NetworkError = z.infer<typeof NetworkErrorSchema>;
  * Internal only - used by extractGenericError
  */
 const GenericErrorSchema = z.object({
+  cause: z.unknown().optional(),
   message: z.string(),
   name: z.string().optional(),
   stack: z.string().optional(),
-  cause: z.unknown().optional(),
 });
 
 type GenericError = z.infer<typeof GenericErrorSchema>;
@@ -108,10 +108,10 @@ function extractGenericError(error: unknown): GenericError {
   // Fallback: Convert to string
   if (error instanceof Error) {
     return {
+      cause: 'cause' in error ? error.cause : undefined,
       message: error.message,
       name: error.name,
       stack: error.stack,
-      cause: 'cause' in error ? error.cause : undefined,
     };
   }
 

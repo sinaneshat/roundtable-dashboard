@@ -21,8 +21,8 @@ type DbClient = Awaited<ReturnType<typeof getDbAsync>>;
 
 // Message part schema for round calculation
 const _RoundCalculationPartSchema = z.object({
-  type: z.string(),
   text: z.string().optional(),
+  type: z.string(),
 }).strict();
 
 // Message metadata schema for round calculation
@@ -33,9 +33,9 @@ const _RoundCalculationMetadataSchema = z.object({
 
 // Message schema for round calculation - subset of full message
 const _RoundCalculationMessageSchema = z.object({
-  role: z.string().optional(),
   metadata: _RoundCalculationMetadataSchema.optional(),
   parts: z.array(_RoundCalculationPartSchema).optional(),
+  role: z.string().optional(),
 }).strict();
 
 type RoundCalculationMessage = z.infer<typeof _RoundCalculationMessageSchema>;
@@ -51,9 +51,9 @@ type CalculateRoundNumberParams = {
 
 // Result schema for round number calculation
 const _RoundNumberResultSchema = z.object({
-  roundNumber: z.number(),
   isRegeneration: z.boolean(),
   isTriggerMessage: z.boolean(),
+  roundNumber: z.number(),
 }).strict();
 
 type RoundNumberResult = z.infer<typeof _RoundNumberResultSchema>;
@@ -61,13 +61,13 @@ type RoundNumberResult = z.infer<typeof _RoundNumberResultSchema>;
 export async function calculateRoundNumber(
   params: CalculateRoundNumberParams,
 ): Promise<RoundNumberResult> {
-  const { threadId, participantIndex, message, regenerateRound, db } = params;
+  const { db, message, participantIndex, regenerateRound, threadId } = params;
 
   if (regenerateRound && participantIndex === 0) {
     return {
-      roundNumber: regenerateRound,
       isRegeneration: true,
       isTriggerMessage: false,
+      roundNumber: regenerateRound,
     };
   }
 
@@ -77,9 +77,9 @@ export async function calculateRoundNumber(
     const frontendRoundNumber = metadata?.roundNumber;
     if (typeof frontendRoundNumber === 'number' && frontendRoundNumber >= 0) {
       return {
-        roundNumber: frontendRoundNumber,
         isRegeneration: false,
         isTriggerMessage: isParticipantTrigger,
+        roundNumber: frontendRoundNumber,
       };
     }
 
@@ -90,39 +90,39 @@ export async function calculateRoundNumber(
       .trim();
 
     const existingUserMessages = await db.query.chatMessage.findMany({
+      columns: { roundNumber: true },
+      limit: 1,
+      orderBy: desc(tables.chatMessage.roundNumber),
       where: and(
         eq(tables.chatMessage.threadId, threadId),
         eq(tables.chatMessage.role, MessageRoles.USER),
       ),
-      columns: { roundNumber: true },
-      orderBy: desc(tables.chatMessage.roundNumber),
-      limit: 1,
     });
 
     const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
 
     if ((isParticipantTrigger || textContent.length === 0) && lastRoundNumber >= DEFAULT_ROUND_NUMBER) {
       return {
-        roundNumber: lastRoundNumber,
         isRegeneration: false,
         isTriggerMessage: true,
+        roundNumber: lastRoundNumber,
       };
     }
 
     return {
-      roundNumber: calculateNextRound(lastRoundNumber),
       isRegeneration: false,
       isTriggerMessage: false,
+      roundNumber: calculateNextRound(lastRoundNumber),
     };
   }
 
   const lastUserMessage = await db.query.chatMessage.findFirst({
+    columns: { createdAt: true, roundNumber: true },
+    orderBy: desc(tables.chatMessage.createdAt),
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.role, MessageRoles.USER),
     ),
-    columns: { roundNumber: true, createdAt: true },
-    orderBy: desc(tables.chatMessage.createdAt),
   });
 
   if (!lastUserMessage) {
@@ -140,13 +140,13 @@ export async function calculateRoundNumber(
   const expectedRoundNumber = lastUserMessage.roundNumber;
 
   const assistantInRound = await db.query.chatMessage.findFirst({
+    columns: { createdAt: true, roundNumber: true },
+    orderBy: desc(tables.chatMessage.createdAt),
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
       eq(tables.chatMessage.roundNumber, expectedRoundNumber),
     ),
-    columns: { roundNumber: true, createdAt: true },
-    orderBy: desc(tables.chatMessage.createdAt),
   });
 
   const roundNumber = assistantInRound
@@ -154,9 +154,9 @@ export async function calculateRoundNumber(
     : expectedRoundNumber;
 
   return {
-    roundNumber,
     isRegeneration: false,
     isTriggerMessage: false,
+    roundNumber,
   };
 }
 
@@ -171,13 +171,13 @@ export async function getNextRoundForChangelog(
 ): Promise<number> {
   const existingUserMessages = await db.query.chatMessage
     .findMany({
+      columns: { roundNumber: true },
+      limit: 1,
+      orderBy: desc(tables.chatMessage.roundNumber),
       where: and(
         eq(tables.chatMessage.threadId, threadId),
         eq(tables.chatMessage.role, MessageRoles.USER),
       ),
-      columns: { roundNumber: true },
-      orderBy: desc(tables.chatMessage.roundNumber),
-      limit: 1,
     });
 
   const lastRoundNumber = existingUserMessages[0]?.roundNumber ?? NO_ROUND_SENTINEL;
@@ -191,9 +191,9 @@ export async function validateRegenerateRound(
 ): Promise<void> {
   const maxRound = await db.query.chatMessage
     .findFirst({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: desc(tables.chatMessage.roundNumber),
       columns: { roundNumber: true },
+      orderBy: desc(tables.chatMessage.roundNumber),
+      where: eq(tables.chatMessage.threadId, threadId),
     });
 
   const maxRoundNumber = maxRound?.roundNumber ?? DEFAULT_ROUND_NUMBER;

@@ -15,14 +15,15 @@ type JobDeleteDialogProps = {
   job: AutomatedJob | null;
 };
 
-export function JobDeleteDialog({ open, onOpenChange, job }: JobDeleteDialogProps) {
+export function JobDeleteDialog({ job, onOpenChange, open }: JobDeleteDialogProps) {
   const t = useTranslations();
   const deleteMutation = useDeleteJobMutation();
   const [deleteThread, setDeleteThread] = useState(false);
 
   const handleConfirm = () => {
-    if (!job)
+    if (!job) {
       return;
+    }
 
     deleteMutation.mutate(
       {
@@ -30,13 +31,13 @@ export function JobDeleteDialog({ open, onOpenChange, job }: JobDeleteDialogProp
         query: { deleteThread: deleteThread ? 'true' : 'false' },
       },
       {
+        onError: () => {
+          toastManager.error(t('admin.jobs.deleteError'));
+        },
         onSuccess: () => {
           toastManager.success(t('admin.jobs.deleted'));
           onOpenChange(false);
           setDeleteThread(false);
-        },
-        onError: () => {
-          toastManager.error(t('admin.jobs.deleteError'));
         },
       },
     );

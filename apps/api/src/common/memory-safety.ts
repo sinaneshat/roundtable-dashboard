@@ -51,22 +51,22 @@ export const MAX_SINGLE_ALLOCATION = 10 * 1024 * 1024;
 // ============================================================================
 
 export const MemoryBudgetConfigSchema = z.object({
-  /** Total budget in bytes (~90MB safe budget) */
-  totalBudget: z.number().int().positive().default(SAFE_REQUEST_MEMORY_BUDGET),
-  /** Maximum messages to load */
-  maxMessages: z.number().int().positive().default(75),
-  /** Maximum attachments to process */
-  maxAttachments: z.number().int().positive().default(10),
   /** Maximum attachment content size per file (10MB - matches MAX_BASE64_FILE_SIZE) */
   maxAttachmentContentSize: z.number().int().positive().default(10 * 1024 * 1024), // 10MB
-  /** Maximum total attachment content (20MB for multiple files) */
-  maxTotalAttachmentContent: z.number().int().positive().default(20 * 1024 * 1024), // 20MB
-  /** Maximum system prompt size */
-  maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
-  /** Maximum RAG results */
-  maxRagResults: z.number().int().positive().default(3),
+  /** Maximum attachments to process */
+  maxAttachments: z.number().int().positive().default(10),
   /** Maximum citation sources */
   maxCitationSources: z.number().int().positive().default(15),
+  /** Maximum messages to load */
+  maxMessages: z.number().int().positive().default(75),
+  /** Maximum RAG results */
+  maxRagResults: z.number().int().positive().default(3),
+  /** Maximum system prompt size */
+  maxSystemPromptSize: z.number().int().positive().default(100 * 1024), // 100KB
+  /** Maximum total attachment content (20MB for multiple files) */
+  maxTotalAttachmentContent: z.number().int().positive().default(20 * 1024 * 1024), // 20MB
+  /** Total budget in bytes (~90MB safe budget) */
+  totalBudget: z.number().int().positive().default(SAFE_REQUEST_MEMORY_BUDGET),
 });
 
 export type MemoryBudgetConfig = z.infer<typeof MemoryBudgetConfigSchema>;
@@ -78,7 +78,7 @@ export type MemoryBudgetConfig = z.infer<typeof MemoryBudgetConfigSchema>;
 export class MemoryBudgetTracker {
   private allocated = 0;
   private readonly config: MemoryBudgetConfig;
-  private readonly allocations: Map<string, number> = new Map();
+  private readonly allocations = new Map<string, number>();
 
   constructor(config?: Partial<MemoryBudgetConfig>) {
     this.config = MemoryBudgetConfigSchema.parse(config ?? {});
@@ -148,10 +148,10 @@ export class MemoryBudgetTracker {
    */
   getSummary(): { total: number; remaining: number; percentage: number; allocations: Record<string, number> } {
     return {
-      total: this.allocated,
-      remaining: this.getRemainingBudget(),
-      percentage: this.getUsagePercentage(),
       allocations: Object.fromEntries(this.allocations),
+      percentage: this.getUsagePercentage(),
+      remaining: this.getRemainingBudget(),
+      total: this.allocated,
     };
   }
 
@@ -292,9 +292,9 @@ export function calculateDynamicLimits(complexity: RequestComplexity): MemoryBud
 
   return {
     ...base,
-    maxMessages,
-    maxAttachments,
     maxAttachmentContentSize,
+    maxAttachments,
+    maxMessages,
     maxRagResults,
   };
 }
@@ -382,32 +382,32 @@ export function createMemoryError(operation: string, tracker: MemoryBudgetTracke
 // ============================================================================
 
 export const MemorySafety = {
-  // Constants
-  WORKER_MEMORY_LIMIT,
-  SAFE_REQUEST_MEMORY_BUDGET,
-  CRITICAL_MEMORY_THRESHOLD,
-  MAX_SINGLE_ALLOCATION,
-
-  // Classes
-  MemoryBudgetTracker,
-  MemoryBudgetExceededError,
-
-  // Estimation
-  estimateStringSize,
-  estimateStringArraySize,
-  estimateObjectSize,
-  estimateBinarySize,
-  estimateBase64Size,
-  estimateMessageSize,
-  estimateFileContentMemory,
-
   // Dynamic scaling
   calculateDynamicLimits,
-
-  // Safe operations
-  truncateToMemoryBudget,
-  safeSlice,
-
   // Errors
   createMemoryError,
+  CRITICAL_MEMORY_THRESHOLD,
+  estimateBase64Size,
+
+  estimateBinarySize,
+  estimateFileContentMemory,
+
+  estimateMessageSize,
+  estimateObjectSize,
+  estimateStringArraySize,
+  // Estimation
+  estimateStringSize,
+  MAX_SINGLE_ALLOCATION,
+  MemoryBudgetExceededError,
+  // Classes
+  MemoryBudgetTracker,
+
+  SAFE_REQUEST_MEMORY_BUDGET,
+
+  safeSlice,
+  // Safe operations
+  truncateToMemoryBudget,
+
+  // Constants
+  WORKER_MEMORY_LIMIT,
 };

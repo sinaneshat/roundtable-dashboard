@@ -27,7 +27,7 @@ import { createChatStore } from '../store';
 // Mock Utilities - Track Query Behavior
 // ============================================================================
 
-type QueryKey = ReadonlyArray<string | number | Record<string, unknown>>;
+type QueryKey = readonly (string | number | Record<string, unknown>)[];
 
 type QueryFetchRecord = {
   queryKey: QueryKey;
@@ -52,17 +52,13 @@ function createQueryBehaviorTracker(): QueryBehaviorTracker {
   const fetches: QueryFetchRecord[] = [];
 
   return {
-    fetches,
     cacheHits: fetches.filter(f => f.cacheHit),
     cacheMisses: fetches.filter(f => !f.cacheHit),
-
-    recordFetch(queryKey: QueryKey, cacheHit: boolean, staleTime?: number) {
-      fetches.push({ queryKey, timestamp: Date.now(), cacheHit, staleTime });
+    clear() {
+      fetches.length = 0;
     },
 
-    getFetchCount(keyMatcher: string) {
-      return fetches.filter(f => JSON.stringify(f.queryKey).includes(keyMatcher)).length;
-    },
+    fetches,
 
     getCacheHitCount(keyMatcher: string) {
       return fetches.filter(f => f.cacheHit && JSON.stringify(f.queryKey).includes(keyMatcher)).length;
@@ -72,13 +68,17 @@ function createQueryBehaviorTracker(): QueryBehaviorTracker {
       return fetches.filter(f => !f.cacheHit && JSON.stringify(f.queryKey).includes(keyMatcher)).length;
     },
 
+    getFetchCount(keyMatcher: string) {
+      return fetches.filter(f => JSON.stringify(f.queryKey).includes(keyMatcher)).length;
+    },
+
     getLastFetch(keyMatcher: string) {
       const matches = fetches.filter(f => JSON.stringify(f.queryKey).includes(keyMatcher));
       return matches[matches.length - 1];
     },
 
-    clear() {
-      fetches.length = 0;
+    recordFetch(queryKey: QueryKey, cacheHit: boolean, staleTime?: number) {
+      fetches.push({ cacheHit, queryKey, staleTime, timestamp: Date.now() });
     },
   };
 }
@@ -95,7 +95,7 @@ describe('thread Detail Fetch - Cache Usage', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -112,13 +112,13 @@ describe('thread Detail Fetch - Cache Usage', () => {
     const threadDetailKey = queryKeys.threads.detail(threadId);
 
     // Initial fetch - cache miss
-    const initialData = { success: true, data: { id: threadId, title: 'Test Thread' } };
+    const initialData = { data: { id: threadId, title: 'Test Thread' }, success: true };
     await queryClient.prefetchQuery({
-      queryKey: threadDetailKey,
       queryFn: async () => {
         tracker.recordFetch(threadDetailKey, false, STALE_TIMES.threadDetail);
         return initialData;
       },
+      queryKey: threadDetailKey,
       staleTime: STALE_TIMES.threadDetail,
     });
 
@@ -149,16 +149,18 @@ describe('thread Detail Fetch - Cache Usage', () => {
 
     // Initial fetch
     await queryClient.prefetchQuery({
-      queryKey: threadDetailKey,
       queryFn: async () => {
         tracker.recordFetch(threadDetailKey, false, testStaleTime);
-        return { success: true, data: { id: threadId } };
+        return { data: { id: threadId }, success: true };
       },
+      queryKey: threadDetailKey,
       staleTime: testStaleTime,
     });
 
     // Wait for staleTime to expire
-    await new Promise(resolve => setTimeout(resolve, testStaleTime + 5));
+    await new Promise((resolve) => {
+      setTimeout(resolve, testStaleTime + 5);
+    });
 
     // Query should now refetch (cache stale)
     const state = queryClient.getQueryState(threadDetailKey);
@@ -169,7 +171,7 @@ describe('thread Detail Fetch - Cache Usage', () => {
     }
 
     // ASSERTIONS
-    expect(isStale).toBe(true); // Data should be stale
+    expect(isStale).toBeTruthy(); // Data should be stale
     expect(tracker.getCacheMissCount('detail')).toBe(2); // Initial + refetch after stale
   });
 
@@ -179,11 +181,11 @@ describe('thread Detail Fetch - Cache Usage', () => {
 
     // Prefetch with normal staleTime
     await queryClient.prefetchQuery({
-      queryKey: threadDetailKey,
       queryFn: async () => {
         tracker.recordFetch(threadDetailKey, false, STALE_TIMES.threadDetail);
-        return { success: true, data: { id: threadId } };
+        return { data: { id: threadId }, success: true };
       },
+      queryKey: threadDetailKey,
       staleTime: STALE_TIMES.threadDetail, // 10 seconds
     });
 
@@ -214,7 +216,7 @@ describe('slug Status Polling - AI Title Detection', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -255,10 +257,10 @@ describe('slug Status Polling - AI Title Detection', () => {
     isAiGeneratedTitle = true;
 
     // Should stop polling
-    expect(refetchInterval()).toBe(false); // Polling stopped
+    expect(refetchInterval()).toBeFalsy(); // Polling stopped
 
     // Verify polling doesn't resume
-    expect(pollingActive).toBe(false);
+    expect(pollingActive).toBeFalsy();
   });
 
   it('should NOT poll continuously - uses conditional refetchInterval', async () => {
@@ -276,8 +278,8 @@ describe('slug Status Polling - AI Title Detection', () => {
 
         // Simulate fetch
         const response = {
-          success: true,
           data: { isAiGeneratedTitle: i >= 2 }, // AI title detected on 3rd poll
+          success: true,
         };
 
         tracker.recordFetch(slugStatusKey, false);
@@ -288,7 +290,9 @@ describe('slug Status Polling - AI Title Detection', () => {
         }
 
         // Wait for polling interval
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise((resolve) => {
+          setTimeout(resolve, 10);
+        });
       }
     };
 
@@ -304,8 +308,8 @@ describe('slug Status Polling - AI Title Detection', () => {
     // Mock document.hidden
     let documentHidden = false;
     Object.defineProperty(document, 'hidden', {
-      get: () => documentHidden,
       configurable: true,
+      get: () => documentHidden,
     });
 
     const refetchInterval = (enabled: boolean, threadId: string | null) => {
@@ -327,7 +331,7 @@ describe('slug Status Polling - AI Title Detection', () => {
 
     // Tab hidden - should NOT poll
     documentHidden = true;
-    expect(refetchInterval(true, 'thread_123')).toBe(false);
+    expect(refetchInterval(true, 'thread_123')).toBeFalsy();
 
     // Tab visible again - resume polling
     documentHidden = false;
@@ -347,7 +351,7 @@ describe('sidebar Invalidation - Thread List Updates', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -365,25 +369,25 @@ describe('sidebar Invalidation - Thread List Updates', () => {
 
     // Initial thread list fetch
     await queryClient.prefetchQuery({
-      queryKey: threadsListKey,
       queryFn: async () => {
         tracker.recordFetch(threadsListKey, false);
         return {
-          success: true,
           data: {
             items: [
               { id: 'thread_123', title: 'Old Title' },
               { id: 'thread_456', title: 'Other Thread' },
             ],
           },
+          success: true,
         };
       },
+      queryKey: threadsListKey,
     });
 
     // Update single thread title via optimistic update (ONE-WAY DATA FLOW)
     queryClient.setQueryData(threadDetailKey, {
-      success: true,
       data: { id: 'thread_123', title: 'New Title' },
+      success: true,
     });
 
     // Check if list was invalidated (it should NOT be)
@@ -392,7 +396,7 @@ describe('sidebar Invalidation - Thread List Updates', () => {
 
     // ASSERTIONS
     expect(tracker.getFetchCount('list')).toBe(1); // Only initial fetch
-    expect(listWasInvalidated).toBe(false); // List NOT invalidated
+    expect(listWasInvalidated).toBeFalsy(); // List NOT invalidated
   });
 
   it('should use optimistic updates for thread mutations, not refetches', async () => {
@@ -401,20 +405,20 @@ describe('sidebar Invalidation - Thread List Updates', () => {
 
     // Prefetch initial list
     await queryClient.prefetchQuery({
-      queryKey: threadsListKey,
       queryFn: async () => {
         tracker.recordFetch(threadsListKey, false);
         return {
-          success: true,
           data: { items: [{ id: 'thread_123', title: 'Existing' }] },
+          success: true,
         };
       },
+      queryKey: threadsListKey,
     });
 
     // Optimistic update - add new thread to cache WITHOUT server fetch
     const currentData = queryClient.getQueryData<{
       success: boolean;
-      data: { items: Array<{ id: string; title: string }> };
+      data: { items: { id: string; title: string }[] };
     }>(threadsListKey);
 
     if (currentData?.success) {
@@ -432,7 +436,7 @@ describe('sidebar Invalidation - Thread List Updates', () => {
     // Verify cache was updated optimistically
     const updatedData = queryClient.getQueryData<{
       success: boolean;
-      data: { items: Array<{ id: string; title: string }> };
+      data: { items: { id: string; title: string }[] };
     }>(threadsListKey);
 
     // ASSERTIONS
@@ -455,7 +459,7 @@ describe('pre-Search Query - Conditional Polling', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -474,28 +478,28 @@ describe('pre-Search Query - Conditional Polling', () => {
 
     // Initial fetch - pre-search COMPLETE
     const completedPreSearch = {
+      data: { results: ['result1'] },
       id: 'ps_1',
       roundNumber: 0,
       status: MessageStatuses.COMPLETE,
-      data: { results: ['result1'] },
     };
 
     await queryClient.prefetchQuery({
-      queryKey: preSearchKey,
       queryFn: async () => {
         tracker.recordFetch(preSearchKey, false);
         return {
-          success: true,
           data: { items: [completedPreSearch] },
+          success: true,
         };
       },
+      queryKey: preSearchKey,
       staleTime: STALE_TIMES.preSearch, // Infinity
     });
 
     // Simulate refetchInterval logic from pre-search.ts
     const data = queryClient.getQueryData<{
       success: boolean;
-      data: { items: Array<{ status: string }> };
+      data: { items: { status: string }[] };
     }>(preSearchKey);
 
     const hasPendingPreSearch = data?.data?.items?.some(
@@ -506,8 +510,8 @@ describe('pre-Search Query - Conditional Polling', () => {
 
     // ASSERTIONS
     expect(tracker.getFetchCount('pre-searches')).toBe(1); // Only initial fetch
-    expect(shouldPoll).toBe(false); // NO polling when complete
-    expect(hasPendingPreSearch).toBe(false);
+    expect(shouldPoll).toBeFalsy(); // NO polling when complete
+    expect(hasPendingPreSearch).toBeFalsy();
   });
 
   it('should poll ONLY when pre-search is PENDING, stop when STREAMING', async () => {
@@ -516,10 +520,10 @@ describe('pre-Search Query - Conditional Polling', () => {
 
     // State 1: Pre-search PENDING - should poll
     const pendingData = {
-      success: true,
       data: {
         items: [{ id: 'ps_1', roundNumber: 0, status: MessageStatuses.PENDING }],
       },
+      success: true,
     };
 
     queryClient.setQueryData(preSearchKey, pendingData);
@@ -533,10 +537,10 @@ describe('pre-Search Query - Conditional Polling', () => {
 
     // State 2: Pre-search STREAMING - should stop polling (SSE handles updates)
     const streamingData = {
-      success: true,
       data: {
         items: [{ id: 'ps_1', roundNumber: 0, status: MessageStatuses.STREAMING }],
       },
+      success: true,
     };
 
     queryClient.setQueryData(preSearchKey, streamingData);
@@ -547,7 +551,7 @@ describe('pre-Search Query - Conditional Polling', () => {
     shouldPoll = hasPending ? POLLING_INTERVALS.preSearchPending : false;
 
     // ASSERTIONS
-    expect(shouldPoll).toBe(false); // Polling stopped
+    expect(shouldPoll).toBeFalsy(); // Polling stopped
     expect(tracker.getFetchCount('pre-searches')).toBe(2); // Initial + poll (stopped before second poll)
   });
 
@@ -570,7 +574,7 @@ describe('moderator Data - ONE-WAY DATA FLOW', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -588,24 +592,24 @@ describe('moderator Data - ONE-WAY DATA FLOW', () => {
 
     // Create messages with moderator
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber }),
+      createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber }),
       createTestAssistantMessage({
-        id: 'p0_r0',
         content: 'Response 1',
-        roundNumber,
+        id: 'p0_r0',
         participantId: 'p1',
         participantIndex: 0,
+        roundNumber,
       }),
       createTestAssistantMessage({
-        id: 'p1_r0',
         content: 'Response 2',
-        roundNumber,
+        id: 'p1_r0',
         participantId: 'p2',
         participantIndex: 1,
+        roundNumber,
       }),
       createTestModeratorMessage({
-        id: 'mod_r0',
         content: 'Summary',
+        id: 'mod_r0',
         roundNumber,
       }),
     ];
@@ -650,8 +654,8 @@ describe('moderator Data - ONE-WAY DATA FLOW', () => {
 
     // Prefetch changelog
     queryClient.setQueryData(changelogKey, {
-      success: true,
       data: { items: [{ roundNumber: 0, type: 'config-change' }] },
+      success: true,
     });
 
     // Simulate moderator completion - should NOT invalidate changelog
@@ -661,7 +665,7 @@ describe('moderator Data - ONE-WAY DATA FLOW', () => {
     const wasInvalidated = changelogState?.isInvalidated ?? false;
 
     // ASSERTIONS
-    expect(wasInvalidated).toBe(false); // Changelog NOT invalidated
+    expect(wasInvalidated).toBeFalsy(); // Changelog NOT invalidated
   });
 });
 
@@ -677,7 +681,7 @@ describe('query Cache Pre-population - Prevent Server Fetches', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -695,8 +699,8 @@ describe('query Cache Pre-population - Prevent Server Fetches', () => {
 
     // Simulate server-side prefetch (prepopulateQueryCache pattern)
     const serverData = {
-      success: true,
       data: { id: threadId, title: 'Prefetched Thread' },
+      success: true,
     };
 
     // Pre-populate cache (server-side hydration)
@@ -750,7 +754,7 @@ describe('navigation Refetch Patterns', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -771,11 +775,11 @@ describe('navigation Refetch Patterns', () => {
 
     // Simulate initial fetch
     await queryClient.prefetchQuery({
-      queryKey: threadDetailKey,
       queryFn: async () => {
         tracker.recordFetch(threadDetailKey, false);
-        return { success: true, data: { id: threadId } };
+        return { data: { id: threadId }, success: true };
       },
+      queryKey: threadDetailKey,
       staleTime: STALE_TIMES.threadDetail,
     });
 
@@ -797,17 +801,17 @@ describe('navigation Refetch Patterns', () => {
   it('should disable automatic refetch behaviors for pre-search', () => {
     // Pre-search query should have all refetch flags disabled
     const preSearchQueryConfig = {
-      refetchOnMount: false,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
       refetchIntervalInBackground: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
     };
 
     // These settings prevent unnecessary refetches
-    expect(preSearchQueryConfig.refetchOnMount).toBe(false);
-    expect(preSearchQueryConfig.refetchOnWindowFocus).toBe(false);
-    expect(preSearchQueryConfig.refetchOnReconnect).toBe(false);
-    expect(preSearchQueryConfig.refetchIntervalInBackground).toBe(false);
+    expect(preSearchQueryConfig.refetchOnMount).toBeFalsy();
+    expect(preSearchQueryConfig.refetchOnWindowFocus).toBeFalsy();
+    expect(preSearchQueryConfig.refetchOnReconnect).toBeFalsy();
+    expect(preSearchQueryConfig.refetchIntervalInBackground).toBeFalsy();
   });
 });
 
@@ -823,7 +827,7 @@ describe('query Deduplication', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -845,15 +849,17 @@ describe('query Deduplication', () => {
     const queryFn = async () => {
       fetchCount++;
       tracker.recordFetch(threadDetailKey, false);
-      await new Promise(resolve => setTimeout(resolve, 10));
-      return { success: true, data: { id: threadId } };
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      return { data: { id: threadId }, success: true };
     };
 
     // Fire 3 simultaneous fetches
     const promises = [
-      queryClient.fetchQuery({ queryKey: threadDetailKey, queryFn, staleTime: STALE_TIMES.threadDetail }),
-      queryClient.fetchQuery({ queryKey: threadDetailKey, queryFn, staleTime: STALE_TIMES.threadDetail }),
-      queryClient.fetchQuery({ queryKey: threadDetailKey, queryFn, staleTime: STALE_TIMES.threadDetail }),
+      queryClient.fetchQuery({ queryFn, queryKey: threadDetailKey, staleTime: STALE_TIMES.threadDetail }),
+      queryClient.fetchQuery({ queryFn, queryKey: threadDetailKey, staleTime: STALE_TIMES.threadDetail }),
+      queryClient.fetchQuery({ queryFn, queryKey: threadDetailKey, staleTime: STALE_TIMES.threadDetail }),
     ];
 
     await Promise.all(promises);
@@ -868,8 +874,8 @@ describe('query Deduplication', () => {
 
     // Initial data
     const initialData = {
-      success: true,
       data: { items: [{ id: 'ps_1', status: MessageStatuses.COMPLETE }] },
+      success: true,
     };
 
     queryClient.setQueryData(preSearchKey, initialData);
@@ -881,7 +887,7 @@ describe('query Deduplication', () => {
     const hasPlaceholder = !!state?.data;
 
     // ASSERTIONS
-    expect(hasPlaceholder).toBe(true); // Previous data available as placeholder
+    expect(hasPlaceholder).toBeTruthy(); // Previous data available as placeholder
   });
 });
 
@@ -897,7 +903,7 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     tracker = createQueryBehaviorTracker();
@@ -917,14 +923,14 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
 
     // Simulate prepopulateQueryCache behavior (same data in both keys)
     const threadData = {
-      success: true,
       data: {
-        thread: { id: threadId, title: 'Test Thread', slug },
-        participants: [],
         messages: [],
-        user: { name: 'Test User', image: null },
+        participants: [],
+        thread: { id: threadId, slug, title: 'Test Thread' },
+        user: { image: null, name: 'Test User' },
       },
       meta: { requestId: 'prefetch', timestamp: new Date().toISOString(), version: 'v1' },
+      success: true,
     };
 
     // Pre-populate both caches (like flow-controller does)
@@ -947,8 +953,8 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
 
     // Pre-populate bySlug cache (like flow-controller does after AI title ready)
     const threadData = {
+      data: { messages: [], participants: [], thread: { id: threadId, slug, title: 'Test Thread' } },
       success: true,
-      data: { thread: { id: threadId, title: 'Test Thread', slug }, participants: [], messages: [] },
     };
     queryClient.setQueryData(bySlugKey, threadData);
 
@@ -986,9 +992,9 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
     // Simulate prepopulateQueryCache with no pre-searches (web search disabled)
     // ✅ FIX: Should always pre-populate, even when empty
     const emptyPreSearchData = {
-      success: true,
       data: { items: [] },
       meta: { requestId: 'prefetch', timestamp: new Date().toISOString(), version: 'v1' },
+      success: true,
     };
 
     queryClient.setQueryData(preSearchKey, emptyPreSearchData);
@@ -997,7 +1003,7 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
     const cachedData = queryClient.getQueryData<typeof emptyPreSearchData>(preSearchKey);
     expect(cachedData).toBeDefined();
     expect(cachedData?.data?.items).toEqual([]);
-    expect(cachedData?.success).toBe(true);
+    expect(cachedData?.success).toBeTruthy();
   });
 
   it('should prevent unnecessary GET /thread/{slug} request on navigation', async () => {
@@ -1007,12 +1013,12 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
 
     // Step 1: Pre-populate cache (flow-controller does this before navigation)
     const threadData = {
-      success: true,
       data: {
-        thread: { id: threadId, title: 'AI Generated Title', slug, isAiGeneratedTitle: true },
+        messages: [{ content: 'Test message', id: 'm1' }],
         participants: [{ id: 'p1', modelId: 'gpt-4' }],
-        messages: [{ id: 'm1', content: 'Test message' }],
+        thread: { id: threadId, isAiGeneratedTitle: true, slug, title: 'AI Generated Title' },
       },
+      success: true,
     };
     queryClient.setQueryData(bySlugKey, threadData);
 
@@ -1036,7 +1042,7 @@ describe('thread Cache Pre-population - bySlug Key Fix', () => {
     // ASSERTIONS
     expect(tracker.getCacheMissCount('slug')).toBe(0); // NO server fetches
     expect(tracker.getCacheHitCount('slug')).toBe(2); // Both loader and component used cache
-    expect(hasData).toBe(true);
+    expect(hasData).toBeTruthy();
   });
 });
 
@@ -1051,7 +1057,7 @@ describe('invalidation Patterns - Targeted, Not Broad', () => {
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -1067,8 +1073,8 @@ describe('invalidation Patterns - Targeted, Not Broad', () => {
     const thread456Key = queryKeys.threads.detail('thread_456');
 
     // Set data for both threads
-    queryClient.setQueryData(thread123Key, { success: true, data: { id: 'thread_123' } });
-    queryClient.setQueryData(thread456Key, { success: true, data: { id: 'thread_456' } });
+    queryClient.setQueryData(thread123Key, { data: { id: 'thread_123' }, success: true });
+    queryClient.setQueryData(thread456Key, { data: { id: 'thread_456' }, success: true });
 
     // Invalidate only thread_123
     await queryClient.invalidateQueries({ queryKey: thread123Key });
@@ -1077,8 +1083,8 @@ describe('invalidation Patterns - Targeted, Not Broad', () => {
     const state456 = queryClient.getQueryState(thread456Key);
 
     // ASSERTIONS
-    expect(state123?.isInvalidated).toBe(true); // thread_123 invalidated
-    expect(state456?.isInvalidated).toBe(false); // thread_456 NOT invalidated
+    expect(state123?.isInvalidated).toBeTruthy(); // thread_123 invalidated
+    expect(state456?.isInvalidated).toBeFalsy(); // thread_456 NOT invalidated
   });
 
   it('should use hierarchical invalidation for related queries', async () => {
@@ -1087,8 +1093,8 @@ describe('invalidation Patterns - Targeted, Not Broad', () => {
     const threadDetail = queryKeys.threads.detail('thread_123');
 
     // Set data
-    queryClient.setQueryData(threadsList, { success: true, data: { items: [] } });
-    queryClient.setQueryData(threadDetail, { success: true, data: { id: 'thread_123' } });
+    queryClient.setQueryData(threadsList, { data: { items: [] }, success: true });
+    queryClient.setQueryData(threadDetail, { data: { id: 'thread_123' }, success: true });
 
     // Invalidate all threads (hierarchical: base -> lists, details)
     await queryClient.invalidateQueries({ queryKey: threadsBase });
@@ -1097,8 +1103,8 @@ describe('invalidation Patterns - Targeted, Not Broad', () => {
     const detailState = queryClient.getQueryState(threadDetail);
 
     // ASSERTIONS
-    expect(listState?.isInvalidated).toBe(true); // Lists invalidated
-    expect(detailState?.isInvalidated).toBe(true); // Detail invalidated
+    expect(listState?.isInvalidated).toBeTruthy(); // Lists invalidated
+    expect(detailState?.isInvalidated).toBeTruthy(); // Detail invalidated
   });
 
   it('should verify usage queries invalidated after chat operations', () => {

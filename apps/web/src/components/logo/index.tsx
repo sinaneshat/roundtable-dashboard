@@ -22,14 +22,14 @@ type Props = {
  * ✅ Enum-based sizing - type-safe, metadata-driven dimensions
  */
 function Logo(props: Props) {
-  const { size = LogoSizes.SM, variant = LogoVariants.ICON, className } = props;
+  const { className, size = LogoSizes.SM, variant = LogoVariants.ICON } = props;
   const t = useTranslations();
 
   // ✅ Get dimensions from metadata (enum-driven, no switch statements)
   const metadata = LogoSizeMetadata[size];
   const logoSize = variant === LogoVariants.ICON
-    ? { width: metadata.width, height: metadata.height }
-    : { width: metadata.widthFull, height: metadata.heightFull };
+    ? { height: metadata.height, width: metadata.width }
+    : { height: metadata.heightFull, width: metadata.widthFull };
 
   // ✅ Single logo source - works universally on light/dark themes
   const logoSrc = BRAND.logos.main;

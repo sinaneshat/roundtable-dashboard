@@ -60,18 +60,18 @@ function createTestStore(initialState?: Partial<ChatStore>) {
  */
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORM,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORM,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -82,25 +82,25 @@ function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'test-thread-123',
-      modelId: 'claude-3-5-sonnet',
-      role: 'Critic',
-      priority: 1,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'claude-3-5-sonnet',
+      priority: 1,
+      role: 'Critic',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -112,12 +112,12 @@ function createMockParticipants(): ChatParticipant[] {
 function createUserMessage(roundNumber: number, text: string, id?: string): UIMessage {
   return {
     id: id || `user-msg-round-${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -131,21 +131,21 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `assistant-msg-round-${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex + 1}`,
-      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
-      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
       finishReason: 'stop',
       hasError: false,
-      isTransient: false,
       isPartialResponse: false,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      isTransient: false,
+      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
+      participantId: `participant-${participantIndex + 1}`,
+      participantIndex,
+      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -215,32 +215,38 @@ describe('form Actions Message Persistence', () => {
       });
 
       expect(optimisticMessage.role).toBe(MessageRoles.USER);
-      expect(optimisticMessage.parts[0]).toEqual({ type: 'text', text: userText });
+      expect(optimisticMessage.parts[0]).toEqual({ text: userText, type: 'text' });
       expect(getRoundNumber(optimisticMessage.metadata)).toBe(nextRound);
-      expect(optimisticMessage.metadata.isOptimistic).toBe(true);
+      expect(optimisticMessage.metadata.isOptimistic).toBeTruthy();
       expect(optimisticMessage.id).toMatch(/^optimistic-user-1-/);
     });
 
     it('should create optimistic message with file parts', () => {
       const fileParts = [
         {
-          type: 'file' as const,
-          url: 'https://example.com/file.pdf',
           filename: 'document.pdf',
           mediaType: 'application/pdf',
+          type: 'file' as const,
           uploadId: 'upload-123',
+          url: 'https://example.com/file.pdf',
         },
       ];
 
       const optimisticMessage = createOptimisticUserMessage({
+        fileParts,
         roundNumber: 1,
         text: 'Analyze this document',
-        fileParts,
       });
 
       expect(optimisticMessage.parts).toHaveLength(2); // File + text
-      expect(optimisticMessage.parts[0]).toEqual(fileParts[0]);
-      expect(optimisticMessage.parts[1]).toEqual({ type: 'text', text: 'Analyze this document' });
+      // toFileUIPart strips uploadId since it's not part of AI SDK's FileUIPart type
+      expect(optimisticMessage.parts[0]).toEqual({
+        filename: 'document.pdf',
+        mediaType: 'application/pdf',
+        type: 'file',
+        url: 'https://example.com/file.pdf',
+      });
+      expect(optimisticMessage.parts[1]).toEqual({ text: 'Analyze this document', type: 'text' });
     });
   });
 
@@ -345,9 +351,10 @@ describe('form Actions Message Persistence', () => {
 
       const replacedMsg = store.getState().messages.find(m => m.id === 'db-id-456');
       expect(replacedMsg).toBeDefined();
-      if (!replacedMsg)
+      if (!replacedMsg) {
         throw new Error('expected replaced message');
-      expect(replacedMsg.parts[0]).toEqual({ type: 'text', text: userText });
+      }
+      expect(replacedMsg.parts[0]).toEqual({ text: userText, type: 'text' });
       expect(getRoundNumber(replacedMsg.metadata)).toBe(1);
     });
   });
@@ -381,13 +388,13 @@ describe('form Actions Message Persistence', () => {
       // Step 3: AI SDK starts streaming (creates participant trigger)
       const participantTrigger: UIMessage = {
         id: 'ai-sdk-trigger-xyz',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up question' }],
         metadata: {
+          isParticipantTrigger: true, // AI SDK marker
           role: MessageRoles.USER,
           roundNumber: 1,
-          isParticipantTrigger: true, // AI SDK marker
         },
+        parts: [{ text: 'Follow-up question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const chatMessages: UIMessage[] = [participantTrigger];
@@ -398,8 +405,9 @@ describe('form Actions Message Persistence', () => {
       // CRITICAL: Original user message MUST be in merged result
       const originalUserMsg = mergedMessages.find(m => m.id === persistedId);
       expect(originalUserMsg).toBeDefined();
-      if (!originalUserMsg)
+      if (!originalUserMsg) {
         throw new Error('expected original user message');
+      }
       expect(originalUserMsg.role).toBe(MessageRoles.USER);
       expect(getRoundNumber(originalUserMsg.metadata)).toBe(1);
       expect(getUserMetadata(originalUserMsg.metadata)?.isParticipantTrigger).toBeFalsy();
@@ -460,13 +468,13 @@ describe('form Actions Message Persistence', () => {
       const storeMessages = store.getState().messages;
       const participantTrigger: UIMessage = {
         id: 'ai-trigger-abc',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: userText }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: nextRound,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: userText, type: 'text' }],
+        role: MessageRoles.USER,
       };
       const chatMessages: UIMessage[] = [participantTrigger];
 
@@ -475,9 +483,10 @@ describe('form Actions Message Persistence', () => {
       // CRITICAL: User message MUST still be present after sync
       const originalMsg = mergedMessages.find(m => m.id === persistedId);
       expect(originalMsg).toBeDefined();
-      if (!originalMsg)
+      if (!originalMsg) {
         throw new Error('expected original message');
-      expect(originalMsg.parts[0]).toEqual({ type: 'text', text: userText });
+      }
+      expect(originalMsg.parts[0]).toEqual({ text: userText, type: 'text' });
 
       // ============ PHASE 4: Deduplication ============
       const finalMessages = mergedMessages.filter((m) => {
@@ -545,8 +554,9 @@ describe('form Actions Message Persistence', () => {
       );
 
       expect(userMsg).toBeDefined();
-      if (!userMsg)
+      if (!userMsg) {
         throw new Error('expected user message');
+      }
       expect(getRoundNumber(userMsg.metadata)).toBe(state.streamingRoundNumber);
     });
   });
@@ -585,7 +595,7 @@ describe('form Actions Message Persistence', () => {
       const state = store.getState();
       expect(state.streamingRoundNumber).toBe(1);
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // User message should still be in store
       const round1Messages = state.messages.filter(
@@ -628,13 +638,13 @@ describe('form Actions Message Persistence', () => {
       const chatMessages: UIMessage[] = [
         {
           id: 'trigger-r2',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Second follow-up' }],
           metadata: {
+            isParticipantTrigger: true,
             role: MessageRoles.USER,
             roundNumber: 2,
-            isParticipantTrigger: true,
           },
+          parts: [{ text: 'Second follow-up', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -730,7 +740,7 @@ describe('form Actions Message Persistence', () => {
       const state = store.getState();
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
       expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(0);
     });
   });

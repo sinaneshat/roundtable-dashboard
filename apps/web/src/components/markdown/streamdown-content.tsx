@@ -28,10 +28,10 @@ const LazyMermaid = lazy(() => import('./lazy-mermaid'));
  */
 const MermaidCodeElementSchema = z.object({
   props: z.object({
+    children: z.string(),
     className: z.string().refine(c => c.includes('language-mermaid'), {
       message: 'Must be a mermaid language code block',
     }),
-    children: z.string(),
   }),
 });
 
@@ -48,8 +48,9 @@ function hasMermaidBlocks(content: string): boolean {
  */
 function extractMermaidChart(children: unknown): string | null {
   const result = MermaidCodeElementSchema.safeParse(children);
-  if (!result.success)
+  if (!result.success) {
     return null;
+  }
   return result.data.props.children;
 }
 

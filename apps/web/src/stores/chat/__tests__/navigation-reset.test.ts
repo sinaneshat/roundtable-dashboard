@@ -38,8 +38,9 @@ function shouldResetOnNavigation(
  * Uses invalidationPatterns.leaveThread for consistency
  */
 function getQueryKeysToInvalidate(threadId: string | null) {
-  if (!threadId)
+  if (!threadId) {
     return [];
+  }
 
   return invalidationPatterns.leaveThread(threadId);
 }
@@ -51,30 +52,30 @@ function getQueryKeysToInvalidate(threadId: string | null) {
 describe('navigation Reset Conditions', () => {
   describe('shouldResetOnNavigation', () => {
     it('returns true when navigating FROM thread TO /chat', () => {
-      expect(shouldResetOnNavigation('/chat', '/chat/some-thread-slug')).toBe(true);
+      expect(shouldResetOnNavigation('/chat', '/chat/some-thread-slug')).toBeTruthy();
     });
 
     it('returns true when navigating FROM any page TO /chat', () => {
-      expect(shouldResetOnNavigation('/chat', '/settings')).toBe(true);
-      expect(shouldResetOnNavigation('/chat', '/dashboard')).toBe(true);
-      expect(shouldResetOnNavigation('/chat', '/')).toBe(true);
+      expect(shouldResetOnNavigation('/chat', '/settings')).toBeTruthy();
+      expect(shouldResetOnNavigation('/chat', '/dashboard')).toBeTruthy();
+      expect(shouldResetOnNavigation('/chat', '/')).toBeTruthy();
     });
 
     it('returns false when already on /chat', () => {
-      expect(shouldResetOnNavigation('/chat', '/chat')).toBe(false);
+      expect(shouldResetOnNavigation('/chat', '/chat')).toBeFalsy();
     });
 
     it('returns false when navigating FROM /chat to thread', () => {
-      expect(shouldResetOnNavigation('/chat/new-thread', '/chat')).toBe(false);
+      expect(shouldResetOnNavigation('/chat/new-thread', '/chat')).toBeFalsy();
     });
 
     it('returns false when navigating between thread pages', () => {
-      expect(shouldResetOnNavigation('/chat/thread-1', '/chat/thread-2')).toBe(false);
+      expect(shouldResetOnNavigation('/chat/thread-1', '/chat/thread-2')).toBeFalsy();
     });
 
     it('returns false when navigating to non-chat pages', () => {
-      expect(shouldResetOnNavigation('/settings', '/chat')).toBe(false);
-      expect(shouldResetOnNavigation('/dashboard', '/chat/thread')).toBe(false);
+      expect(shouldResetOnNavigation('/settings', '/chat')).toBeFalsy();
+      expect(shouldResetOnNavigation('/dashboard', '/chat/thread')).toBeFalsy();
     });
   });
 });
@@ -140,26 +141,26 @@ describe('navigation Scenarios', () => {
     it('should trigger reset when clicking logo from thread page', () => {
       // User on /chat/some-thread clicks logo → navigates to /chat
       const shouldReset = shouldResetOnNavigation('/chat', '/chat/some-thread');
-      expect(shouldReset).toBe(true);
+      expect(shouldReset).toBeTruthy();
     });
 
     it('should trigger reset when clicking logo from thread with complex slug', () => {
       // Thread slugs can have special characters
       const shouldReset = shouldResetOnNavigation('/chat', '/chat/my-thread-about-ai-2024-01-01');
-      expect(shouldReset).toBe(true);
+      expect(shouldReset).toBeTruthy();
     });
   });
 
   describe('new Chat Button', () => {
     it('should trigger reset when clicking "New Chat" from thread page', () => {
       const shouldReset = shouldResetOnNavigation('/chat', '/chat/existing-conversation');
-      expect(shouldReset).toBe(true);
+      expect(shouldReset).toBeTruthy();
     });
 
     it('should not trigger reset when clicking "New Chat" from /chat', () => {
       // Already on /chat, clicking new chat shouldn't reset again
       const shouldReset = shouldResetOnNavigation('/chat', '/chat');
-      expect(shouldReset).toBe(false);
+      expect(shouldReset).toBeFalsy();
     });
   });
 
@@ -167,13 +168,13 @@ describe('navigation Scenarios', () => {
     it('should trigger reset when navigating directly to /chat', () => {
       // User types /chat in URL bar
       const shouldReset = shouldResetOnNavigation('/chat', '/settings');
-      expect(shouldReset).toBe(true);
+      expect(shouldReset).toBeTruthy();
     });
 
     it('should not trigger reset when navigating to specific thread', () => {
       // User types /chat/thread-id in URL bar
       const shouldReset = shouldResetOnNavigation('/chat/specific-thread', '/settings');
-      expect(shouldReset).toBe(false);
+      expect(shouldReset).toBeFalsy();
     });
   });
 
@@ -181,13 +182,13 @@ describe('navigation Scenarios', () => {
     it('should trigger reset when going back to /chat', () => {
       // User presses back from thread → lands on /chat
       const shouldReset = shouldResetOnNavigation('/chat', '/chat/previous-thread');
-      expect(shouldReset).toBe(true);
+      expect(shouldReset).toBeTruthy();
     });
 
     it('should not trigger reset when going back between threads', () => {
       // User presses back from thread → lands on another thread
       const shouldReset = shouldResetOnNavigation('/chat/thread-1', '/chat/thread-2');
-      expect(shouldReset).toBe(false);
+      expect(shouldReset).toBeFalsy();
     });
   });
 });
@@ -205,10 +206,10 @@ describe('user Preference Preservation', () => {
 
       // Simulate preference object shape
       const preferences = {
-        selectedModelIds: ['model-1', 'model-2'],
+        enableWebSearch: true,
         modelOrder: ['model-1', 'model-2'],
         selectedMode: 'analyzing',
-        enableWebSearch: true,
+        selectedModelIds: ['model-1', 'model-2'],
       };
 
       expectedFields.forEach((field) => {
@@ -218,10 +219,10 @@ describe('user Preference Preservation', () => {
 
     it('handles empty preference arrays', () => {
       const preferences = {
-        selectedModelIds: [],
+        enableWebSearch: false,
         modelOrder: [],
         selectedMode: 'analyzing',
-        enableWebSearch: false,
+        selectedModelIds: [],
       };
 
       expect(preferences.selectedModelIds).toEqual([]);
@@ -230,14 +231,14 @@ describe('user Preference Preservation', () => {
 
     it('handles default preference values', () => {
       const defaultPreferences = {
-        selectedModelIds: [],
+        enableWebSearch: false,
         modelOrder: [],
         selectedMode: 'analyzing',
-        enableWebSearch: false,
+        selectedModelIds: [],
       };
 
       // Verify defaults can be passed to reset
-      expect(defaultPreferences.enableWebSearch).toBe(false);
+      expect(defaultPreferences.enableWebSearch).toBeFalsy();
       expect(defaultPreferences.selectedMode).toBe('analyzing');
     });
   });
@@ -265,8 +266,8 @@ describe('edge Cases', () => {
 
   describe('same Page Navigation', () => {
     it('does not reset on same-page navigation', () => {
-      expect(shouldResetOnNavigation('/chat', '/chat')).toBe(false);
-      expect(shouldResetOnNavigation('/chat/thread', '/chat/thread')).toBe(false);
+      expect(shouldResetOnNavigation('/chat', '/chat')).toBeFalsy();
+      expect(shouldResetOnNavigation('/chat/thread', '/chat/thread')).toBeFalsy();
     });
   });
 
@@ -274,7 +275,7 @@ describe('edge Cases', () => {
     it('pathname comparison ignores query strings', () => {
       // TanStack Router's useLocation().pathname returns pathname without query string
       // These tests verify our logic works with clean pathnames
-      expect(shouldResetOnNavigation('/chat', '/chat/thread')).toBe(true);
+      expect(shouldResetOnNavigation('/chat', '/chat/thread')).toBeTruthy();
     });
   });
 });

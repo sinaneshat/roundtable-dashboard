@@ -45,22 +45,22 @@ type ChatInputToolbarMenuProps = {
 };
 
 export const ChatInputToolbarMenu = memo(({
-  selectedParticipants,
   allModels,
-  onOpenModelModal,
-  selectedMode,
-  onOpenModeModal,
-  enableWebSearch,
-  onWebSearchToggle,
-  onAttachmentClick,
   attachmentCount = 0,
-  enableAttachments = true,
-  isListening = false,
-  onToggleSpeech,
-  isSpeechSupported = false,
-  disabled = false,
-  isModelsLoading = false,
   autoMode = false,
+  disabled = false,
+  enableAttachments = true,
+  enableWebSearch,
+  isListening = false,
+  isModelsLoading = false,
+  isSpeechSupported = false,
+  onAttachmentClick,
+  onOpenModelModal,
+  onOpenModeModal,
+  onToggleSpeech,
+  onWebSearchToggle,
+  selectedMode,
+  selectedParticipants,
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
 

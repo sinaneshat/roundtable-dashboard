@@ -7,29 +7,29 @@ import { z } from 'zod';
 
 /** Generic API response wrapper - data field validated by specific schemas */
 export const ApiResponseSchema = z.object({
-  success: z.boolean(),
   data: z.record(z.string(), z.unknown()).optional(),
+  success: z.boolean(),
 }).strict();
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 
 const UsageCreditsSchema = z.object({
-  balance: z.number().nonnegative(),
   available: z.number().nonnegative(),
+  balance: z.number().nonnegative(),
   status: UsageStatusSchema.optional(),
 }).strict();
 
 const UsagePlanSchema = z.object({
-  type: z.string().min(1),
-  name: z.string().min(1),
-  monthlyCredits: z.number().int().nonnegative(),
-  hasActiveSubscription: z.boolean().optional(),
   freeRoundUsed: z.boolean().optional(),
+  hasActiveSubscription: z.boolean().optional(),
+  monthlyCredits: z.number().int().nonnegative(),
+  name: z.string().min(1),
   nextRefillAt: z.string().datetime().nullable(),
   pendingChange: z.object({
-    pendingTier: z.string().min(1),
     effectiveDate: z.string().min(1),
+    pendingTier: z.string().min(1),
   }).strict().nullable().optional(),
+  type: z.string().min(1),
 }).strict();
 
 export const UsageStatsDataSchema = z.object({
@@ -59,8 +59,8 @@ export function validateUsageStatsCache(data: unknown): UsageStatsData | null {
 
 const UserCacheSchema = z.object({
   id: z.string().min(1).optional(),
-  name: z.string().nullable().optional(),
   image: z.string().url().nullable().optional(),
+  name: z.string().nullable().optional(),
 }).strict();
 
 /** Thread metadata schema - allows extensible key-value pairs */
@@ -72,23 +72,23 @@ const ThreadMetadataSchema = z.record(z.string(), z.union([
 ])).nullable().optional();
 
 export const ChatThreadCacheSchema = z.object({
+  createdAt: z.union([z.date(), z.string()]),
+  enableWebSearch: z.boolean().optional(),
   id: z.string().min(1),
-  userId: z.string().min(1).optional(),
-  projectId: z.string().min(1).nullable().optional(),
-  title: z.string(),
-  slug: z.string().min(1),
-  previousSlug: z.string().min(1).nullable().optional(),
-  mode: z.string().min(1).optional(),
-  status: z.string().min(1).optional(),
+  isAiGeneratedTitle: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
   isPublic: z.boolean().optional(),
-  isAiGeneratedTitle: z.boolean().optional(),
-  enableWebSearch: z.boolean().optional(),
-  metadata: ThreadMetadataSchema,
-  version: z.number().int().nonnegative().optional(),
-  createdAt: z.union([z.date(), z.string()]),
-  updatedAt: z.union([z.date(), z.string()]),
   lastMessageAt: z.union([z.date(), z.string()]).nullable().optional(),
+  metadata: ThreadMetadataSchema,
+  mode: z.string().min(1).optional(),
+  previousSlug: z.string().min(1).nullable().optional(),
+  projectId: z.string().min(1).nullable().optional(),
+  slug: z.string().min(1),
+  status: z.string().min(1).optional(),
+  title: z.string(),
+  updatedAt: z.union([z.date(), z.string()]),
+  userId: z.string().min(1).optional(),
+  version: z.number().int().nonnegative().optional(),
 }).strict();
 
 /** Participant settings schema - allows extensible configuration */
@@ -100,23 +100,23 @@ const ParticipantSettingsSchema = z.record(z.string(), z.union([
 ])).nullable().optional();
 
 const ChatParticipantCacheCompatSchema = z.object({
-  id: z.string().min(1),
-  threadId: z.string().min(1),
-  modelId: z.string().min(1),
-  customRoleId: z.string().min(1).nullable().optional(),
-  role: z.string().min(1).nullable().optional(),
-  priority: z.number().int().nonnegative().optional(),
-  isEnabled: z.boolean().optional(),
-  settings: ParticipantSettingsSchema,
   createdAt: z.union([z.date(), z.string()]),
+  customRoleId: z.string().min(1).nullable().optional(),
+  id: z.string().min(1),
+  isEnabled: z.boolean().optional(),
+  modelId: z.string().min(1),
+  priority: z.number().int().nonnegative().optional(),
+  role: z.string().min(1).nullable().optional(),
+  settings: ParticipantSettingsSchema,
+  threadId: z.string().min(1),
   updatedAt: z.union([z.date(), z.string()]),
 }).strict();
 
 /** Message part schema - supports text, file, reasoning parts */
 const MessagePartCacheSchema = z.object({
-  type: z.string().min(1),
-  text: z.string().optional(),
   state: z.string().optional(),
+  text: z.string().optional(),
+  type: z.string().min(1),
 }).catchall(z.unknown());
 
 /** Message metadata schema - allows extensible metadata */
@@ -129,20 +129,16 @@ const MessageMetadataCacheSchema = z.record(z.string(), z.union([
 ])).optional();
 
 const UIMessageCacheCompatSchema = z.object({
-  id: z.string().min(1),
-  role: z.string().min(1),
-  parts: z.array(MessagePartCacheSchema).optional(),
   content: z.string().optional(),
-  metadata: MessageMetadataCacheSchema,
   createdAt: z.union([z.date(), z.string()]).optional(),
+  id: z.string().min(1),
+  metadata: MessageMetadataCacheSchema,
+  parts: z.array(MessagePartCacheSchema).optional(),
+  role: z.string().min(1),
 }).strict();
 
 /** Changelog entry schema for cache validation */
 const ChangelogEntryCacheSchema = z.object({
-  id: z.string().min(1),
-  threadId: z.string().min(1),
-  changeType: z.string().min(1),
-  changeSummary: z.string(),
   changeData: z.record(z.string(), z.union([
     z.string(),
     z.number(),
@@ -151,16 +147,20 @@ const ChangelogEntryCacheSchema = z.object({
     z.array(z.unknown()),
     z.record(z.string(), z.unknown()),
   ])),
-  roundNumber: z.number().int().nonnegative().optional(),
+  changeSummary: z.string(),
+  changeType: z.string().min(1),
   createdAt: z.union([z.date(), z.string()]),
+  id: z.string().min(1),
+  roundNumber: z.number().int().nonnegative().optional(),
+  threadId: z.string().min(1),
   updatedAt: z.union([z.date(), z.string()]).optional(),
 }).strict();
 
 export const ThreadDetailPayloadCacheSchema = z.object({
-  thread: ChatThreadCacheSchema,
-  participants: z.array(ChatParticipantCacheCompatSchema).optional(),
-  messages: z.array(UIMessageCacheCompatSchema).optional(),
   changelog: z.array(ChangelogEntryCacheSchema).optional(),
+  messages: z.array(UIMessageCacheCompatSchema).optional(),
+  participants: z.array(ChatParticipantCacheCompatSchema).optional(),
+  thread: ChatThreadCacheSchema,
   user: UserCacheSchema.optional(),
 }).strict();
 
@@ -185,7 +185,6 @@ export function validateThreadDetailPayloadCache(data: unknown): ThreadDetailPay
 }
 
 export const PaginatedPageCacheSchema = z.object({
-  success: z.boolean(),
   data: z
     .object({
       items: z.array(ChatThreadCacheSchema).optional(),
@@ -195,13 +194,14 @@ export const PaginatedPageCacheSchema = z.object({
     })
     .strict()
     .optional(),
+  success: z.boolean(),
 }).strict();
 
 export type PaginatedPageCache = z.infer<typeof PaginatedPageCacheSchema>;
 
 export const InfiniteQueryCacheSchema = z.object({
-  pages: z.array(PaginatedPageCacheSchema).min(1),
   pageParams: z.array(z.string().nullable().optional()).optional(),
+  pages: z.array(PaginatedPageCacheSchema).min(1),
 }).strict();
 
 export type InfiniteQueryCache = z.infer<typeof InfiniteQueryCacheSchema>;
@@ -231,8 +231,8 @@ export function validateThreadDetailCache(data: unknown): ThreadDetailCacheData 
 }
 
 export const ThreadDetailResponseCacheSchema = z.object({
-  success: z.boolean(),
   data: ThreadDetailPayloadCacheSchema,
+  success: z.boolean(),
 }).strict();
 
 export type ThreadDetailResponseCache = z.infer<typeof ThreadDetailResponseCacheSchema>;
@@ -243,10 +243,10 @@ export function validateThreadDetailResponseCache(data: unknown): ThreadDetailRe
 }
 
 export const ThreadsListCachePageSchema = z.object({
-  success: z.boolean(),
   data: z.object({
     items: z.array(ChatThreadCacheSchema),
   }).strict().optional(),
+  success: z.boolean(),
 }).strict();
 
 export type ThreadsListCachePage = z.infer<typeof ThreadsListCachePageSchema>;
@@ -268,10 +268,6 @@ export function validateThreadsListPages(data: unknown): ThreadsListCachePage[] 
 }
 
 const ChangelogItemCacheSchema = z.object({
-  id: z.string().min(1),
-  threadId: z.string().min(1),
-  changeType: z.string().min(1),
-  changeSummary: z.string(),
   changeData: z.record(z.string(), z.union([
     z.string(),
     z.number(),
@@ -280,16 +276,20 @@ const ChangelogItemCacheSchema = z.object({
     z.array(z.unknown()),
     z.record(z.string(), z.unknown()),
   ])),
-  roundNumber: z.number().int().nonnegative().optional(),
+  changeSummary: z.string(),
+  changeType: z.string().min(1),
   createdAt: z.union([z.date(), z.string()]),
+  id: z.string().min(1),
+  roundNumber: z.number().int().nonnegative().optional(),
+  threadId: z.string().min(1),
   updatedAt: z.union([z.date(), z.string()]).optional(),
 }).strict();
 
 export const ChangelogListCacheSchema = z.object({
-  success: z.boolean(),
   data: z.object({
     items: z.array(ChangelogItemCacheSchema),
   }).strict().optional(),
+  success: z.boolean(),
 }).strict();
 
 export type ChangelogListCache = z.infer<typeof ChangelogListCacheSchema>;
@@ -314,16 +314,16 @@ export function validateChangelogListCache(data: unknown): ChangelogListCache | 
 // ============================================================================
 
 export const ThreadSlugStatusPayloadSchema = z.object({
+  isAiGeneratedTitle: z.boolean(),
   slug: z.string().min(1),
   title: z.string(),
-  isAiGeneratedTitle: z.boolean(),
 }).strict();
 
 export type ThreadSlugStatusPayload = z.infer<typeof ThreadSlugStatusPayloadSchema>;
 
 export const ThreadSlugStatusResponseSchema = z.object({
-  success: z.literal(true),
   data: ThreadSlugStatusPayloadSchema,
+  success: z.literal(true),
 }).strict();
 
 export type ThreadSlugStatusResponse = z.infer<typeof ThreadSlugStatusResponseSchema>;

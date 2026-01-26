@@ -21,14 +21,14 @@ type ShareDialogProps = {
 };
 
 export function ShareDialog({
-  open,
+  isLoading,
+  isPublic,
+  onMakePrivate,
+  onMakePublic,
   onOpenChange,
+  open,
   slug,
   threadTitle: _threadTitle,
-  isPublic,
-  isLoading,
-  onMakePublic,
-  onMakePrivate,
 }: ShareDialogProps) {
   const t = useTranslations();
 

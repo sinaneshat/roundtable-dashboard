@@ -25,17 +25,17 @@ import { createChatStore } from '@/stores/chat';
 // Test Utilities
 // ============================================================================
 
-function createParticipant(index: number, threadId: string = 'thread-123') {
+function createParticipant(index: number, threadId = 'thread-123') {
   return {
-    id: `participant-${index}`,
-    threadId,
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: '2024-01-01T00:00:00Z',
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: '2024-01-01T00:00:00Z',
   };
 }
@@ -44,80 +44,80 @@ function createParticipantMessage(
   roundNumber: number,
   participantIndex: number,
   threadId: string,
-  content: string = '',
+  content = '',
   finishReason: string = FinishReasons.STOP,
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: content ? [{ type: 'text', text: content }] : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: content.length, totalTokens: content.length },
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: content.length, promptTokens: 0, totalTokens: content.length },
     },
+    parts: content ? [{ text: content, type: 'text' }] : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createModeratorMessage(
   roundNumber: number,
   threadId: string,
-  content: string = '',
+  content = '',
   finishReason: string = FinishReasons.STOP,
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: content ? [{ type: 'text', text: content }] : [],
     metadata: {
-      isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
-      model: 'Council Moderator',
-      role: MessageRoles.ASSISTANT,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: content.length, totalTokens: content.length },
+      isModerator: true,
+      model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: content.length, promptTokens: 0, totalTokens: content.length },
     },
+    parts: content ? [{ text: content, type: 'text' }] : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
-function createThread(enableWebSearch: boolean = false) {
+function createThread(enableWebSearch = false) {
   return {
+    createdAt: '2024-01-01T00:00:00Z',
+    enableWebSearch,
     id: 'thread-123',
-    userId: 'user-123',
-    projectId: null,
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    mode: 'debating' as const,
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch,
-    metadata: null,
-    version: 1,
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z',
     lastMessageAt: '2024-01-01T00:00:00Z',
+    metadata: null,
+    mode: 'debating' as const,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: '2024-01-01T00:00:00Z',
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createPreSearch(roundNumber: number, status: string = MessageStatuses.PENDING) {
   return {
-    id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    userQuery: 'Test query',
-    status,
-    searchData: null,
     createdAt: '2024-01-01T00:00:00Z',
+    id: `presearch-r${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status,
+    threadId: 'thread-123',
     updatedAt: '2024-01-01T00:00:00Z',
+    userQuery: 'Test query',
   };
 }
 
@@ -130,7 +130,7 @@ describe('multi-Round Placeholder Behavior', () => {
     const store = createChatStore();
 
     // Round 0: Complete
-    const userR0 = createTestUserMessage({ id: 'user_r0', content: 'Question 1', roundNumber: 0 });
+    const userR0 = createTestUserMessage({ content: 'Question 1', id: 'user_r0', roundNumber: 0 });
     const p0R0 = createParticipantMessage(0, 0, 'thread-123', 'Answer 1');
     const modR0 = createModeratorMessage(0, 'thread-123', 'Summary 1');
 
@@ -142,10 +142,10 @@ describe('multi-Round Placeholder Behavior', () => {
 
     const stateAfterR0 = store.getState();
     expect(stateAfterR0.streamingRoundNumber).toBeNull();
-    expect(stateAfterR0.isStreaming).toBe(false);
+    expect(stateAfterR0.isStreaming).toBeFalsy();
 
     // User submits Round 1
-    const userR1 = createTestUserMessage({ id: 'user_r1', content: 'Question 2', roundNumber: 1 });
+    const userR1 = createTestUserMessage({ content: 'Question 2', id: 'user_r1', roundNumber: 1 });
     store.getState().setMessages([userR0, p0R0, modR0, userR1]);
 
     // Trigger Round 1 placeholders
@@ -163,7 +163,7 @@ describe('multi-Round Placeholder Behavior', () => {
     const store = createChatStore();
 
     // Round 0
-    const userR0 = createTestUserMessage({ id: 'user_r0', content: 'R0', roundNumber: 0 });
+    const userR0 = createTestUserMessage({ content: 'R0', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userR0]);
     store.getState().setParticipants([createParticipant(0), createParticipant(1)]);
     store.getState().setStreamingRoundNumber(0);
@@ -179,7 +179,7 @@ describe('multi-Round Placeholder Behavior', () => {
     store.getState().completeStreaming();
 
     // Round 1 with different participant count
-    const userR1 = createTestUserMessage({ id: 'user_r1', content: 'R1', roundNumber: 1 });
+    const userR1 = createTestUserMessage({ content: 'R1', id: 'user_r1', roundNumber: 1 });
     store.getState().setMessages([userR0, p0R0, p1R0, modR0, userR1]);
     store.getState().setParticipants([createParticipant(0), createParticipant(1), createParticipant(2)]);
     store.getState().setStreamingRoundNumber(1);
@@ -198,7 +198,7 @@ describe('multi-Round Placeholder Behavior', () => {
     store.getState().setParticipants(participants);
 
     // Round 0
-    const userR0 = createTestUserMessage({ id: 'user_r0', content: 'R0', roundNumber: 0 });
+    const userR0 = createTestUserMessage({ content: 'R0', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userR0]);
     store.getState().setStreamingRoundNumber(0);
 
@@ -213,7 +213,7 @@ describe('multi-Round Placeholder Behavior', () => {
     expect(store.getState().streamingRoundNumber).toBeNull();
 
     // Immediately start Round 1
-    const userR1 = createTestUserMessage({ id: 'user_r1', content: 'R1', roundNumber: 1 });
+    const userR1 = createTestUserMessage({ content: 'R1', id: 'user_r1', roundNumber: 1 });
     store.getState().setMessages([userR0, p0R0, modR0, userR1]);
     store.getState().setStreamingRoundNumber(1);
 
@@ -236,7 +236,7 @@ describe('configuration Changes Impact on Placeholders', () => {
     const initialParticipants = [createParticipant(0), createParticipant(1)];
     store.getState().setParticipants(initialParticipants);
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userMessage]);
     store.getState().setStreamingRoundNumber(0);
 
@@ -259,7 +259,7 @@ describe('configuration Changes Impact on Placeholders', () => {
     const allParticipants = [createParticipant(0), createParticipant(1), createParticipant(2)];
     store.getState().setParticipants(allParticipants);
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userMessage]);
     store.getState().setStreamingRoundNumber(0);
 
@@ -286,7 +286,7 @@ describe('configuration Changes Impact on Placeholders', () => {
     ];
     store.getState().setParticipants(participants);
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userMessage]);
     store.getState().setStreamingRoundNumber(0);
 
@@ -301,8 +301,9 @@ describe('configuration Changes Impact on Placeholders', () => {
     const state = store.getState();
     expect(state.participants).toHaveLength(3);
     const firstParticipant = state.participants[0];
-    if (!firstParticipant)
+    if (!firstParticipant) {
       throw new Error('Expected first participant');
+    }
     expect(firstParticipant.priority).toBe(0);
 
     // UI shows placeholders in new order
@@ -317,7 +318,7 @@ describe('pre-Search Placeholder Integration', () => {
   it('should show pre-search placeholder before participant placeholders', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Research question', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Research question', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0), createParticipant(1)];
 
     store.getState().setMessages([userMessage]);
@@ -331,11 +332,12 @@ describe('pre-Search Placeholder Integration', () => {
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
-    expect(state.thread?.enableWebSearch).toBe(true);
+    expect(state.thread?.enableWebSearch).toBeTruthy();
     expect(state.preSearches).toHaveLength(1);
     const statePreSearch = state.preSearches[0];
-    if (!statePreSearch)
+    if (!statePreSearch) {
       throw new Error('Expected pre-search');
+    }
     expect(statePreSearch.status).toBe(MessageStatuses.PENDING);
 
     // UI Flow:
@@ -347,7 +349,7 @@ describe('pre-Search Placeholder Integration', () => {
   it('should transition pre-search placeholder through status states', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     store.getState().setMessages([userMessage]);
     store.getState().setThread(createThread(true));
 
@@ -358,8 +360,9 @@ describe('pre-Search Placeholder Integration', () => {
 
     let state = store.getState();
     let currentPreSearch = state.preSearches[0];
-    if (!currentPreSearch)
+    if (!currentPreSearch) {
       throw new Error('Expected pre-search');
+    }
     expect(currentPreSearch.status).toBe(MessageStatuses.PENDING);
 
     // Streaming state
@@ -368,8 +371,9 @@ describe('pre-Search Placeholder Integration', () => {
 
     state = store.getState();
     currentPreSearch = state.preSearches[0];
-    if (!currentPreSearch)
+    if (!currentPreSearch) {
       throw new Error('Expected pre-search');
+    }
     expect(currentPreSearch.status).toBe(MessageStatuses.STREAMING);
 
     // Complete state
@@ -378,8 +382,9 @@ describe('pre-Search Placeholder Integration', () => {
 
     state = store.getState();
     currentPreSearch = state.preSearches[0];
-    if (!currentPreSearch)
+    if (!currentPreSearch) {
       throw new Error('Expected pre-search');
+    }
     expect(currentPreSearch.status).toBe(MessageStatuses.COMPLETE);
 
     // Placeholder remains visible throughout, updating its visual state
@@ -388,7 +393,7 @@ describe('pre-Search Placeholder Integration', () => {
   it('should keep participant placeholders visible while pre-search executes', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0), createParticipant(1)];
 
     store.getState().setMessages([userMessage]);
@@ -403,8 +408,9 @@ describe('pre-Search Placeholder Integration', () => {
     const state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
     const preSearchItem = state.preSearches[0];
-    if (!preSearchItem)
+    if (!preSearchItem) {
       throw new Error('Expected pre-search');
+    }
     expect(preSearchItem.status).toBe(MessageStatuses.STREAMING);
     expect(state.participants).toHaveLength(2);
 
@@ -415,7 +421,7 @@ describe('pre-Search Placeholder Integration', () => {
   it('should handle pre-search failure gracefully', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0)];
 
     store.getState().setMessages([userMessage]);
@@ -429,8 +435,9 @@ describe('pre-Search Placeholder Integration', () => {
 
     const state = store.getState();
     const failedSearch = state.preSearches[0];
-    if (!failedSearch)
+    if (!failedSearch) {
       throw new Error('Expected pre-search');
+    }
     expect(failedSearch.status).toBe(MessageStatuses.FAILED);
     expect(state.streamingRoundNumber).toBe(0);
 
@@ -447,7 +454,7 @@ describe('error Handling & Edge Cases', () => {
   it('should show placeholder with error state for failed participant', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0), createParticipant(1)];
 
     store.getState().setMessages([userMessage]);
@@ -472,7 +479,7 @@ describe('error Handling & Edge Cases', () => {
   it('should handle stop button during placeholder phase', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0), createParticipant(1)];
 
     store.getState().setMessages([userMessage]);
@@ -486,7 +493,7 @@ describe('error Handling & Edge Cases', () => {
     store.getState().completeStreaming();
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
     expect(state.streamingRoundNumber).toBeNull();
 
     // Placeholders should disappear/become inactive
@@ -495,7 +502,7 @@ describe('error Handling & Edge Cases', () => {
   it('should cleanup placeholders when round completes', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0)];
 
     store.getState().setMessages([userMessage]);
@@ -514,8 +521,8 @@ describe('error Handling & Edge Cases', () => {
 
     const state = store.getState();
     expect(state.streamingRoundNumber).toBeNull();
-    expect(state.isStreaming).toBe(false);
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.isModeratorStreaming).toBeFalsy();
 
     // Placeholders no longer visible (round complete)
   });
@@ -523,7 +530,7 @@ describe('error Handling & Edge Cases', () => {
   it('should handle no participants configured', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
 
     store.getState().setMessages([userMessage]);
     store.getState().setParticipants([]); // No participants!
@@ -541,7 +548,7 @@ describe('error Handling & Edge Cases', () => {
   it('should handle duplicate streamingRoundNumber set', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0)];
 
     store.getState().setMessages([userMessage]);
@@ -566,7 +573,7 @@ describe('placeholder Visibility Rules', () => {
   it('should hide placeholders when streamingRoundNumber is null', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0)];
 
     store.getState().setMessages([userMessage]);
@@ -583,12 +590,12 @@ describe('placeholder Visibility Rules', () => {
     const store = createChatStore();
 
     // Round 0 complete
-    const userR0 = createTestUserMessage({ id: 'user_r0', content: 'R0', roundNumber: 0 });
+    const userR0 = createTestUserMessage({ content: 'R0', id: 'user_r0', roundNumber: 0 });
     const p0R0 = createParticipantMessage(0, 0, 'thread-123', 'A0');
     const modR0 = createModeratorMessage(0, 'thread-123', 'S0');
 
     // Round 1 streaming
-    const userR1 = createTestUserMessage({ id: 'user_r1', content: 'R1', roundNumber: 1 });
+    const userR1 = createTestUserMessage({ content: 'R1', id: 'user_r1', roundNumber: 1 });
 
     store.getState().setMessages([userR0, p0R0, modR0, userR1]);
     store.getState().setParticipants([createParticipant(0)]);
@@ -628,7 +635,7 @@ describe('moderator Placeholder Specific Behavior', () => {
   it('should keep moderator placeholder visible throughout participant streaming', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const participants = [createParticipant(0), createParticipant(1), createParticipant(2)];
 
     store.getState().setMessages([userMessage]);
@@ -654,13 +661,13 @@ describe('moderator Placeholder Specific Behavior', () => {
     }
 
     // Moderator placeholder should be visible at all times
-    expect(visibilityChecks.every(v => v === true)).toBe(true);
+    expect(visibilityChecks.every(v => v === true)).toBeTruthy();
   });
 
   it('should transition moderator placeholder to streaming when participants complete', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const p0 = createParticipantMessage(0, 0, 'thread-123', 'Response');
 
     store.getState().setMessages([userMessage, p0]);
@@ -672,14 +679,14 @@ describe('moderator Placeholder Specific Behavior', () => {
     store.getState().setIsStreaming(false);
 
     const stateBeforeModerator = store.getState();
-    expect(stateBeforeModerator.isStreaming).toBe(false);
-    expect(stateBeforeModerator.isModeratorStreaming).toBe(false);
+    expect(stateBeforeModerator.isStreaming).toBeFalsy();
+    expect(stateBeforeModerator.isModeratorStreaming).toBeFalsy();
 
     // Moderator starts
     store.getState().setIsModeratorStreaming(true);
 
     const stateAfterModerator = store.getState();
-    expect(stateAfterModerator.isModeratorStreaming).toBe(true);
+    expect(stateAfterModerator.isModeratorStreaming).toBeTruthy();
     expect(stateAfterModerator.streamingRoundNumber).toBe(0);
 
     // Same placeholder, now shows streaming indicator
@@ -688,7 +695,7 @@ describe('moderator Placeholder Specific Behavior', () => {
   it('should hide moderator placeholder when round completes', () => {
     const store = createChatStore();
 
-    const userMessage = createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 });
+    const userMessage = createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 });
     const p0 = createParticipantMessage(0, 0, 'thread-123', 'Response');
     const mod = createModeratorMessage(0, 'thread-123', 'Summary');
 
@@ -703,7 +710,7 @@ describe('moderator Placeholder Specific Behavior', () => {
 
     const state = store.getState();
     expect(state.streamingRoundNumber).toBeNull();
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isModeratorStreaming).toBeFalsy();
 
     // Moderator placeholder hidden, actual message visible
   });

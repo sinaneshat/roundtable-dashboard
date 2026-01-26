@@ -31,32 +31,32 @@ type UseModeratorStreamOptions = {
  * ✅ UNIFIED RENDERING: Adds moderator message to messages array during streaming
  * so it goes through the exact same rendering path as participant messages.
  */
-export function useModeratorStream({ threadId, enabled = true }: UseModeratorStreamOptions) {
+export function useModeratorStream({ enabled = true, threadId }: UseModeratorStreamOptions) {
   const queryClient = useQueryClient();
 
   const {
-    participants,
-    messages,
-    setMessages,
-    setIsModeratorStreaming,
+    completeStreaming,
     hasModeratorStreamBeenTriggered,
     markModeratorStreamTriggered,
-    completeStreaming,
+    messages,
+    participants,
+    setIsModeratorStreaming,
+    setMessages,
   } = useChatStore(
     useShallow(s => ({
-      participants: s.participants,
-      messages: s.messages,
-      setMessages: s.setMessages,
-      setIsModeratorStreaming: s.setIsModeratorStreaming,
+      completeStreaming: s.completeStreaming,
       hasModeratorStreamBeenTriggered: s.hasModeratorStreamBeenTriggered,
       markModeratorStreamTriggered: s.markModeratorStreamTriggered,
-      completeStreaming: s.completeStreaming,
+      messages: s.messages,
+      participants: s.participants,
+      setIsModeratorStreaming: s.setIsModeratorStreaming,
+      setMessages: s.setMessages,
     })),
   );
 
   const [state, setState] = useState<ModeratorStreamState>({
-    isStreaming: false,
     error: null,
+    isStreaming: false,
     roundNumber: null,
   });
 
@@ -77,8 +77,12 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
     roundNumber: number,
     participantMessageIds: string[],
   ) => {
-    if (!enabled || !threadId)
+    // Capture ref at function start to satisfy require-atomic-updates
+    const abortRef = abortControllerRef;
+
+    if (!enabled || !threadId) {
       return;
+    }
 
     const moderatorId = `${threadId}_r${roundNumber}_moderator`;
     if (hasModeratorStreamBeenTriggered(moderatorId, roundNumber)) {
@@ -88,16 +92,16 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
     markModeratorStreamTriggered(moderatorId, roundNumber);
     setIsModeratorStreaming(true);
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
 
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortRef.current = controller;
 
     setState({
-      isStreaming: true,
       error: null,
+      isStreaming: true,
       roundNumber,
     });
 
@@ -109,21 +113,21 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
           msg.id === moderatorId
             ? {
                 ...msg,
-                parts: [{ type: MessagePartTypes.TEXT, text: '' }],
+                parts: [{ text: '', type: MessagePartTypes.TEXT }],
               }
             : msg,
         );
       } else {
         const streamingModeratorMessage: UIMessage = {
           id: moderatorId,
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: '' }],
           metadata: {
             isModerator: true,
-            roundNumber,
-            participantIndex: MODERATOR_PARTICIPANT_INDEX,
             model: MODERATOR_NAME,
+            participantIndex: MODERATOR_PARTICIPANT_INDEX,
+            roundNumber,
           },
+          parts: [{ text: '', type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         };
         return [...currentMessages, streamingModeratorMessage];
       }
@@ -133,11 +137,11 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
       // Use RPC service for type-safe moderator streaming
       const response = await streamModeratorService(
         {
-          param: {
-            threadId,
-            roundNumber: String(roundNumber),
-          },
           json: { participantMessageIds },
+          param: {
+            roundNumber: String(roundNumber),
+            threadId,
+          },
         },
         { signal: controller.signal },
       );
@@ -164,7 +168,7 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
               msg.id === moderatorId
                 ? {
                     ...msg,
-                    parts: [{ type: MessagePartTypes.TEXT, text: textToSet }],
+                    parts: [{ text: textToSet, type: MessagePartTypes.TEXT }],
                   }
                 : msg,
             ),
@@ -176,8 +180,9 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done)
+        if (done) {
           break;
+        }
 
         const chunk = decoder.decode(value, { stream: true });
 
@@ -206,8 +211,8 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
       }
 
       const result = await queryClient.fetchQuery({
-        queryKey: queryKeys.threads.messages(threadId),
         queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
+        queryKey: queryKeys.threads.messages(threadId),
         staleTime: 0,
       });
 
@@ -235,13 +240,13 @@ export function useModeratorStream({ threadId, enabled = true }: UseModeratorStr
 
       setState(prev => ({
         ...prev,
-        isStreaming: false,
         error: error instanceof Error ? error : new Error(String(error)),
+        isStreaming: false,
       }));
     } finally {
       setIsModeratorStreaming(false);
       completeStreaming();
-      abortControllerRef.current = null;
+      abortRef.current = null;
     }
   }, [
     enabled,

@@ -34,44 +34,44 @@ function createMockThread(options: {
   mode?: string;
 } = {}) {
   return {
+    createdAt: new Date(),
+    enableWebSearch: options.enableWebSearch ?? false,
     id: 'thread-123',
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: options.mode || 'brainstorm',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: options.enableWebSearch ?? false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: options.mode || 'brainstorm',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
   } as const;
 }
 
 function createMockParticipants() {
   return [
     {
-      id: 'participant-1',
-      threadId: 'thread-123',
-      modelId: 'model-a',
-      role: null,
-      customRoleId: null,
-      priority: 0,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'model-a',
+      priority: 0,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'thread-123',
-      modelId: 'model-b',
-      role: null,
-      customRoleId: null,
-      priority: 1,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'model-b',
+      priority: 1,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -80,36 +80,36 @@ function createMockParticipants() {
 function createUserMessage(roundNumber: number, text = 'Test message') {
   return {
     id: `user-msg-r${roundNumber}`,
+    metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' as const }],
     role: MessageRoles.USER as const,
-    parts: [{ type: 'text' as const, text }],
-    metadata: { roundNumber, role: MessageRoles.USER },
   };
 }
 
 function createAssistantMessage(roundNumber: number, participantIndex: number) {
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: `Response from participant ${participantIndex}` }],
     metadata: {
-      roundNumber,
+      modelId: `model-${participantIndex}`,
       participantIndex,
       role: MessageRoles.ASSISTANT,
-      modelId: `model-${participantIndex}`,
+      roundNumber,
     },
+    parts: [{ text: `Response from participant ${participantIndex}`, type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
 function createModeratorMessage(roundNumber: number) {
   return {
     id: `moderator-msg-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: 'Moderator summary' }],
     metadata: {
-      roundNumber,
-      role: MessageRoles.ASSISTANT,
       isModerator: true,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{ text: 'Moderator summary', type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -118,25 +118,25 @@ function createPreSearch(roundNumber: number, status: MessageStatuses, options: 
   completedAt?: Date | null;
 } = {}): StoredPreSearch {
   return {
+    completedAt: options.completedAt ?? null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    userQuery: options.userQuery || `Query for round ${roundNumber}`,
-    status,
     searchData: status === MessageStatuses.COMPLETE
       ? {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: '',
           successCount: 0,
-          failureCount: 0,
+          summary: '',
           totalResults: 0,
           totalTime: 0,
         }
       : null,
-    createdAt: new Date(),
-    completedAt: options.completedAt ?? null,
-    errorMessage: null,
+    status,
+    threadId: 'thread-123',
+    userQuery: options.userQuery || `Query for round ${roundNumber}`,
   };
 }
 
@@ -146,14 +146,16 @@ function createPreSearch(roundNumber: number, status: MessageStatuses, options: 
  */
 function createDelayedPatchMock(delayMs: number) {
   return vi.fn(async () => {
-    await new Promise(resolve => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
     return {
-      success: true,
       data: {
-        thread: createMockThread({ enableWebSearch: true }),
-        participants: createMockParticipants(),
         message: createUserMessage(1),
+        participants: createMockParticipants(),
+        thread: createMockThread({ enableWebSearch: true }),
       },
+      success: true,
     };
   });
 }
@@ -164,20 +166,22 @@ function createDelayedPatchMock(delayMs: number) {
  */
 function createDelayedChangelogMock(delayMs: number) {
   return vi.fn(async () => {
-    await new Promise(resolve => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => {
+      setTimeout(resolve, delayMs);
+    });
     return {
-      success: true,
       data: {
         items: [
           {
-            id: 'changelog-1',
-            threadId: 'thread-123',
-            roundNumber: 1,
             changeType: 'web_search_enabled',
             createdAt: new Date().toISOString(),
+            id: 'changelog-1',
+            roundNumber: 1,
+            threadId: 'thread-123',
           },
         ],
       },
+      success: true,
     };
   });
 }
@@ -239,14 +243,14 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       // ✅ TEST: Pre-search should NOT execute while configChangeRoundNumber is set
       // In real code, useStreamingTrigger checks this condition and returns early
       const shouldBlockPreSearch = store.getState().configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       // Simulate PATCH completing
       store.getState().setConfigChangeRoundNumber(null);
 
       // Now pre-search can execute
       const shouldAllowPreSearch = store.getState().configChangeRoundNumber === null;
-      expect(shouldAllowPreSearch).toBe(true);
+      expect(shouldAllowPreSearch).toBeTruthy();
     });
 
     it('should handle slow PATCH preventing pre-search execution', async () => {
@@ -291,7 +295,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       // Now pre-search can execute
-      expect(store.getState().configChangeRoundNumber).toBe(null);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
     });
 
     it('should verify configChangeRoundNumber blocks pre-search in useStreamingTrigger logic', () => {
@@ -317,7 +321,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
 
       const shouldBlockStreaming = configChangeRoundNumber !== null || isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
       expect(configChangeRoundNumber).toBe(0);
     });
   });
@@ -344,14 +348,14 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
 
       // ✅ TEST: Streaming should be blocked while waiting for changelog
       const shouldBlockStreaming = store.getState().isWaitingForChangelog;
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
 
       // Changelog fetch completes
       store.getState().setIsWaitingForChangelog(false);
 
       // Now streaming can proceed
       const canProceed = !store.getState().isWaitingForChangelog;
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
 
     it('should handle slow changelog fetch preventing streaming', async () => {
@@ -383,7 +387,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const changelogPromise = slowChangelogMock();
 
       // While changelog is fetching, streaming should be blocked
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Wait for changelog to complete
       await changelogPromise;
@@ -392,7 +396,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setIsWaitingForChangelog(false);
 
       // Now streaming can proceed
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should verify both flags block streaming in useStreamingTrigger', () => {
@@ -414,9 +418,9 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
 
       const shouldBlock = configChangeRound !== null || waitingForChangelog;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
       expect(configChangeRound).toBe(1);
-      expect(waitingForChangelog).toBe(true);
+      expect(waitingForChangelog).toBeTruthy();
 
       // Clear PATCH flag (PATCH completed)
       store.getState().setConfigChangeRoundNumber(null);
@@ -424,7 +428,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       // Still blocked by changelog flag
       const stillBlocked = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
-      expect(stillBlocked).toBe(true);
+      expect(stillBlocked).toBeTruthy();
 
       // Clear changelog flag (changelog fetched)
       store.getState().setIsWaitingForChangelog(false);
@@ -432,7 +436,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       // Now unblocked
       const unblocked = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
-      expect(unblocked).toBe(true);
+      expect(unblocked).toBeTruthy();
     });
   });
 
@@ -458,7 +462,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
 
       // Round 1 is now pending
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // =============== ATTEMPT ROUND 2 SUBMISSION ===============
       // This should be BLOCKED because round 1 is still pending
@@ -468,11 +472,11 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
         || store.getState().isWaitingForChangelog
         || store.getState().waitingToStartStreaming;
 
-      expect(isRound1Pending).toBe(true);
+      expect(isRound1Pending).toBeTruthy();
 
       // User clicks submit again - form should be disabled or submission blocked
       const canSubmitRound2 = !isRound1Pending;
-      expect(canSubmitRound2).toBe(false);
+      expect(canSubmitRound2).toBeFalsy();
 
       // =============== ROUND 1 COMPLETES ===============
       store.getState().setConfigChangeRoundNumber(null);
@@ -484,7 +488,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
         && !store.getState().isWaitingForChangelog
         && !store.getState().waitingToStartStreaming;
 
-      expect(canNowSubmit).toBe(true);
+      expect(canNowSubmit).toBeTruthy();
     });
 
     it('should handle rapid submissions with proper serialization', async () => {
@@ -518,7 +522,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const canSubmitRound2 = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
 
-      expect(canSubmitRound2).toBe(false);
+      expect(canSubmitRound2).toBeFalsy();
 
       // Wait for round 1 to complete
       await round1Promise;
@@ -557,7 +561,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const isInconsistent = store.getState().isWaitingForChangelog
         && store.getState().configChangeRoundNumber === null;
 
-      expect(isInconsistent).toBe(true);
+      expect(isInconsistent).toBeTruthy();
 
       // Simulate use-changelog-sync fix (line 153-154)
       if (isInconsistent) {
@@ -565,7 +569,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       }
 
       // State is now consistent
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should never allow pre-search STREAMING while changelog flags are set', () => {
@@ -588,7 +592,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const shouldBlockPreSearch = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
 
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearch?.status).toBe(MessageStatuses.PENDING);
@@ -625,10 +629,10 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const canStartStreaming = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
 
-      expect(canStartStreaming).toBe(false);
+      expect(canStartStreaming).toBeFalsy();
 
       // Verify isStreaming is false
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Clear flags (changelog fetch complete)
       store.getState().setConfigChangeRoundNumber(null);
@@ -638,7 +642,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const canNowStream = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
 
-      expect(canNowStream).toBe(true);
+      expect(canNowStream).toBeTruthy();
     });
 
     it('should maintain consistent state throughout PATCH → changelog → pre-search → stream flow', () => {
@@ -663,25 +667,25 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
 
       // State check: PATCH pending
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // =============== STEP 2: PATCH completes ===============
       store.getState().setConfigChangeRoundNumber(null);
       store.getState().setIsWaitingForChangelog(true); // Trigger changelog fetch
 
       // State check: Waiting for changelog
-      expect(store.getState().configChangeRoundNumber).toBe(null);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // =============== STEP 3: Changelog fetch completes ===============
       store.getState().setIsWaitingForChangelog(false);
 
       // State check: Ready for pre-search
-      expect(store.getState().configChangeRoundNumber).toBe(null);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // =============== STEP 4: Pre-search executes ===============
       store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);
@@ -702,10 +706,10 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setWaitingToStartStreaming(false);
 
       // Final state check
-      expect(store.getState().isStreaming).toBe(true);
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().configChangeRoundNumber).toBe(null);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isStreaming).toBeTruthy();
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().configChangeRoundNumber).toBeNull();
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -736,7 +740,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const canExecutePreSearch = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
 
-      expect(canExecutePreSearch).toBe(true);
+      expect(canExecutePreSearch).toBeTruthy();
     });
 
     it('should handle THREAD screen submission with config changes', () => {
@@ -772,7 +776,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       const ready = store.getState().configChangeRoundNumber === null
         && !store.getState().isWaitingForChangelog;
 
-      expect(ready).toBe(true);
+      expect(ready).toBeTruthy();
     });
 
     it('should maintain flag consistency across screen transitions', () => {
@@ -794,7 +798,7 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       // ✅ Flags should be preserved during screen transition
       // initializeThread preserves flags when hasActiveFormSubmission is true
       expect(store.getState().configChangeRoundNumber).toBe(0);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
   });
 
@@ -818,8 +822,8 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setHasPendingConfigChanges(true);
 
       // Final state
-      expect(store.getState().enableWebSearch).toBe(true);
-      expect(store.getState().hasPendingConfigChanges).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
+      expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
       // Submit with final config
       store.getState().setMessages([
@@ -848,8 +852,8 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().addParticipant({
         id: 'model-c',
         modelId: 'model-c',
-        role: null,
         priority: 2,
+        role: null,
       });
       store.getState().setHasPendingConfigChanges(true);
 
@@ -865,13 +869,13 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().addParticipant({
         id: 'model-d',
         modelId: 'model-d',
-        role: null,
         priority: 2,
+        role: null,
       });
       store.getState().setHasPendingConfigChanges(true);
 
       expect(store.getState().selectedParticipants).toHaveLength(3);
-      expect(store.getState().hasPendingConfigChanges).toBe(true);
+      expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
       // Submit with final config
       store.getState().setConfigChangeRoundNumber(1);
@@ -913,10 +917,10 @@ describe('config Change Race Prevention - PATCH Ordering', () => {
       store.getState().setIsWaitingForChangelog(false);
 
       // User's new changes are tracked
-      expect(store.getState().hasPendingConfigChanges).toBe(true);
+      expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
       // Round 2 submission would use the latest config
-      expect(store.getState().enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeFalsy();
     });
 
     it('should handle system staying consistent during rapid round submissions', () => {

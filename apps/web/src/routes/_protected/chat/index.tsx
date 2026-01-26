@@ -8,10 +8,10 @@ const pageTitle = 'Chat - Roundtable';
 const pageDescription = 'Start a new AI conversation with multiple models.';
 
 export const Route = createFileRoute('/_protected/chat/')({
-  // Server-side random selection - no client-side skeleton flash
-  loader: () => getServerQuickStartData(),
   component: ChatOverviewScreen,
   // Protected routes should not be indexed
+  loader: () => getServerQuickStartData(),
+  // Server-side random selection - no client-side skeleton flash
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {

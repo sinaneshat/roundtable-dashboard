@@ -9,10 +9,10 @@ import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const deletedAccountAudit = sqliteTable(
   'deleted_account_audit',
   {
-    id: text('id').primaryKey(),
-    emailHash: text('email_hash').notNull().unique(), // SHA-256 hash
     deletionCount: integer('deletion_count').default(1).notNull(),
+    emailHash: text('email_hash').notNull().unique(), // SHA-256 hash
     firstDeletedAt: integer('first_deleted_at', { mode: 'timestamp_ms' }).notNull(),
+    id: text('id').primaryKey(),
     lastDeletedAt: integer('last_deleted_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [

@@ -17,8 +17,8 @@ import * as z from 'zod';
  * Billing context for AI operations that deduct credits
  */
 export const BillingContextSchema = z.object({
-  userId: z.string(),
   threadId: z.string(),
+  userId: z.string(),
 });
 
 export type BillingContext = z.infer<typeof BillingContextSchema>;
@@ -37,12 +37,12 @@ export type ImageAnalysisBillingContext = z.infer<typeof ImageAnalysisBillingCon
 // ============================================================================
 
 export const CreditBalanceInfoSchema = z.object({
-  balance: z.number(),
-  reserved: z.number(),
   available: z.number(),
-  planType: PlanTypeSchema,
+  balance: z.number(),
   monthlyCredits: z.number(),
   nextRefillAt: z.date().nullable(),
+  planType: PlanTypeSchema,
+  reserved: z.number(),
 });
 
 export type CreditBalanceInfo = z.infer<typeof CreditBalanceInfoSchema>;
@@ -52,12 +52,12 @@ export type CreditBalanceInfo = z.infer<typeof CreditBalanceInfoSchema>;
 // ============================================================================
 
 export const TokenUsageSchema = z.object({
-  inputTokens: z.number(),
-  outputTokens: z.number(),
   action: CreditActionSchema,
-  threadId: z.string().optional(),
+  inputTokens: z.number(),
   messageId: z.string().optional(),
   modelId: z.string(),
+  outputTokens: z.number(),
+  threadId: z.string().optional(),
 });
 
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;

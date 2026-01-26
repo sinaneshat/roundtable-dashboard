@@ -943,7 +943,7 @@ describe('free User Round Completion Triggers Zero-Out', () => {
 
     it('checks moderator message has content for multi-participant', () => {
       const moderatorMessageExists = true;
-      const moderatorParts = [{ type: 'text', text: 'This is the round summary.' }];
+      const moderatorParts = [{ text: 'This is the round summary.', type: 'text' }];
 
       const hasModeratorContent
         = moderatorMessageExists
@@ -956,7 +956,7 @@ describe('free User Round Completion Triggers Zero-Out', () => {
 
     it('detects incomplete moderator when message has no content', () => {
       const moderatorMessageExists = true;
-      const moderatorParts: Array<{ type: string; text: string }> = []; // Empty parts
+      const moderatorParts: { type: string; text: string }[] = []; // Empty parts
 
       const hasModeratorContent
         = moderatorMessageExists
@@ -1132,10 +1132,10 @@ describe('edge Cases and Complex Scenarios', () => {
       const creditsUsed = Math.ceil(totalTokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 
       const transactionMetadata = {
+        creditsUsed,
         inputTokens,
         outputTokens,
         totalTokens,
-        creditsUsed,
       };
 
       expect(transactionMetadata.totalTokens).toBe(3000);

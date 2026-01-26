@@ -9,7 +9,7 @@ type ToolCallPartProps = {
   className?: string;
 };
 
-export function ToolCallPart({ part, className }: ToolCallPartProps) {
+export function ToolCallPart({ className, part }: ToolCallPartProps) {
   const t = useTranslations();
 
   return (

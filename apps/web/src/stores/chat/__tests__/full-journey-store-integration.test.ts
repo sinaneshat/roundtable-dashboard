@@ -42,8 +42,8 @@ describe('store Initialization', () => {
     expect(state.thread).toBeNull();
     expect(state.participants).toEqual([]);
     expect(state.messages).toEqual([]);
-    expect(state.isStreaming).toBe(false);
-    expect(state.showInitialUI).toBe(true);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.showInitialUI).toBeTruthy();
     expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
@@ -88,7 +88,7 @@ describe('thread Creation Journey', () => {
 
     // Step 1: Initial state
     expect(state.thread).toBeNull();
-    expect(state.showInitialUI).toBe(true);
+    expect(state.showInitialUI).toBeTruthy();
 
     // Step 2: User starts typing
     state.setInputValue('What is the best approach?');
@@ -98,11 +98,11 @@ describe('thread Creation Journey', () => {
     state.setPendingMessage('What is the best approach?');
     state.setWaitingToStartStreaming(true);
     expect(getStoreState(store).pendingMessage).toBe('What is the best approach?');
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
 
     // Step 4: Thread creation response
     state.setIsCreatingThread(true);
-    expect(getStoreState(store).isCreatingThread).toBe(true);
+    expect(getStoreState(store).isCreatingThread).toBeTruthy();
 
     state.setThread(thread);
     state.setParticipants(participants);
@@ -116,14 +116,14 @@ describe('thread Creation Journey', () => {
 
     // Step 5: Streaming starts - hide initial UI
     state.setShowInitialUI(false);
-    expect(getStoreState(store).showInitialUI).toBe(false);
+    expect(getStoreState(store).showInitialUI).toBeFalsy();
 
     // Step 6: Streaming begins
     state.setIsStreaming(true);
     state.setWaitingToStartStreaming(false);
     state.setStreamingRoundNumber(0);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).streamingRoundNumber).toBe(0);
   });
 
@@ -151,8 +151,9 @@ describe('thread Creation Journey', () => {
     // Participants array unchanged
     expect(getStoreState(store).participants).toHaveLength(3);
     const firstParticipant = getStoreState(store).participants[0];
-    if (!firstParticipant)
+    if (!firstParticipant) {
       throw new Error('expected participant');
+    }
     expect(firstParticipant.id).toBe('participant-0');
   });
 });
@@ -176,8 +177,8 @@ describe('message Accumulation', () => {
 
     // Add user message
     const userMessage = createTestUserMessage({
-      id: 'thread-e2e-123_r0_user',
       content: 'Test question',
+      id: 'thread-e2e-123_r0_user',
       roundNumber: 0,
     });
     state.setMessages([userMessage]);
@@ -187,12 +188,12 @@ describe('message Accumulation', () => {
     const messages = [userMessage];
     for (let i = 0; i < 3; i++) {
       const assistantMessage = createTestAssistantMessage({
-        id: `thread-e2e-123_r0_p${i}`,
         content: `Response from participant ${i}`,
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `thread-e2e-123_r0_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
       messages.push(assistantMessage);
     }
@@ -203,14 +204,18 @@ describe('message Accumulation', () => {
     const msg1 = getStoreState(store).messages[1];
     const msg2 = getStoreState(store).messages[2];
     const msg3 = getStoreState(store).messages[3];
-    if (!msg0)
+    if (!msg0) {
       throw new Error('expected message 0');
-    if (!msg1)
+    }
+    if (!msg1) {
       throw new Error('expected message 1');
-    if (!msg2)
+    }
+    if (!msg2) {
       throw new Error('expected message 2');
-    if (!msg3)
+    }
+    if (!msg3) {
       throw new Error('expected message 3');
+    }
     expect(msg0.role).toBe(MessageRoles.USER);
     expect(msg1.role).toBe(MessageRoles.ASSISTANT);
     expect(msg2.role).toBe(MessageRoles.ASSISTANT);
@@ -221,17 +226,17 @@ describe('message Accumulation', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'thread-e2e-123_r0_user',
       content: 'Test',
+      id: 'thread-e2e-123_r0_user',
       roundNumber: 0,
     });
     const assistantMessage = createTestAssistantMessage({
-      id: 'thread-e2e-123_r0_p0',
       content: 'Response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-e2e-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, assistantMessage]);
@@ -261,14 +266,14 @@ describe('moderator Tracking', () => {
 
     // First caller marks round 0
     const firstResult = state.tryMarkModeratorCreated(0);
-    expect(firstResult).toBe(true);
+    expect(firstResult).toBeTruthy();
 
     // Second caller (race condition) tries same round
     const secondResult = state.tryMarkModeratorCreated(0);
-    expect(secondResult).toBe(false);
+    expect(secondResult).toBeFalsy();
 
     // Verify only marked once
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
     expect(getStoreState(store).createdModeratorRounds.size).toBe(1);
   });
 
@@ -276,15 +281,15 @@ describe('moderator Tracking', () => {
     const state = getStoreState(store);
 
     // Initially not streaming moderator
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
     // Set streaming moderator
     state.setIsModeratorStreaming(true);
-    expect(getStoreState(store).isModeratorStreaming).toBe(true);
+    expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
 
     // Clear streaming moderator
     state.setIsModeratorStreaming(false);
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
   });
 });
 
@@ -309,27 +314,27 @@ describe('multi-Round Conversation', () => {
 
     // Round 0 messages
     const round0Messages: UIMessage[] = [
-      createTestUserMessage({ id: 'r0_user', content: 'Question 0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Question 0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'R0 Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 
     // Round 1 messages
     const round1Messages: UIMessage[] = [
-      createTestUserMessage({ id: 'r1_user', content: 'Question 1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Question 1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'R1 Response',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -337,12 +342,12 @@ describe('multi-Round Conversation', () => {
     state.setMessages([...round0Messages, ...round1Messages]);
 
     // Mark moderators as created for both rounds
-    expect(state.tryMarkModeratorCreated(0)).toBe(true);
-    expect(state.tryMarkModeratorCreated(1)).toBe(true);
+    expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
+    expect(state.tryMarkModeratorCreated(1)).toBeTruthy();
 
     // Verify tracking
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
   });
 
   it('preserves round 0 messages when adding round 1', () => {
@@ -350,14 +355,14 @@ describe('multi-Round Conversation', () => {
 
     // Round 0 messages
     const round0Messages: UIMessage[] = [
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'R0P0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(round0Messages);
@@ -366,14 +371,14 @@ describe('multi-Round Conversation', () => {
     // Add round 1 messages
     const allMessages: UIMessage[] = [
       ...round0Messages,
-      createTestUserMessage({ id: 'r1_user', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'R1P0',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
     state.setMessages(allMessages);
@@ -400,7 +405,7 @@ describe('multi-Round Conversation', () => {
     // Complete round 0
     state.completeStreaming();
 
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
     expect(getStoreState(store).currentParticipantIndex).toBe(0);
   });
@@ -424,21 +429,21 @@ describe('thread Navigation Reset', () => {
     state.setThread(createMockThread({ id: 'old-thread' }));
     state.setParticipants(createMockParticipants(2));
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'msg1', content: 'Old', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Old', id: 'msg1', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'msg2',
         content: 'Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'msg2',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(messages);
     state.tryMarkModeratorCreated(0);
 
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
 
     // Navigate to new thread - reset via resetForThreadNavigation
     state.resetForThreadNavigation();
@@ -457,13 +462,13 @@ describe('thread Navigation Reset', () => {
     state.setHasSentPendingMessage(true);
 
     expect(getStoreState(store).createdModeratorRounds.size).toBe(2);
-    expect(getStoreState(store).hasSentPendingMessage).toBe(true);
+    expect(getStoreState(store).hasSentPendingMessage).toBeTruthy();
 
     // Reset
     state.resetForThreadNavigation();
 
     expect(getStoreState(store).createdModeratorRounds.size).toBe(0);
-    expect(getStoreState(store).hasSentPendingMessage).toBe(false);
+    expect(getStoreState(store).hasSentPendingMessage).toBeFalsy();
   });
 
   it('clears feedback state on navigation (fresh Map instances)', () => {
@@ -512,7 +517,7 @@ describe('streaming Completion', () => {
     // Complete
     state.completeStreaming();
 
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
     expect(getStoreState(store).currentParticipantIndex).toBe(0);
   });
@@ -521,14 +526,14 @@ describe('streaming Completion', () => {
     const state = getStoreState(store);
 
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0',
         content: 'R',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(messages);
@@ -561,22 +566,22 @@ describe('pre-Search State', () => {
     // Mark round 0 as triggered
     state.markPreSearchTriggered(0);
 
-    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
   });
 
   it('prevents duplicate pre-search triggers', () => {
     const state = getStoreState(store);
 
     // First trigger - should not be triggered yet
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeFalsy();
 
     // Mark as triggered
     state.markPreSearchTriggered(0);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
 
     // Check duplicate detection
-    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBe(true);
+    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBeTruthy();
   });
 
   it('allows pre-search for different rounds', () => {
@@ -587,9 +592,9 @@ describe('pre-Search State', () => {
     state.markPreSearchTriggered(2);
 
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(3);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(2)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(2)).toBeTruthy();
   });
 
   it('clears pre-search tracking for specific round', () => {
@@ -602,8 +607,8 @@ describe('pre-Search State', () => {
     // clearPreSearchTracking takes roundNumber param
     state.clearPreSearchTracking(0);
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(1);
-    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBe(false);
-    expect(getStoreState(store).triggeredPreSearchRounds.has(1)).toBe(true);
+    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBeFalsy();
+    expect(getStoreState(store).triggeredPreSearchRounds.has(1)).toBeTruthy();
 
     state.clearPreSearchTracking(1);
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(0);
@@ -630,8 +635,8 @@ describe('complete Round Journey (Integration)', () => {
 
     // === STEP 1: User submits message ===
     const userMessage = createTestUserMessage({
-      id: 'thread-e2e-123_r0_user',
       content: 'What is the best approach?',
+      id: 'thread-e2e-123_r0_user',
       roundNumber: 0,
     });
 
@@ -640,7 +645,7 @@ describe('complete Round Journey (Integration)', () => {
     state.setWaitingToStartStreaming(true);
 
     expect(getStoreState(store).messages).toHaveLength(1);
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
 
     // === STEP 2: Streaming starts ===
     state.setIsStreaming(true);
@@ -650,17 +655,17 @@ describe('complete Round Journey (Integration)', () => {
     state.setHasSentPendingMessage(true);
     state.setPendingMessage(null);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
-    expect(getStoreState(store).hasSentPendingMessage).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
+    expect(getStoreState(store).hasSentPendingMessage).toBeTruthy();
 
     // === STEP 3: Participant 0 completes ===
     const p0Message = createTestAssistantMessage({
-      id: 'thread-e2e-123_r0_p0',
       content: 'I recommend approach A...',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-e2e-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     state.setMessages([userMessage, p0Message]);
     state.setCurrentParticipantIndex(1);
@@ -670,12 +675,12 @@ describe('complete Round Journey (Integration)', () => {
 
     // === STEP 4: Participant 1 completes ===
     const p1Message = createTestAssistantMessage({
-      id: 'thread-e2e-123_r0_p1',
       content: 'I suggest approach B...',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-e2e-123_r0_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     state.setMessages([userMessage, p0Message, p1Message]);
 
@@ -684,25 +689,25 @@ describe('complete Round Journey (Integration)', () => {
     // === STEP 5: All participants done, streaming completes ===
     state.completeStreaming();
 
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
 
     // === STEP 6: Mark moderator as created (atomic check-and-mark) ===
     const canCreateModerator = state.tryMarkModeratorCreated(0);
-    expect(canCreateModerator).toBe(true);
+    expect(canCreateModerator).toBeTruthy();
 
     // === STEP 7: Moderator streaming initiated ===
     state.setIsModeratorStreaming(true);
-    expect(getStoreState(store).isModeratorStreaming).toBe(true);
+    expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
 
     // === STEP 8: Moderator complete ===
     state.setIsModeratorStreaming(false);
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
     // === VERIFY FINAL STATE ===
     const finalState = getStoreState(store);
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.isStreaming).toBe(false);
-    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
+    expect(finalState.isStreaming).toBeFalsy();
+    expect(finalState.createdModeratorRounds.has(0)).toBeTruthy();
   });
 });
 
@@ -724,17 +729,17 @@ describe('stop Button Behavior', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'user',
       content: 'Q',
+      id: 'user',
       roundNumber: 0,
     });
     const p0Message = createTestAssistantMessage({
-      id: 'p0',
       content: 'Complete response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, p0Message]);
@@ -746,24 +751,24 @@ describe('stop Button Behavior', () => {
 
     // Participant 0's complete message preserved
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
   });
 
   it('stop prevents moderator creation if not all participants done', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'user',
       content: 'Q',
+      id: 'user',
       roundNumber: 0,
     });
     const p0Message = createTestAssistantMessage({
-      id: 'p0',
       content: 'Response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'p0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, p0Message]);

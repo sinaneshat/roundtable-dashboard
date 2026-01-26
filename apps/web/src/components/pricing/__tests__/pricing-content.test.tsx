@@ -108,7 +108,7 @@ describe('pricingContent', () => {
       );
 
       await user.click(screen.getByRole('button', { name: 'actions.tryAgain' }));
-      expect(mockReload).toHaveBeenCalled();
+      expect(mockReload).toHaveBeenCalledWith();
 
       Object.defineProperty(window, 'location', {
         value: originalLocation,
@@ -125,8 +125,8 @@ describe('pricingContent', () => {
         prices: [
           createMockPrice({
             id: 'price_monthly',
-            productId: 'prod_monthly',
             interval: UIBillingIntervals.MONTH,
+            productId: 'prod_monthly',
           }),
         ],
       });
@@ -137,8 +137,8 @@ describe('pricingContent', () => {
         prices: [
           createMockPrice({
             id: 'price_yearly',
-            productId: 'prod_yearly',
             interval: BillingIntervals.YEAR,
+            productId: 'prod_yearly',
           }),
         ],
       });
@@ -165,8 +165,8 @@ describe('pricingContent', () => {
         prices: [
           createMockPrice({
             id: 'price_yearly_only',
-            productId: 'prod_yearly_only',
             interval: BillingIntervals.YEAR,
+            productId: 'prod_yearly_only',
           }),
         ],
       });
@@ -191,8 +191,8 @@ describe('pricingContent', () => {
         prices: [
           createMockPrice({
             id: 'price_yearly_only',
-            productId: 'prod_yearly_only',
             interval: BillingIntervals.YEAR,
+            productId: 'prod_yearly_only',
           }),
         ],
       });
@@ -234,9 +234,9 @@ describe('pricingContent', () => {
 
     it('passes correct props to pricing cards', () => {
       const product = createMockProduct({
-        name: 'Test Plan',
         description: 'Test description',
         features: ['Feature 1', 'Feature 2'],
+        name: 'Test Plan',
       });
 
       render(
@@ -306,16 +306,16 @@ describe('pricingContent', () => {
         prices: [createMockPrice({ id: 'price_pro' })],
       });
       const subscription = {
+        cancelAtPeriodEnd: false,
+        canceledAt: new Date().toISOString(),
+        currentPeriodEnd: new Date().toISOString(),
+        currentPeriodStart: new Date().toISOString(),
         id: 'sub_canceled',
+        price: { productId: 'prod_test' },
         priceId: 'price_pro',
         status: StripeSubscriptionStatuses.CANCELED,
-        cancelAtPeriodEnd: false,
-        currentPeriodStart: new Date().toISOString(),
-        currentPeriodEnd: new Date().toISOString(),
-        canceledAt: new Date().toISOString(),
-        trialStart: null,
         trialEnd: null,
-        price: { productId: 'prod_test' },
+        trialStart: null,
       };
 
       render(
@@ -366,7 +366,7 @@ describe('pricingContent', () => {
           products={[product]}
           subscriptions={[subscription]}
           processingPriceId={null}
-          showSubscriptionBanner={true}
+          showSubscriptionBanner
           onSubscribe={vi.fn()}
           onCancel={vi.fn()}
           onManageBilling={vi.fn()}
@@ -405,7 +405,7 @@ describe('pricingContent', () => {
           products={[product]}
           subscriptions={[]}
           processingPriceId={null}
-          showSubscriptionBanner={true}
+          showSubscriptionBanner
           onSubscribe={vi.fn()}
           onCancel={vi.fn()}
           onManageBilling={vi.fn()}
@@ -482,7 +482,7 @@ describe('pricingContent', () => {
       );
 
       await user.click(screen.getByText('pricing.card.manageBilling'));
-      expect(handleManageBilling).toHaveBeenCalled();
+      expect(handleManageBilling).toHaveBeenCalledWith();
     });
   });
 
@@ -538,7 +538,7 @@ describe('pricingContent', () => {
           products={[product]}
           subscriptions={[subscription]}
           processingPriceId={null}
-          isManagingBilling={true}
+          isManagingBilling
           onSubscribe={vi.fn()}
           onCancel={vi.fn()}
           onManageBilling={vi.fn()}
@@ -573,13 +573,13 @@ describe('pricingContent', () => {
       const product = createMockProduct({
         prices: [
           {
-            id: 'price_invalid',
-            productId: 'prod_test',
-            unitAmount: null,
-            currency: 'usd',
-            interval: UIBillingIntervals.MONTH,
-            trialPeriodDays: null,
             active: true,
+            currency: 'usd',
+            id: 'price_invalid',
+            interval: UIBillingIntervals.MONTH,
+            productId: 'prod_test',
+            trialPeriodDays: null,
+            unitAmount: null,
           },
         ],
       });

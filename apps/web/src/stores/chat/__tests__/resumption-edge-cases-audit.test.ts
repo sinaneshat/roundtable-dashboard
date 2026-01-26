@@ -35,10 +35,7 @@ describe('resumption Edge Cases Audit', () => {
        * only has round 0 data. Should NOT trigger anything.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
         isStreaming: false,
-        waitingToStartStreaming: false,
-        participants: createMockResumptionParticipants(2),
         // Client only has round 0 complete
         messages: [
           createMockUserMessage(0),
@@ -46,22 +43,25 @@ describe('resumption Edge Cases Audit', () => {
           createMockAssistantMessage(0, 1),
           createMockModeratorMessage(0),
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       // Server says round 1 is incomplete (PARTICIPANTS phase)
       const serverResumption = createMockStreamResumptionState({
-        roundNumber: 1, // Server says round 1
         currentPhase: RoundPhases.PARTICIPANTS,
         participants: {
+          allComplete: false,
+          currentParticipantIndex: 0,
           hasActiveStream: false,
+          nextParticipantToTrigger: 0,
+          participantStatuses: null,
           streamId: null,
           totalParticipants: 2,
-          currentParticipantIndex: 0,
-          participantStatuses: null,
-          nextParticipantToTrigger: 0,
-          allComplete: false,
         },
+        roundNumber: 1, // Server says round 1
       });
 
       const state = store.getState();
@@ -71,7 +71,7 @@ describe('resumption Edge Cases Audit', () => {
         const metadata = m.metadata as { roundNumber?: number } | undefined;
         return metadata?.roundNumber === 1 && m.role === 'user';
       });
-      expect(hasRound1UserMessage).toBe(false);
+      expect(hasRound1UserMessage).toBeFalsy();
 
       // Server says round 1 - mismatch with client state
       expect(serverResumption.roundNumber).toBe(1);
@@ -89,35 +89,35 @@ describe('resumption Edge Cases Audit', () => {
        * Should reconcile by NOT re-triggering P0/P1
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
         isStreaming: false,
-        waitingToStartStreaming: false,
-        participants: createMockResumptionParticipants(3),
         // Client has user + P0 only (P1 missing due to cache delay)
         messages: [
           createMockUserMessage(0),
           createMockAssistantMessage(0, 0), // P0 complete
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(3),
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       // Server says P2 should be next (P0 and P1 already done)
       const serverResumption = createMockStreamResumptionState({
-        roundNumber: 0,
         currentPhase: RoundPhases.PARTICIPANTS,
         participants: {
-          hasActiveStream: false,
-          streamId: null,
-          totalParticipants: 3,
+          allComplete: false,
           currentParticipantIndex: 2, // Currently on P2
+          hasActiveStream: false,
+          nextParticipantToTrigger: 2,
           participantStatuses: {
             0: { complete: true, hasError: false },
             1: { complete: true, hasError: false },
             2: { complete: false, hasError: false },
           },
-          nextParticipantToTrigger: 2,
-          allComplete: false,
+          streamId: null,
+          totalParticipants: 3,
         },
+        roundNumber: 0,
       });
 
       const state = store.getState();
@@ -138,8 +138,8 @@ describe('resumption Edge Cases Audit', () => {
 
       // Server says next is P2 (P0 and P1 both marked complete server-side)
       expect(serverResumption.participants?.nextParticipantToTrigger).toBe(2);
-      expect(serverResumption.participants?.participantStatuses?.[0]?.complete).toBe(true);
-      expect(serverResumption.participants?.participantStatuses?.[1]?.complete).toBe(true);
+      expect(serverResumption.participants?.participantStatuses?.[0]?.complete).toBeTruthy();
+      expect(serverResumption.participants?.participantStatuses?.[1]?.complete).toBeTruthy();
 
       // Correct behavior: Trust server, trigger P2 (not P0 or P1)
       // P1's message should be fetched from DB, not re-generated
@@ -153,18 +153,18 @@ describe('resumption Edge Cases Audit', () => {
        * Old effects for thread A should see scope version changed and bail out
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: true,
-        streamingRoundNumber: 0,
         currentParticipantIndex: 1,
-        // ✅ SCOPE VERSIONING: Track version for stale effect detection
-        resumptionScopeVersion: 1,
-        participants: createMockResumptionParticipants(2),
+        isStreaming: true,
         messages: [
           createMockUserMessage(0),
           createMockAssistantMessage(0, 0),
         ],
-        thread: { id: 'thread-A', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        // ✅ SCOPE VERSIONING: Track version for stale effect detection
+        resumptionScopeVersion: 1,
+        screenMode: ScreenModes.THREAD,
+        streamingRoundNumber: 0,
+        thread: { enableWebSearch: false, id: 'thread-A' },
       });
 
       const initialVersion = store.getState().resumptionScopeVersion;
@@ -172,10 +172,10 @@ describe('resumption Edge Cases Audit', () => {
 
       // Simulate navigation to different thread (increments scope version)
       store.setState({
-        thread: { id: 'thread-B', enableWebSearch: false },
-        resumptionScopeVersion: 2, // Version incremented on navigation
-        messages: [], // New thread has no messages
         isStreaming: false,
+        messages: [], // New thread has no messages
+        resumptionScopeVersion: 2, // Version incremented on navigation
+        thread: { enableWebSearch: false, id: 'thread-B' },
       });
 
       const newVersion = store.getState().resumptionScopeVersion;
@@ -193,12 +193,12 @@ describe('resumption Edge Cases Audit', () => {
        * Pattern: roundTriggerInProgressRef guards against React batching race
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
         isStreaming: false,
-        waitingToStartStreaming: false,
-        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       let triggerCount = 0;
@@ -207,8 +207,9 @@ describe('resumption Edge Cases Audit', () => {
       // Track calls
       store.setState({
         setWaitingToStartStreaming: (value: boolean) => {
-          if (value)
+          if (value) {
             triggerCount++;
+          }
           originalSetWaiting(value);
         },
       });
@@ -259,20 +260,20 @@ describe('resumption Edge Cases Audit', () => {
        * System should reconcile by completing P1 first.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: false,
-        waitingToStartStreaming: false,
         currentResumptionPhase: RoundPhases.MODERATOR, // Server says moderator
-        streamResumptionPrefilled: true,
-        resumptionRoundNumber: 0,
-        participants: createMockResumptionParticipants(2),
+        isStreaming: false,
         // Client only has P0, missing P1
         messages: [
           createMockUserMessage(0),
           createMockAssistantMessage(0, 0), // P0 complete
           // P1 missing!
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        resumptionRoundNumber: 0,
+        screenMode: ScreenModes.THREAD,
+        streamResumptionPrefilled: true,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       const state = store.getState();
@@ -331,8 +332,8 @@ describe('resumption Edge Cases Audit', () => {
       const state = store.getState();
 
       // Moderator is streaming
-      expect(state.isModeratorStreaming).toBe(true);
-      expect(state.isStreaming).toBe(false); // Participant streaming is off
+      expect(state.isModeratorStreaming).toBeTruthy();
+      expect(state.isStreaming).toBeFalsy(); // Participant streaming is off
 
       // All participants complete
       expect(state.messages.filter(m => m.role === 'assistant')).toHaveLength(2);

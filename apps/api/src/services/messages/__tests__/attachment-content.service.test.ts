@@ -33,10 +33,10 @@ vi.mock('@/services/uploads', () => ({
 
 vi.mock('@/db', () => ({
   upload: {
-    id: 'id',
-    mimeType: 'mimeType',
     filename: 'filename',
     fileSize: 'fileSize',
+    id: 'id',
+    mimeType: 'mimeType',
     r2Key: 'r2Key',
   },
 }));
@@ -45,16 +45,16 @@ vi.mock('@/db', () => ({
 // Test Helpers
 // ============================================================================
 
-function createMockDb(uploads: Array<{
+function createMockDb(uploads: {
   id: string;
   mimeType: string;
   filename: string;
   fileSize: number;
   r2Key: string;
-}>) {
+}[]) {
   return {
-    select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
     where: vi.fn().mockResolvedValue(uploads),
   } as unknown as LoadAttachmentContentParams['db'];
 }
@@ -66,10 +66,10 @@ function createTextContent(text: string): ArrayBuffer {
 
 function createMockLogger() {
   return {
-    info: vi.fn(),
     debug: vi.fn(),
-    warn: vi.fn(),
     error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
   } as unknown as LoadAttachmentContentParams['logger'];
 }
 
@@ -88,10 +88,10 @@ describe('attachment Content Service', () => {
       const textBuffer = createTextContent(textContent);
 
       const uploads = [{
-        id: 'upload-1',
-        mimeType: 'text/plain',
         filename: 'test.txt',
         fileSize: textBuffer.byteLength,
+        id: 'upload-1',
+        mimeType: 'text/plain',
         r2Key: 'uploads/user-1/upload-1_test.txt',
       }];
 
@@ -99,17 +99,17 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: textBuffer.byteLength,
+        contentType: 'text/plain',
         data: textBuffer,
         found: true,
-        contentType: 'text/plain',
-        contentLength: textBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-1'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -126,26 +126,26 @@ describe('attachment Content Service', () => {
       const textBuffer = createTextContent(markdownContent);
 
       const uploads = [{
-        id: 'upload-md',
-        mimeType: 'text/markdown',
         filename: 'readme.md',
         fileSize: textBuffer.byteLength,
+        id: 'upload-md',
+        mimeType: 'text/markdown',
         r2Key: 'uploads/user-1/upload-md_readme.md',
       }];
 
       const db = createMockDb(uploads);
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: textBuffer.byteLength,
+        contentType: 'text/markdown',
         data: textBuffer,
         found: true,
-        contentType: 'text/markdown',
-        contentLength: textBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-md'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -158,26 +158,26 @@ describe('attachment Content Service', () => {
       const textBuffer = createTextContent(csvContent);
 
       const uploads = [{
-        id: 'upload-csv',
-        mimeType: 'text/csv',
         filename: 'data.csv',
         fileSize: textBuffer.byteLength,
+        id: 'upload-csv',
+        mimeType: 'text/csv',
         r2Key: 'uploads/user-1/upload-csv_data.csv',
       }];
 
       const db = createMockDb(uploads);
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: textBuffer.byteLength,
+        contentType: 'text/csv',
         data: textBuffer,
         found: true,
-        contentType: 'text/csv',
-        contentLength: textBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-csv'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -185,30 +185,30 @@ describe('attachment Content Service', () => {
     });
 
     it('should convert application/json files to base64 data URLs', async () => {
-      const jsonContent = JSON.stringify({ key: 'value', count: 42 });
+      const jsonContent = JSON.stringify({ count: 42, key: 'value' });
       const textBuffer = createTextContent(jsonContent);
 
       const uploads = [{
-        id: 'upload-json',
-        mimeType: 'application/json',
         filename: 'config.json',
         fileSize: textBuffer.byteLength,
+        id: 'upload-json',
+        mimeType: 'application/json',
         r2Key: 'uploads/user-1/upload-json_config.json',
       }];
 
       const db = createMockDb(uploads);
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: textBuffer.byteLength,
+        contentType: 'application/json',
         data: textBuffer,
         found: true,
-        contentType: 'application/json',
-        contentLength: textBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-json'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -236,26 +236,26 @@ describe('attachment Content Service', () => {
       ]).buffer;
 
       const uploads = [{
-        id: 'upload-png',
-        mimeType: 'image/png',
         filename: 'screenshot.png',
         fileSize: pngBuffer.byteLength,
+        id: 'upload-png',
+        mimeType: 'image/png',
         r2Key: 'uploads/user-1/upload-png_screenshot.png',
       }];
 
       const db = createMockDb(uploads);
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: pngBuffer.byteLength,
+        contentType: 'image/png',
         data: pngBuffer,
         found: true,
-        contentType: 'image/png',
-        contentLength: pngBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-png'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -268,26 +268,26 @@ describe('attachment Content Service', () => {
       const pdfBuffer = createTextContent(pdfContent);
 
       const uploads = [{
-        id: 'upload-pdf',
-        mimeType: 'application/pdf',
         filename: 'document.pdf',
         fileSize: pdfBuffer.byteLength,
+        id: 'upload-pdf',
+        mimeType: 'application/pdf',
         r2Key: 'uploads/user-1/upload-pdf_document.pdf',
       }];
 
       const db = createMockDb(uploads);
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: pdfBuffer.byteLength,
+        contentType: 'application/pdf',
         data: pdfBuffer,
         found: true,
-        contentType: 'application/pdf',
-        contentLength: pdfBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-pdf'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(1);
@@ -303,10 +303,10 @@ describe('attachment Content Service', () => {
   describe('unsupported MIME Types', () => {
     it('should skip unsupported MIME types (video/mp4)', async () => {
       const uploads = [{
-        id: 'upload-video',
-        mimeType: 'video/mp4',
         filename: 'video.mp4',
         fileSize: 1024,
+        id: 'upload-video',
+        mimeType: 'video/mp4',
         r2Key: 'uploads/user-1/upload-video_video.mp4',
       }];
 
@@ -315,9 +315,9 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-video'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(0);
@@ -328,10 +328,10 @@ describe('attachment Content Service', () => {
 
     it('should skip unknown MIME types', async () => {
       const uploads = [{
-        id: 'upload-unknown',
-        mimeType: 'application/octet-stream',
         filename: 'unknown.bin',
         fileSize: 1024,
+        id: 'upload-unknown',
+        mimeType: 'application/octet-stream',
         r2Key: 'uploads/user-1/upload-unknown_unknown.bin',
       }];
 
@@ -339,8 +339,8 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-unknown'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(0);
@@ -359,10 +359,10 @@ describe('attachment Content Service', () => {
       const textBuffer = createTextContent(largeContent);
 
       const largeFile = {
-        id: 'upload-large',
-        mimeType: 'text/plain',
         filename: 'large.txt',
         fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
+        id: 'upload-large',
+        mimeType: 'text/plain',
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -370,33 +370,33 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: textBuffer.byteLength,
+        contentType: 'text/plain',
         data: textBuffer,
         found: true,
-        contentType: 'text/plain',
-        contentLength: textBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-large'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // Files within limit should be processed successfully
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
-      expect(getFile).toHaveBeenCalled();
+      expect(getFile).toHaveBeenCalledWith();
     });
 
     it('should skip files exceeding memory-safe limit', async () => {
       // Files over MAX_BASE64_FILE_SIZE are skipped to prevent OOM in Workers
       // Using 30MB to exceed both 10MB (prod) and 25MB (local) limits
       const largeFile = {
-        id: 'upload-large',
-        mimeType: 'text/plain',
         filename: 'large.txt',
         fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
+        id: 'upload-large',
+        mimeType: 'text/plain',
         r2Key: 'uploads/user-1/upload-large_large.txt',
       };
 
@@ -405,9 +405,9 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-large'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // Large files should be skipped (not loaded into memory)
@@ -427,8 +427,8 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: [],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(0);
@@ -441,8 +441,8 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: undefined as unknown as string[],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(0);
@@ -451,10 +451,10 @@ describe('attachment Content Service', () => {
 
     it('should handle file not found in storage', async () => {
       const uploads = [{
-        id: 'upload-missing',
-        mimeType: 'text/plain',
         filename: 'missing.txt',
         fileSize: 100,
+        id: 'upload-missing',
+        mimeType: 'text/plain',
         r2Key: 'uploads/user-1/upload-missing_missing.txt',
       }];
 
@@ -462,17 +462,17 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: 0,
+        contentType: null,
         data: null,
         found: false,
-        contentType: null,
-        contentLength: 0,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-missing'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(0);
@@ -486,24 +486,24 @@ describe('attachment Content Service', () => {
 
       const uploads = [
         {
-          id: 'upload-txt',
-          mimeType: 'text/plain',
           filename: 'file.txt',
           fileSize: textBuffer.byteLength,
+          id: 'upload-txt',
+          mimeType: 'text/plain',
           r2Key: 'uploads/user-1/upload-txt_file.txt',
         },
         {
-          id: 'upload-json',
-          mimeType: 'application/json',
           filename: 'data.json',
           fileSize: jsonBuffer.byteLength,
+          id: 'upload-json',
+          mimeType: 'application/json',
           r2Key: 'uploads/user-1/upload-json_data.json',
         },
         {
-          id: 'upload-video',
-          mimeType: 'video/mp4', // Unsupported - should be skipped
           filename: 'video.mp4',
           fileSize: 1024,
+          id: 'upload-video',
+          mimeType: 'video/mp4', // Unsupported - should be skipped
           r2Key: 'uploads/user-1/upload-video_video.mp4',
         },
       ];
@@ -512,22 +512,22 @@ describe('attachment Content Service', () => {
 
       vi.mocked(getFile)
         .mockResolvedValueOnce({
+          contentLength: textBuffer.byteLength,
+          contentType: 'text/plain',
           data: textBuffer,
           found: true,
-          contentType: 'text/plain',
-          contentLength: textBuffer.byteLength,
         })
         .mockResolvedValueOnce({
+          contentLength: jsonBuffer.byteLength,
+          contentType: 'application/json',
           data: jsonBuffer,
           found: true,
-          contentType: 'application/json',
-          contentLength: jsonBuffer.byteLength,
         });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-txt', 'upload-json', 'upload-video'],
-        r2Bucket: undefined,
         db,
+        r2Bucket: undefined,
       });
 
       expect(result.fileParts).toHaveLength(2); // txt and json
@@ -547,10 +547,10 @@ describe('attachment Content Service', () => {
       const pdfBuffer = new ArrayBuffer(100); // Mock buffer
 
       const pdfFile = {
-        id: 'upload-dashboard-pdf',
-        mimeType: 'application/pdf',
         filename: 'dashboard-export.pdf',
         fileSize: 5.8 * 1024 * 1024, // 5.8MB - within new 10MB limit
+        id: 'upload-dashboard-pdf',
+        mimeType: 'application/pdf',
         r2Key: 'uploads/user-1/upload-dashboard-pdf_dashboard-export.pdf',
       };
 
@@ -558,24 +558,24 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: pdfBuffer.byteLength,
+        contentType: 'application/pdf',
         data: pdfBuffer,
         found: true,
-        contentType: 'application/pdf',
-        contentLength: pdfBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-dashboard-pdf'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // PDF within 10MB limit should be processed
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
       expect(result.fileParts[0]?.mimeType).toBe('application/pdf');
-      expect(getFile).toHaveBeenCalled();
+      expect(getFile).toHaveBeenCalledWith();
     });
 
     it('should process PDF files at exactly 10MB', async () => {
@@ -583,10 +583,10 @@ describe('attachment Content Service', () => {
       const pdfBuffer = new ArrayBuffer(100);
 
       const pdfFile = {
-        id: 'upload-large-pdf',
-        mimeType: 'application/pdf',
         filename: 'large-document.pdf',
         fileSize: 10 * 1024 * 1024, // Exactly 10MB
+        id: 'upload-large-pdf',
+        mimeType: 'application/pdf',
         r2Key: 'uploads/user-1/upload-large-pdf_large-document.pdf',
       };
 
@@ -594,17 +594,17 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: pdfBuffer.byteLength,
+        contentType: 'application/pdf',
         data: pdfBuffer,
         found: true,
-        contentType: 'application/pdf',
-        contentLength: pdfBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-large-pdf'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // PDFs at exactly 10MB should be processed
@@ -616,10 +616,10 @@ describe('attachment Content Service', () => {
       // Files over MAX_BASE64_FILE_SIZE (10MB prod / 25MB local) should be skipped
       // Using 30MB to exceed both environments
       const oversizedPdf = {
-        id: 'upload-oversized-pdf',
-        mimeType: 'application/pdf',
         filename: 'oversized.pdf',
         fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
+        id: 'upload-oversized-pdf',
+        mimeType: 'application/pdf',
         r2Key: 'uploads/user-1/upload-oversized-pdf_oversized.pdf',
       };
 
@@ -628,16 +628,16 @@ describe('attachment Content Service', () => {
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-oversized-pdf'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // Oversized PDFs should be skipped
       expect(result.fileParts).toHaveLength(0);
       expect(result.stats.skipped).toBe(1);
       expect(getFile).not.toHaveBeenCalled();
-      expect(logger?.warn).toHaveBeenCalled();
+      expect(logger?.warn).toHaveBeenCalledWith();
     });
 
     it('should process image files within 10MB limit', async () => {
@@ -645,10 +645,10 @@ describe('attachment Content Service', () => {
       const imageBuffer = new ArrayBuffer(100);
 
       const imageFile = {
-        id: 'upload-screenshot',
-        mimeType: 'image/png',
         filename: 'dashboard-screenshot.png',
         fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
+        id: 'upload-screenshot',
+        mimeType: 'image/png',
         r2Key: 'uploads/user-1/upload-screenshot_dashboard-screenshot.png',
       };
 
@@ -656,17 +656,17 @@ describe('attachment Content Service', () => {
       const logger = createMockLogger();
 
       vi.mocked(getFile).mockResolvedValue({
+        contentLength: imageBuffer.byteLength,
+        contentType: 'image/png',
         data: imageBuffer,
         found: true,
-        contentType: 'image/png',
-        contentLength: imageBuffer.byteLength,
       });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-screenshot'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // Images within limit should be processed for vision models
@@ -681,24 +681,24 @@ describe('attachment Content Service', () => {
 
       const uploads = [
         {
-          id: 'upload-small-pdf',
-          mimeType: 'application/pdf',
           filename: 'small.pdf',
           fileSize: 2 * 1024 * 1024, // 2MB
+          id: 'upload-small-pdf',
+          mimeType: 'application/pdf',
           r2Key: 'uploads/user-1/upload-small-pdf_small.pdf',
         },
         {
-          id: 'upload-medium-pdf',
-          mimeType: 'application/pdf',
           filename: 'medium.pdf',
           fileSize: 8 * 1024 * 1024, // 8MB - within 10MB limit
+          id: 'upload-medium-pdf',
+          mimeType: 'application/pdf',
           r2Key: 'uploads/user-1/upload-medium-pdf_medium.pdf',
         },
         {
-          id: 'upload-oversized-pdf',
-          mimeType: 'application/pdf',
           filename: 'oversized.pdf',
           fileSize: 30 * 1024 * 1024, // 30MB - exceeds both 10MB and 25MB limits
+          id: 'upload-oversized-pdf',
+          mimeType: 'application/pdf',
           r2Key: 'uploads/user-1/upload-oversized-pdf_oversized.pdf',
         },
       ];
@@ -708,23 +708,23 @@ describe('attachment Content Service', () => {
 
       vi.mocked(getFile)
         .mockResolvedValueOnce({
+          contentLength: smallPdfBuffer.byteLength,
+          contentType: 'application/pdf',
           data: smallPdfBuffer,
           found: true,
-          contentType: 'application/pdf',
-          contentLength: smallPdfBuffer.byteLength,
         })
         .mockResolvedValueOnce({
+          contentLength: mediumPdfBuffer.byteLength,
+          contentType: 'application/pdf',
           data: mediumPdfBuffer,
           found: true,
-          contentType: 'application/pdf',
-          contentLength: mediumPdfBuffer.byteLength,
         });
 
       const result = await loadAttachmentContent({
         attachmentIds: ['upload-small-pdf', 'upload-medium-pdf', 'upload-oversized-pdf'],
-        r2Bucket: undefined,
         db,
         logger,
+        r2Bucket: undefined,
       });
 
       // 2 PDFs within limit should be processed, 1 should be skipped

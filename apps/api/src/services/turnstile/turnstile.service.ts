@@ -14,15 +14,15 @@ const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverif
 
 // Internal schemas with .strict() for Cloudflare Turnstile API responses
 const _TurnstileValidationResultSchema = z.object({
-  'success': z.boolean(),
-  'challenge_ts': z.string().optional(),
-  'hostname': z.string().optional(),
   'action': z.string().optional(),
   'cdata': z.string().optional(),
+  'challenge_ts': z.string().optional(),
   'error-codes': z.array(z.string()).optional(),
+  'hostname': z.string().optional(),
   'metadata': z.object({
     ephemeral_id: z.string().optional(),
   }).strict().optional(),
+  'success': z.boolean(),
 }).strict();
 
 export type TurnstileValidationResult = z.infer<typeof _TurnstileValidationResultSchema>;
@@ -49,15 +49,15 @@ export async function validateTurnstileToken(
   // Input validation
   if (!token || typeof token !== 'string') {
     return {
-      'success': false,
       'error-codes': ['invalid-input-response'],
+      'success': false,
     };
   }
 
   if (token.length > 2048) {
     return {
-      'success': false,
       'error-codes': ['invalid-input-response'],
+      'success': false,
     };
   }
 
@@ -74,8 +74,8 @@ export async function validateTurnstileToken(
     }
 
     const response = await fetch(SITEVERIFY_URL, {
-      method: 'POST',
       body: formData,
+      method: 'POST',
       signal: controller.signal,
     });
 
@@ -85,15 +85,15 @@ export async function validateTurnstileToken(
     if (result.success) {
       if (options.expectedAction && result.action !== options.expectedAction) {
         return {
-          'success': false,
           'error-codes': ['action-mismatch'],
+          'success': false,
         };
       }
 
       if (options.expectedHostname && result.hostname !== options.expectedHostname) {
         return {
-          'success': false,
           'error-codes': ['hostname-mismatch'],
+          'success': false,
         };
       }
     }
@@ -102,14 +102,14 @@ export async function validateTurnstileToken(
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
       return {
-        'success': false,
         'error-codes': ['timeout-error'],
+        'success': false,
       };
     }
 
     return {
-      'success': false,
       'error-codes': ['internal-error'],
+      'success': false,
     };
   } finally {
     clearTimeout(timeoutId);
@@ -133,8 +133,8 @@ export async function validateTurnstileFromContext(
       return { success: true };
     }
     return {
-      'success': false,
       'error-codes': ['missing-secret-key'],
+      'success': false,
     };
   }
 
@@ -143,7 +143,7 @@ export async function validateTurnstileFromContext(
     || c.req.header('X-Forwarded-For')?.split(',')[0]?.trim()
     || c.req.header('X-Real-IP');
 
-  return validateTurnstileToken(token, secretKey, remoteIp, options);
+  return await validateTurnstileToken(token, secretKey, remoteIp, options);
 }
 
 /**

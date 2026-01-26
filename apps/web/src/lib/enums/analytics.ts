@@ -30,11 +30,11 @@ export const DEFAULT_PROJECT_ANALYTICS_EVENT_TYPE: ProjectAnalyticsEventType = '
 
 // 5. CONSTANT OBJECT
 export const ProjectAnalyticsEventTypes = {
-  MILESTONE_COMPLETED: 'milestone_completed' as const,
   MEMBER_ADDED: 'member_added' as const,
+  MILESTONE_COMPLETED: 'milestone_completed' as const,
+  PROJECT_ACTION: 'project_action' as const,
   STATUS_CHANGED: 'status_changed' as const,
   TASK_CREATED: 'task_created' as const,
-  PROJECT_ACTION: 'project_action' as const,
 } as const;
 
 // 6. TYPE GUARD (uses Zod safeParse - no type cast)

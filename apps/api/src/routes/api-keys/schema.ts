@@ -23,8 +23,8 @@ export const ApiKeyIdParamSchema = z.object({
     description: 'API key ID',
     example: 'key_abc123xyz',
     param: {
-      name: 'keyId',
       in: 'path',
+      name: 'keyId',
     },
   }),
 }).openapi('ApiKeyIdParam');
@@ -42,14 +42,14 @@ export const CreateApiKeyRequestSchema = apiKeyInsertSchema
     name: true,
   })
   .extend({
+    expiresIn: z.number().int().positive().min(1, 'Expiration must be at least 1 day').max(365, 'Expiration cannot exceed 365 days').optional().openapi({
+      description: 'Expiration time in days (1-365, optional)',
+      example: 30,
+    }),
     // Additional user-facing fields not in table
     name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').openapi({
       description: 'A descriptive name for the API key',
       example: 'My API Key',
-    }),
-    expiresIn: z.number().int().positive().min(1, 'Expiration must be at least 1 day').max(365, 'Expiration cannot exceed 365 days').optional().openapi({
-      description: 'Expiration time in days (1-365, optional)',
-      example: 30,
     }),
     remaining: z.number().int().positive().nullable().optional().openapi({
       description: 'Maximum number of requests (null for unlimited)',
@@ -64,27 +64,35 @@ export const CreateApiKeyRequestSchema = apiKeyInsertSchema
  */
 export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
   .pick({
-    name: true,
     enabled: true,
-    remaining: true,
+    name: true,
+    rateLimitEnabled: true,
+    rateLimitMax: true,
+    rateLimitTimeWindow: true,
     refillAmount: true,
     refillInterval: true,
-    rateLimitEnabled: true,
-    rateLimitTimeWindow: true,
-    rateLimitMax: true,
+    remaining: true,
   })
   .extend({
-    name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').optional().openapi({
-      description: 'Update the API key name',
-      example: 'Updated API Key Name',
-    }),
     enabled: z.boolean().optional().openapi({
       description: 'Enable or disable the API key',
       example: true,
     }),
-    remaining: z.number().int().positive().nullable().optional().openapi({
-      description: 'Update remaining requests (null for unlimited)',
-      example: 5000,
+    name: z.string().min(3, 'Name must be at least 3 characters').max(50, 'Name must be at most 50 characters').optional().openapi({
+      description: 'Update the API key name',
+      example: 'Updated API Key Name',
+    }),
+    rateLimitEnabled: z.boolean().optional().openapi({
+      description: 'Enable or disable rate limiting for this API key',
+      example: true,
+    }),
+    rateLimitMax: z.number().int().positive().nullable().optional().openapi({
+      description: 'Maximum requests allowed within the time window',
+      example: 1000,
+    }),
+    rateLimitTimeWindow: z.number().int().positive().nullable().optional().openapi({
+      description: 'Rate limit time window in milliseconds',
+      example: 86400000, // 24 hours
     }),
     refillAmount: z.number().int().positive().nullable().optional().openapi({
       description: 'Amount to refill on each refill interval',
@@ -94,17 +102,9 @@ export const UpdateApiKeyRequestSchema = apiKeyUpdateSchema
       description: 'Refill interval in milliseconds',
       example: 86400000, // 24 hours
     }),
-    rateLimitEnabled: z.boolean().optional().openapi({
-      description: 'Enable or disable rate limiting for this API key',
-      example: true,
-    }),
-    rateLimitTimeWindow: z.number().int().positive().nullable().optional().openapi({
-      description: 'Rate limit time window in milliseconds',
-      example: 86400000, // 24 hours
-    }),
-    rateLimitMax: z.number().int().positive().nullable().optional().openapi({
-      description: 'Maximum requests allowed within the time window',
-      example: 1000,
+    remaining: z.number().int().positive().nullable().optional().openapi({
+      description: 'Update remaining requests (null for unlimited)',
+      example: 5000,
     }),
   })
   .openapi('UpdateApiKeyRequest');
@@ -139,8 +139,8 @@ export const ApiKeyWithKeySchema = ApiKeySchema.extend({
 
 export const ListApiKeysResponseSchema = createApiResponseSchema(
   z.object({
-    items: z.array(ApiKeySchema),
     count: z.number().int().nonnegative(),
+    items: z.array(ApiKeySchema),
   }).openapi('ListApiKeysPayload'),
 ).openapi('ListApiKeysResponse');
 

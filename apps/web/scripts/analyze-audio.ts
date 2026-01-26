@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Audio Analyzer Script
  *
@@ -7,29 +8,40 @@
  * Run with: bun run scripts/analyze-audio.ts
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
 import { getAudioData, getWaveformPortion } from '@remotion/media-utils';
-import * as fs from 'fs';
-import * as path from 'path';
 
 const AUDIO_PATH = path.join(__dirname, '../public/static/music/showcase-bg.mp3');
 const SAMPLE_RATE = 10; // Samples per second
 const OUTPUT_PATH = path.join(__dirname, '../src/remotion/lib/audio-analysis.json');
 
-interface EnergySegment {
+type EnergySegment = {
   startSeconds: number;
   endSeconds: number;
   avgEnergy: number;
   peakEnergy: number;
   label: 'quiet' | 'low' | 'medium' | 'building' | 'high' | 'peak';
-}
+};
 
 function classifyEnergy(energy: number, maxEnergy: number): EnergySegment['label'] {
   const normalized = energy / maxEnergy;
-  if (normalized < 0.15) return 'quiet';
-  if (normalized < 0.3) return 'low';
-  if (normalized < 0.5) return 'medium';
-  if (normalized < 0.7) return 'building';
-  if (normalized < 0.85) return 'high';
+  if (normalized < 0.15) {
+    return 'quiet';
+  }
+  if (normalized < 0.3) {
+    return 'low';
+  }
+  if (normalized < 0.5) {
+    return 'medium';
+  }
+  if (normalized < 0.7) {
+    return 'building';
+  }
+  if (normalized < 0.85) {
+    return 'high';
+  }
   return 'peak';
 }
 
@@ -77,7 +89,7 @@ async function analyzeAudio() {
 
     // Calculate RMS energy
     const energy = Math.sqrt(
-      portion.reduce((sum, bar) => sum + bar.amplitude * bar.amplitude, 0) / portion.length
+      portion.reduce((sum, bar) => sum + bar.amplitude * bar.amplitude, 0) / portion.length,
     );
 
     samples.push({ time: t, energy });
@@ -94,7 +106,9 @@ async function analyzeAudio() {
     const end = Math.min(start + SEGMENT_DURATION, duration);
     const segmentSamples = samples.filter(s => s.time >= start && s.time < end);
 
-    if (segmentSamples.length === 0) continue;
+    if (segmentSamples.length === 0) {
+      continue;
+    }
 
     const avgEnergy = segmentSamples.reduce((sum, s) => sum + s.energy, 0) / segmentSamples.length;
     const peakEnergy = Math.max(...segmentSamples.map(s => s.energy));
@@ -109,13 +123,13 @@ async function analyzeAudio() {
   }
 
   // Print visual chart
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${'='.repeat(80)}`);
   console.log('AUDIO ENERGY ANALYSIS');
   console.log('='.repeat(80));
   console.log('\nEnergy levels by 5-second segments:\n');
 
   const barWidth = 40;
-  segments.forEach((seg, i) => {
+  segments.forEach((seg, _i) => {
     const normalized = seg.avgEnergy / maxEnergy;
     const bars = Math.round(normalized * barWidth);
     const bar = '█'.repeat(bars) + '░'.repeat(barWidth - bars);
@@ -125,7 +139,7 @@ async function analyzeAudio() {
   });
 
   // Find best sections for each energy level
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${'='.repeat(80)}`);
   console.log('RECOMMENDED SECTIONS FOR VIDEO');
   console.log('='.repeat(80));
 
@@ -134,17 +148,17 @@ async function analyzeAudio() {
   const peakSections = segments.filter(s => s.label === 'peak' || s.label === 'high');
 
   console.log('\n🔇 QUIET/LOW (for Intro, Fade outs):');
-  quietSections.slice(0, 3).forEach(s => {
+  quietSections.slice(0, 3).forEach((s) => {
     console.log(`   ${formatTime(s.startSeconds)}-${formatTime(s.endSeconds)}`);
   });
 
   console.log('\n📈 BUILDING/MEDIUM (for Features, Navigation):');
-  buildingSections.slice(0, 5).forEach(s => {
+  buildingSections.slice(0, 5).forEach((s) => {
     console.log(`   ${formatTime(s.startSeconds)}-${formatTime(s.endSeconds)}`);
   });
 
   console.log('\n🔥 HIGH/PEAK (for THE DROP, Core Features):');
-  peakSections.forEach(s => {
+  peakSections.forEach((s) => {
     console.log(`   ${formatTime(s.startSeconds)}-${formatTime(s.endSeconds)}`);
   });
 
@@ -165,7 +179,7 @@ async function analyzeAudio() {
   console.log(`\n✅ Analysis saved to: ${OUTPUT_PATH}`);
 
   // Generate splice recommendations
-  console.log('\n' + '='.repeat(80));
+  console.log(`\n${'='.repeat(80)}`);
   console.log('SUGGESTED AUDIO SPLICE MAP');
   console.log('='.repeat(80));
   console.log('\nVideo Scene → Recommended Audio Section:');
@@ -181,11 +195,11 @@ async function analyzeAudio() {
     { name: 'Finale', frames: '2418-2532', seconds: 3.8, energy: 'low' },
   ];
 
-  videoScenes.forEach(scene => {
+  videoScenes.forEach((scene) => {
     const matchingSegments = segments.filter(s =>
-      s.label === scene.energy ||
-      (scene.energy === 'building' && (s.label === 'building' || s.label === 'medium')) ||
-      (scene.energy === 'peak' && (s.label === 'peak' || s.label === 'high'))
+      s.label === scene.energy
+      || (scene.energy === 'building' && (s.label === 'building' || s.label === 'medium'))
+      || (scene.energy === 'peak' && (s.label === 'peak' || s.label === 'high')),
     );
     const best = matchingSegments[0];
     if (best) {

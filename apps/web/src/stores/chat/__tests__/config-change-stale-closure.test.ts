@@ -32,32 +32,32 @@ import { createChatStore } from '@/stores/chat';
 
 function createMockThread(enableWebSearch = false): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORMING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORMING,
+    slug: 'test-thread',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: new Date(),
   };
 }
 
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -82,8 +82,8 @@ describe('config Change Stale Closure Prevention', () => {
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
       // Initial state: form enableWebSearch matches thread
-      expect(store.getState().enableWebSearch).toBe(false);
-      expect(store.getState().thread?.enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeFalsy();
+      expect(store.getState().thread?.enableWebSearch).toBeFalsy();
 
       // Simulate stale closure scenario:
       // 1. Capture "old" state (what a stale closure would see)
@@ -101,12 +101,12 @@ describe('config Change Stale Closure Prevention', () => {
       const currentWebSearchFromThread = thread.enableWebSearch ?? false;
       const buggyWebSearchChanged = currentWebSearchFromThread !== staleFormState.enableWebSearch;
       // Both are false: (false !== false) = false - BUG: no change detected!
-      expect(buggyWebSearchChanged).toBe(false);
+      expect(buggyWebSearchChanged).toBeFalsy();
 
       // Fixed approach: compare thread with fresh store state
       const fixedWebSearchChanged = currentWebSearchFromThread !== freshState.enableWebSearch;
       // (false !== true) = true - CORRECT: change detected!
-      expect(fixedWebSearchChanged).toBe(true);
+      expect(fixedWebSearchChanged).toBeTruthy();
     });
 
     it('should detect webSearch toggle from true to false via fresh state read', () => {
@@ -116,8 +116,8 @@ describe('config Change Stale Closure Prevention', () => {
 
       // Initial state: form enableWebSearch matches thread
       store.getState().setEnableWebSearch(true);
-      expect(store.getState().enableWebSearch).toBe(true);
-      expect(store.getState().thread?.enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
+      expect(store.getState().thread?.enableWebSearch).toBeTruthy();
 
       // Simulate stale closure: capture old state
       const staleFormState = {
@@ -133,11 +133,11 @@ describe('config Change Stale Closure Prevention', () => {
       // Buggy: stale value (true !== true) = false - no change
       const currentWebSearch = thread.enableWebSearch ?? false;
       const buggyWebSearchChanged = currentWebSearch !== staleFormState.enableWebSearch;
-      expect(buggyWebSearchChanged).toBe(false);
+      expect(buggyWebSearchChanged).toBeFalsy();
 
       // Fixed: (true !== false) = true - change detected
       const fixedWebSearchChanged = currentWebSearch !== freshState.enableWebSearch;
-      expect(fixedWebSearchChanged).toBe(true);
+      expect(fixedWebSearchChanged).toBeTruthy();
     });
 
     it('should not detect change when toggle value matches thread', () => {
@@ -151,7 +151,7 @@ describe('config Change Stale Closure Prevention', () => {
       const currentWebSearch = thread.enableWebSearch ?? false;
       const webSearchChanged = currentWebSearch !== freshState.enableWebSearch;
       // (true !== true) = false - correctly no change
-      expect(webSearchChanged).toBe(false);
+      expect(webSearchChanged).toBeFalsy();
     });
   });
 
@@ -187,7 +187,7 @@ describe('config Change Stale Closure Prevention', () => {
       // Fixed approach: always detects the change
       // thread.mode (brainstorm) !== fresh.selectedMode (debate) = true (change detected)
       const fixedModeChanged = threadMode !== freshState.selectedMode;
-      expect(fixedModeChanged).toBe(true);
+      expect(fixedModeChanged).toBeTruthy();
 
       // The bug manifests when stale closure captured state BEFORE user toggled
       // This test verifies fresh state read correctly detects the change
@@ -202,7 +202,7 @@ describe('config Change Stale Closure Prevention', () => {
 
       // Verify initial state
       const initialState = store.getState();
-      expect(initialState.enableWebSearch).toBe(false);
+      expect(initialState.enableWebSearch).toBeFalsy();
 
       // User changes both settings
       store.getState().setSelectedMode(ChatModes.DEBATING);
@@ -216,9 +216,9 @@ describe('config Change Stale Closure Prevention', () => {
       const freshModeChanged = (thread.mode ?? null) !== freshState.selectedMode;
 
       // thread.enableWebSearch (false) !== fresh.enableWebSearch (true) = true
-      expect(freshWebSearchChanged).toBe(true);
+      expect(freshWebSearchChanged).toBeTruthy();
       // thread.mode (brainstorm) !== fresh.selectedMode (debate) = true
-      expect(freshModeChanged).toBe(true);
+      expect(freshModeChanged).toBeTruthy();
 
       // The key insight: fresh state read always reflects user's latest changes
       // regardless of when the callback was created
@@ -238,7 +238,7 @@ describe('config Change Stale Closure Prevention', () => {
       const modeChanged = (thread.mode ?? null) !== freshState.selectedMode;
       const hasPendingChanges = webSearchChanged || modeChanged;
 
-      expect(hasPendingChanges).toBe(true);
+      expect(hasPendingChanges).toBeTruthy();
     });
   });
 
@@ -260,7 +260,7 @@ describe('config Change Stale Closure Prevention', () => {
         patchPayload.enableWebSearch = freshState.enableWebSearch;
       }
 
-      expect(patchPayload.enableWebSearch).toBe(true);
+      expect(patchPayload.enableWebSearch).toBeTruthy();
     });
 
     it('should not include enableWebSearch in PATCH payload when unchanged', () => {
@@ -316,11 +316,11 @@ describe('config Change Stale Closure Prevention', () => {
 
       // Buggy: stale value would not create placeholder
       const buggyCreatePreSearch = staleEnableWebSearch === true;
-      expect(buggyCreatePreSearch).toBe(false);
+      expect(buggyCreatePreSearch).toBeFalsy();
 
       // Fixed: fresh value correctly creates placeholder
       const fixedCreatePreSearch = freshEnableWebSearch === true;
-      expect(fixedCreatePreSearch).toBe(true);
+      expect(fixedCreatePreSearch).toBeTruthy();
     });
   });
 
@@ -338,7 +338,7 @@ describe('config Change Stale Closure Prevention', () => {
       const modeChanged = currentModeFromThread !== freshState.selectedMode;
 
       // 'brainstorming' !== 'debating' = true
-      expect(modeChanged).toBe(true);
+      expect(modeChanged).toBeTruthy();
       expect(currentModeFromThread).toBe(ChatModes.BRAINSTORMING);
       expect(freshState.selectedMode).toBe(ChatModes.DEBATING);
     });
@@ -355,11 +355,11 @@ describe('config Change Stale Closure Prevention', () => {
 
       // Final fresh state should be what user ended with
       const freshState = store.getState();
-      expect(freshState.enableWebSearch).toBe(true);
+      expect(freshState.enableWebSearch).toBeTruthy();
 
       // Change detection should work
       const webSearchChanged = (thread.enableWebSearch ?? false) !== freshState.enableWebSearch;
-      expect(webSearchChanged).toBe(true);
+      expect(webSearchChanged).toBeTruthy();
     });
 
     it('should detect no change when user toggles back to original', () => {
@@ -374,7 +374,7 @@ describe('config Change Stale Closure Prevention', () => {
       const freshState = store.getState();
       const webSearchChanged = (thread.enableWebSearch ?? false) !== freshState.enableWebSearch;
       // (false !== false) = false - no change
-      expect(webSearchChanged).toBe(false);
+      expect(webSearchChanged).toBeFalsy();
     });
   });
 });

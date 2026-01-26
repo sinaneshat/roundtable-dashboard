@@ -35,30 +35,30 @@ import type { ChatParticipant } from '@/services/api';
 // ============================================================================
 
 export const ParticipantDebugInfoSchema = z.object({
-  participantId: z.string().nullable(),
-  participantIndex: z.number().nullable(),
+  hasContent: z.boolean(),
+  hasFinishReason: z.boolean(),
   hasMessage: z.boolean(),
   hasStreamingParts: z.boolean(),
-  hasFinishReason: z.boolean(),
-  hasContent: z.boolean(),
   isComplete: z.boolean(),
+  participantId: z.string().nullable(),
+  participantIndex: z.number().nullable(),
 });
 
 export const ParticipantCompletionStatusSchema = z.object({
   /** Whether all participants have completed for this round */
   allComplete: z.boolean(),
-  /** Total number of expected participants */
-  expectedCount: z.number(),
   /** Number of participants with complete messages */
   completedCount: z.number(),
-  /** Number of participants still streaming */
-  streamingCount: z.number(),
-  /** Participant IDs that are still streaming */
-  streamingParticipantIds: z.array(z.string()),
   /** Participant IDs that have completed */
   completedParticipantIds: z.array(z.string()),
   /** Debug info about each participant's status */
   debugInfo: z.array(ParticipantDebugInfoSchema),
+  /** Total number of expected participants */
+  expectedCount: z.number(),
+  /** Number of participants still streaming */
+  streamingCount: z.number(),
+  /** Participant IDs that are still streaming */
+  streamingParticipantIds: z.array(z.string()),
 });
 
 // ============================================================================
@@ -112,9 +112,9 @@ export function isMessageComplete(message: UIMessage): boolean {
   let hasFallbackFinishReason = false;
   let hasFallbackErrorFlag = false;
   if (!metadata && isObject(message.metadata)) {
-    const rawFinishReason = message.metadata.finishReason;
+    const rawFinishReason = message.metadata['finishReason'];
     hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
-    hasFallbackErrorFlag = message.metadata.hasError === true;
+    hasFallbackErrorFlag = message.metadata['hasError'] === true;
   }
 
   // Check for text content (including reasoning - V7 FIX for reasoning models like Gemini)
@@ -131,7 +131,7 @@ export function isMessageComplete(message: UIMessage): boolean {
 
   let hasValidFallbackFinishReason = false;
   if (hasFallbackFinishReason && isObject(message.metadata)) {
-    hasValidFallbackFinishReason = message.metadata.finishReason !== FinishReasons.UNKNOWN;
+    hasValidFallbackFinishReason = message.metadata['finishReason'] !== FinishReasons.UNKNOWN;
   }
 
   // Complete if:
@@ -159,12 +159,12 @@ export function getParticipantCompletionStatus(
   if (enabledParticipants.length === 0) {
     return {
       allComplete: false,
-      expectedCount: 0,
       completedCount: 0,
-      streamingCount: 0,
-      streamingParticipantIds: [],
       completedParticipantIds: [],
       debugInfo: [],
+      expectedCount: 0,
+      streamingCount: 0,
+      streamingParticipantIds: [],
     };
   }
 
@@ -199,13 +199,13 @@ export function getParticipantCompletionStatus(
     if (!participantMessage) {
       // No message yet for this participant
       debugInfo.push({
-        participantId: participant.id,
-        participantIndex: participant.priority,
+        hasContent: false,
+        hasFinishReason: false,
         hasMessage: false,
         hasStreamingParts: false,
-        hasFinishReason: false,
-        hasContent: false,
         isComplete: false,
+        participantId: participant.id,
+        participantIndex: participant.priority,
       });
       streamingParticipantIds.push(participant.id);
       continue;
@@ -225,7 +225,7 @@ export function getParticipantCompletionStatus(
     // ✅ FALLBACK: Check finishReason directly when Zod validation fails
     let hasFallbackFinishReason = false;
     if (!metadata && isObject(participantMessage.metadata)) {
-      const rawFinishReason = participantMessage.metadata.finishReason;
+      const rawFinishReason = participantMessage.metadata['finishReason'];
       hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
     }
 
@@ -242,7 +242,7 @@ export function getParticipantCompletionStatus(
 
     let hasValidFallbackFinishReason = false;
     if (hasFallbackFinishReason && isObject(participantMessage.metadata)) {
-      hasValidFallbackFinishReason = participantMessage.metadata.finishReason !== FinishReasons.UNKNOWN;
+      hasValidFallbackFinishReason = participantMessage.metadata['finishReason'] !== FinishReasons.UNKNOWN;
     }
 
     // If streaming, message is NOT complete - streaming parts takes precedence over finishReason
@@ -250,13 +250,13 @@ export function getParticipantCompletionStatus(
     const isComplete = !hasStreamingParts && (hasValidFinishReason || hasValidFallbackFinishReason || !!hasTextContent);
 
     debugInfo.push({
-      participantId: participant.id,
-      participantIndex: participant.priority,
+      hasContent: !!hasTextContent,
+      hasFinishReason: hasValidFinishReason || hasValidFallbackFinishReason,
       hasMessage: true,
       hasStreamingParts,
-      hasFinishReason: hasValidFinishReason || hasValidFallbackFinishReason,
-      hasContent: !!hasTextContent,
       isComplete,
+      participantId: participant.id,
+      participantIndex: participant.priority,
     });
 
     if (isComplete) {
@@ -270,12 +270,12 @@ export function getParticipantCompletionStatus(
 
   return {
     allComplete,
-    expectedCount: enabledParticipants.length,
     completedCount: completedParticipantIds.length,
-    streamingCount: streamingParticipantIds.length,
-    streamingParticipantIds,
     completedParticipantIds,
     debugInfo,
+    expectedCount: enabledParticipants.length,
+    streamingCount: streamingParticipantIds.length,
+    streamingParticipantIds,
   };
 }
 
@@ -337,23 +337,26 @@ export function getRoundActualCompletionStatus(
 ): RoundActualCompletionStatus {
   // Get participant messages for this round (exclude moderator)
   const roundParticipantMessages = messages.filter((m) => {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
-    if (getRoundNumber(m.metadata) !== roundNumber)
+    }
+    if (getRoundNumber(m.metadata) !== roundNumber) {
       return false;
+    }
     // Exclude moderator messages
     const modMeta = getModeratorMetadata(m.metadata);
-    if (modMeta)
+    if (modMeta) {
       return false;
+    }
     return true;
   });
 
   if (roundParticipantMessages.length === 0) {
     return {
       allComplete: false,
-      expectedCount: 0,
       completedCount: 0,
       completedIndices: [],
+      expectedCount: 0,
       incompleteIndices: [],
     };
   }
@@ -378,9 +381,9 @@ export function getRoundActualCompletionStatus(
   if (maxIndex < 0) {
     return {
       allComplete: false,
-      expectedCount: 0,
       completedCount: 0,
       completedIndices: [],
+      expectedCount: 0,
       incompleteIndices: [],
     };
   }
@@ -401,9 +404,9 @@ export function getRoundActualCompletionStatus(
 
   return {
     allComplete: incompleteIndices.length === 0 && completedIndices.length === expectedCount,
-    expectedCount,
     completedCount: completedIndices.length,
     completedIndices,
+    expectedCount,
     incompleteIndices,
   };
 }
@@ -427,12 +430,14 @@ export function getModeratorMessageForRound(
   roundNumber: number,
 ): UIMessage | undefined {
   return messages.find((m) => {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
+    }
 
     const metadata = getModeratorMetadata(m.metadata);
-    if (!metadata)
+    if (!metadata) {
       return false;
+    }
 
     return getRoundNumber(m.metadata) === roundNumber;
   });

@@ -8,31 +8,19 @@ import { createApiResponseSchema, PaginationQuerySchema } from '@/core/schemas';
 // ============================================================================
 
 export const CreditBalancePayloadSchema = z.object({
-  balance: z.number().openapi({
-    description: 'Current available credit balance',
-    example: 8500,
-  }),
-  reserved: z.number().openapi({
-    description: 'Credits reserved for in-progress operations',
-    example: 100,
-  }),
   available: z.number().openapi({
     description: 'Credits available for use (balance - reserved)',
     example: 8400,
   }),
-  status: UsageStatusSchema.openapi({
-    description: 'Visual status indicator (default/warning/critical)',
-    example: 'default',
+  balance: z.number().openapi({
+    description: 'Current available credit balance',
+    example: 8500,
   }),
   percentage: z.number().openapi({
     description: 'Percentage of credits used (from monthly allocation)',
     example: 15,
   }),
   plan: z.object({
-    type: PlanTypeSchema.openapi({
-      description: 'Current plan type',
-      example: 'free',
-    }),
     monthlyCredits: z.number().openapi({
       description: 'Monthly credit allocation (0 for free tier - one-time signup credits only)',
       example: 0,
@@ -41,8 +29,20 @@ export const CreditBalancePayloadSchema = z.object({
       description: 'Next monthly refill date (null for free tier - no renewals)',
       example: null,
     }),
+    type: PlanTypeSchema.openapi({
+      description: 'Current plan type',
+      example: 'free',
+    }),
   }).openapi({
     description: 'Plan information',
+  }),
+  reserved: z.number().openapi({
+    description: 'Credits reserved for in-progress operations',
+    example: 100,
+  }),
+  status: UsageStatusSchema.openapi({
+    description: 'Visual status indicator (default/warning/critical)',
+    example: 'default',
   }),
 }).openapi('CreditBalancePayload');
 
@@ -55,13 +55,9 @@ export const CreditBalanceResponseSchema = createApiResponseSchema(
 // ============================================================================
 
 export const CreditTransactionSchema = z.object({
-  id: z.string().openapi({
-    description: 'Transaction ID',
-    example: '01JARW8VXNQH1234567890ABC',
-  }),
-  type: z.string().openapi({
-    description: 'Transaction type',
-    example: 'deduction',
+  action: CreditActionSchema.nullable().openapi({
+    description: 'Action that triggered this transaction',
+    example: 'ai_response',
   }),
   amount: z.number().openapi({
     description: 'Credit amount (positive = credit in, negative = deduction)',
@@ -71,13 +67,17 @@ export const CreditTransactionSchema = z.object({
     description: 'Balance after this transaction',
     example: 8495,
   }),
-  action: CreditActionSchema.nullable().openapi({
-    description: 'Action that triggered this transaction',
-    example: 'ai_response',
+  createdAt: z.coerce.date().openapi({
+    description: 'Transaction timestamp',
+    example: '2025-01-15T10:30:00Z',
   }),
   description: z.string().nullable().openapi({
     description: 'Human-readable description',
     example: 'AI response tokens: 1500 input, 800 output',
+  }),
+  id: z.string().openapi({
+    description: 'Transaction ID',
+    example: '01JARW8VXNQH1234567890ABC',
   }),
   inputTokens: z.number().nullable().openapi({
     description: 'Input tokens consumed (if applicable)',
@@ -91,9 +91,9 @@ export const CreditTransactionSchema = z.object({
     description: 'Associated thread ID',
     example: '01JARW8VXNQH1234567890XYZ',
   }),
-  createdAt: z.coerce.date().openapi({
-    description: 'Transaction timestamp',
-    example: '2025-01-15T10:30:00Z',
+  type: z.string().openapi({
+    description: 'Transaction type',
+    example: 'deduction',
   }),
 }).openapi('CreditTransaction');
 
@@ -102,9 +102,9 @@ export const CreditTransactionsPayloadSchema = z.object({
     description: 'List of credit transactions',
   }),
   pagination: z.object({
-    total: z.number().openapi({
-      description: 'Total number of transactions',
-      example: 150,
+    hasMore: z.boolean().openapi({
+      description: 'Whether more items exist',
+      example: true,
     }),
     limit: z.number().openapi({
       description: 'Items per page',
@@ -114,9 +114,9 @@ export const CreditTransactionsPayloadSchema = z.object({
       description: 'Current offset',
       example: 0,
     }),
-    hasMore: z.boolean().openapi({
-      description: 'Whether more items exist',
-      example: true,
+    total: z.number().openapi({
+      description: 'Total number of transactions',
+      example: 150,
     }),
   }),
 }).openapi('CreditTransactionsPayload');
@@ -126,13 +126,13 @@ export const CreditTransactionsResponseSchema = createApiResponseSchema(
 ).openapi('CreditTransactionsResponse');
 
 export const CreditTransactionsQuerySchema = PaginationQuerySchema.extend({
-  type: CreditTransactionTypeSchema.optional().openapi({
-    description: 'Filter by transaction type',
-    example: 'deduction',
-  }),
   action: CreditActionSchema.optional().openapi({
     description: 'Filter by action',
     example: 'ai_response',
+  }),
+  type: CreditTransactionTypeSchema.optional().openapi({
+    description: 'Filter by transaction type',
+    example: 'deduction',
   }),
 }).openapi('CreditTransactionsQuery');
 
@@ -146,10 +146,6 @@ export const CreditEstimateRequestSchema = z.object({
     example: 'ai_response',
   }),
   params: z.object({
-    participantCount: z.number().optional().openapi({
-      description: 'Number of AI participants (for streaming)',
-      example: 2,
-    }),
     estimatedInputTokens: z.number().optional().openapi({
       description: 'Estimated input tokens',
       example: 1000,
@@ -158,15 +154,19 @@ export const CreditEstimateRequestSchema = z.object({
       description: 'Estimated output tokens',
       example: 2000,
     }),
+    participantCount: z.number().optional().openapi({
+      description: 'Number of AI participants (for streaming)',
+      example: 2,
+    }),
   }).optional().openapi({
     description: 'Parameters for estimation',
   }),
 }).openapi('CreditEstimateRequest');
 
 export const CreditEstimatePayloadSchema = z.object({
-  estimatedCredits: z.number().openapi({
-    description: 'Estimated credit cost',
-    example: 3,
+  balanceAfter: z.number().openapi({
+    description: 'Estimated balance after action',
+    example: 8397,
   }),
   canAfford: z.boolean().openapi({
     description: 'Whether user has enough credits',
@@ -176,9 +176,9 @@ export const CreditEstimatePayloadSchema = z.object({
     description: 'Current available balance',
     example: 8400,
   }),
-  balanceAfter: z.number().openapi({
-    description: 'Estimated balance after action',
-    example: 8397,
+  estimatedCredits: z.number().openapi({
+    description: 'Estimated credit cost',
+    example: 3,
   }),
 }).openapi('CreditEstimatePayload');
 

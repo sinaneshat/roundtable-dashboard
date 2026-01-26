@@ -21,8 +21,8 @@ import { SetCreditsRequestSchema } from './schema';
 export const setUserCreditsHandler: RouteHandler<typeof setUserCreditsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: SetCreditsRequestSchema,
     operationName: 'setUserCredits',
+    validateBody: SetCreditsRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -42,10 +42,10 @@ export const setUserCreditsHandler: RouteHandler<typeof setUserCreditsRoute, Api
     const balance = await getUserCreditBalance(user.id);
 
     return Responses.ok(c, {
-      balance: balance.balance,
-      reserved: balance.reserved,
       available: balance.available,
+      balance: balance.balance,
       planType: balance.planType,
+      reserved: balance.reserved,
     });
   },
 );

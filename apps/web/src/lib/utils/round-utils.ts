@@ -97,8 +97,9 @@ export function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessa
 
   for (const message of messages) {
     // Deduplicate in same pass (eliminates third loop)
-    if (seenIds.has(message.id))
+    if (seenIds.has(message.id)) {
       continue;
+    }
     seenIds.add(message.id);
 
     // Get explicit round number or infer from context

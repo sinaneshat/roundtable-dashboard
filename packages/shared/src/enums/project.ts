@@ -27,10 +27,10 @@ export const ProjectIndexStatusSchema = z.enum(PROJECT_INDEX_STATUSES).openapi({
 export type ProjectIndexStatus = z.infer<typeof ProjectIndexStatusSchema>;
 
 export const ProjectIndexStatuses = {
-  PENDING: 'pending' as const,
-  INDEXING: 'indexing' as const,
-  INDEXED: 'indexed' as const,
   FAILED: 'failed' as const,
+  INDEXED: 'indexed' as const,
+  INDEXING: 'indexing' as const,
+  PENDING: 'pending' as const,
 } as const;
 
 // ============================================================================
@@ -53,9 +53,9 @@ export type AiSearchCheckStatus = z.infer<typeof AiSearchCheckStatusSchema>;
 
 export const AiSearchCheckStatuses = {
   ACTIVE: 'active' as const,
-  PAUSED: 'paused' as const,
-  NOT_FOUND: 'not_found' as const,
   ERROR: 'error' as const,
+  NOT_FOUND: 'not_found' as const,
+  PAUSED: 'paused' as const,
 } as const;
 
 // ============================================================================
@@ -82,9 +82,9 @@ export type ProjectMemorySource = z.infer<typeof ProjectMemorySourceSchema>;
 export const ProjectMemorySources = {
   CHAT: 'chat' as const,
   EXPLICIT: 'explicit' as const,
+  INSTRUCTION: 'instruction' as const,
   MODERATOR: 'moderator' as const,
   SEARCH: 'search' as const,
-  INSTRUCTION: 'instruction' as const,
 } as const;
 
 // ============================================================================
@@ -134,36 +134,36 @@ export const ProjectIconSchema = z.enum(PROJECT_ICONS).openapi({
 export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
 
 export const ProjectIcons = {
-  BRIEFCASE: 'briefcase' as const,
-  CODE: 'code' as const,
   BOOK: 'book' as const,
+  BRAIN: 'brain' as const,
+  BRIEFCASE: 'briefcase' as const,
+  CALENDAR: 'calendar' as const,
+  CLOCK: 'clock' as const,
+  CODE: 'code' as const,
+  COINS: 'coins' as const,
+  DATABASE: 'database' as const,
+  FILE_TEXT: 'fileText' as const,
+  GIFT: 'gift' as const,
   GLOBE: 'globe' as const,
   GRADUATION_CAP: 'graduationCap' as const,
-  COINS: 'coins' as const,
-  PENCIL: 'pencil' as const,
-  IMAGE: 'image' as const,
-  GIFT: 'gift' as const,
-  CLOCK: 'clock' as const,
-  LIGHTBULB: 'lightbulb' as const,
-  FILE_TEXT: 'fileText' as const,
-  LAYERS: 'layers' as const,
-  SCALE: 'scale' as const,
-  WRENCH: 'wrench' as const,
-  USERS: 'users' as const,
-  TARGET: 'target' as const,
-  ZAP: 'zap' as const,
-  DATABASE: 'database' as const,
-  MAIL: 'mail' as const,
-  LOCK: 'lock' as const,
-  KEY: 'key' as const,
-  HOME: 'home' as const,
-  BRAIN: 'brain' as const,
-  SPARKLES: 'sparkles' as const,
-  MESSAGE_SQUARE: 'messageSquare' as const,
-  CALENDAR: 'calendar' as const,
-  PACKAGE: 'package' as const,
   HAMMER: 'hammer' as const,
+  HOME: 'home' as const,
+  IMAGE: 'image' as const,
+  KEY: 'key' as const,
+  LAYERS: 'layers' as const,
+  LIGHTBULB: 'lightbulb' as const,
+  LOCK: 'lock' as const,
+  MAIL: 'mail' as const,
+  MESSAGE_SQUARE: 'messageSquare' as const,
+  PACKAGE: 'package' as const,
+  PENCIL: 'pencil' as const,
+  SCALE: 'scale' as const,
   SEARCH: 'search' as const,
+  SPARKLES: 'sparkles' as const,
+  TARGET: 'target' as const,
+  USERS: 'users' as const,
+  WRENCH: 'wrench' as const,
+  ZAP: 'zap' as const,
 } as const;
 
 // ============================================================================
@@ -201,24 +201,24 @@ export const ProjectColorSchema = z.enum(PROJECT_COLORS).openapi({
 export type ProjectColor = z.infer<typeof ProjectColorSchema>;
 
 export const ProjectColors = {
-  GRAY: 'gray' as const,
-  RED: 'red' as const,
-  ORANGE: 'orange' as const,
   AMBER: 'amber' as const,
-  YELLOW: 'yellow' as const,
-  LIME: 'lime' as const,
-  GREEN: 'green' as const,
-  EMERALD: 'emerald' as const,
-  TEAL: 'teal' as const,
-  CYAN: 'cyan' as const,
-  SKY: 'sky' as const,
   BLUE: 'blue' as const,
-  INDIGO: 'indigo' as const,
-  VIOLET: 'violet' as const,
-  PURPLE: 'purple' as const,
+  CYAN: 'cyan' as const,
+  EMERALD: 'emerald' as const,
   FUCHSIA: 'fuchsia' as const,
+  GRAY: 'gray' as const,
+  GREEN: 'green' as const,
+  INDIGO: 'indigo' as const,
+  LIME: 'lime' as const,
+  ORANGE: 'orange' as const,
   PINK: 'pink' as const,
+  PURPLE: 'purple' as const,
+  RED: 'red' as const,
   ROSE: 'rose' as const,
+  SKY: 'sky' as const,
+  TEAL: 'teal' as const,
+  VIOLET: 'violet' as const,
+  YELLOW: 'yellow' as const,
 } as const;
 
 // ============================================================================
@@ -237,8 +237,8 @@ export type ProjectTemplateKey = z.infer<typeof ProjectTemplateKeySchema>;
 export const ProjectTemplateKeys = {
   INVESTING: 'investing' as const,
   RESEARCH: 'research' as const,
-  WRITING: 'writing' as const,
   TRAVEL: 'travel' as const,
+  WRITING: 'writing' as const,
 } as const;
 
 export type ProjectTemplateConfig = {
@@ -248,10 +248,10 @@ export type ProjectTemplateConfig = {
 };
 
 export const PROJECT_TEMPLATES: readonly ProjectTemplateConfig[] = [
-  { key: ProjectTemplateKeys.INVESTING, icon: ProjectIcons.COINS, color: ProjectColors.AMBER },
-  { key: ProjectTemplateKeys.RESEARCH, icon: ProjectIcons.GRADUATION_CAP, color: ProjectColors.BLUE },
-  { key: ProjectTemplateKeys.WRITING, icon: ProjectIcons.PENCIL, color: ProjectColors.VIOLET },
-  { key: ProjectTemplateKeys.TRAVEL, icon: ProjectIcons.GLOBE, color: ProjectColors.ORANGE },
+  { color: ProjectColors.AMBER, icon: ProjectIcons.COINS, key: ProjectTemplateKeys.INVESTING },
+  { color: ProjectColors.BLUE, icon: ProjectIcons.GRADUATION_CAP, key: ProjectTemplateKeys.RESEARCH },
+  { color: ProjectColors.VIOLET, icon: ProjectIcons.PENCIL, key: ProjectTemplateKeys.WRITING },
+  { color: ProjectColors.ORANGE, icon: ProjectIcons.GLOBE, key: ProjectTemplateKeys.TRAVEL },
 ] as const;
 
 // ============================================================================
@@ -277,21 +277,21 @@ export const CitationSourceTypeSchema = z.enum(CITATION_SOURCE_TYPES).openapi({
 export type CitationSourceType = z.infer<typeof CitationSourceTypeSchema>;
 
 export const CitationSourceTypes = {
-  MEMORY: 'memory' as const,
-  THREAD: 'thread' as const,
   ATTACHMENT: 'attachment' as const,
-  SEARCH: 'search' as const,
+  MEMORY: 'memory' as const,
   MODERATOR: 'moderator' as const,
   RAG: 'rag' as const,
+  SEARCH: 'search' as const,
+  THREAD: 'thread' as const,
 } as const;
 
 export const CitationSourceLabels: Record<CitationSourceType, string> = {
-  [CitationSourceTypes.MEMORY]: 'Memory',
-  [CitationSourceTypes.THREAD]: 'Thread',
   [CitationSourceTypes.ATTACHMENT]: 'File',
-  [CitationSourceTypes.SEARCH]: 'Search',
+  [CitationSourceTypes.MEMORY]: 'Memory',
   [CitationSourceTypes.MODERATOR]: 'Moderator',
   [CitationSourceTypes.RAG]: 'Indexed File',
+  [CitationSourceTypes.SEARCH]: 'Search',
+  [CitationSourceTypes.THREAD]: 'Thread',
 } as const;
 
 // ============================================================================
@@ -303,28 +303,28 @@ export const CITATION_PREFIXES = ['mem', 'thd', 'att', 'sch', 'mod', 'rag'] as c
 export type CitationPrefix = (typeof CITATION_PREFIXES)[number];
 
 export const CitationSourcePrefixes: Record<CitationSourceType, CitationPrefix> = {
-  [CitationSourceTypes.MEMORY]: 'mem',
-  [CitationSourceTypes.THREAD]: 'thd',
   [CitationSourceTypes.ATTACHMENT]: 'att',
-  [CitationSourceTypes.SEARCH]: 'sch',
+  [CitationSourceTypes.MEMORY]: 'mem',
   [CitationSourceTypes.MODERATOR]: 'mod',
   [CitationSourceTypes.RAG]: 'rag',
+  [CitationSourceTypes.SEARCH]: 'sch',
+  [CitationSourceTypes.THREAD]: 'thd',
 };
 
 export const CitationPrefixToSourceType: Record<CitationPrefix, CitationSourceType> = {
-  mem: CitationSourceTypes.MEMORY,
-  thd: CitationSourceTypes.THREAD,
   att: CitationSourceTypes.ATTACHMENT,
-  sch: CitationSourceTypes.SEARCH,
+  mem: CitationSourceTypes.MEMORY,
   mod: CitationSourceTypes.MODERATOR,
   rag: CitationSourceTypes.RAG,
+  sch: CitationSourceTypes.SEARCH,
+  thd: CitationSourceTypes.THREAD,
 };
 
 export const CitationSourceContentLimits: Record<CitationSourceType, number> = {
-  [CitationSourceTypes.MEMORY]: 300,
-  [CitationSourceTypes.THREAD]: 400,
   [CitationSourceTypes.ATTACHMENT]: 300,
-  [CitationSourceTypes.SEARCH]: 300,
+  [CitationSourceTypes.MEMORY]: 300,
   [CitationSourceTypes.MODERATOR]: 400,
   [CitationSourceTypes.RAG]: 500,
+  [CitationSourceTypes.SEARCH]: 300,
+  [CitationSourceTypes.THREAD]: 400,
 } as const;

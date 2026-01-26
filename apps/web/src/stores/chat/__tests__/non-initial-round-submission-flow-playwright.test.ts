@@ -40,38 +40,38 @@ const THREAD_ID = 'thread-round2-test';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: THREAD_ID,
-    userId: 'user-123',
-    title: 'Ongoing Conversation',
-    slug: 'ongoing-conversation-abc123',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: THREAD_ID,
+    isAiGeneratedTitle: true,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: true,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'ongoing-conversation-abc123',
+    status: 'active',
+    title: 'Ongoing Conversation',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createParticipant(index: number, overrides?: Partial<ChatParticipant>): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: THREAD_ID,
-    modelId: `model-${index}`,
-    role: `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: `Participant ${index}`,
+    settings: null,
+    threadId: THREAD_ID,
     updatedAt: new Date(),
     ...overrides,
   } as ChatParticipant;
@@ -79,8 +79,8 @@ function createParticipant(index: number, overrides?: Partial<ChatParticipant>):
 
 function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
-    id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
+    id: `${THREAD_ID}_r${roundNumber}_user`,
     roundNumber,
   });
 }
@@ -92,21 +92,21 @@ function createAssistantMsg(
   finishReason = FinishReasons.STOP,
 ): ApiMessage {
   return createTestAssistantMessage({
-    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
-    roundNumber,
+    finishReason,
+    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason,
+    roundNumber,
   });
 }
 
 function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
-    id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
-    roundNumber,
     finishReason: FinishReasons.STOP,
+    id: `${THREAD_ID}_r${roundNumber}_moderator`,
+    roundNumber,
   });
 }
 
@@ -115,31 +115,31 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
   const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
     complete: MessageStatuses.COMPLETE,
     failed: MessageStatuses.FAILED,
+    pending: MessageStatuses.PENDING,
+    streaming: MessageStatuses.STREAMING,
   };
   return {
+    completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${THREAD_ID}-r${roundNumber}`,
-    threadId: THREAD_ID,
     roundNumber,
-    userQuery: `Query ${roundNumber}`,
-    status: statusMap[status],
     searchData: status === 'complete'
       ? {
+          failureCount: 0,
+          moderatorSummary: 'Search complete',
           queries: [],
           results: [],
-          moderatorSummary: 'Search complete',
           successCount: 1,
-          failureCount: 0,
           totalResults: 0,
           totalTime: 100,
         }
       : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    status: statusMap[status],
+    threadId: THREAD_ID,
+    userQuery: `Query ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -176,7 +176,7 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
     store.getState().setIsCreatingThread(true); // Simulates PATCH in progress
 
     // Chat input should be disabled (same as first round)
-    expect(store.getState().isCreatingThread).toBe(true);
+    expect(store.getState().isCreatingThread).toBeTruthy();
     expect(store.getState().pendingMessage).toBe('Second question');
   });
 
@@ -189,7 +189,7 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
 
     // Simulate PATCH request
     store.getState().setIsCreatingThread(true);
-    expect(store.getState().isCreatingThread).toBe(true);
+    expect(store.getState().isCreatingThread).toBeTruthy();
   });
 
   it('should disable input while waiting to start streaming Round 2', () => {
@@ -206,7 +206,7 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
     ]);
     store.getState().setWaitingToStartStreaming(true);
 
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('should disable input during Round 2 participant streaming', () => {
@@ -224,7 +224,7 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
     store.getState().setIsStreaming(true);
     store.getState().setCurrentParticipantIndex(0);
 
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 
   it('should disable input during Round 2 moderator streaming', () => {
@@ -242,7 +242,7 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
     ]);
     store.getState().setIsModeratorStreaming(true);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
   });
 
   it('should re-enable input after Round 2 completes', () => {
@@ -259,9 +259,9 @@ describe('behavior 1: Chat box behavior identical to first round', () => {
     store.getState().setWaitingToStartStreaming(false);
 
     // Input should be enabled
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().isModeratorStreaming).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 });
 
@@ -303,7 +303,7 @@ describe('behavior 2: Input clears immediately after submission', () => {
 
     // Input should be cleared even though PATCH not complete
     expect(store.getState().pendingMessage).toBeNull();
-    expect(store.getState().isCreatingThread).toBe(true);
+    expect(store.getState().isCreatingThread).toBeTruthy();
   });
 
   it('should NOT restore pendingMessage if PATCH fails', () => {
@@ -408,8 +408,8 @@ describe('behavior 4: Streaming starts AFTER PATCH completes (not before)', () =
     store.getState().setIsCreatingThread(true);
 
     // Should NOT allow streaming
-    expect(store.getState().isCreatingThread).toBe(true);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isCreatingThread).toBeTruthy();
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should wait for PATCH completion before setting waitingToStartStreaming', () => {
@@ -431,8 +431,8 @@ describe('behavior 4: Streaming starts AFTER PATCH completes (not before)', () =
     // NOW can set waiting to start streaming
     store.getState().setWaitingToStartStreaming(true);
 
-    expect(store.getState().isCreatingThread).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().isCreatingThread).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('should transition from PATCH → waiting → streaming correctly', () => {
@@ -444,9 +444,9 @@ describe('behavior 4: Streaming starts AFTER PATCH completes (not before)', () =
 
     // Step 1: PATCH starts
     store.getState().setIsCreatingThread(true);
-    expect(store.getState().isCreatingThread).toBe(true);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isCreatingThread).toBeTruthy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // Step 2: PATCH completes
     store.getState().setIsCreatingThread(false);
@@ -457,18 +457,18 @@ describe('behavior 4: Streaming starts AFTER PATCH completes (not before)', () =
 
     // Step 3: Waiting to start streaming
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().isCreatingThread).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isCreatingThread).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // Step 4: Streaming starts
     store.getState().setWaitingToStartStreaming(false);
     store.getState().setIsStreaming(true);
     store.getState().setCurrentParticipantIndex(0);
 
-    expect(store.getState().isCreatingThread).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isCreatingThread).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 });
 
@@ -487,7 +487,7 @@ describe('behavior 5: Correct execution order', () => {
       setupCompletedRound(store, 0, 2);
 
       // No config changes
-      expect(store.getState().hasPendingConfigChanges).toBe(false);
+      expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
       // PATCH completes → User message added
       store.getState().setMessages([
@@ -538,7 +538,7 @@ describe('behavior 5: Correct execution order', () => {
 
       // User makes config changes
       store.getState().setHasPendingConfigChanges(true);
-      expect(store.getState().hasPendingConfigChanges).toBe(true);
+      expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
       // PATCH completes (includes config changes)
       store.getState().setHasPendingConfigChanges(false);
@@ -550,11 +550,11 @@ describe('behavior 5: Correct execution order', () => {
       ]);
 
       // Changelog should be processed (simulated by clearing flag)
-      expect(store.getState().hasPendingConfigChanges).toBe(false);
+      expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
       // NOW participants can stream
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
 
     it('should NOT start participants before changelog processed', () => {
@@ -575,8 +575,8 @@ describe('behavior 5: Correct execution order', () => {
       ]);
 
       // Should still be waiting for changelog
-      expect(store.getState().isWaitingForChangelog).toBe(true);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -611,7 +611,7 @@ describe('behavior 5: Correct execution order', () => {
 
       // NOW participants can stream
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
 
     it('should NOT start participants while pre-search is PENDING', () => {
@@ -639,7 +639,7 @@ describe('behavior 5: Correct execution order', () => {
       const shouldBlock = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should allow participants after pre-search FAILED', () => {
@@ -665,11 +665,11 @@ describe('behavior 5: Correct execution order', () => {
       const canProceed = preSearch?.status === MessageStatuses.COMPLETE
         || preSearch?.status === MessageStatuses.FAILED;
 
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
 
       // Participants can stream
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
   });
 
@@ -721,7 +721,7 @@ describe('behavior 5: Correct execution order', () => {
       store.getState().setIsModeratorStreaming(false);
 
       // Verify final state
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
       expect(store.getState().preSearches).toHaveLength(1);
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
 
@@ -788,8 +788,8 @@ describe('scenario: Round 2 submission with NO config changes', () => {
     const round1Messages = allMessages.filter(m => m.metadata.roundNumber === 1);
 
     expect(round1Messages).toHaveLength(4); // user + 2 assistants + moderator
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 });
 
@@ -817,8 +817,8 @@ describe('scenario: Round 2 submission WITH config changes', () => {
 
     // Participants stream AFTER changelog
     store.getState().setIsStreaming(true);
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 });
 
@@ -886,7 +886,7 @@ describe('scenario: Rapid submissions (debouncing)', () => {
     const canSubmitAgain = !store.getState().isCreatingThread;
 
     // Should NOT allow second submission
-    expect(canSubmitAgain).toBe(false);
+    expect(canSubmitAgain).toBeFalsy();
   });
 
   it('should prevent submission during streaming', () => {
@@ -902,7 +902,7 @@ describe('scenario: Rapid submissions (debouncing)', () => {
     // User tries to submit Round 2
     const canSubmit = !store.getState().isStreaming && !store.getState().isModeratorStreaming;
 
-    expect(canSubmit).toBe(false);
+    expect(canSubmit).toBeFalsy();
   });
 });
 
@@ -919,9 +919,9 @@ describe('scenario: Submission during slow PATCH response', () => {
     store.getState().setIsCreatingThread(true);
 
     // Simulate slow PATCH (still in progress)
-    expect(store.getState().isCreatingThread).toBe(true);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isCreatingThread).toBeTruthy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // PATCH eventually completes
     store.getState().setIsCreatingThread(false);
@@ -930,7 +930,7 @@ describe('scenario: Submission during slow PATCH response', () => {
       createUserMsg(1),
     ]);
 
-    expect(store.getState().isCreatingThread).toBe(false);
+    expect(store.getState().isCreatingThread).toBeFalsy();
   });
 });
 
@@ -946,25 +946,25 @@ describe('scenario: Chat input state transitions', () => {
     const isEnabled1 = !store.getState().isCreatingThread
       && !store.getState().isStreaming
       && !store.getState().isModeratorStreaming;
-    expect(isEnabled1).toBe(true);
+    expect(isEnabled1).toBeTruthy();
 
     // State 2: Disabled (PATCH in progress)
     store.getState().setIsCreatingThread(true);
     const isEnabled2 = !store.getState().isCreatingThread;
-    expect(isEnabled2).toBe(false);
+    expect(isEnabled2).toBeFalsy();
 
     // State 3: Disabled (streaming)
     store.getState().setIsCreatingThread(false);
     store.getState().setIsStreaming(true);
     const isEnabled3 = !store.getState().isStreaming;
-    expect(isEnabled3).toBe(false);
+    expect(isEnabled3).toBeFalsy();
 
     // State 4: Enabled again (round complete)
     store.getState().setIsStreaming(false);
     const isEnabled4 = !store.getState().isCreatingThread
       && !store.getState().isStreaming
       && !store.getState().isModeratorStreaming;
-    expect(isEnabled4).toBe(true);
+    expect(isEnabled4).toBeTruthy();
   });
 });
 
@@ -984,8 +984,8 @@ describe('scenario: Mid-conversation web search toggle', () => {
     store.getState().setEnableWebSearch(true);
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().enableWebSearch).toBe(true);
-    expect(store.getState().thread?.enableWebSearch).toBe(false); // Thread still has old value
+    expect(store.getState().enableWebSearch).toBeTruthy();
+    expect(store.getState().thread?.enableWebSearch).toBeFalsy(); // Thread still has old value
 
     // Submit Round 1
     store.getState().setHasPendingConfigChanges(false);
@@ -1020,7 +1020,7 @@ describe('scenario: Mid-conversation web search toggle', () => {
     store.getState().setEnableWebSearch(false);
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     // Submit Round 1 (no pre-search should be created)
     store.getState().setHasPendingConfigChanges(false);
@@ -1058,7 +1058,7 @@ describe('placeholder visibility: Immediate appearance after submission (Round 1
 
     // IMMEDIATELY after submission
     expect(store.getState().streamingRoundNumber).toBe(1);
-    expect(store.getState().waitingToStartStreaming).toBe(false); // Will be set true later
+    expect(store.getState().waitingToStartStreaming).toBeFalsy(); // Will be set true later
   });
 
   it('should maintain streamingRoundNumber throughout PATCH', () => {
@@ -1071,14 +1071,15 @@ describe('placeholder visibility: Immediate appearance after submission (Round 1
 
     // Submit
     const participant0 = participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question 2', [participant0.modelId]);
 
     // DURING PATCH
     store.getState().setIsCreatingThread(true);
     expect(store.getState().streamingRoundNumber).toBe(1);
-    expect(store.getState().isCreatingThread).toBe(true);
+    expect(store.getState().isCreatingThread).toBeTruthy();
 
     // PATCH completes
     store.getState().setIsCreatingThread(false);
@@ -1124,8 +1125,9 @@ describe('placeholder visibility: Pre-search placeholder', () => {
 
     // Submit Round 1
     const participant0 = store.getState().participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question with search', [participant0.modelId]);
 
     // Pre-search created
@@ -1151,8 +1153,9 @@ describe('placeholder visibility: Pre-search placeholder', () => {
 
     // Submit
     const participant0 = store.getState().participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().addPreSearch(createPreSearch(1, 'pending'));
 
@@ -1182,8 +1185,9 @@ describe('placeholder visibility: Pre-search placeholder', () => {
 
     // Submit with pre-search
     const participant0 = store.getState().participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().addPreSearch(createPreSearch(1, 'pending'));
 
@@ -1223,7 +1227,7 @@ describe('placeholder visibility: Participant placeholders', () => {
 
     // Both participants should show "Thinking..." placeholders
     // (actual placeholder rendering happens in UI layer, store just provides data)
-    expect(store.getState().isStreaming).toBe(false); // Not started yet
+    expect(store.getState().isStreaming).toBeFalsy(); // Not started yet
     expect(store.getState().currentParticipantIndex).toBe(0);
   });
 
@@ -1261,7 +1265,7 @@ describe('placeholder visibility: Participant placeholders', () => {
 
     // Streaming starts - placeholder 0 transitions to streaming
     store.getState().setIsStreaming(true);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
     expect(store.getState().currentParticipantIndex).toBe(0);
 
     // Participant 0 completes - placeholder 1 still shows "Thinking..."
@@ -1269,7 +1273,7 @@ describe('placeholder visibility: Participant placeholders', () => {
     expect(store.getState().currentParticipantIndex).toBe(1);
 
     // Participant 1 starts streaming
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 
   it('should NOT remove participant placeholders before moderator completes', () => {
@@ -1282,8 +1286,9 @@ describe('placeholder visibility: Participant placeholders', () => {
 
     // Submit
     const participant0 = participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
 
     // Participant streams and completes
@@ -1315,8 +1320,9 @@ describe('placeholder visibility: Moderator placeholder', () => {
 
     // Submit and complete participants
     const participant0 = participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setIsStreaming(true);
     store.getState().setMessages([
@@ -1329,7 +1335,7 @@ describe('placeholder visibility: Moderator placeholder', () => {
     // Moderator starts - placeholder should show
     store.getState().setIsModeratorStreaming(true);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
     expect(store.getState().streamingRoundNumber).toBe(1); // Still set
   });
 
@@ -1342,8 +1348,9 @@ describe('placeholder visibility: Moderator placeholder', () => {
 
     // Complete participants
     const participant0 = store.getState().participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setMessages([
       ...store.getState().messages,
@@ -1354,17 +1361,17 @@ describe('placeholder visibility: Moderator placeholder', () => {
     // Moderator streaming
     store.getState().setIsModeratorStreaming(true);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
     expect(store.getState().streamingRoundNumber).toBe(1);
 
     // Add moderator message (streaming in progress)
     store.getState().setMessages([
       ...store.getState().messages,
-      { ...createModeratorMsg(1), parts: [{ type: MessagePartTypes.TEXT, text: 'Partial...' }] },
+      { ...createModeratorMsg(1), parts: [{ text: 'Partial...', type: MessagePartTypes.TEXT }] },
     ]);
 
     // Should still be in moderator streaming state
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
   });
 
   it('should clear streamingRoundNumber only when completeStreaming called', () => {
@@ -1376,8 +1383,9 @@ describe('placeholder visibility: Moderator placeholder', () => {
 
     // Complete full round
     const participant0 = store.getState().participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     store.getState().setMessages([
       ...store.getState().messages,
@@ -1471,7 +1479,7 @@ describe('placeholder visibility: Timeline - no disappearing placeholders', () =
     // TIMELINE POINT 9: Moderator streams
     store.getState().setIsModeratorStreaming(true);
     expect(store.getState().streamingRoundNumber).toBe(1); // ✅ Still visible
-    expect(store.getState().isModeratorStreaming).toBe(true); // Moderator placeholder visible
+    expect(store.getState().isModeratorStreaming).toBeTruthy(); // Moderator placeholder visible
 
     // TIMELINE POINT 10: Moderator completes
     store.getState().setMessages([
@@ -1496,8 +1504,9 @@ describe('placeholder visibility: Timeline - no disappearing placeholders', () =
 
     // Submit
     const participant0 = participants[0];
-    if (!participant0)
+    if (!participant0) {
       throw new Error('expected participant0');
+    }
     store.getState().prepareForNewMessage('Question', [participant0.modelId]);
     const roundNumber = store.getState().streamingRoundNumber;
     expect(roundNumber).toBe(1);
@@ -1553,7 +1562,7 @@ describe('edge cases', () => {
     store.getState().setError(new Error('PATCH failed'));
 
     // Should allow retry
-    expect(store.getState().isCreatingThread).toBe(false);
+    expect(store.getState().isCreatingThread).toBeFalsy();
     expect(store.getState().error).toBeDefined();
   });
 
@@ -1585,7 +1594,7 @@ describe('edge cases', () => {
 
     // Moderator can still stream
     store.getState().setIsModeratorStreaming(true);
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
   });
 
   it('should handle concurrent round completion and new submission', () => {
@@ -1615,7 +1624,7 @@ describe('edge cases', () => {
 
     // NOW user can submit Round 2
     const canSubmit = !store.getState().isStreaming && !store.getState().isModeratorStreaming;
-    expect(canSubmit).toBe(true);
+    expect(canSubmit).toBeTruthy();
   });
 });
 
@@ -1635,13 +1644,13 @@ describe('cRITICAL: User message visibility during non-initial round submission'
     // PHASE 1: Optimistic message added
     const optimisticMessage = {
       id: 'optimistic-user-1-12345',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Follow-up question' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 1,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Follow-up question', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     };
 
     store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -1716,7 +1725,7 @@ describe('cRITICAL: User message visibility during non-initial round submission'
     expect(round1Messages).toHaveLength(2); // User + assistant
     const userMsg = round1Messages.find(m => m.role === UIMessageRoles.USER);
     expect(userMsg).toBeDefined();
-    expect(userMsg?.parts[0]).toEqual({ type: MessagePartTypes.TEXT, text: 'Follow-up' });
+    expect(userMsg?.parts[0]).toEqual({ text: 'Follow-up', type: MessagePartTypes.TEXT });
   });
 
   it('should preserve user message when configChangeRoundNumber blocks streaming', () => {
@@ -1730,13 +1739,13 @@ describe('cRITICAL: User message visibility during non-initial round submission'
     // Submit with config changes
     const optimisticMessage = {
       id: 'optimistic-user-1',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Question with config change' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 1,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Question with config change', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     };
 
     store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -1763,13 +1772,13 @@ describe('cRITICAL: User message visibility during non-initial round submission'
     // Add optimistic message
     const optimisticMessage = {
       id: 'optimistic-user-1',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 1,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     };
 
     store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -1812,9 +1821,9 @@ describe('cRITICAL: User message visibility during non-initial round submission'
       ...store.getState().messages,
       {
         id: 'optimistic-1',
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Q1', type: MessagePartTypes.TEXT }],
         role: UIMessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Q1' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 1, isOptimistic: true },
       },
     ]);
     expect(getUserMessageCount(1)).toBe(1);
@@ -1876,9 +1885,9 @@ describe('cRITICAL: User message visibility during non-initial round submission'
       ...store.getState().messages,
       {
         id: optimisticId,
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
         role: UIMessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 1, isOptimistic: true },
       },
     ]);
     store.getState().setStreamingRoundNumber(1);

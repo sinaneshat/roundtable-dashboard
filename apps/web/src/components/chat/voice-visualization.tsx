@@ -21,9 +21,9 @@ const DEFAULT_BAR_HEIGHTS = Array.from({ length: 40 }, (_, i) => {
 });
 
 export function VoiceVisualization({
-  isActive,
   audioLevels = EMPTY_AUDIO_LEVELS,
   barCount = 40,
+  isActive,
 }: VoiceVisualizationProps) {
   const t = useTranslations();
   const bars = useMemo(() => {
@@ -56,13 +56,13 @@ export function VoiceVisualization({
           <div className="flex items-center gap-2 shrink-0">
             <motion.div
               animate={{
-                scale: [1, 1.2, 1],
                 opacity: [1, 0.8, 1],
+                scale: [1, 1.2, 1],
               }}
               transition={{
                 duration: 1.5,
-                repeat: Number.POSITIVE_INFINITY,
                 ease: 'easeInOut',
+                repeat: Number.POSITIVE_INFINITY,
               }}
               aria-hidden="true"
             >
@@ -89,10 +89,10 @@ export function VoiceVisualization({
                     height: [`${minHeight}%`, `${maxHeight}%`, `${minHeight}%`],
                   }}
                   transition={{
-                    duration,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: 'easeInOut',
                     delay: index * 0.02,
+                    duration,
+                    ease: 'easeInOut',
+                    repeat: Number.POSITIVE_INFINITY,
                   }}
                 />
               );

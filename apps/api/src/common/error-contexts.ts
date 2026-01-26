@@ -31,21 +31,6 @@ export const ErrorContextBuilders = {
   }),
 
   /**
-   * Create resource not found error context
-   * Used when a database record or API resource is not found
-   */
-  resourceNotFound: (
-    resource: string,
-    resourceId?: string,
-    userId?: string,
-  ): ErrorContext => ({
-    errorType: ErrorContextTypes.RESOURCE,
-    resource,
-    resourceId,
-    userId,
-  }),
-
-  /**
    * Create authorization error context
    * Used when user lacks permission to access a resource
    */
@@ -58,15 +43,6 @@ export const ErrorContextBuilders = {
     resource,
     resourceId,
     userId,
-  }),
-
-  /**
-   * Create validation error context
-   * Used when request validation fails
-   */
-  validation: (field?: string): ErrorContext => ({
-    errorType: ErrorContextTypes.VALIDATION,
-    field,
   }),
 
   /**
@@ -92,9 +68,24 @@ export const ErrorContextBuilders = {
     resourceId?: string,
   ): ErrorContext => ({
     errorType: ErrorContextTypes.EXTERNAL_SERVICE,
-    service,
     operation,
     resourceId,
+    service,
+  }),
+
+  /**
+   * Create resource not found error context
+   * Used when a database record or API resource is not found
+   */
+  resourceNotFound: (
+    resource: string,
+    resourceId?: string,
+    userId?: string,
+  ): ErrorContext => ({
+    errorType: ErrorContextTypes.RESOURCE,
+    resource,
+    resourceId,
+    userId,
   }),
 
   /**
@@ -106,8 +97,17 @@ export const ErrorContextBuilders = {
     resourceId?: string,
   ): ErrorContext => ({
     errorType: ErrorContextTypes.EXTERNAL_SERVICE,
-    service: 'stripe',
     operation,
     resourceId,
+    service: 'stripe',
+  }),
+
+  /**
+   * Create validation error context
+   * Used when request validation fails
+   */
+  validation: (field?: string): ErrorContext => ({
+    errorType: ErrorContextTypes.VALIDATION,
+    field,
   }),
 } as const;

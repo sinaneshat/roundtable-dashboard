@@ -21,11 +21,11 @@ export const DEFAULT_SHORT_ROLE_NAME: ShortRoleName = 'Analyst';
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const ShortRoleNames = {
-  IDEATOR: 'Ideator' as const,
-  STRATEGIST: 'Strategist' as const,
   ANALYST: 'Analyst' as const,
   BUILDER: 'Builder' as const,
   CRITIC: 'Critic' as const,
+  IDEATOR: 'Ideator' as const,
+  STRATEGIST: 'Strategist' as const,
 } as const;
 
 // ============================================================================
@@ -56,15 +56,15 @@ export const DEFAULT_ROLE_ICON_NAME: RoleIconName = 'lightbulb';
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const RoleIconNames = {
+  BRIEFCASE: 'briefcase' as const,
+  GRADUATION_CAP: 'graduationCap' as const,
+  HAMMER: 'hammer' as const,
   LIGHTBULB: 'lightbulb' as const,
   MESSAGE_SQUARE: 'messageSquare' as const,
-  HAMMER: 'hammer' as const,
-  TARGET: 'target' as const,
   SPARKLES: 'sparkles' as const,
-  GRADUATION_CAP: 'graduationCap' as const,
-  USERS: 'users' as const,
-  BRIEFCASE: 'briefcase' as const,
+  TARGET: 'target' as const,
   TRENDING_UP: 'trendingUp' as const,
+  USERS: 'users' as const,
 } as const;
 
 // ============================================================================
@@ -79,14 +79,6 @@ export const RoleCategoryMetadataSchema = z.object({
 export type RoleCategoryMetadata = z.infer<typeof RoleCategoryMetadataSchema>;
 
 export const ROLE_CATEGORY_METADATA: Record<ShortRoleName, RoleCategoryMetadata> = {
-  Ideator: {
-    bgColor: 'rgba(34, 197, 94, 0.2)',
-    iconColor: '#4ade80',
-  },
-  Strategist: {
-    bgColor: 'rgba(59, 130, 246, 0.2)',
-    iconColor: '#60a5fa',
-  },
   Analyst: {
     bgColor: 'rgba(6, 182, 212, 0.2)',
     iconColor: '#22d3ee',
@@ -99,54 +91,62 @@ export const ROLE_CATEGORY_METADATA: Record<ShortRoleName, RoleCategoryMetadata>
     bgColor: 'rgba(236, 72, 153, 0.2)',
     iconColor: '#f472b6',
   },
+  Ideator: {
+    bgColor: 'rgba(34, 197, 94, 0.2)',
+    iconColor: '#4ade80',
+  },
+  Strategist: {
+    bgColor: 'rgba(59, 130, 246, 0.2)',
+    iconColor: '#60a5fa',
+  },
 } as const;
 
 export const ROLE_NAME_MAPPINGS = {
-  // Ideation/Creative roles → Ideator
-  'The Ideator': ShortRoleNames.IDEATOR,
-  'Ideator': ShortRoleNames.IDEATOR,
-  'Lateral Thinker': ShortRoleNames.IDEATOR,
-  'Visionary Thinker': ShortRoleNames.IDEATOR,
-  'Framer': ShortRoleNames.IDEATOR,
   'Alternative Framer': ShortRoleNames.IDEATOR,
-
-  // Strategy/Reasoning roles → Strategist
-  'Structured Reasoner': ShortRoleNames.STRATEGIST,
-  'Deep Reasoner': ShortRoleNames.STRATEGIST,
-  'Systems Thinker': ShortRoleNames.STRATEGIST,
-  'Position Advocate': ShortRoleNames.STRATEGIST,
-  'Proposer': ShortRoleNames.STRATEGIST,
-  'Implementation Strategist': ShortRoleNames.STRATEGIST,
-
-  // Analysis roles → Analyst
-  'The Data Analyst': ShortRoleNames.ANALYST,
-  'Trade-Off Analyst': ShortRoleNames.ANALYST,
-  'Trade-off Clarifier': ShortRoleNames.ANALYST,
-  'Evidence Gatherer': ShortRoleNames.ANALYST,
-  'Cross-Checker': ShortRoleNames.ANALYST,
   'Alternative Lens': ShortRoleNames.ANALYST,
-  'Nuancer': ShortRoleNames.ANALYST,
-
-  // Building/Implementation roles → Builder
-  'Builder': ShortRoleNames.BUILDER,
-  'Implementer': ShortRoleNames.BUILDER,
-  'Synthesizer': ShortRoleNames.BUILDER,
-
-  // Critical/Skeptical roles → Critic
-  'Devil\'s Advocate': ShortRoleNames.CRITIC,
   'Assumption Challenger': ShortRoleNames.CRITIC,
   'Assumption Critic': ShortRoleNames.CRITIC,
-  'Skeptic': ShortRoleNames.CRITIC,
+  // Building/Implementation roles → Builder
+  'Builder': ShortRoleNames.BUILDER,
   'Contrarian': ShortRoleNames.CRITIC,
-  'Correctness Reviewer': ShortRoleNames.CRITIC,
-  'Practical Evaluator': ShortRoleNames.CRITIC,
 
+  'Correctness Reviewer': ShortRoleNames.CRITIC,
+  'Cross-Checker': ShortRoleNames.ANALYST,
+  'Deep Reasoner': ShortRoleNames.STRATEGIST,
+  // Critical/Skeptical roles → Critic
+  'Devil\'s Advocate': ShortRoleNames.CRITIC,
+  'Domain Expert': ShortRoleNames.ANALYST,
+  'Evidence Gatherer': ShortRoleNames.ANALYST,
+
+  'Framer': ShortRoleNames.IDEATOR,
+  'Grounding Voice': ShortRoleNames.CRITIC,
+  'Ideator': ShortRoleNames.IDEATOR,
+  'Implementation Strategist': ShortRoleNames.STRATEGIST,
+  'Implementer': ShortRoleNames.BUILDER,
+  'Lateral Thinker': ShortRoleNames.IDEATOR,
   // Moderation/Support roles
   'Mediator': ShortRoleNames.ANALYST,
-  'Grounding Voice': ShortRoleNames.CRITIC,
-  'User Advocate': ShortRoleNames.ANALYST,
-  'Domain Expert': ShortRoleNames.ANALYST,
+
+  'Nuancer': ShortRoleNames.ANALYST,
+  'Position Advocate': ShortRoleNames.STRATEGIST,
+  'Practical Evaluator': ShortRoleNames.CRITIC,
+
+  'Proposer': ShortRoleNames.STRATEGIST,
   'Secondary Theorist': ShortRoleNames.ANALYST,
+  'Skeptic': ShortRoleNames.CRITIC,
+  // Strategy/Reasoning roles → Strategist
+  'Structured Reasoner': ShortRoleNames.STRATEGIST,
+  'Synthesizer': ShortRoleNames.BUILDER,
+  'Systems Thinker': ShortRoleNames.STRATEGIST,
+  // Analysis roles → Analyst
+  'The Data Analyst': ShortRoleNames.ANALYST,
+
+  // Ideation/Creative roles → Ideator
+  'The Ideator': ShortRoleNames.IDEATOR,
+  'Trade-Off Analyst': ShortRoleNames.ANALYST,
+  'Trade-off Clarifier': ShortRoleNames.ANALYST,
+  'User Advocate': ShortRoleNames.ANALYST,
+  'Visionary Thinker': ShortRoleNames.IDEATOR,
 } as const;
 
 export type PredefinedRoleTemplate = {
@@ -158,58 +158,58 @@ export type PredefinedRoleTemplate = {
 
 export const PREDEFINED_ROLE_TEMPLATES: readonly PredefinedRoleTemplate[] = [
   {
-    name: 'The Ideator',
-    iconName: 'lightbulb',
+    category: ShortRoleNames.IDEATOR,
     description: 'Generate creative ideas and innovative solutions',
-    category: ShortRoleNames.IDEATOR,
+    iconName: 'lightbulb',
+    name: 'The Ideator',
   },
   {
-    name: 'Devil\'s Advocate',
-    iconName: 'messageSquare',
+    category: ShortRoleNames.CRITIC,
     description: 'Challenge assumptions and identify potential issues',
-    category: ShortRoleNames.CRITIC,
+    iconName: 'messageSquare',
+    name: 'Devil\'s Advocate',
   },
   {
-    name: 'Builder',
-    iconName: 'hammer',
-    description: 'Focus on practical implementation and execution',
     category: ShortRoleNames.BUILDER,
+    description: 'Focus on practical implementation and execution',
+    iconName: 'hammer',
+    name: 'Builder',
   },
   {
-    name: 'Practical Evaluator',
-    iconName: 'target',
-    description: 'Assess feasibility and real-world applicability',
     category: ShortRoleNames.CRITIC,
+    description: 'Assess feasibility and real-world applicability',
+    iconName: 'target',
+    name: 'Practical Evaluator',
   },
   {
-    name: 'Visionary Thinker',
-    iconName: 'sparkles',
-    description: 'Think big picture and long-term strategy',
     category: ShortRoleNames.IDEATOR,
+    description: 'Think big picture and long-term strategy',
+    iconName: 'sparkles',
+    name: 'Visionary Thinker',
   },
   {
-    name: 'Domain Expert',
-    iconName: 'graduationCap',
+    category: ShortRoleNames.ANALYST,
     description: 'Provide deep domain-specific knowledge',
-    category: ShortRoleNames.ANALYST,
+    iconName: 'graduationCap',
+    name: 'Domain Expert',
   },
   {
-    name: 'User Advocate',
-    iconName: 'users',
+    category: ShortRoleNames.ANALYST,
     description: 'Champion user needs and experience',
-    category: ShortRoleNames.ANALYST,
+    iconName: 'users',
+    name: 'User Advocate',
   },
   {
-    name: 'Implementation Strategist',
-    iconName: 'briefcase',
-    description: 'Plan execution strategy and implementation',
     category: ShortRoleNames.STRATEGIST,
+    description: 'Plan execution strategy and implementation',
+    iconName: 'briefcase',
+    name: 'Implementation Strategist',
   },
   {
-    name: 'The Data Analyst',
-    iconName: 'trendingUp',
-    description: 'Analyze data and provide insights',
     category: ShortRoleNames.ANALYST,
+    description: 'Analyze data and provide insights',
+    iconName: 'trendingUp',
+    name: 'The Data Analyst',
   },
 ] as const;
 
@@ -217,7 +217,7 @@ function isShortRoleName(role: unknown): role is ShortRoleName {
   return ShortRoleNameSchema.safeParse(role).success;
 }
 
-export function getShortRoleName(role: string): ShortRoleName | string {
+export function getShortRoleName(role: string): string {
   if (role in ROLE_NAME_MAPPINGS) {
     return ROLE_NAME_MAPPINGS[role as keyof typeof ROLE_NAME_MAPPINGS];
   }

@@ -18,14 +18,14 @@ type TierConfiguration = {
 
 const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
-    name: 'Free',
     maxModels: 3,
     monthlyCredits: 0,
+    name: 'Free',
   },
   pro: {
-    name: 'Pro',
     maxModels: 12,
     monthlyCredits: CREDIT_CONFIG.PLANS.paid.monthlyCredits,
+    name: 'Pro',
   },
 } as const;
 

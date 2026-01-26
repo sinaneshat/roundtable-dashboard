@@ -63,12 +63,12 @@ export function buildPaginatedQueryOptions<TColumn extends AnyColumn>(options: {
   orderBy: ReturnType<typeof getCursorOrderBy>;
   limit: number;
 } {
-  const { timestampColumn, cursor, limit, direction = 'desc', filters = [] } = options;
+  const { cursor, direction = 'desc', filters = [], limit, timestampColumn } = options;
 
   return {
-    where: buildCursorWhereWithFilters(timestampColumn, cursor, direction, filters),
-    orderBy: getCursorOrderBy(timestampColumn, direction),
     limit: limit + 1,
+    orderBy: getCursorOrderBy(timestampColumn, direction),
+    where: buildCursorWhereWithFilters(timestampColumn, cursor, direction, filters),
   };
 }
 

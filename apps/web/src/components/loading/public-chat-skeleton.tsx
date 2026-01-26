@@ -28,7 +28,7 @@ export function PublicChatSkeleton() {
         {/* Message skeletons - reuse ThreadMessagesSkeleton */}
         <ThreadMessagesSkeleton
           participantCount={3}
-          showModerator={true}
+          showModerator
           showInput={false}
         />
 

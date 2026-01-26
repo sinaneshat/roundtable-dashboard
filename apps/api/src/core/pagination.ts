@@ -68,13 +68,13 @@ export const CursorPaginationQuerySchema = z.object({
  * Page-based pagination query parameters
  */
 export const OffsetPaginationQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1).openapi({
-    example: 1,
-    description: 'Page number (1-based)',
-  }),
   limit: z.coerce.number().int().positive().max(MAX_PAGE_SIZE).default(DEFAULT_PAGE_SIZE).openapi({
-    example: DEFAULT_PAGE_SIZE,
     description: `Results per page (max ${MAX_PAGE_SIZE})`,
+    example: DEFAULT_PAGE_SIZE,
+  }),
+  page: z.coerce.number().int().positive().default(1).openapi({
+    description: 'Page number (1-based)',
+    example: 1,
   }),
 }).openapi('OffsetPaginationQuery');
 
@@ -87,8 +87,8 @@ export const OffsetPaginationQuerySchema = z.object({
  * Defines which field to use as cursor and its sort direction
  */
 export const CursorFieldConfigSchema = z.object({
-  field: z.string(),
   direction: SortDirectionSchema,
+  field: z.string(),
 });
 
 export type CursorFieldConfig = z.infer<typeof CursorFieldConfigSchema>;
@@ -97,8 +97,8 @@ export type CursorFieldConfig = z.infer<typeof CursorFieldConfigSchema>;
  * Page-based pagination parameters schema
  */
 export const PagePaginationParamsSchema = z.object({
-  page: z.number().int().positive(),
   limit: z.number().int().positive(),
+  page: z.number().int().positive(),
 });
 
 export type PagePaginationParams = z.infer<typeof PagePaginationParamsSchema>;
@@ -107,12 +107,12 @@ export type PagePaginationParams = z.infer<typeof PagePaginationParamsSchema>;
  * Page-based pagination metadata schema
  */
 export const PagePaginationMetadataSchema = z.object({
-  page: z.number().int().positive(),
-  limit: z.number().int().positive(),
-  total: z.number().int().nonnegative(),
-  pages: z.number().int().nonnegative(),
   hasNext: z.boolean(),
   hasPrev: z.boolean(),
+  limit: z.number().int().positive(),
+  page: z.number().int().positive(),
+  pages: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
 });
 
 export type PagePaginationMetadata = z.infer<typeof PagePaginationMetadataSchema>;
@@ -121,9 +121,9 @@ export type PagePaginationMetadata = z.infer<typeof PagePaginationMetadataSchema
  * Cursor-based pagination metadata schema
  */
 export const CursorPaginationMetadataSchema = z.object({
-  nextCursor: z.string().nullable(),
-  hasMore: z.boolean(),
   count: z.number().int().nonnegative(),
+  hasMore: z.boolean(),
+  nextCursor: z.string().nullable(),
 });
 
 export type CursorPaginationMetadata = z.infer<typeof CursorPaginationMetadataSchema>;
@@ -172,9 +172,9 @@ export function applyCursorPagination<T>(
   return {
     items: paginatedItems,
     pagination: {
-      nextCursor,
-      hasMore,
       count: paginatedItems.length,
+      hasMore,
+      nextCursor,
     },
   };
 }
@@ -341,12 +341,12 @@ export function calculatePageMetadata(
   const pages = Math.ceil(total / limit);
 
   return {
-    page,
-    limit,
-    total,
-    pages,
     hasNext: page < pages,
     hasPrev: page > 1,
+    limit,
+    page,
+    pages,
+    total,
   };
 }
 
@@ -422,29 +422,29 @@ export function validatePageParams(
 ): { valid: true; page: number; limit: number } | { valid: false; error: string } {
   if (!Number.isInteger(page) || page < 1) {
     return {
-      valid: false,
       error: 'Page must be a positive integer',
+      valid: false,
     };
   }
 
   if (!Number.isInteger(limit) || limit < 1) {
     return {
-      valid: false,
       error: 'Limit must be a positive integer',
+      valid: false,
     };
   }
 
   if (limit > maxLimit) {
     return {
-      valid: false,
       error: `Limit cannot exceed ${maxLimit}`,
+      valid: false,
     };
   }
 
   return {
-    valid: true,
-    page,
     limit,
+    page,
+    valid: true,
   };
 }
 

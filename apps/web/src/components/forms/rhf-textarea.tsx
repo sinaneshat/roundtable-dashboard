@@ -24,15 +24,15 @@ type RHFTextareaProps<TFieldValues extends FieldValues = FieldValues> = {
 };
 
 export function RHFTextarea<TFieldValues extends FieldValues = FieldValues>({
-  name,
-  title,
+  className,
   description,
+  hideLabel = false,
+  name,
+  onKeyDown,
   placeholder,
   required,
   rows,
-  onKeyDown,
-  className,
-  hideLabel = false,
+  title,
 }: RHFTextareaProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

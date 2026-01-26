@@ -42,13 +42,13 @@ import {
 function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
-      queries: {
+      mutations: {
         retry: false,
+      },
+      queries: {
         // Use a small but non-zero gcTime to prevent immediate cache eviction
         // when invalidateQueries is called after setQueryData
         gcTime: 1000,
-      },
-      mutations: {
         retry: false,
       },
     },
@@ -71,13 +71,13 @@ function createWrapper(queryClient: QueryClient) {
 
 // Default mock data for services called in onSuccess
 const defaultMockUsageData = {
+  data: { creditsLimit: 1000, creditsUsed: 0, modelsLimit: 10, modelsUsed: 0 },
   success: true as const,
-  data: { creditsUsed: 0, creditsLimit: 1000, modelsUsed: 0, modelsLimit: 10 },
 };
 
 const defaultMockModelsData = {
+  data: { count: 0, items: [] },
   success: true as const,
-  data: { items: [], count: 0 },
 };
 
 describe('useSwitchSubscriptionMutation', () => {
@@ -108,26 +108,26 @@ describe('useSwitchSubscriptionMutation', () => {
       const newPrice = createMockPrice({ id: 'price_monthly_pro', unitAmount: 2000 });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: updatedSubscription,
-          message: 'Subscription upgraded successfully',
           changeDetails: {
-            oldPrice,
-            newPrice,
-            isUpgrade: true,
             isDowngrade: false,
+            isUpgrade: true,
+            newPrice,
+            oldPrice,
           },
+          message: 'Subscription upgraded successfully',
+          subscription: updatedSubscription,
         },
+        success: true as const,
       };
 
       // Pre-populate cache with old subscription
       queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
-        success: true,
         data: {
-          items: [oldSubscription],
           count: 1,
+          items: [oldSubscription],
         },
+        success: true,
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -140,13 +140,13 @@ describe('useSwitchSubscriptionMutation', () => {
       // Execute mutation
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_old' },
           json: { newPriceId: 'price_monthly_pro' },
+          param: { id: 'sub_old' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Verify cache was invalidated (not directly updated - will refetch on next access)
@@ -157,8 +157,8 @@ describe('useSwitchSubscriptionMutation', () => {
       );
       expect(apiServices.switchSubscriptionService).toHaveBeenCalledWith(
         expect.objectContaining({
-          param: { id: 'sub_old' },
           json: { newPriceId: 'price_monthly_pro' },
+          param: { id: 'sub_old' },
         }),
         expect.anything(),
       );
@@ -168,21 +168,21 @@ describe('useSwitchSubscriptionMutation', () => {
       const updatedSubscription = createActiveSubscription({ priceId: 'price_new' });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: updatedSubscription,
           message: 'Subscription upgraded',
+          subscription: updatedSubscription,
         },
+        success: true as const,
       };
 
       const mockUsageData = {
+        data: { creditsLimit: 1000, creditsUsed: 0, modelsLimit: 10, modelsUsed: 0 },
         success: true as const,
-        data: { creditsUsed: 0, creditsLimit: 1000, modelsUsed: 0, modelsLimit: 10 },
       };
 
       const mockModelsData = {
+        data: { count: 0, items: [] },
         success: true as const,
-        data: { items: [], count: 0 },
       };
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -198,13 +198,13 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { newPriceId: 'price_new' },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Verify subscriptions invalidated
@@ -229,17 +229,17 @@ describe('useSwitchSubscriptionMutation', () => {
       const newPrice = createMockPrice({ id: 'price_premium', unitAmount: 5000 });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: upgradedSubscription,
-          message: 'Subscription upgraded immediately with proration',
           changeDetails: {
-            oldPrice,
-            newPrice,
-            isUpgrade: true,
             isDowngrade: false,
+            isUpgrade: true,
+            newPrice,
+            oldPrice,
           },
+          message: 'Subscription upgraded immediately with proration',
+          subscription: upgradedSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -250,16 +250,16 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { newPriceId: 'price_premium' },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.data?.changeDetails?.isUpgrade).toBe(true);
+      expect(result.current.data?.data?.changeDetails?.isUpgrade).toBeTruthy();
       expect(result.current.data?.data?.message).toContain('upgraded');
     });
 
@@ -274,17 +274,17 @@ describe('useSwitchSubscriptionMutation', () => {
       const newPrice = createMockPrice({ id: 'price_basic', unitAmount: 1000 });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: downgradedSubscription,
-          message: 'Subscription downgrade scheduled for end of billing period',
           changeDetails: {
-            oldPrice,
-            newPrice,
-            isUpgrade: false,
             isDowngrade: true,
+            isUpgrade: false,
+            newPrice,
+            oldPrice,
           },
+          message: 'Subscription downgrade scheduled for end of billing period',
+          subscription: downgradedSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -295,16 +295,16 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { newPriceId: 'price_basic' },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.data?.changeDetails?.isDowngrade).toBe(true);
+      expect(result.current.data?.data?.changeDetails?.isDowngrade).toBeTruthy();
       expect(result.current.data?.data?.message).toContain('scheduled');
     });
   });
@@ -312,11 +312,11 @@ describe('useSwitchSubscriptionMutation', () => {
   describe('error handling', () => {
     it('should handle API errors', async () => {
       const mockErrorResponse = {
-        success: false as const,
         error: {
           code: 'INVALID_PRICE',
           message: 'Invalid price ID',
         },
+        success: false as const,
       };
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockErrorResponse);
@@ -327,16 +327,16 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { newPriceId: 'price_invalid' },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.success).toBe(false);
+      expect(result.current.data?.success).toBeFalsy();
       expect(result.current.data?.error?.message).toBe('Invalid price ID');
     });
 
@@ -351,8 +351,8 @@ describe('useSwitchSubscriptionMutation', () => {
       await act(async () => {
         try {
           await result.current.mutateAsync({
-            param: { id: 'sub_test' },
             json: { newPriceId: 'price_new' },
+            param: { id: 'sub_test' },
           });
         } catch {
           // Expected error
@@ -360,7 +360,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isError).toBe(true);
+        expect(result.current.isError).toBeTruthy();
       });
 
       expect(result.current.error).toEqual(networkError);
@@ -377,8 +377,8 @@ describe('useSwitchSubscriptionMutation', () => {
       await act(async () => {
         try {
           await result.current.mutateAsync({
-            param: { id: 'sub_test' },
             json: { newPriceId: 'price_new' },
+            param: { id: 'sub_test' },
           });
         } catch {
           // Expected error
@@ -386,7 +386,7 @@ describe('useSwitchSubscriptionMutation', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isError).toBe(true);
+        expect(result.current.isError).toBeTruthy();
       });
 
       // Should only be called once (no retries)
@@ -403,20 +403,20 @@ describe('useSwitchSubscriptionMutation', () => {
       const updatedSubscription2 = { ...subscription2, priceId: 'price_new_2' };
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: updatedSubscription2,
           message: 'Updated',
+          subscription: updatedSubscription2,
         },
+        success: true as const,
       };
 
       // Pre-populate cache with multiple subscriptions
       queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
-        success: true,
         data: {
-          items: [subscription1, subscription2, subscription3],
           count: 3,
+          items: [subscription1, subscription2, subscription3],
         },
+        success: true,
       });
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -428,13 +428,13 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_2' },
           json: { newPriceId: 'price_new_2' },
+          param: { id: 'sub_2' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Verify invalidation was called (cache will be refetched on next access)
@@ -452,11 +452,11 @@ describe('useSwitchSubscriptionMutation', () => {
       const updatedSubscription = createActiveSubscription({ priceId: 'price_new' });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: updatedSubscription,
           message: 'Updated',
+          subscription: updatedSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'switchSubscriptionService').mockResolvedValue(mockResponse);
@@ -467,17 +467,17 @@ describe('useSwitchSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { newPriceId: 'price_new' },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Should not crash, invalidation will fetch fresh data
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
   });
 });
@@ -500,16 +500,16 @@ describe('useCancelSubscriptionMutation', () => {
   describe('successful subscription cancellation', () => {
     it('should cancel subscription at period end (default)', async () => {
       const canceledSubscription = createCanceledSubscription({
-        id: 'sub_cancel',
         cancelAtPeriodEnd: true,
+        id: 'sub_cancel',
       });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: canceledSubscription,
           message: 'Subscription will be canceled at the end of the billing period',
+          subscription: canceledSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
@@ -520,33 +520,33 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_cancel' },
           json: { immediately: false },
+          param: { id: 'sub_cancel' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBe(true);
+      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBeTruthy();
       expect(result.current.data?.data?.message).toContain('end of the billing period');
     });
 
     it('should cancel subscription immediately when requested', async () => {
       const canceledSubscription = createMockSubscription({
-        id: 'sub_immediate',
-        status: StripeSubscriptionStatuses.CANCELED,
         cancelAtPeriodEnd: false,
         canceledAt: new Date(),
+        id: 'sub_immediate',
+        status: StripeSubscriptionStatuses.CANCELED,
       });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: canceledSubscription,
           message: 'Subscription canceled immediately',
+          subscription: canceledSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
@@ -557,13 +557,13 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_immediate' },
           json: { immediately: true },
+          param: { id: 'sub_immediate' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(result.current.data?.data?.subscription.status).toBe(StripeSubscriptionStatuses.CANCELED);
@@ -575,20 +575,20 @@ describe('useCancelSubscriptionMutation', () => {
       const canceledSubscription = createCanceledSubscription({ id: 'sub_test' });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: canceledSubscription,
           message: 'Canceled',
+          subscription: canceledSubscription,
         },
+        success: true as const,
       };
 
       // Pre-populate cache
       queryClient.setQueryData<ListSubscriptionsResponse>(queryKeys.subscriptions.list(), {
-        success: true,
         data: {
-          items: [activeSubscription],
           count: 1,
+          items: [activeSubscription],
         },
+        success: true,
       });
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
@@ -600,13 +600,13 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { immediately: false },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Verify cache was invalidated (will refetch on next access)
@@ -617,28 +617,28 @@ describe('useCancelSubscriptionMutation', () => {
       );
 
       // Mutation response contains canceled subscription
-      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBe(true);
+      expect(result.current.data?.data?.subscription.cancelAtPeriodEnd).toBeTruthy();
     });
 
     it('should invalidate related queries after cancellation', async () => {
       const canceledSubscription = createCanceledSubscription();
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: canceledSubscription,
           message: 'Canceled',
+          subscription: canceledSubscription,
         },
+        success: true as const,
       };
 
       const mockUsageData = {
+        data: { creditsLimit: 100, creditsUsed: 0, modelsLimit: 1, modelsUsed: 0 },
         success: true as const,
-        data: { creditsUsed: 0, creditsLimit: 100, modelsUsed: 0, modelsLimit: 1 },
       };
 
       const mockModelsData = {
+        data: { count: 0, items: [] },
         success: true as const,
-        data: { items: [], count: 0 },
       };
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
@@ -654,13 +654,13 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { immediately: false },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Verify subscriptions invalidated
@@ -683,11 +683,11 @@ describe('useCancelSubscriptionMutation', () => {
   describe('error handling', () => {
     it('should handle cancellation errors', async () => {
       const mockErrorResponse = {
-        success: false as const,
         error: {
           code: 'ALREADY_CANCELED',
           message: 'Subscription already canceled',
         },
+        success: false as const,
       };
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockErrorResponse);
@@ -698,16 +698,16 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_test' },
           json: { immediately: false },
+          param: { id: 'sub_test' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.success).toBe(false);
+      expect(result.current.data?.success).toBeFalsy();
       expect(result.current.data?.error?.message).toBe('Subscription already canceled');
     });
 
@@ -722,8 +722,8 @@ describe('useCancelSubscriptionMutation', () => {
       await act(async () => {
         try {
           await result.current.mutateAsync({
-            param: { id: 'sub_test' },
             json: { immediately: false },
+            param: { id: 'sub_test' },
           });
         } catch {
           // Expected error
@@ -731,7 +731,7 @@ describe('useCancelSubscriptionMutation', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isError).toBe(true);
+        expect(result.current.isError).toBeTruthy();
       });
 
       expect(result.current.error).toEqual(networkError);
@@ -748,8 +748,8 @@ describe('useCancelSubscriptionMutation', () => {
       await act(async () => {
         try {
           await result.current.mutateAsync({
-            param: { id: 'sub_test' },
             json: { immediately: false },
+            param: { id: 'sub_test' },
           });
         } catch {
           // Expected error
@@ -757,7 +757,7 @@ describe('useCancelSubscriptionMutation', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isError).toBe(true);
+        expect(result.current.isError).toBeTruthy();
       });
 
       // Should only be called once (no retries)
@@ -769,17 +769,17 @@ describe('useCancelSubscriptionMutation', () => {
     it('should handle cancellation during grace period', async () => {
       const now = new Date();
       const gracePeriodSubscription = createMockSubscription({
+        currentPeriodEnd: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // Expired 2 days ago
         id: 'sub_grace',
         status: StripeSubscriptionStatuses.PAST_DUE,
-        currentPeriodEnd: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // Expired 2 days ago
       });
 
       const mockResponse = {
-        success: true as const,
         data: {
-          subscription: gracePeriodSubscription,
           message: 'Subscription canceled during grace period',
+          subscription: gracePeriodSubscription,
         },
+        success: true as const,
       };
 
       vi.spyOn(apiServices, 'cancelSubscriptionService').mockResolvedValue(mockResponse);
@@ -790,13 +790,13 @@ describe('useCancelSubscriptionMutation', () => {
 
       await act(async () => {
         await result.current.mutateAsync({
-          param: { id: 'sub_grace' },
           json: { immediately: true },
+          param: { id: 'sub_grace' },
         });
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(result.current.data?.data?.subscription.status).toBe(StripeSubscriptionStatuses.PAST_DUE);

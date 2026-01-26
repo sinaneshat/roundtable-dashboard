@@ -17,20 +17,20 @@ import { ErrorDetailsSchema } from '../validation';
 // ============================================================================
 
 export const ApiErrorSchema = z.object({
-  success: z.literal(false),
   error: z.object({
-    message: z.string(),
     code: z.string().optional(),
     details: ErrorDetailsSchema.optional(),
+    message: z.string(),
   }).strict(),
+  success: z.literal(false),
 }).strict().openapi({
   description: 'API error response',
   example: {
-    success: false,
     error: {
-      message: 'Resource not found',
       code: 'NOT_FOUND',
+      message: 'Resource not found',
     },
+    success: false,
   },
 });
 
@@ -42,8 +42,8 @@ export type ApiError = z.infer<typeof ApiErrorSchema>;
 
 export function createApiSuccessSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
-    success: z.literal(true),
     data: dataSchema,
+    success: z.literal(true),
   }).strict().openapi({
     description: 'Successful API response',
   });
@@ -73,11 +73,11 @@ export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
   return z.object({
-    items: z.array(itemSchema),
-    total: z.number().int().nonnegative(),
-    page: z.number().int().positive(),
-    limit: z.number().int().positive(),
     hasMore: z.boolean(),
+    items: z.array(itemSchema),
+    limit: z.number().int().positive(),
+    page: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
   }).strict().openapi({
     description: 'Paginated response with offset-based pagination',
   });
@@ -97,9 +97,9 @@ export type PaginatedResponse<T> = {
 
 export function createCursorPaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema: T) {
   return z.object({
+    hasMore: z.boolean(),
     items: z.array(itemSchema),
     nextCursor: z.string().nullable(),
-    hasMore: z.boolean(),
   }).strict().openapi({
     description: 'Paginated response with cursor-based pagination',
   });

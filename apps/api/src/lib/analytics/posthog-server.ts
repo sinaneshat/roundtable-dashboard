@@ -70,10 +70,10 @@ export function getPostHogClient(): PostHog | null {
 
   // Create new PostHog client
   posthogClient = new PostHog(apiKey, {
-    host: apiHost,
     // Flush immediately for edge environments (Cloudflare Workers)
     flushAt: 1,
     flushInterval: 0,
+    host: apiHost,
   });
 
   return posthogClient;
@@ -157,7 +157,39 @@ export async function flushPostHog(): Promise<void> {
   }
 }
 
-type ExceptionProperties = Record<string, unknown>;
+// ============================================================================
+// Exception Properties Schema
+// ============================================================================
+
+/**
+ * ExceptionPropertiesSchema - Typed exception properties for PostHog
+ *
+ * ✅ JUSTIFIED .passthrough(): PostHog exception tracking accepts arbitrary
+ * custom properties for extensible error context. This schema validates known
+ * fields while allowing additional app-specific properties per PostHog's design.
+ *
+ * Known fields are typed for IDE autocompletion and validation.
+ */
+export const ExceptionPropertiesSchema = z.object({
+  // Common exception context fields
+  endpoint: z.string().optional(),
+  errorCode: z.string().optional(),
+  finishReason: z.string().optional(),
+  httpStatus: z.number().int().optional(),
+  jobId: z.string().optional(),
+  jobName: z.string().optional(),
+  modelId: z.string().optional(),
+  participantId: z.string().optional(),
+  queueName: z.string().optional(),
+  requestId: z.string().optional(),
+  retryCount: z.number().int().optional(),
+  service: z.string().optional(),
+  source: z.string().optional(),
+  threadId: z.string().optional(),
+  userId: z.string().optional(),
+}).passthrough();
+
+export type ExceptionProperties = z.infer<typeof ExceptionPropertiesSchema>;
 
 /**
  * Capture an exception server-side with optional user context
@@ -180,8 +212,9 @@ export async function captureServerException(
   },
 ): Promise<void> {
   const posthog = getPostHogClient();
-  if (!posthog)
+  if (!posthog) {
     return;
+  }
 
   const distinctId = options?.distinctId
     ?? (options?.cookieHeader ? getDistinctIdFromCookie(options.cookieHeader) : ANONYMOUS_USER_ID);

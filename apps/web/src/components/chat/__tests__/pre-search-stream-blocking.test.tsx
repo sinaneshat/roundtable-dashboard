@@ -34,32 +34,32 @@ import { createChatStore } from '@/stores/chat';
 
 function createMockThread(enableWebSearch = false): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORMING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORMING,
+    slug: 'test-thread',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: new Date(),
   };
 }
 
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -67,15 +67,15 @@ function createMockParticipants(): ChatParticipant[] {
 
 function createMockPreSearch(roundNumber: number, status: MessageStatuses = MessageStatuses.PENDING): StoredPreSearch {
   return {
-    id: `presearch-${roundNumber}`,
-    threadId: 'test-thread-123',
-    roundNumber,
-    userQuery: 'test query',
-    status,
-    searchData: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
     errorMessage: null,
+    id: `presearch-${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status,
+    threadId: 'test-thread-123',
+    userQuery: 'test query',
   };
 }
 
@@ -129,7 +129,7 @@ describe('preSearchStream Changelog Blocking', () => {
       // Simulate: configChangeRoundNumber set BEFORE PATCH
       store.getState().setConfigChangeRoundNumber(1);
 
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should block when isWaitingForChangelog is true (AFTER PATCH)', () => {
@@ -139,7 +139,7 @@ describe('preSearchStream Changelog Blocking', () => {
       // Simulate: isWaitingForChangelog set AFTER PATCH completes
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should block when BOTH flags are set (during PATCH → changelog transition)', () => {
@@ -150,7 +150,7 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setConfigChangeRoundNumber(1);
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should NOT block when both flags are cleared (after changelog syncs)', () => {
@@ -158,7 +158,7 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
       // Both flags are null/false by default
-      expect(shouldBlockPreSearchExecution(store)).toBe(false);
+      expect(shouldBlockPreSearchExecution(store)).toBeFalsy();
     });
 
     it('should still block if only configChangeRoundNumber is cleared', () => {
@@ -170,7 +170,7 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
       store.getState().setConfigChangeRoundNumber(null);
 
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should still block if only isWaitingForChangelog is cleared', () => {
@@ -182,7 +182,7 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
       store.getState().setIsWaitingForChangelog(false);
 
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
   });
 
@@ -196,7 +196,7 @@ describe('preSearchStream Changelog Blocking', () => {
       // Block with configChangeRoundNumber
       store.getState().setConfigChangeRoundNumber(1);
 
-      expect(canExecutePreSearch(store, preSearch)).toBe(false);
+      expect(canExecutePreSearch(store, preSearch)).toBeFalsy();
     });
 
     it('should allow pre-search execution when unblocked', () => {
@@ -206,7 +206,7 @@ describe('preSearchStream Changelog Blocking', () => {
       const preSearch = createMockPreSearch(1);
 
       // No blocking flags set
-      expect(canExecutePreSearch(store, preSearch)).toBe(true);
+      expect(canExecutePreSearch(store, preSearch)).toBeTruthy();
     });
 
     it('should allow pre-search after both flags cleared (changelog sync complete)', () => {
@@ -220,14 +220,14 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       // Initially blocked
-      expect(canExecutePreSearch(store, preSearch)).toBe(false);
+      expect(canExecutePreSearch(store, preSearch)).toBeFalsy();
 
       // Clear both flags (changelog sync complete)
       store.getState().setConfigChangeRoundNumber(null);
       store.getState().setIsWaitingForChangelog(false);
 
       // Now allowed
-      expect(canExecutePreSearch(store, preSearch)).toBe(true);
+      expect(canExecutePreSearch(store, preSearch)).toBeTruthy();
     });
 
     it('should prevent duplicate execution via tryMarkPreSearchTriggered', () => {
@@ -237,12 +237,12 @@ describe('preSearchStream Changelog Blocking', () => {
       const preSearch = createMockPreSearch(1);
 
       // First attempt succeeds
-      expect(canExecutePreSearch(store, preSearch)).toBe(true);
+      expect(canExecutePreSearch(store, preSearch)).toBeTruthy();
 
       // Second attempt fails (already triggered)
       const state = store.getState();
-      expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
-      expect(state.tryMarkPreSearchTriggered(1)).toBe(false);
+      expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
+      expect(state.tryMarkPreSearchTriggered(1)).toBeFalsy();
     });
   });
 
@@ -252,61 +252,61 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
       const preSearch = createMockPreSearch(1);
-      const executionLog: Array<{ phase: string; blocked: boolean }> = [];
+      const executionLog: { phase: string; blocked: boolean }[] = [];
 
       // Phase 1: User enables web search, before any flags set
       store.getState().setEnableWebSearch(true);
       executionLog.push({
-        phase: 'before-config-change-flag',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'before-config-change-flag',
       });
 
       // Phase 2: configChangeRoundNumber set (BEFORE PATCH)
       store.getState().setConfigChangeRoundNumber(1);
       executionLog.push({
-        phase: 'after-configChangeRoundNumber',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'after-configChangeRoundNumber',
       });
 
       // Phase 3: PATCH in-flight (simulated delay)
       executionLog.push({
-        phase: 'during-patch',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'during-patch',
       });
 
       // Phase 4: PATCH completes, isWaitingForChangelog set
       store.getState().setIsWaitingForChangelog(true);
       executionLog.push({
-        phase: 'after-patch-before-changelog',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'after-patch-before-changelog',
       });
 
       // Phase 5: Changelog fetch in-flight
       executionLog.push({
-        phase: 'during-changelog-fetch',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'during-changelog-fetch',
       });
 
       // Phase 6: Changelog sync complete, both flags cleared
       store.getState().setConfigChangeRoundNumber(null);
       store.getState().setIsWaitingForChangelog(false);
       executionLog.push({
-        phase: 'after-changelog-sync',
         blocked: shouldBlockPreSearchExecution(store),
+        phase: 'after-changelog-sync',
       });
 
       // Verify blocking at each phase
       expect(executionLog).toEqual([
-        { phase: 'before-config-change-flag', blocked: false },
-        { phase: 'after-configChangeRoundNumber', blocked: true },
-        { phase: 'during-patch', blocked: true },
-        { phase: 'after-patch-before-changelog', blocked: true },
-        { phase: 'during-changelog-fetch', blocked: true },
-        { phase: 'after-changelog-sync', blocked: false },
+        { blocked: false, phase: 'before-config-change-flag' },
+        { blocked: true, phase: 'after-configChangeRoundNumber' },
+        { blocked: true, phase: 'during-patch' },
+        { blocked: true, phase: 'after-patch-before-changelog' },
+        { blocked: true, phase: 'during-changelog-fetch' },
+        { blocked: false, phase: 'after-changelog-sync' },
       ]);
 
       // Pre-search can now execute
-      expect(canExecutePreSearch(store, preSearch)).toBe(true);
+      expect(canExecutePreSearch(store, preSearch)).toBeTruthy();
     });
 
     it('should maintain correct order: PATCH → changelog → pre-search', () => {
@@ -382,7 +382,7 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setConfigChangeRoundNumber(0);
 
       // 0 !== null, so should still block
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should handle rapid flag changes correctly', () => {
@@ -399,8 +399,8 @@ describe('preSearchStream Changelog Blocking', () => {
 
       // Final state: configChangeRoundNumber=2, isWaitingForChangelog=true
       expect(store.getState().configChangeRoundNumber).toBe(2);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
     });
 
     it('should handle multiple rounds with config changes', () => {
@@ -410,22 +410,22 @@ describe('preSearchStream Changelog Blocking', () => {
       // Round 1: Config change
       store.getState().setConfigChangeRoundNumber(1);
       store.getState().setIsWaitingForChangelog(true);
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
 
       // Round 1: Changelog sync
       store.getState().setConfigChangeRoundNumber(null);
       store.getState().setIsWaitingForChangelog(false);
-      expect(shouldBlockPreSearchExecution(store)).toBe(false);
+      expect(shouldBlockPreSearchExecution(store)).toBeFalsy();
 
       // Round 2: Another config change
       store.getState().setConfigChangeRoundNumber(2);
       store.getState().setIsWaitingForChangelog(true);
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
 
       // Round 2: Changelog sync
       store.getState().setConfigChangeRoundNumber(null);
       store.getState().setIsWaitingForChangelog(false);
-      expect(shouldBlockPreSearchExecution(store)).toBe(false);
+      expect(shouldBlockPreSearchExecution(store)).toBeFalsy();
     });
 
     it('should not block when no config changes (just message submission)', () => {
@@ -437,10 +437,10 @@ describe('preSearchStream Changelog Blocking', () => {
 
       // No flags set because no config change
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // Pre-search should execute immediately
-      expect(canExecutePreSearch(store, preSearch)).toBe(true);
+      expect(canExecutePreSearch(store, preSearch)).toBeTruthy();
     });
   });
 
@@ -517,8 +517,8 @@ describe('preSearchStream Changelog Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       // Pre-search MUST be blocked here
-      expect(shouldBlockPreSearchExecution(store)).toBe(true);
-      expect(canExecutePreSearch(store, preSearch)).toBe(false);
+      expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
+      expect(canExecutePreSearch(store, preSearch)).toBeFalsy();
     });
   });
 });
@@ -535,11 +535,11 @@ describe('preSearchStream E2E Flow', () => {
     const thread = createMockThread(false); // Start without web search
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
-    const events: Array<{ event: string; timestamp: number; blocked?: boolean }> = [];
+    const events: { event: string; timestamp: number; blocked?: boolean }[] = [];
     let timestamp = 0;
 
     const log = (event: string, blocked?: boolean) => {
-      events.push({ event, timestamp: timestamp++, blocked });
+      events.push({ blocked, event, timestamp: timestamp++ });
     };
 
     // Step 1: User enables web search in form
@@ -555,15 +555,15 @@ describe('preSearchStream E2E Flow', () => {
 
     // Step 4: Pre-search placeholder added
     store.getState().addPreSearch({
-      id: 'presearch-1',
-      threadId: 'test-thread-123',
-      roundNumber: 1,
-      userQuery: 'test query',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
       errorMessage: null,
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'test-thread-123',
+      userQuery: 'test query',
     });
     log('presearch-placeholder-added');
 
@@ -601,18 +601,18 @@ describe('preSearchStream E2E Flow', () => {
 
     // Verify order and blocking states
     expect(events).toEqual([
-      { event: 'user-enables-web-search', timestamp: 0, blocked: undefined },
-      { event: 'form-submit', timestamp: 1, blocked: undefined },
-      { event: 'config-change-round-set', timestamp: 2, blocked: undefined },
-      { event: 'presearch-placeholder-added', timestamp: 3, blocked: undefined },
-      { event: 'presearch-component-check', timestamp: 4, blocked: true },
-      { event: 'PATCH-request-sent', timestamp: 5, blocked: undefined },
-      { event: 'PATCH-complete-waiting-changelog', timestamp: 6, blocked: undefined },
-      { event: 'presearch-recheck', timestamp: 7, blocked: true },
-      { event: 'changelog-fetch-started', timestamp: 8, blocked: undefined },
-      { event: 'changelog-sync-complete', timestamp: 9, blocked: undefined },
-      { event: 'presearch-final-check', timestamp: 10, blocked: false },
-      { event: 'presearch-executed', timestamp: 11, blocked: undefined },
+      { blocked: undefined, event: 'user-enables-web-search', timestamp: 0 },
+      { blocked: undefined, event: 'form-submit', timestamp: 1 },
+      { blocked: undefined, event: 'config-change-round-set', timestamp: 2 },
+      { blocked: undefined, event: 'presearch-placeholder-added', timestamp: 3 },
+      { blocked: true, event: 'presearch-component-check', timestamp: 4 },
+      { blocked: undefined, event: 'PATCH-request-sent', timestamp: 5 },
+      { blocked: undefined, event: 'PATCH-complete-waiting-changelog', timestamp: 6 },
+      { blocked: true, event: 'presearch-recheck', timestamp: 7 },
+      { blocked: undefined, event: 'changelog-fetch-started', timestamp: 8 },
+      { blocked: undefined, event: 'changelog-sync-complete', timestamp: 9 },
+      { blocked: false, event: 'presearch-final-check', timestamp: 10 },
+      { blocked: undefined, event: 'presearch-executed', timestamp: 11 },
     ]);
   });
 
@@ -633,15 +633,15 @@ describe('preSearchStream E2E Flow', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: 'presearch-1',
-      threadId: 'test-thread-123',
-      roundNumber: 1,
-      userQuery: 'test query',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
       errorMessage: null,
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'test-thread-123',
+      userQuery: 'test query',
     });
 
     // Pre-search blocked
@@ -694,16 +694,16 @@ describe('preSearchStream E2E Flow', () => {
 
     // Order must be maintained
     store.getState().setConfigChangeRoundNumber(1);
-    expect(shouldBlockPreSearchExecution(store)).toBe(true);
+    expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
 
     // PATCH
     await Promise.resolve();
     store.getState().setIsWaitingForChangelog(true);
-    expect(shouldBlockPreSearchExecution(store)).toBe(true);
+    expect(shouldBlockPreSearchExecution(store)).toBeTruthy();
 
     // Changelog
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
-    expect(shouldBlockPreSearchExecution(store)).toBe(false);
+    expect(shouldBlockPreSearchExecution(store)).toBeFalsy();
   });
 });

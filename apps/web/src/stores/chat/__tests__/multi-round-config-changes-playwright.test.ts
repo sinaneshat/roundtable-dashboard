@@ -57,16 +57,16 @@ function createInitialConfig(
   mode: ChatMode,
 ): ConversationState {
   return {
-    threadId: 'thread-123',
+    currentRound: 0,
     rounds: [
       {
-        roundNumber: 0,
-        participants,
-        mode,
         changes: undefined, // No changes for first round
+        mode,
+        participants,
+        roundNumber: 0,
       },
     ],
-    currentRound: 0,
+    threadId: 'thread-123',
   };
 }
 
@@ -82,9 +82,9 @@ function detectConfigChanges(
   newConfig.participants.forEach((p) => {
     if (!prevIds.has(p.id)) {
       changes.push({
-        type: 'added',
-        participantId: p.id,
         details: `Added ${p.modelId} as ${p.role || 'participant'}`,
+        participantId: p.id,
+        type: 'added',
       });
     }
   });
@@ -93,9 +93,9 @@ function detectConfigChanges(
   previousConfig.participants.forEach((p) => {
     if (!newIds.has(p.id)) {
       changes.push({
-        type: 'removed',
-        participantId: p.id,
         details: `Removed ${p.modelId}`,
+        participantId: p.id,
+        type: 'removed',
       });
     }
   });
@@ -106,16 +106,16 @@ function detectConfigChanges(
     if (prevP) {
       if (prevP.role !== newP.role) {
         changes.push({
-          type: 'modified',
-          participantId: newP.id,
           details: `Changed role from ${prevP.role || 'none'} to ${newP.role || 'none'}`,
+          participantId: newP.id,
+          type: 'modified',
         });
       }
       if (prevP.priority !== newP.priority) {
         changes.push({
-          type: 'reordered',
-          participantId: newP.id,
           details: `Moved from position ${prevP.priority} to ${newP.priority}`,
+          participantId: newP.id,
+          type: 'reordered',
         });
       }
     }
@@ -137,29 +137,29 @@ function addRound(
   const nextRoundNumber = previousRound.roundNumber + 1;
   const changes = detectConfigChanges(
     { ...previousRound, participants: previousRound.participants },
-    { roundNumber: nextRoundNumber, participants: newParticipants, mode: newMode },
+    { mode: newMode, participants: newParticipants, roundNumber: nextRoundNumber },
   );
 
   // Add mode change if different
   if (previousRound.mode !== newMode) {
     changes.push({
-      type: 'modified',
-      participantId: 'mode',
       details: `Changed mode from ${previousRound.mode} to ${newMode}`,
+      participantId: 'mode',
+      type: 'modified',
     });
   }
 
   const newRound: RoundConfig = {
-    roundNumber: nextRoundNumber,
-    participants: newParticipants,
-    mode: newMode,
     changes: changes.length > 0 ? changes : undefined,
+    mode: newMode,
+    participants: newParticipants,
+    roundNumber: nextRoundNumber,
   };
 
   return {
     ...state,
-    rounds: [...state.rounds, newRound],
     currentRound: nextRoundNumber,
+    rounds: [...state.rounds, newRound],
   };
 }
 
@@ -210,8 +210,8 @@ describe('multi-Round Configuration Changes E2E', () => {
 
       // Changelog exists for Round 1
       const changelogBanner = {
-        roundNumber: 1,
         changes: state.rounds[1]?.changes || [],
+        roundNumber: 1,
         summary: '1 added',
       };
 
@@ -254,7 +254,7 @@ describe('multi-Round Configuration Changes E2E', () => {
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       expect(state.rounds[1]?.changes).toHaveLength(2);
-      expect(state.rounds[1]?.changes?.every(c => c.type === 'added')).toBe(true);
+      expect(state.rounds[1]?.changes?.every(c => c.type === 'added')).toBeTruthy();
     });
   });
 
@@ -270,10 +270,12 @@ describe('multi-Round Configuration Changes E2E', () => {
       // Remove participant-1
       const p0 = round0Participants[0];
       const p2 = round0Participants[2];
-      if (!p0)
+      if (!p0) {
         throw new Error('expected participant 0');
-      if (!p2)
+      }
+      if (!p2) {
         throw new Error('expected participant 2');
+      }
       const round1Participants = [p0, p2];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
@@ -291,8 +293,9 @@ describe('multi-Round Configuration Changes E2E', () => {
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
       const p0 = round0Participants[0];
-      if (!p0)
+      if (!p0) {
         throw new Error('expected participant 0');
+      }
       const round1Participants = [p0];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
@@ -302,13 +305,13 @@ describe('multi-Round Configuration Changes E2E', () => {
 
       // Changelog UI would render this with strikethrough
       const changelogDisplay = {
-        icon: '−',
         color: 'red',
+        icon: '−',
         strikethrough: true,
         text: removedChange?.details,
       };
 
-      expect(changelogDisplay.strikethrough).toBe(true);
+      expect(changelogDisplay.strikethrough).toBeTruthy();
     });
 
     it('should handle removing all but one participant', () => {
@@ -321,8 +324,9 @@ describe('multi-Round Configuration Changes E2E', () => {
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
       const p0 = round0Participants[0];
-      if (!p0)
+      if (!p0) {
         throw new Error('expected participant 0');
+      }
       const round1Participants = [p0];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
@@ -350,28 +354,29 @@ describe('multi-Round Configuration Changes E2E', () => {
 
       const reorderChanges = state.rounds[1]?.changes?.filter(c => c.type === 'reordered');
       expect(reorderChanges).toHaveLength(2);
-      expect(reorderChanges?.some(c => c.participantId === 'participant-0')).toBe(true);
-      expect(reorderChanges?.some(c => c.participantId === 'participant-2')).toBe(true);
+      expect(reorderChanges?.some(c => c.participantId === 'participant-0')).toBeTruthy();
+      expect(reorderChanges?.some(c => c.participantId === 'participant-2')).toBeTruthy();
     });
 
     it('should verify new order in Round 1 streaming sequence', () => {
       const round0Participants = [
-        createMockParticipant(0, { priority: 0, modelId: 'gpt-4o' }),
-        createMockParticipant(1, { priority: 1, modelId: 'claude-3-opus' }),
+        createMockParticipant(0, { modelId: 'gpt-4o', priority: 0 }),
+        createMockParticipant(1, { modelId: 'claude-3-opus', priority: 1 }),
       ];
       let state = createInitialConfig(round0Participants, ChatModes.BRAINSTORMING);
 
       // Reverse order
       const round1Participants = [
-        createMockParticipant(0, { priority: 1, modelId: 'gpt-4o' }),
-        createMockParticipant(1, { priority: 0, modelId: 'claude-3-opus' }),
+        createMockParticipant(0, { modelId: 'gpt-4o', priority: 1 }),
+        createMockParticipant(1, { modelId: 'claude-3-opus', priority: 0 }),
       ];
       state = addRound(state, round1Participants, ChatModes.BRAINSTORMING);
 
       // Verify streaming would use new priority order
       const round1 = state.rounds[1];
-      if (!round1)
+      if (!round1) {
         throw new Error('expected round 1');
+      }
       const sortedParticipants = [...round1.participants].sort((a, b) => a.priority - b.priority);
       expect(sortedParticipants[0]?.id).toBe('participant-1');
       expect(sortedParticipants[1]?.id).toBe('participant-0');
@@ -418,8 +423,8 @@ describe('multi-Round Configuration Changes E2E', () => {
 
       // Changelog UI would render this with pencil icon
       const changelogDisplay = {
-        icon: '✏️',
         color: 'blue',
+        icon: '✏️',
         text: roleChange?.details,
       };
 

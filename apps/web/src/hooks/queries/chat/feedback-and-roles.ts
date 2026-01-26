@@ -44,9 +44,9 @@ export function useThreadFeedbackQuery(threadId: string, enabled = true) {
 
   return useQuery({
     ...options,
+    enabled: isAuthenticated && !!threadId && enabled,
     gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
     placeholderData: previousData => previousData,
-    enabled: isAuthenticated && !!threadId && enabled,
     throwOnError: false,
   });
 }
@@ -88,21 +88,22 @@ export function useCustomRolesQuery(enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
-    queryKey: queryKeys.customRoles.lists(),
+    enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: ({ pageParam }) =>
       listCustomRolesService({
         query: { cursor: pageParam },
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    staleTime: STALE_TIME_PRESETS.medium,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryKey: queryKeys.customRoles.lists(),
     retry: false,
-    enabled: isAuthenticated && enabled, // Only fetch when authenticated and explicitly enabled
+    staleTime: STALE_TIME_PRESETS.medium,
     throwOnError: false,
   });
 }
@@ -121,12 +122,12 @@ export function useCustomRoleQuery(roleId: string, enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.customRoles.detail(roleId),
-    queryFn: () => getCustomRoleService({ param: { id: roleId } }),
-    staleTime: STALE_TIME_PRESETS.long,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: isAuthenticated && !!roleId && enabled, // Only fetch when authenticated and roleId exists
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryFn: () => getCustomRoleService({ param: { id: roleId } }),
+    queryKey: queryKeys.customRoles.detail(roleId),
     retry: false,
+    staleTime: STALE_TIME_PRESETS.long,
     throwOnError: false,
   });
 }
@@ -151,21 +152,22 @@ export function useUserPresetsQuery(enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
-    queryKey: queryKeys.userPresets.lists(),
+    enabled: isAuthenticated && enabled,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: ({ pageParam }) =>
       listUserPresetsService({
         query: { cursor: pageParam },
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    staleTime: STALE_TIME_PRESETS.medium,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryKey: queryKeys.userPresets.lists(),
     retry: false,
-    enabled: isAuthenticated && enabled,
+    staleTime: STALE_TIME_PRESETS.medium,
     throwOnError: false,
   });
 }
@@ -183,12 +185,12 @@ export function useUserPresetQuery(presetId: string, enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.userPresets.detail(presetId),
-    queryFn: () => getUserPresetService({ param: { id: presetId } }),
-    staleTime: STALE_TIME_PRESETS.long,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: isAuthenticated && !!presetId && enabled,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryFn: () => getUserPresetService({ param: { id: presetId } }),
+    queryKey: queryKeys.userPresets.detail(presetId),
     retry: false,
+    staleTime: STALE_TIME_PRESETS.long,
     throwOnError: false,
   });
 }

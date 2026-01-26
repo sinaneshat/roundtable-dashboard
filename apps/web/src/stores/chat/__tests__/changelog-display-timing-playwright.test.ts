@@ -41,33 +41,33 @@ type MockQueryClient = {
 
 function createMockQueryClient(): MockQueryClient & Partial<QueryClient> {
   return {
-    setQueryData: vi.fn(),
     getQueryData: vi.fn(),
+    setQueryData: vi.fn(),
   };
 }
 
 function createMockChangelog(
   roundNumber: number,
-  changes: Array<{
+  changes: {
     type: 'added' | 'removed' | 'modified' | 'reordered' | 'mode-changed';
     participantId?: string;
     modelId?: string;
-  }>,
+  }[],
 ): ChatThreadChangelog {
   return {
-    id: `changelog-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
-    changeType: 'participant_change',
     changeData: {
       changes: changes.map(c => ({
-        type: c.type,
-        participantId: c.participantId,
         modelId: c.modelId,
+        participantId: c.participantId,
+        type: c.type,
       })),
     },
+    changeType: 'participant_change',
     createdAt: new Date().toISOString(),
+    id: `changelog-r${roundNumber}`,
+    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
+    roundNumber,
+    threadId: 'thread-123',
   };
 }
 
@@ -97,7 +97,7 @@ describe('changelog Visibility Control', () => {
       // Re-fetch state after mutations
       const updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(true);
+      expect(updatedState.isWaitingForChangelog).toBeTruthy();
       expect(updatedState.configChangeRoundNumber).toBe(1);
     });
 
@@ -110,7 +110,7 @@ describe('changelog Visibility Control', () => {
       // Re-fetch state after mutations
       let updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(true);
+      expect(updatedState.isWaitingForChangelog).toBeTruthy();
 
       // Simulate changelog sync completion (from use-changelog-sync.ts:106-107)
       state.setIsWaitingForChangelog(false);
@@ -119,8 +119,8 @@ describe('changelog Visibility Control', () => {
       // Re-fetch state after second mutations
       updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(false);
-      expect(updatedState.configChangeRoundNumber).toBe(null);
+      expect(updatedState.isWaitingForChangelog).toBeFalsy();
+      expect(updatedState.configChangeRoundNumber).toBeNull();
     });
   });
 
@@ -137,21 +137,21 @@ describe('changelog Visibility Control', () => {
         state.setConfigChangeRoundNumber(null);
       }
 
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.configChangeRoundNumber).toBeNull();
     });
 
     it('does not trigger changelog fetch when no changes', () => {
       const state = store.getState();
 
       // No config changes = no changelog wait
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Changelog sync should not activate (shouldFetch = false)
       const shouldFetch = state.isWaitingForChangelog
         && state.configChangeRoundNumber !== null;
 
-      expect(shouldFetch).toBe(false);
+      expect(shouldFetch).toBeFalsy();
     });
   });
 });
@@ -164,8 +164,8 @@ describe('changelog Summary Display', () => {
   describe('change type detection', () => {
     it('detects additions correctly', () => {
       const changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-        { type: 'added', participantId: 'p2', modelId: 'claude-3' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
+        { modelId: 'claude-3', participantId: 'p2', type: 'added' },
       ]);
 
       const addedCount = changelog.changeData.changes.filter(
@@ -178,7 +178,7 @@ describe('changelog Summary Display', () => {
 
     it('detects removals correctly', () => {
       const changelog = createMockChangelog(2, [
-        { type: 'removed', participantId: 'p1', modelId: 'gpt-4' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'removed' },
       ]);
 
       const removedCount = changelog.changeData.changes.filter(
@@ -190,8 +190,8 @@ describe('changelog Summary Display', () => {
 
     it('detects modifications correctly', () => {
       const changelog = createMockChangelog(3, [
-        { type: 'modified', participantId: 'p1' },
-        { type: 'reordered', participantId: 'p2' },
+        { participantId: 'p1', type: 'modified' },
+        { participantId: 'p2', type: 'reordered' },
       ]);
 
       const modifiedCount = changelog.changeData.changes.filter(
@@ -204,10 +204,10 @@ describe('changelog Summary Display', () => {
 
     it('creates correct summary for mixed changes', () => {
       const changelog = createMockChangelog(4, [
-        { type: 'added', participantId: 'p1' },
-        { type: 'added', participantId: 'p2' },
-        { type: 'removed', participantId: 'p3' },
-        { type: 'modified', participantId: 'p4' },
+        { participantId: 'p1', type: 'added' },
+        { participantId: 'p2', type: 'added' },
+        { participantId: 'p3', type: 'removed' },
+        { participantId: 'p4', type: 'modified' },
       ]);
 
       const added = changelog.changeData.changes.filter(
@@ -235,9 +235,9 @@ describe('changelog Summary Display', () => {
 describe('changelog Expandable Details', () => {
   it('contains all change entries for round', () => {
     const changelog = createMockChangelog(2, [
-      { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-      { type: 'removed', participantId: 'p2', modelId: 'claude-2' },
-      { type: 'modified', participantId: 'p3' },
+      { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
+      { modelId: 'claude-2', participantId: 'p2', type: 'removed' },
+      { participantId: 'p3', type: 'modified' },
     ]);
 
     expect(changelog.changeData.changes).toHaveLength(3);
@@ -248,8 +248,8 @@ describe('changelog Expandable Details', () => {
 
   it('includes model information for additions and removals', () => {
     const changelog = createMockChangelog(1, [
-      { type: 'added', participantId: 'p1', modelId: ModelIds.X_AI_GROK_4_1_FAST },
-      { type: 'removed', participantId: 'p2', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
+      { modelId: ModelIds.X_AI_GROK_4_1_FAST, participantId: 'p1', type: 'added' },
+      { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, participantId: 'p2', type: 'removed' },
     ]);
 
     const addedEntry = changelog.changeData.changes.find(
@@ -291,7 +291,7 @@ describe('changelog Fetch Timing', () => {
         && updatedState.configChangeRoundNumber !== null
         && !!effectiveThreadId;
 
-      expect(shouldFetch).toBe(true);
+      expect(shouldFetch).toBeTruthy();
     });
 
     it('does not trigger fetch when isWaitingForChangelog=false', () => {
@@ -303,7 +303,7 @@ describe('changelog Fetch Timing', () => {
       const shouldFetch = state.isWaitingForChangelog
         && state.configChangeRoundNumber !== null;
 
-      expect(shouldFetch).toBe(false);
+      expect(shouldFetch).toBeFalsy();
     });
 
     it('does not trigger fetch when configChangeRoundNumber=null', () => {
@@ -315,7 +315,7 @@ describe('changelog Fetch Timing', () => {
       const shouldFetch = state.isWaitingForChangelog
         && state.configChangeRoundNumber !== null;
 
-      expect(shouldFetch).toBe(false);
+      expect(shouldFetch).toBeFalsy();
     });
   });
 
@@ -326,18 +326,18 @@ describe('changelog Fetch Timing', () => {
 
       // Simulate existing cache (from use-changelog-sync.ts:76-103)
       const existingCache = {
-        success: true,
         data: {
           items: [
             createMockChangelog(1, [
-              { type: 'added', participantId: 'p1' },
+              { participantId: 'p1', type: 'added' },
             ]),
           ],
         },
+        success: true,
       };
 
       const newChangelog = createMockChangelog(2, [
-        { type: 'removed', participantId: 'p2' },
+        { participantId: 'p2', type: 'removed' },
       ]);
 
       let capturedResult: { data: { items: { roundNumber: number }[] } } | null = null;
@@ -355,18 +355,19 @@ describe('changelog Fetch Timing', () => {
           const uniqueNewItems = [newChangelog].filter(item => !existingIds.has(item.id));
 
           return {
-            success: true,
             data: {
               items: [...uniqueNewItems, ...existingItems],
             },
+            success: true,
           };
         },
       );
 
-      expect(mockQueryClient.setQueryData).toHaveBeenCalled();
+      expect(mockQueryClient.setQueryData).toHaveBeenCalledWith();
       expect(capturedResult).not.toBeNull();
-      if (!capturedResult)
+      if (!capturedResult) {
         throw new Error('expected capturedResult');
+      }
       expect(capturedResult.data.items).toHaveLength(2);
       expect(capturedResult.data.items[0]?.roundNumber).toBe(2); // Newest first
       expect(capturedResult.data.items[1]?.roundNumber).toBe(1);
@@ -382,8 +383,8 @@ describe('changelog Fetch Timing', () => {
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
 
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.configChangeRoundNumber).toBeNull();
     });
 
     it('clears flags even when no new changelog entries (empty response)', () => {
@@ -400,7 +401,7 @@ describe('changelog Fetch Timing', () => {
         state.setConfigChangeRoundNumber(null);
       }
 
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
   });
 });
@@ -429,7 +430,7 @@ describe('streaming Blocking Until Changelog Ready', () => {
       // Streaming trigger should NOT proceed (from use-streaming-trigger.ts logic)
       const shouldBlockStreaming = updatedState.isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
     });
 
     it('allows streaming when isWaitingForChangelog=false', () => {
@@ -443,7 +444,7 @@ describe('streaming Blocking Until Changelog Ready', () => {
 
       const shouldBlockStreaming = updatedState.isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(false);
+      expect(shouldBlockStreaming).toBeFalsy();
     });
 
     it('blocks streaming until changelog sync completes', () => {
@@ -457,7 +458,7 @@ describe('streaming Blocking Until Changelog Ready', () => {
       // Re-fetch state after mutations
       let updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(true);
+      expect(updatedState.isWaitingForChangelog).toBeTruthy();
 
       // Changelog fetch completes
       state.setIsWaitingForChangelog(false);
@@ -467,7 +468,7 @@ describe('streaming Blocking Until Changelog Ready', () => {
       updatedState = store.getState();
 
       // Now streaming can proceed
-      expect(updatedState.isWaitingForChangelog).toBe(false);
+      expect(updatedState.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -489,8 +490,8 @@ describe('streaming Blocking Until Changelog Ready', () => {
       state.setIsWaitingForChangelog(false);
       state.setConfigChangeRoundNumber(null);
 
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.configChangeRoundNumber).toBeNull();
     });
   });
 });
@@ -502,7 +503,7 @@ describe('streaming Blocking Until Changelog Ready', () => {
 describe('changelog Round Number Association', () => {
   it('associates changelog with specific round number', () => {
     const changelog = createMockChangelog(3, [
-      { type: 'added', participantId: 'p1' },
+      { participantId: 'p1', type: 'added' },
     ]);
 
     expect(changelog.roundNumber).toBe(3);
@@ -510,7 +511,7 @@ describe('changelog Round Number Association', () => {
 
   it('tracks previous round number for comparison', () => {
     const changelog = createMockChangelog(4, [
-      { type: 'removed', participantId: 'p2' },
+      { participantId: 'p2', type: 'removed' },
     ]);
 
     expect(changelog.roundNumber).toBe(4);
@@ -519,10 +520,10 @@ describe('changelog Round Number Association', () => {
 
   it('sets previousRoundNumber=null for round 0', () => {
     const changelog = createMockChangelog(0, [
-      { type: 'added', participantId: 'p1' },
+      { participantId: 'p1', type: 'added' },
     ]);
 
-    expect(changelog.previousRoundNumber).toBe(null);
+    expect(changelog.previousRoundNumber).toBeNull();
   });
 
   it('stores correct round number from configChangeRoundNumber', () => {
@@ -542,7 +543,7 @@ describe('changelog Round Number Association', () => {
     const updatedState = testStore.getState();
 
     expect(updatedState.configChangeRoundNumber).toBe(2);
-    expect(updatedState.isWaitingForChangelog).toBe(true);
+    expect(updatedState.isWaitingForChangelog).toBeTruthy();
   });
 });
 
@@ -554,13 +555,13 @@ describe('multiple Rounds with Separate Changelogs', () => {
   it('stores separate changelog entries for different rounds', () => {
     const changelogs = [
       createMockChangelog(1, [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
       ]),
       createMockChangelog(3, [
-        { type: 'removed', participantId: 'p2', modelId: 'claude-3' },
+        { modelId: 'claude-3', participantId: 'p2', type: 'removed' },
       ]),
       createMockChangelog(5, [
-        { type: 'modified', participantId: 'p3' },
+        { participantId: 'p3', type: 'modified' },
       ]),
     ];
 
@@ -572,9 +573,9 @@ describe('multiple Rounds with Separate Changelogs', () => {
 
   it('retrieves changelog for specific round', () => {
     const changelogs = [
-      createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
-      createMockChangelog(2, [{ type: 'removed', participantId: 'p2' }]),
-      createMockChangelog(3, [{ type: 'modified', participantId: 'p3' }]),
+      createMockChangelog(1, [{ participantId: 'p1', type: 'added' }]),
+      createMockChangelog(2, [{ participantId: 'p2', type: 'removed' }]),
+      createMockChangelog(3, [{ participantId: 'p3', type: 'modified' }]),
     ];
 
     const round2Changelog = changelogs.find(c => c.roundNumber === 2);
@@ -585,9 +586,9 @@ describe('multiple Rounds with Separate Changelogs', () => {
 
   it('no changelog for rounds without config changes', () => {
     const changelogs = [
-      createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
+      createMockChangelog(1, [{ participantId: 'p1', type: 'added' }]),
       // Round 2: No config changes, no changelog
-      createMockChangelog(3, [{ type: 'removed', participantId: 'p2' }]),
+      createMockChangelog(3, [{ participantId: 'p2', type: 'removed' }]),
     ];
 
     const round2Changelog = changelogs.find(c => c.roundNumber === 2);
@@ -621,8 +622,8 @@ describe('no Changelog When Config Unchanged', () => {
       state.setConfigChangeRoundNumber(null);
     }
 
-    expect(state.isWaitingForChangelog).toBe(false);
-    expect(state.configChangeRoundNumber).toBe(null);
+    expect(state.isWaitingForChangelog).toBeFalsy();
+    expect(state.configChangeRoundNumber).toBeNull();
   });
 
   it('allows streaming immediately when no config changes', () => {
@@ -637,16 +638,16 @@ describe('no Changelog When Config Unchanged', () => {
     // Streaming should NOT be blocked
     const isBlocked = updatedState.isWaitingForChangelog;
 
-    expect(isBlocked).toBe(false);
-    expect(updatedState.waitingToStartStreaming).toBe(true);
+    expect(isBlocked).toBeFalsy();
+    expect(updatedState.waitingToStartStreaming).toBeTruthy();
   });
 
   it('empty changelog cache when no changes ever made', () => {
     const emptyCache = {
-      success: true,
       data: {
         items: [],
       },
+      success: true,
     };
 
     expect(emptyCache.data.items).toHaveLength(0);
@@ -663,17 +664,17 @@ describe('historical Changelog Display After Refresh', () => {
     const effectiveThreadId = 'thread-123';
 
     const cachedChangelogs = {
-      success: true,
       data: {
         items: [
           createMockChangelog(2, [
-            { type: 'added', participantId: 'p1' },
+            { participantId: 'p1', type: 'added' },
           ]),
           createMockChangelog(1, [
-            { type: 'removed', participantId: 'p2' },
+            { participantId: 'p2', type: 'removed' },
           ]),
         ],
       },
+      success: true,
     };
 
     mockQueryClient.getQueryData.mockReturnValue(cachedChangelogs);
@@ -689,9 +690,9 @@ describe('historical Changelog Display After Refresh', () => {
 
   it('displays changelogs for all historical rounds', () => {
     const changelogs = [
-      createMockChangelog(5, [{ type: 'added', participantId: 'p1' }]),
-      createMockChangelog(3, [{ type: 'removed', participantId: 'p2' }]),
-      createMockChangelog(2, [{ type: 'modified', participantId: 'p3' }]),
+      createMockChangelog(5, [{ participantId: 'p1', type: 'added' }]),
+      createMockChangelog(3, [{ participantId: 'p2', type: 'removed' }]),
+      createMockChangelog(2, [{ participantId: 'p3', type: 'modified' }]),
     ];
 
     // All historical changelogs should be preserved
@@ -705,9 +706,9 @@ describe('historical Changelog Display After Refresh', () => {
 
   it('preserves changelog details across page refreshes', () => {
     const changelog = createMockChangelog(3, [
-      { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-      { type: 'removed', participantId: 'p2', modelId: 'claude-3' },
-      { type: 'modified', participantId: 'p3' },
+      { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
+      { modelId: 'claude-3', participantId: 'p2', type: 'removed' },
+      { participantId: 'p3', type: 'modified' },
     ]);
 
     // All change data should be preserved
@@ -757,7 +758,7 @@ describe('changelog Edge Cases', () => {
       state.setIsWaitingForChangelog(false);
 
       // Streaming no longer blocked
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -779,7 +780,7 @@ describe('changelog Edge Cases', () => {
       // Even though values match, hasPendingConfigChanges indicates user made a change
       const hasAnyChanges = webSearchChanged || updatedState.hasPendingConfigChanges;
 
-      expect(hasAnyChanges).toBe(true);
+      expect(hasAnyChanges).toBeTruthy();
     });
 
     it('clears hasPendingConfigChanges after successful submission', () => {
@@ -790,7 +791,7 @@ describe('changelog Edge Cases', () => {
       // Simulate form-actions.ts:377-378 (after PATCH success)
       state.setHasPendingConfigChanges(false);
 
-      expect(state.hasPendingConfigChanges).toBe(false);
+      expect(state.hasPendingConfigChanges).toBeFalsy();
     });
   });
 
@@ -811,8 +812,8 @@ describe('changelog Edge Cases', () => {
     it('combines mode change with participant changes', () => {
       const changelog = createMockChangelog(3, [
         { type: 'mode-changed' },
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
-        { type: 'removed', participantId: 'p2', modelId: 'claude-3' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
+        { modelId: 'claude-3', participantId: 'p2', type: 'removed' },
       ]);
 
       expect(changelog.changeData.changes).toHaveLength(3);
@@ -824,8 +825,8 @@ describe('changelog Edge Cases', () => {
         c => c.type === ChangelogChangeTypesExtended.ADDED || c.type === ChangelogChangeTypesExtended.REMOVED,
       );
 
-      expect(hasModeChange).toBe(true);
-      expect(hasParticipantChanges).toBe(true);
+      expect(hasModeChange).toBeTruthy();
+      expect(hasParticipantChanges).toBeTruthy();
     });
   });
 
@@ -834,16 +835,16 @@ describe('changelog Edge Cases', () => {
       const mockQueryClient = createMockQueryClient();
 
       const existingCache = {
-        success: true,
         data: {
           items: [
-            createMockChangelog(2, [{ type: 'added', participantId: 'p1' }]),
+            createMockChangelog(2, [{ participantId: 'p1', type: 'added' }]),
           ],
         },
+        success: true,
       };
 
       const newChangelog = createMockChangelog(2, [
-        { type: 'added', participantId: 'p1' },
+        { participantId: 'p1', type: 'added' },
       ]); // Same round, same ID
 
       // Simulate use-changelog-sync.ts:89-93 (duplicate check)
@@ -861,10 +862,10 @@ describe('changelog Edge Cases', () => {
           const uniqueNewItems = [newChangelog].filter(item => !existingIds.has(item.id));
 
           return {
-            success: true,
             data: {
               items: [...uniqueNewItems, ...existingItems],
             },
+            success: true,
           };
         },
       );
@@ -894,15 +895,15 @@ describe('changelog Accordion Display and Timeline Position', () => {
   describe('accordion appearance conditions', () => {
     it('shows accordion when config changes are made', () => {
       const changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
       ]);
 
       // Simulate changelog fetch success and cache merge
       mockQueryClient.setQueryData(
         queryKeys.threads.changelog('thread-123'),
         {
-          success: true,
           data: { items: [changelog] },
+          success: true,
         },
       );
 
@@ -919,13 +920,13 @@ describe('changelog Accordion Display and Timeline Position', () => {
       const state = store.getState();
 
       // No changes = no isWaitingForChangelog flag
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.configChangeRoundNumber).toBeNull();
 
       // Changelog cache remains empty
       const emptyCache = {
-        success: true,
         data: { items: [] },
+        success: true,
       };
 
       expect(emptyCache.data.items).toHaveLength(0);
@@ -933,18 +934,18 @@ describe('changelog Accordion Display and Timeline Position', () => {
 
     it('shows accordion for correct round number', () => {
       const round1Changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1' },
+        { participantId: 'p1', type: 'added' },
       ]);
       const round3Changelog = createMockChangelog(3, [
-        { type: 'removed', participantId: 'p2' },
+        { participantId: 'p2', type: 'removed' },
       ]);
 
       // Multiple changelogs for different rounds
       const cache = {
-        success: true,
         data: {
           items: [round3Changelog, round1Changelog], // Newest first
         },
+        success: true,
       };
 
       // Find changelog for specific round
@@ -964,7 +965,7 @@ describe('changelog Accordion Display and Timeline Position', () => {
       // Round 1: User + AI messages
 
       const changelog = createMockChangelog(1, [
-        { type: 'added', participantId: 'p1' },
+        { participantId: 'p1', type: 'added' },
       ]);
 
       expect(changelog.roundNumber).toBe(1);
@@ -977,15 +978,15 @@ describe('changelog Accordion Display and Timeline Position', () => {
 
     it('preserves timeline order with multiple changelogs', () => {
       const changelogs = [
-        createMockChangelog(4, [{ type: 'added', participantId: 'p1' }]),
-        createMockChangelog(2, [{ type: 'removed', participantId: 'p2' }]),
-        createMockChangelog(1, [{ type: 'modified', participantId: 'p3' }]),
+        createMockChangelog(4, [{ participantId: 'p1', type: 'added' }]),
+        createMockChangelog(2, [{ participantId: 'p2', type: 'removed' }]),
+        createMockChangelog(1, [{ participantId: 'p3', type: 'modified' }]),
       ];
 
       // Cache stores newest first (createdAt DESC ordering)
       const cache = {
-        success: true,
         data: { items: changelogs }, // Already sorted by round descending
+        success: true,
       };
 
       expect(cache.data.items[0]?.roundNumber).toBe(4);
@@ -998,7 +999,7 @@ describe('changelog Accordion Display and Timeline Position', () => {
       // This shows "these are the config changes that affected round N"
 
       const changelogRound2 = createMockChangelog(2, [
-        { type: 'added', participantId: 'p1' },
+        { participantId: 'p1', type: 'added' },
       ]);
 
       // Timeline order (conceptual):
@@ -1045,8 +1046,8 @@ describe('changelog Does Not Block Placeholders', () => {
       const finalState = store.getState();
 
       expect(finalState.expectedParticipantIds).toEqual(expectedIds);
-      expect(finalState.isWaitingForChangelog).toBe(true); // Still waiting
-      expect(finalState.waitingToStartStreaming).toBe(true);
+      expect(finalState.isWaitingForChangelog).toBeTruthy(); // Still waiting
+      expect(finalState.waitingToStartStreaming).toBeTruthy();
 
       // Placeholders are controlled by expectedParticipantIds, not by changelog state
       // This ensures participants cards show up immediately, even during changelog fetch
@@ -1063,7 +1064,7 @@ describe('changelog Does Not Block Placeholders', () => {
       // Re-fetch state after mutations
       let updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(true);
+      expect(updatedState.isWaitingForChangelog).toBeTruthy();
       expect(updatedState.expectedParticipantIds).toHaveLength(2);
 
       // Changelog completes
@@ -1074,7 +1075,7 @@ describe('changelog Does Not Block Placeholders', () => {
       updatedState = store.getState();
 
       // Placeholders remain unchanged
-      expect(updatedState.isWaitingForChangelog).toBe(false);
+      expect(updatedState.isWaitingForChangelog).toBeFalsy();
       expect(updatedState.expectedParticipantIds).toHaveLength(2);
     });
 
@@ -1097,7 +1098,7 @@ describe('changelog Does Not Block Placeholders', () => {
 
       // Streaming blocked = true (isWaitingForChangelog)
       const isStreamingBlocked = updatedState.isWaitingForChangelog;
-      expect(isStreamingBlocked).toBe(true);
+      expect(isStreamingBlocked).toBeTruthy();
 
       // This demonstrates: placeholders can render while streaming is blocked
     });
@@ -1109,7 +1110,7 @@ describe('changelog Does Not Block Placeholders', () => {
 
       // Changelog exists for round 2
       const changelog = createMockChangelog(2, [
-        { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
+        { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
       ]);
 
       // Round 2 streaming with placeholders
@@ -1148,14 +1149,14 @@ describe('changelog Entries Visible During Streaming', () => {
 
       // Changelog fetched and merged for round 2
       const changelog = createMockChangelog(2, [
-        { type: 'added', participantId: 'p1' },
+        { participantId: 'p1', type: 'added' },
       ]);
 
       mockQueryClient.setQueryData(
         queryKeys.threads.changelog('thread-123'),
         {
-          success: true,
           data: { items: [changelog] },
+          success: true,
         },
       );
 
@@ -1169,7 +1170,7 @@ describe('changelog Entries Visible During Streaming', () => {
       const updatedState = store.getState();
 
       // Changelog should be visible in timeline even during streaming
-      expect(updatedState.isStreaming).toBe(true);
+      expect(updatedState.isStreaming).toBeTruthy();
 
       const cachedChangelog = mockQueryClient.setQueryData.mock.calls[0];
       expect(cachedChangelog).toBeDefined();
@@ -1177,16 +1178,16 @@ describe('changelog Entries Visible During Streaming', () => {
 
     it('changelog persists across multiple streaming rounds', () => {
       const changelogs = [
-        createMockChangelog(1, [{ type: 'added', participantId: 'p1' }]),
-        createMockChangelog(2, [{ type: 'removed', participantId: 'p2' }]),
+        createMockChangelog(1, [{ participantId: 'p1', type: 'added' }]),
+        createMockChangelog(2, [{ participantId: 'p2', type: 'removed' }]),
       ];
 
       // Cache has multiple changelogs
       mockQueryClient.setQueryData(
         queryKeys.threads.changelog('thread-123'),
         {
-          success: true,
           data: { items: changelogs },
+          success: true,
         },
       );
 
@@ -1200,7 +1201,7 @@ describe('changelog Entries Visible During Streaming', () => {
       const updatedState = store.getState();
 
       // All historical changelogs remain visible
-      expect(updatedState.isStreaming).toBe(true);
+      expect(updatedState.isStreaming).toBeTruthy();
 
       const cached = mockQueryClient.setQueryData.mock.calls[0];
       expect(cached).toBeDefined();
@@ -1209,12 +1210,12 @@ describe('changelog Entries Visible During Streaming', () => {
     it('changelog visible from cache on page load during streaming', () => {
       // Simulate page refresh during active streaming
       const existingChangelog = createMockChangelog(2, [
-        { type: 'modified', participantId: 'p1' },
+        { participantId: 'p1', type: 'modified' },
       ]);
 
       mockQueryClient.getQueryData.mockReturnValue({
-        success: true,
         data: { items: [existingChangelog] },
+        success: true,
       });
 
       // Load cached changelog
@@ -1234,7 +1235,7 @@ describe('changelog Entries Visible During Streaming', () => {
       const updatedState = store.getState();
 
       // Changelog visible during resumed streaming
-      expect(updatedState.isStreaming).toBe(true);
+      expect(updatedState.isStreaming).toBeTruthy();
     });
   });
 
@@ -1253,18 +1254,18 @@ describe('changelog Entries Visible During Streaming', () => {
       // Re-fetch state after mutations
       let updatedState = store.getState();
 
-      expect(updatedState.isWaitingForChangelog).toBe(true);
+      expect(updatedState.isWaitingForChangelog).toBeTruthy();
 
       // Changelog for round 2 fetched
       const changelog = createMockChangelog(2, [
-        { type: 'added', participantId: 'p3' },
+        { participantId: 'p3', type: 'added' },
       ]);
 
       mockQueryClient.setQueryData(
         queryKeys.threads.changelog('thread-123'),
         {
-          success: true,
           data: { items: [changelog] },
+          success: true,
         },
       );
 
@@ -1279,7 +1280,7 @@ describe('changelog Entries Visible During Streaming', () => {
       updatedState = store.getState();
 
       // New changelog visible during round 2 streaming
-      expect(updatedState.isStreaming).toBe(true);
+      expect(updatedState.isStreaming).toBeTruthy();
       expect(updatedState.streamingRoundNumber).toBe(2);
     });
   });
@@ -1320,7 +1321,7 @@ describe('complete Changelog Flow E2E', () => {
     // Re-fetch state after mutations
     let updatedState = store.getState();
 
-    expect(updatedState.isWaitingForChangelog).toBe(true);
+    expect(updatedState.isWaitingForChangelog).toBeTruthy();
     expect(updatedState.configChangeRoundNumber).toBe(2);
 
     // 5. use-changelog-sync detects flag and fetches changelog (use-changelog-sync.ts:47)
@@ -1328,18 +1329,18 @@ describe('complete Changelog Flow E2E', () => {
       && updatedState.configChangeRoundNumber !== null
       && !!effectiveThreadId;
 
-    expect(shouldFetch).toBe(true);
+    expect(shouldFetch).toBeTruthy();
 
     // 6. Fetch completes, merges into cache (use-changelog-sync.ts:76-103)
     const newChangelog = createMockChangelog(2, [
-      { type: 'added', participantId: 'p1', modelId: 'gpt-4' },
+      { modelId: 'gpt-4', participantId: 'p1', type: 'added' },
     ]);
 
     mockQueryClient.setQueryData(
       queryKeys.threads.changelog(effectiveThreadId),
       () => ({
-        success: true,
         data: { items: [newChangelog] },
+        success: true,
       }),
     );
 
@@ -1350,12 +1351,12 @@ describe('complete Changelog Flow E2E', () => {
     // Re-fetch state after second mutations
     updatedState = store.getState();
 
-    expect(updatedState.isWaitingForChangelog).toBe(false);
-    expect(updatedState.configChangeRoundNumber).toBe(null);
+    expect(updatedState.isWaitingForChangelog).toBeFalsy();
+    expect(updatedState.configChangeRoundNumber).toBeNull();
 
     // 8. Streaming can now proceed
-    expect(updatedState.waitingToStartStreaming).toBe(true);
-    expect(updatedState.isWaitingForChangelog).toBe(false);
+    expect(updatedState.waitingToStartStreaming).toBeTruthy();
+    expect(updatedState.isWaitingForChangelog).toBeFalsy();
   });
 
   it('executes flow when no changes: PATCH → clear flags → immediate streaming', () => {
@@ -1381,12 +1382,12 @@ describe('complete Changelog Flow E2E', () => {
     // Re-fetch state after mutations
     const updatedState = store.getState();
 
-    expect(updatedState.isWaitingForChangelog).toBe(false);
-    expect(updatedState.configChangeRoundNumber).toBe(null);
+    expect(updatedState.isWaitingForChangelog).toBeFalsy();
+    expect(updatedState.configChangeRoundNumber).toBeNull();
 
     // 5. Streaming proceeds immediately
-    expect(updatedState.waitingToStartStreaming).toBe(true);
-    expect(updatedState.isWaitingForChangelog).toBe(false);
+    expect(updatedState.waitingToStartStreaming).toBeTruthy();
+    expect(updatedState.isWaitingForChangelog).toBeFalsy();
   });
 
   it('handles pre-search + changelog flow: both must complete before streaming', () => {
@@ -1402,15 +1403,15 @@ describe('complete Changelog Flow E2E', () => {
     // 2. Pre-search created (form-actions.ts:297-303)
     if (enableWebSearch) {
       state.addPreSearch({
-        id: 'presearch-r2',
-        threadId: 'thread-123',
-        roundNumber: 2,
-        userQuery: 'test query',
-        status: MessageStatuses.PENDING,
-        searchData: undefined,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'presearch-r2',
+        roundNumber: 2,
+        searchData: undefined,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       });
     }
 
@@ -1422,7 +1423,7 @@ describe('complete Changelog Flow E2E', () => {
     // Re-fetch state after mutations
     let updatedState = store.getState();
 
-    expect(updatedState.isWaitingForChangelog).toBe(true);
+    expect(updatedState.isWaitingForChangelog).toBeTruthy();
     expect(updatedState.preSearches).toHaveLength(1);
 
     // 4. Both must complete before streaming
@@ -1431,25 +1432,26 @@ describe('complete Changelog Flow E2E', () => {
       && (preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING);
     const isChangelogBlocking = updatedState.isWaitingForChangelog;
 
-    expect(isPreSearchBlocking).toBe(true);
-    expect(isChangelogBlocking).toBe(true);
+    expect(isPreSearchBlocking).toBeTruthy();
+    expect(isChangelogBlocking).toBeTruthy();
 
     // 5. Pre-search completes
     state.removePreSearch('presearch-r2');
-    if (!preSearch)
+    if (!preSearch) {
       throw new Error('expected preSearch');
+    }
     state.addPreSearch({
       ...preSearch,
-      status: MessageStatuses.COMPLETE,
       searchData: {
+        failureCount: 0,
         queries: [],
         results: [],
-        summary: 'Complete',
         successCount: 1,
-        failureCount: 0,
+        summary: 'Complete',
         totalResults: 1,
         totalTime: 1000,
       },
+      status: MessageStatuses.COMPLETE,
     });
 
     // 6. Changelog completes
@@ -1459,6 +1461,6 @@ describe('complete Changelog Flow E2E', () => {
     updatedState = store.getState();
 
     // 7. Streaming can now proceed
-    expect(updatedState.isWaitingForChangelog).toBe(false);
+    expect(updatedState.isWaitingForChangelog).toBeFalsy();
   });
 });

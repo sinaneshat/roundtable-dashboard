@@ -23,7 +23,7 @@ export type FileTypeIconProps = {
   className?: string;
 };
 
-export function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
+export function FileTypeIcon({ className, mimeType }: FileTypeIconProps) {
   const iconName = getFileIconName(mimeType);
   const iconClass = cn('size-5 text-white', className);
 
@@ -221,13 +221,16 @@ export function ChatInputAttachments({
       <ScrollArea orientation="horizontal" className="w-full">
         <div className="flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-border/30">
           <AnimatePresence mode="popLayout">
-            {attachments.map(attachment => (
-              <AttachmentChip
-                key={attachment.id}
-                attachment={attachment}
-                onRemove={onRemove ? () => onRemove(attachment.id) : undefined}
-              />
-            ))}
+            {attachments.map((attachment) => {
+              const removeHandler = onRemove ? { onRemove: () => onRemove(attachment.id) } : {};
+              return (
+                <AttachmentChip
+                  key={attachment.id}
+                  attachment={attachment}
+                  {...removeHandler}
+                />
+              );
+            })}
           </AnimatePresence>
         </div>
       </ScrollArea>

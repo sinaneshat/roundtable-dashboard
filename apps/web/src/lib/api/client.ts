@@ -29,9 +29,9 @@ import { getApiBaseUrl } from '@/lib/config/base-urls';
 // ============================================================================
 
 export type ClientOptions = {
-  cookieHeader?: string;
-  signal?: AbortSignal;
-  bypassCache?: boolean;
+  cookieHeader?: string | undefined;
+  signal?: AbortSignal | undefined;
+  bypassCache?: boolean | undefined;
 };
 
 // Individual client types for each route group
@@ -86,40 +86,40 @@ export function createApiClient(options?: ClientOptions): ApiClientType {
 
   const baseUrl = getApiBaseUrl();
   const config = {
-    headers: buildHeaders(options),
     fetch: buildFetch(options),
+    headers: buildHeaders(options),
   };
 
   // Create typed clients for each route group
   const clients = {
-    healthAuth: hc<HealthAuthRoutesType>(baseUrl, config),
-    billing: hc<BillingRoutesType>(baseUrl, config),
-    chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
-    chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
-    chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
-    project: hc<ProjectRoutesType>(baseUrl, config),
     admin: hc<AdminRoutesType>(baseUrl, config),
-    utility: hc<UtilityRoutesType>(baseUrl, config),
-    upload: hc<UploadRoutesType>(baseUrl, config),
+    billing: hc<BillingRoutesType>(baseUrl, config),
+    chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
+    chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
+    chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
+    healthAuth: hc<HealthAuthRoutesType>(baseUrl, config),
+    project: hc<ProjectRoutesType>(baseUrl, config),
     test: hc<TestRoutesType>(baseUrl, config),
+    upload: hc<UploadRoutesType>(baseUrl, config),
+    utility: hc<UtilityRoutesType>(baseUrl, config),
   };
 
   // Route namespace to client mapping
   const namespaceMap: Record<string, keyof typeof clients> = {
-    health: 'healthAuth',
-    system: 'healthAuth',
-    og: 'healthAuth',
+    admin: 'admin',
     auth: 'healthAuth',
     billing: 'billing',
     chat: 'chatThread', // Primary, will check others too
-    projects: 'project',
-    admin: 'admin',
-    usage: 'utility',
     credits: 'utility',
-    models: 'utility',
+    health: 'healthAuth',
     mcp: 'utility',
-    uploads: 'upload',
+    models: 'utility',
+    og: 'healthAuth',
+    projects: 'project',
+    system: 'healthAuth',
     test: 'test',
+    uploads: 'upload',
+    usage: 'utility',
   };
 
   // Chat namespace needs special handling (spans 3 clients)
@@ -151,8 +151,9 @@ export function createApiClient(options?: ClientOptions): ApiClientType {
       // Fallback: search all clients
       for (const client of Object.values(clients)) {
         const val = (client as Record<string, unknown>)[prop];
-        if (val !== undefined)
+        if (val !== undefined) {
           return val;
+        }
       }
 
       return undefined;
@@ -174,8 +175,9 @@ export const createPublicApiClient = createApiClient;
 
 function buildHeaders(options?: ClientOptions): Record<string, string> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (options?.cookieHeader)
+  if (options?.cookieHeader) {
     headers.Cookie = options.cookieHeader;
+  }
   if (options?.bypassCache) {
     headers['Cache-Control'] = 'no-cache';
     headers.Pragma = 'no-cache';
@@ -208,9 +210,16 @@ export class ServiceFetchError extends Error {
   }
 }
 
+/**
+ * Type for authenticated fetch init options (extends RequestInit)
+ */
+type AuthenticatedFetchInit = RequestInit & {
+  searchParams?: Record<string, string>;
+};
+
 export async function authenticatedFetch(
   path: string,
-  init: RequestInit & { searchParams?: Record<string, string> },
+  init: AuthenticatedFetchInit,
 ): Promise<Response> {
   const baseUrl = getApiBaseUrl();
   const fullBaseUrl = baseUrl.startsWith('/') && typeof window !== 'undefined'

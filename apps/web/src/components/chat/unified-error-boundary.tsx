@@ -63,9 +63,9 @@ function useContextMessage(context: ErrorBoundaryContext): string {
 }
 
 const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
+  context,
   error,
   errorInfo,
-  context,
   onReset,
 }) => {
   const t = useTranslations();
@@ -151,21 +151,21 @@ export class UnifiedErrorBoundary extends Component<
   constructor(props: UnifiedErrorBoundaryProps) {
     super(props);
     this.state = {
-      hasError: false,
+      context: props.context || ErrorBoundaryContexts.GENERAL,
       error: null,
       errorInfo: null,
-      context: props.context || ErrorBoundaryContexts.GENERAL,
+      hasError: false,
     };
   }
 
   static getDerivedStateFromError(error: Error): Partial<UnifiedErrorBoundaryState> {
     return {
-      hasError: true,
       error,
+      hasError: true,
     };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({
       error,
       errorInfo,
@@ -183,29 +183,33 @@ export class UnifiedErrorBoundary extends Component<
     }
 
     // Dynamically import PostHog to avoid bundling in initial load
-    import('posthog-js').then((mod) => {
-      mod.default.capture('$exception', {
-        $exception_message: error.message,
-        $exception_stack_trace_raw: error.stack,
-        $exception_type: error.name,
-        $exception_source: 'react_error_boundary',
-        context: this.state.context,
-        componentStack: errorInfo.componentStack,
+    import('posthog-js')
+      .then((mod) => {
+        mod.default.capture('$exception', {
+          $exception_message: error.message,
+          $exception_source: 'react_error_boundary',
+          $exception_stack_trace_raw: error.stack,
+          $exception_type: error.name,
+          componentStack: errorInfo.componentStack,
+          context: this.state.context,
+        });
+      })
+      .catch(() => {
+        // Silently ignore PostHog import failures - error tracking is non-critical
       });
-    });
   };
 
   handleReset = () => {
     this.setState({
-      hasError: false,
       error: null,
       errorInfo: null,
+      hasError: false,
     });
 
     this.props.onReset?.();
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       const FallbackComponent = this.props.fallbackComponent || DefaultErrorFallback;
 
@@ -225,8 +229,8 @@ export class UnifiedErrorBoundary extends Component<
 
 export function InlineErrorDisplay({
   error,
-  participantName,
   onRetry,
+  participantName,
 }: {
   error: string;
   participantName?: string;

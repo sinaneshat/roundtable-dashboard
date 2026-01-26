@@ -10,9 +10,49 @@
  * @module lib/utils/date-transforms
  */
 
+import { z } from 'zod';
+
 import type { ApiMessage, ChatParticipant, ChatThread } from '@/services/api';
 import type { StoredPreSearchValidated } from '@/services/api/chat/pre-search';
 import { StoredPreSearchSchema } from '@/services/api/chat/pre-search';
+
+// ============================================================================
+// RAW API INPUT SCHEMAS - For function parameters with string | Date fields
+// ============================================================================
+
+/**
+ * Schema for raw ChatThread from API (before date transformation)
+ * Dates may be strings or Date objects depending on API serialization
+ */
+const RawChatThreadInputSchema = z.custom<
+  Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
+    createdAt: string | Date;
+    updatedAt: string | Date;
+    lastMessageAt: string | Date | null;
+  }
+>();
+type RawChatThreadInput = z.infer<typeof RawChatThreadInputSchema>;
+
+/**
+ * Schema for raw ChatParticipant from API (before date transformation)
+ */
+const RawChatParticipantInputSchema = z.custom<
+  Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
+    createdAt: string | Date;
+    updatedAt: string | Date;
+  }
+>();
+type RawChatParticipantInput = z.infer<typeof RawChatParticipantInputSchema>;
+
+/**
+ * Schema for raw ApiMessage from API (before date transformation)
+ */
+const RawApiMessageInputSchema = z.custom<
+  Omit<ApiMessage, 'createdAt'> & {
+    createdAt: string | Date;
+  }
+>();
+type RawApiMessageInput = z.infer<typeof RawApiMessageInputSchema>;
 
 // ============================================================================
 // CORE DATE UTILITIES
@@ -112,17 +152,13 @@ export function toISOStringOrNull(value: string | Date | null | undefined): stri
  * ```
  */
 export function transformChatThread(
-  thread: Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  },
+  thread: RawChatThreadInput,
 ): ChatThread {
   return {
     ...thread,
     createdAt: toISOString(ensureDate(thread.createdAt)),
-    updatedAt: toISOString(ensureDate(thread.updatedAt)),
     lastMessageAt: toISOStringOrNull(ensureDateOrNull(thread.lastMessageAt)),
+    updatedAt: toISOString(ensureDate(thread.updatedAt)),
   };
 }
 
@@ -144,10 +180,7 @@ export function transformChatThread(
  * ```
  */
 export function transformChatParticipant(
-  participant: Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  },
+  participant: RawChatParticipantInput,
 ): ChatParticipant {
   return {
     ...participant,
@@ -173,9 +206,7 @@ export function transformChatParticipant(
  * ```
  */
 export function transformChatMessage(
-  message: Omit<ApiMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  },
+  message: RawApiMessageInput,
 ): ApiMessage {
   return {
     ...message,
@@ -199,11 +230,7 @@ export function transformChatMessage(
  * ```
  */
 export function transformChatThreads(
-  threads: Array<Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  }>,
+  threads: RawChatThreadInput[],
 ): ChatThread[] {
   return threads.map(transformChatThread);
 }
@@ -220,10 +247,7 @@ export function transformChatThreads(
  * ```
  */
 export function transformChatParticipants(
-  participants: Array<Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  }>,
+  participants: RawChatParticipantInput[],
 ): ChatParticipant[] {
   return participants.map(transformChatParticipant);
 }
@@ -240,9 +264,7 @@ export function transformChatParticipants(
  * ```
  */
 export function transformChatMessages(
-  messages: Array<Omit<ApiMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  }>,
+  messages: RawApiMessageInput[],
 ): ApiMessage[] {
   return messages.map(transformChatMessage);
 }
@@ -295,32 +317,25 @@ export function transformPreSearches(
 // ============================================================================
 
 /**
- * Thread data bundle type for batch transformation
+ * Schema for thread data bundle - batch transformation input
  * Represents a complete thread response with related entities
  */
-export type ThreadDataBundle = {
-  thread?: Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  };
-  participants?: Array<Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  }>;
-  messages?: Array<Omit<ApiMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  }>;
-};
+const _ThreadDataBundleSchema = z.object({
+  messages: z.array(RawApiMessageInputSchema).optional(),
+  participants: z.array(RawChatParticipantInputSchema).optional(),
+  thread: RawChatThreadInputSchema.optional(),
+});
+export type ThreadDataBundle = z.infer<typeof _ThreadDataBundleSchema>;
 
 /**
- * Transformed thread data bundle with Date objects
+ * Schema for transformed thread data bundle with Date objects
  */
-export type TransformedThreadDataBundle = {
-  thread?: ChatThread;
-  participants?: ChatParticipant[];
-  messages?: ApiMessage[];
-};
+const _TransformedThreadDataBundleSchema = z.object({
+  messages: z.custom<ApiMessage[]>().optional(),
+  participants: z.custom<ChatParticipant[]>().optional(),
+  thread: z.custom<ChatThread>().optional(),
+});
+export type TransformedThreadDataBundle = z.infer<typeof _TransformedThreadDataBundleSchema>;
 
 /**
  * Transform complete thread data bundle in one call
@@ -355,8 +370,8 @@ export function transformThreadBundle(
   bundle: ThreadDataBundle,
 ): TransformedThreadDataBundle {
   return {
-    thread: bundle.thread ? transformChatThread(bundle.thread) : undefined,
-    participants: bundle.participants ? transformChatParticipants(bundle.participants) : undefined,
     messages: bundle.messages ? transformChatMessages(bundle.messages) : undefined,
+    participants: bundle.participants ? transformChatParticipants(bundle.participants) : undefined,
+    thread: bundle.thread ? transformChatThread(bundle.thread) : undefined,
   };
 }

@@ -20,13 +20,13 @@ const highlightStyle: CSSProperties = {
 
 export function UnsubscribeFooter({
   recipientEmail,
-  unsubscribeUrl,
   senderIp,
   senderLocation,
   style,
+  unsubscribeUrl,
 }: UnsubscribeFooterProps) {
   return (
-    <EmailText size="sm" color="muted" style={style}>
+    <EmailText size="sm" color="muted" {...(style !== undefined && { style })}>
       {recipientEmail && (
         <>
           This email was intended for

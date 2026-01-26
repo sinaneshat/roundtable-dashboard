@@ -21,8 +21,8 @@ type UseStuckStreamDetectionParams = {
  * not timeout-driven.
  */
 export function useStuckStreamDetection({
-  store,
   lastStreamActivityRef,
+  store,
 }: UseStuckStreamDetectionParams) {
   const chatIsStreaming = useStore(store, s => s.isStreaming);
 

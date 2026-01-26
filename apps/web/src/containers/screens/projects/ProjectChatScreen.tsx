@@ -65,7 +65,7 @@ type ProjectChatScreenProps = {
   project: GetProjectResponse['data'] | null;
 };
 
-export default function ProjectChatScreen({ projectId, project }: ProjectChatScreenProps) {
+export default function ProjectChatScreen({ project, projectId }: ProjectChatScreenProps) {
   const t = useTranslations();
   const { data: session } = useSession();
   const sessionUser = session?.user;
@@ -81,86 +81,86 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   const { defaultModelId } = useModelLookup();
   const incompatibleModelIdsRef = useRef<Set<string>>(new Set());
   const initStateRef = useRef({
-    reset: false,
     modelOrder: false,
     participants: false,
+    reset: false,
     sync: false,
     threadActions: false,
   });
 
   const {
     _hasHydrated: preferencesHydrated,
+    enableWebSearch: persistedWebSearch,
     modelOrder: persistedModelOrder,
     selectedMode: persistedMode,
-    enableWebSearch: persistedWebSearch,
     selectedModelIds: persistedModelIds,
-    setSelectedModelIds: setPersistedModelIds,
+    setEnableWebSearch: setPersistedWebSearch,
     setModelOrder: setPersistedModelOrder,
     setSelectedMode: setPersistedMode,
-    setEnableWebSearch: setPersistedWebSearch,
+    setSelectedModelIds: setPersistedModelIds,
     syncWithAccessibleModels,
   } = useModelPreferencesStore(useShallow(s => ({
     _hasHydrated: s._hasHydrated,
+    enableWebSearch: s.enableWebSearch,
     modelOrder: s.modelOrder,
     selectedMode: s.selectedMode,
-    enableWebSearch: s.enableWebSearch,
     selectedModelIds: s.selectedModelIds,
-    setSelectedModelIds: s.setSelectedModelIds,
+    setEnableWebSearch: s.setEnableWebSearch,
     setModelOrder: s.setModelOrder,
     setSelectedMode: s.setSelectedMode,
-    setEnableWebSearch: s.setEnableWebSearch,
+    setSelectedModelIds: s.setSelectedModelIds,
     syncWithAccessibleModels: s.syncWithAccessibleModels,
   })));
 
   const {
+    addParticipant,
+    autoMode,
+    createdThreadId,
+    enableWebSearch,
     inputValue,
+    isAnalyzingPrompt,
+    isCreatingThread,
+    isStreaming,
+    messages,
+    modelOrder,
+    removeParticipant,
+    resetToOverview,
     selectedMode,
     selectedParticipants,
-    enableWebSearch,
-    messages,
-    autoMode,
-    isAnalyzingPrompt,
-    modelOrder,
+    setAutoMode,
+    setEnableWebSearch,
     setInputValue,
+    setModelOrder,
     setSelectedMode,
     setSelectedParticipants,
-    addParticipant,
-    removeParticipant,
-    updateParticipant,
-    setEnableWebSearch,
-    setAutoMode,
-    setModelOrder,
-    resetToOverview,
-    isStreaming,
-    isCreatingThread,
-    waitingToStartStreaming,
     showInitialUI,
-    createdThreadId,
+    updateParticipant,
+    waitingToStartStreaming,
   } = useChatStore(
     useShallow(s => ({
+      addParticipant: s.addParticipant,
+      autoMode: s.autoMode,
+      createdThreadId: s.createdThreadId,
+      enableWebSearch: s.enableWebSearch,
       inputValue: s.inputValue,
+      isAnalyzingPrompt: s.isAnalyzingPrompt,
+      isCreatingThread: s.isCreatingThread,
+      isStreaming: s.isStreaming,
+      messages: s.messages,
+      modelOrder: s.modelOrder,
+      removeParticipant: s.removeParticipant,
+      resetToOverview: s.resetToOverview,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
-      enableWebSearch: s.enableWebSearch,
-      messages: s.messages,
-      autoMode: s.autoMode,
-      isAnalyzingPrompt: s.isAnalyzingPrompt,
-      modelOrder: s.modelOrder,
+      setAutoMode: s.setAutoMode,
+      setEnableWebSearch: s.setEnableWebSearch,
       setInputValue: s.setInputValue,
+      setModelOrder: s.setModelOrder,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
-      addParticipant: s.addParticipant,
-      removeParticipant: s.removeParticipant,
-      updateParticipant: s.updateParticipant,
-      setEnableWebSearch: s.setEnableWebSearch,
-      setAutoMode: s.setAutoMode,
-      setModelOrder: s.setModelOrder,
-      resetToOverview: s.resetToOverview,
-      isStreaming: s.isStreaming,
-      isCreatingThread: s.isCreatingThread,
-      waitingToStartStreaming: s.waitingToStartStreaming,
       showInitialUI: s.showInitialUI,
-      createdThreadId: s.createdThreadId,
+      updateParticipant: s.updateParticipant,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
@@ -182,30 +182,35 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   useOverviewActions({ projectId });
 
   const allEnabledModels = useMemo(() => {
-    if (!modelsData?.success)
+    if (!modelsData?.success) {
       return [];
+    }
     return modelsData.data.items;
   }, [modelsData]);
 
   const customRoles = useMemo(() => {
-    if (!customRolesData?.pages)
+    if (!customRolesData?.pages) {
       return [];
+    }
     return customRolesData.pages.flatMap((page) => {
-      if (!page?.success)
+      if (!page?.success) {
         return [];
+      }
       return page.data.items;
     });
   }, [customRolesData?.pages]);
 
   const userTierConfig = useMemo(() => {
-    if (!modelsData?.success)
+    if (!modelsData?.success) {
       return undefined;
+    }
     return modelsData.data.user_tier_config;
   }, [modelsData]);
 
   const accessibleModelIds = useMemo(() => {
-    if (allEnabledModels.length === 0)
+    if (allEnabledModels.length === 0) {
       return [];
+    }
     return allEnabledModels
       .filter((m: Model) => m.is_accessible_to_user)
       .map((m: Model) => m.id);
@@ -213,8 +218,9 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
 
   const initialParticipants = useMemo<ParticipantConfig[]>(() => {
     const firstPreset = MODEL_PRESETS[0];
-    if (!preferencesHydrated || accessibleModelIds.length === 0)
+    if (!preferencesHydrated || accessibleModelIds.length === 0) {
       return [];
+    }
 
     if (persistedModelIds.length > 0) {
       const validIds = persistedModelIds.filter(id => accessibleModelIds.includes(id));
@@ -222,8 +228,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
         return validIds.map((modelId, index) => ({
           id: modelId,
           modelId,
-          role: '',
           priority: index,
+          role: '',
         }));
       }
     }
@@ -235,11 +241,12 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
         .map((mr, index) => ({
           id: mr.modelId,
           modelId: mr.modelId,
-          role: mr.role,
           priority: index,
+          role: mr.role,
         }));
-      if (presetParticipants.length > 0)
+      if (presetParticipants.length > 0) {
         return presetParticipants;
+      }
     }
 
     const defaultIds = accessibleModelIds.slice(0, 3);
@@ -247,8 +254,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       return defaultIds.map((modelId: string, index: number) => ({
         id: modelId,
         modelId,
-        role: '',
         priority: index,
+        role: '',
       }));
     }
 
@@ -256,8 +263,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       return [{
         id: defaultModelId,
         modelId: defaultModelId,
-        role: '',
         priority: 0,
+        role: '',
       }];
     }
 
@@ -265,12 +272,12 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   }, [preferencesHydrated, accessibleModelIds, persistedModelIds, defaultModelId]);
 
   const orderedModels = useOrderedModels({
-    selectedParticipants,
     allEnabledModels,
     modelOrder,
+    selectedParticipants,
   });
 
-  const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
+  const { fileIncompatibleModelIds, incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
     const visionIncompatible = new Set<string>();
     const fileIncompatible = new Set<string>();
@@ -290,18 +297,20 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
     const hasDocumentFiles = existingDocFiles || newDocFiles;
 
     const filesToCheck: { mimeType: string }[] = [];
-    if (hasImageFiles)
+    if (hasImageFiles) {
       filesToCheck.push({ mimeType: 'image/png' });
-    if (hasDocumentFiles)
+    }
+    if (hasDocumentFiles) {
       filesToCheck.push({ mimeType: 'application/pdf' });
+    }
 
     if (filesToCheck.length > 0) {
       const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
       const detailed = getDetailedIncompatibleModelIds(modelsWithCapabilities, filesToCheck);
       for (const id of detailed.incompatibleIds) {
@@ -315,7 +324,7 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       }
     }
 
-    return { incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible, fileIncompatibleModelIds: fileIncompatible };
+    return { fileIncompatibleModelIds: fileIncompatible, incompatibleModelIds: incompatible, visionIncompatibleModelIds: visionIncompatible };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
   useEffect(() => {
@@ -421,8 +430,9 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   const handlePromptSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!inputValue.trim() || isOperationBlocked)
+    if (!inputValue.trim() || isOperationBlocked) {
       return;
+    }
 
     // Check thread limit before proceeding
     if (isThreadLimitReached) {
@@ -430,8 +440,9 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       return;
     }
 
-    if (!chatAttachments.allUploaded)
+    if (!chatAttachments.allUploaded) {
       return;
+    }
 
     if (autoMode && inputValue.trim()) {
       const hasImageFiles = chatAttachments.attachments.some(att => isImageFile(att.file.type));
@@ -439,29 +450,31 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       const accessibleSet = new Set<string>(accessibleModelIds);
 
       await analyzeAndApply({
-        prompt: inputValue.trim(),
-        hasImageFiles,
-        hasDocumentFiles,
         accessibleModelIds: accessibleSet,
+        hasDocumentFiles,
+        hasImageFiles,
+        prompt: inputValue.trim(),
       });
     }
 
     const currentParticipants = storeApi.getState().selectedParticipants;
-    if (currentParticipants.length < MIN_PARTICIPANTS_REQUIRED)
+    if (currentParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
       return;
+    }
 
     try {
       const attachmentIds = chatAttachments.getUploadIds();
       const attachmentInfos = chatAttachments.attachments
         .filter(att => att.status === UploadStatuses.COMPLETED && att.uploadId)
         .map((att) => {
-          if (!att.uploadId)
+          if (!att.uploadId) {
             throw new Error('Upload ID required');
+          }
           return {
-            uploadId: att.uploadId,
             filename: att.file.name,
             mimeType: att.file.type,
             previewUrl: att.preview?.url,
+            uploadId: att.uploadId,
           };
         });
 
@@ -482,8 +495,9 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
 
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
-    if (!orderedModel)
+    if (!orderedModel) {
       return;
+    }
 
     if (orderedModel.participant) {
       removeParticipant(modelId);
@@ -499,8 +513,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       const newParticipant: ParticipantConfig = {
         id: modelId,
         modelId,
-        role: '',
         priority: 0,
+        role: '',
       };
       addParticipant(newParticipant);
       const currentParticipants = storeApi.getState().selectedParticipants;
@@ -509,11 +523,11 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   }, [orderedModels, removeParticipant, addParticipant, setPersistedModelIds, storeApi, t]);
 
   const handleRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
-    updateParticipant(modelId, { role, customRoleId });
+    updateParticipant(modelId, { customRoleId, role });
   }, [updateParticipant]);
 
   const handleClearRole = useCallback(
-    (modelId: string) => updateParticipant(modelId, { role: '', customRoleId: undefined }),
+    (modelId: string) => updateParticipant(modelId, { customRoleId: undefined, role: '' }),
     [updateParticipant],
   );
 
@@ -543,8 +557,9 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       ToastNamespaces.CHAT_MODELS,
     );
 
-    if (!result.success)
+    if (!result.success) {
       return;
+    }
 
     setSelectedParticipants(result.participants);
     const modelIds = result.participants.map(p => p.modelId);
@@ -594,23 +609,23 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   const sharedChatInputProps = useMemo(() => {
     const status: ChatStatus = isOperationBlocked ? 'submitted' : 'ready';
     return {
-      value: inputValue,
-      onChange: setInputValue,
-      onSubmit: handlePromptSubmit,
-      status,
-      placeholder: t('chat.input.placeholder'),
-      participants: selectedParticipants,
-      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
-      attachments: chatAttachments.attachments,
-      onAddAttachments: chatAttachments.addFiles,
-      onRemoveAttachment: chatAttachments.removeAttachment,
-      enableAttachments: !isOperationBlocked,
       attachmentClickRef,
-      toolbar: chatInputToolbar,
+      attachments: chatAttachments.attachments,
+      autoMode,
+      enableAttachments: !isOperationBlocked,
+      isModelsLoading,
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
-      isModelsLoading,
-      autoMode,
+      onAddAttachments: chatAttachments.addFiles,
+      onChange: setInputValue,
+      onRemoveAttachment: chatAttachments.removeAttachment,
+      onRemoveParticipant: isOperationBlocked ? undefined : removeParticipant,
+      onSubmit: handlePromptSubmit,
+      participants: selectedParticipants,
+      placeholder: t('chat.input.placeholder'),
+      status,
+      toolbar: chatInputToolbar,
+      value: inputValue,
     };
   }, [
     inputValue,
@@ -728,8 +743,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
         {showChatView && (
           <ChatView
             user={{
-              name: sessionUser?.name || 'You',
               image: sessionUser?.image || null,
+              name: sessionUser?.name || 'You',
             }}
             mode={ScreenModes.OVERVIEW}
             onSubmit={handlePromptSubmit}
@@ -764,10 +779,10 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
           selectedCount={selectedParticipants.length}
           maxModels={userTierConfig.max_models}
           userTierInfo={{
-            tier_name: userTierConfig.tier_name,
-            max_models: userTierConfig.max_models,
-            current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
+            current_tier: userTierConfig.tier,
+            max_models: userTierConfig.max_models,
+            tier_name: userTierConfig.tier_name,
           }}
           visionIncompatibleModelIds={visionIncompatibleModelIds}
           fileIncompatibleModelIds={fileIncompatibleModelIds}

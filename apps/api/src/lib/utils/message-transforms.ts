@@ -89,8 +89,9 @@ function isUIMessageRole(
 export function isPreSearchMessage(
   message: UIMessage,
 ): message is UIMessage & { metadata: DbPreSearchMessageMetadata } {
-  if (!message.metadata)
+  if (!message.metadata) {
     return false;
+  }
   const validation = DbPreSearchMessageMetadataSchema.safeParse(
     message.metadata,
   );
@@ -106,8 +107,9 @@ export function isPreSearchMessage(
 export function isParticipantMessage(
   message: UIMessage,
 ): message is UIMessage & { metadata: DbAssistantMessageMetadata } {
-  if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
+  if (!message.metadata || message.role !== MessageRoles.ASSISTANT) {
     return false;
+  }
   const validation = DbAssistantMessageMetadataSchema.safeParse(
     message.metadata,
   );
@@ -120,17 +122,29 @@ export function isParticipantMessage(
 // Format Conversion
 // ============================================================================
 
+/**
+ * Normalize message part states from STREAMING to DONE
+ *
+ * ✅ JUSTIFIED TYPE ASSERTION: The generic array type T is preserved through
+ * the map operation. TypeScript cannot infer that Array.map() returns the same
+ * array type T when T extends unknown[]. The transformation is type-safe:
+ * each element is either unchanged or has only its 'state' property modified.
+ */
 function normalizeMessagePartStates<T extends unknown[]>(parts: T): T {
   if (!parts?.length) {
     return parts;
   }
 
-  return parts.map((part) => {
+  const normalized = parts.map((part) => {
     if (typeof part === 'object' && part !== null && 'state' in part && part.state === TextPartStates.STREAMING) {
       return { ...part, state: TextPartStates.DONE };
     }
     return part;
-  }) as T;
+  });
+
+  // ✅ JUSTIFIED CAST: Array.map preserves element structure; T extends unknown[]
+  // and each element is either unchanged or has 'state' field modified
+  return normalized as T;
 }
 
 /**
@@ -162,22 +176,25 @@ export function chatMessageToUIMessage(
     : message.roundNumber !== null && message.roundNumber !== undefined
       ? {
           ...(message.metadata || {}),
-          role: message.role,
-          participantId: message.participantId || undefined,
           createdAt,
+          participantId: message.participantId || undefined,
+          role: message.role,
           roundNumber: message.roundNumber,
         }
       : null;
 
+  // ✅ JUSTIFIED CAST: normalizeMessagePartStates returns the same array structure
+  // as its input. The input is message.parts (UIMessage['parts'] | undefined),
+  // and the function only modifies 'state' fields on objects, preserving the type.
   const normalizedParts = normalizeMessagePartStates(
     message.parts || [],
   ) as UIMessage['parts'];
 
   return {
     id: message.id,
-    role: message.role,
-    parts: normalizedParts,
     metadata,
+    parts: normalizedParts,
+    role: message.role,
   };
 }
 
@@ -235,11 +252,11 @@ export function chatMessagesToUIMessages(
             const metadataForEnrichment = buildAssistantMetadata(
               getAssistantMetadata(message.metadata) || {},
               {
-                roundNumber: explicitRound,
-                participantId: participant.id,
                 model: participant.modelId,
-                participantRole: participant.role,
+                participantId: participant.id,
                 participantIndex: 0,
+                participantRole: participant.role,
+                roundNumber: explicitRound,
               },
             );
 
@@ -249,9 +266,9 @@ export function chatMessagesToUIMessages(
                 metadataForEnrichment,
                 {
                   id: participant.id,
+                  index: 0,
                   modelId: participant.modelId,
                   role: participant.role,
-                  index: 0,
                 },
               ),
             };
@@ -303,10 +320,10 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = buildAssistantMetadata(
             getAssistantMetadata(message.metadata) || {},
             {
-              roundNumber: currentRound ?? 0,
-              participantId: participant.id,
               model: participant.modelId,
+              participantId: participant.id,
               participantRole: participant.role,
+              roundNumber: currentRound ?? 0,
             },
           );
         } else {
@@ -379,8 +396,9 @@ export function filterByRound(
 
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
-    if (message.role === MessageRoles.ASSISTANT)
+    if (message.role === MessageRoles.ASSISTANT) {
       return true;
+    }
 
     if (message.role === MessageRoles.USER) {
       const textParts = message.parts?.filter(
@@ -427,7 +445,7 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    if (getParticipantId(m.metadata) == null) {
+    if (getParticipantId(m.metadata) === null) {
       return false;
     }
 
@@ -446,7 +464,7 @@ export function getParticipantMessageIds(messages: UIMessage[]): string[] {
   return Array.from(
     new Set(
       messages
-        .filter(m => getParticipantId(m.metadata) != null)
+        .filter(m => getParticipantId(m.metadata) !== null)
         .map(m => m.id),
     ),
   );
@@ -501,41 +519,49 @@ export function createErrorUIMessage(
 ): UIMessage {
   const validatedMetadata = errorMetadata
     ? ErrorMetadataSchema.safeParse(errorMetadata)
-    : { success: false as const, data: undefined };
+    : { data: undefined, success: false as const };
 
   const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
 
   // openRouterError can be string or record from error schema, normalize to record format
   const openRouterError = normalizeOpenRouterError(metadata?.openRouterError);
 
-  const errorMeta = buildAssistantMetadata(
-    {},
-    {
-      participantId: participant.id,
-      participantIndex: currentIndex,
-      participantRole: participant.role,
-      model: participant.modelId,
-      roundNumber,
-      hasError: true,
-      errorType,
-      errorMessage,
-      errorCategory: metadata?.errorCategory || errorType,
-      statusCode: metadata?.statusCode,
-      rawErrorMessage: metadata?.rawErrorMessage,
-      providerMessage:
-        metadata?.providerMessage
-        || metadata?.rawErrorMessage
-        || errorMessage,
-      openRouterError,
-      openRouterCode: metadata?.openRouterCode,
-    },
-  );
+  // Build options incrementally to satisfy exactOptionalPropertyTypes
+  const options: Parameters<typeof buildAssistantMetadata>[1] = {
+    errorCategory: metadata?.errorCategory || errorType,
+    errorMessage,
+    errorType,
+    hasError: true,
+    model: participant.modelId,
+    participantId: participant.id,
+    participantIndex: currentIndex,
+    participantRole: participant.role,
+    providerMessage:
+      metadata?.providerMessage
+      || metadata?.rawErrorMessage
+      || errorMessage,
+    roundNumber,
+  };
+  if (metadata?.openRouterCode !== undefined) {
+    options.openRouterCode = metadata.openRouterCode;
+  }
+  if (openRouterError !== undefined) {
+    options.openRouterError = openRouterError;
+  }
+  if (metadata?.rawErrorMessage !== undefined) {
+    options.rawErrorMessage = metadata.rawErrorMessage;
+  }
+  if (metadata?.statusCode !== undefined) {
+    options.statusCode = metadata.statusCode;
+  }
+
+  const errorMeta = buildAssistantMetadata({}, options);
 
   return {
     id: `error-${crypto.randomUUID()}-${currentIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: '' }],
     metadata: errorMeta,
+    parts: [{ text: '', type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -581,8 +607,8 @@ export function mergeParticipantMetadata(
 
   const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
-    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
     completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
+    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
@@ -606,9 +632,9 @@ export function mergeParticipantMetadata(
   return buildAssistantMetadata(
     {
       finishReason: safeFinishReason,
-      usage,
-      isTransient: validatedMetadata?.isTransient === true,
       isPartialResponse: validatedMetadata?.isPartialResponse === true,
+      isTransient: validatedMetadata?.isTransient === true,
+      usage,
       ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && {
         createdAt: validatedMetadata.createdAt,
       }),
@@ -624,13 +650,13 @@ export function mergeParticipantMetadata(
       }),
     },
     {
+      hasError,
+      model: participant.modelId,
       participantId: effectiveParticipantId,
       participantIndex: currentIndex,
       participantRole: participant.role,
-      model: participant.modelId,
       roundNumber,
-      hasError,
-      ...(hasError && { errorType: safeErrorType, errorMessage }),
+      ...(hasError && { errorMessage, errorType: safeErrorType }),
     },
   );
 }

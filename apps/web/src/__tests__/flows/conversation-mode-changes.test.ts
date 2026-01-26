@@ -63,10 +63,10 @@ function createModeChangeEntry(
   roundNumber: number,
 ): ModeChangeEntry {
   return {
-    type: ChangelogChangeTypesExtended.MODE_CHANGED,
-    oldMode,
     newMode,
+    oldMode,
     roundNumber,
+    type: ChangelogChangeTypesExtended.MODE_CHANGED,
   };
 }
 
@@ -91,44 +91,45 @@ function simulateSubmissionFlow(
   let timestamp = 0;
 
   // Step 1: PATCH request to update thread
-  flow.push({ step: 'PATCH', timestamp: timestamp++, data: { updated: true } });
+  flow.push({ data: { updated: true }, step: 'PATCH', timestamp: timestamp++ });
 
   // Step 2: Changelog if config changes
   if (hasConfigChanges) {
-    flow.push({ step: 'CHANGELOG', timestamp: timestamp++, data: { hasChanges: true } });
+    flow.push({ data: { hasChanges: true }, step: 'CHANGELOG', timestamp: timestamp++ });
   }
 
   // Step 3: Pre-search if web search enabled
   if (hasWebSearch) {
-    flow.push({ step: 'PRE_SEARCH', timestamp: timestamp++, data: { searching: true } });
+    flow.push({ data: { searching: true }, step: 'PRE_SEARCH', timestamp: timestamp++ });
   }
 
   // Step 4: Participants streaming
   for (let i = 0; i < participantCount; i++) {
-    flow.push({ step: 'PARTICIPANT', timestamp: timestamp++, data: { index: i } });
+    flow.push({ data: { index: i }, step: 'PARTICIPANT', timestamp: timestamp++ });
   }
 
   // Step 5: Council moderator
-  flow.push({ step: 'MODERATOR', timestamp: timestamp++, data: { evaluating: true } });
+  flow.push({ data: { evaluating: true }, step: 'MODERATOR', timestamp: timestamp++ });
 
   return flow;
 }
 
 function validateFlowOrder(flow: SubmissionFlow[]): boolean {
   const stepOrder: Record<string, number> = {
-    PATCH: 0,
     CHANGELOG: 1,
-    PRE_SEARCH: 2,
-    PARTICIPANT: 3,
     MODERATOR: 4,
+    PARTICIPANT: 3,
+    PATCH: 0,
+    PRE_SEARCH: 2,
   };
 
   for (let i = 1; i < flow.length; i++) {
     const currentStep = flow[i];
     const previousStep = flow[i - 1];
 
-    if (!currentStep || !previousStep)
+    if (!currentStep || !previousStep) {
       continue;
+    }
 
     const currentOrder = stepOrder[currentStep.step];
     const previousOrder = stepOrder[previousStep.step];
@@ -158,12 +159,12 @@ function createRoundState(
   changelogEntries: ModeChangeEntry[] = [],
 ): RoundState {
   return {
-    roundNumber,
-    mode,
-    hasChangelog,
     changelogEntries,
-    isStreaming: false,
+    hasChangelog,
     hasModeratorCompleted: false,
+    isStreaming: false,
+    mode,
+    roundNumber,
   };
 }
 
@@ -243,7 +244,7 @@ describe('conversation Mode Changes - Changelog Creation', () => {
 
     const roundState = createRoundState(2, ChatModes.PROBLEM_SOLVING, true, [changelogEntry]);
 
-    expect(roundState.hasChangelog).toBe(true);
+    expect(roundState.hasChangelog).toBeTruthy();
     expect(roundState.changelogEntries).toHaveLength(1);
     expect(roundState.changelogEntries[0]?.newMode).toBe(ChatModes.PROBLEM_SOLVING);
   });
@@ -276,11 +277,11 @@ describe('conversation Mode Changes - Changelog Creation', () => {
       ]),
     ];
 
-    expect(rounds[0]?.hasChangelog).toBe(false);
-    expect(rounds[1]?.hasChangelog).toBe(true);
+    expect(rounds[0]?.hasChangelog).toBeFalsy();
+    expect(rounds[1]?.hasChangelog).toBeTruthy();
     expect(rounds[1]?.changelogEntries[0]?.newMode).toBe(ChatModes.BRAINSTORMING);
-    expect(rounds[2]?.hasChangelog).toBe(false);
-    expect(rounds[3]?.hasChangelog).toBe(true);
+    expect(rounds[2]?.hasChangelog).toBeFalsy();
+    expect(rounds[3]?.hasChangelog).toBeTruthy();
     expect(rounds[3]?.changelogEntries[0]?.newMode).toBe(ChatModes.ANALYZING);
   });
 });
@@ -293,7 +294,7 @@ describe('conversation Mode Changes - Submission Flow', () => {
   it('should follow correct order: PATCH → CHANGELOG → PARTICIPANT → MODERATOR', () => {
     const flow = simulateSubmissionFlow(true, false, 2);
 
-    expect(validateFlowOrder(flow)).toBe(true);
+    expect(validateFlowOrder(flow)).toBeTruthy();
     expect(flow[0]?.step).toBe('PATCH');
     expect(flow[1]?.step).toBe('CHANGELOG');
     expect(flow[2]?.step).toBe('PARTICIPANT');
@@ -304,20 +305,20 @@ describe('conversation Mode Changes - Submission Flow', () => {
   it('should skip changelog when mode unchanged', () => {
     const flow = simulateSubmissionFlow(false, false, 2);
 
-    expect(validateFlowOrder(flow)).toBe(true);
+    expect(validateFlowOrder(flow)).toBeTruthy();
     expect(flow[0]?.step).toBe('PATCH');
     expect(flow[1]?.step).toBe('PARTICIPANT');
     expect(flow[2]?.step).toBe('PARTICIPANT');
     expect(flow[3]?.step).toBe('MODERATOR');
 
     const hasChangelog = flow.some(f => f.step === 'CHANGELOG');
-    expect(hasChangelog).toBe(false);
+    expect(hasChangelog).toBeFalsy();
   });
 
   it('should include pre-search in flow when web search enabled', () => {
     const flow = simulateSubmissionFlow(true, true, 2);
 
-    expect(validateFlowOrder(flow)).toBe(true);
+    expect(validateFlowOrder(flow)).toBeTruthy();
     expect(flow[0]?.step).toBe('PATCH');
     expect(flow[1]?.step).toBe('CHANGELOG');
     expect(flow[2]?.step).toBe('PRE_SEARCH');
@@ -337,7 +338,7 @@ describe('conversation Mode Changes - Submission Flow', () => {
     // Simulate submission flow
     const flow = simulateSubmissionFlow(true, false, 3);
 
-    expect(validateFlowOrder(flow)).toBe(true);
+    expect(validateFlowOrder(flow)).toBeTruthy();
     expect(flow).toHaveLength(6); // PATCH + CHANGELOG + 3 PARTICIPANTS + MODERATOR
   });
 
@@ -347,7 +348,7 @@ describe('conversation Mode Changes - Submission Flow', () => {
     participantCounts.forEach((count) => {
       const flow = simulateSubmissionFlow(true, false, count);
 
-      expect(validateFlowOrder(flow)).toBe(true);
+      expect(validateFlowOrder(flow)).toBeTruthy();
 
       const participantSteps = flow.filter(f => f.step === 'PARTICIPANT');
       expect(participantSteps).toHaveLength(count);
@@ -362,8 +363,8 @@ describe('conversation Mode Changes - Submission Flow', () => {
 describe('conversation Mode Changes - Moderator Adaptation', () => {
   it('should adapt evaluation criteria to BRAINSTORMING mode', () => {
     const evaluationCriteria = {
-      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.ANALYZING]: ['Analytical Depth', 'Evidence', 'Objectivity', 'Clarity'],
+      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.DEBATING]: ['Argument Strength', 'Logic', 'Persuasiveness', 'Counterpoints'],
       [ChatModes.PROBLEM_SOLVING]: ['Solution Quality', 'Feasibility', 'Impact', 'Risks'],
     };
@@ -378,8 +379,8 @@ describe('conversation Mode Changes - Moderator Adaptation', () => {
 
   it('should adapt evaluation criteria to ANALYZING mode', () => {
     const evaluationCriteria = {
-      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.ANALYZING]: ['Analytical Depth', 'Evidence', 'Objectivity', 'Clarity'],
+      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.DEBATING]: ['Argument Strength', 'Logic', 'Persuasiveness', 'Counterpoints'],
       [ChatModes.PROBLEM_SOLVING]: ['Solution Quality', 'Feasibility', 'Impact', 'Risks'],
     };
@@ -394,8 +395,8 @@ describe('conversation Mode Changes - Moderator Adaptation', () => {
 
   it('should adapt evaluation criteria to DEBATING mode', () => {
     const evaluationCriteria = {
-      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.ANALYZING]: ['Analytical Depth', 'Evidence', 'Objectivity', 'Clarity'],
+      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.DEBATING]: ['Argument Strength', 'Logic', 'Persuasiveness', 'Counterpoints'],
       [ChatModes.PROBLEM_SOLVING]: ['Solution Quality', 'Feasibility', 'Impact', 'Risks'],
     };
@@ -410,8 +411,8 @@ describe('conversation Mode Changes - Moderator Adaptation', () => {
 
   it('should adapt evaluation criteria to PROBLEM_SOLVING mode', () => {
     const evaluationCriteria = {
-      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.ANALYZING]: ['Analytical Depth', 'Evidence', 'Objectivity', 'Clarity'],
+      [ChatModes.BRAINSTORMING]: ['Creativity', 'Diversity', 'Practicality', 'Innovation'],
       [ChatModes.DEBATING]: ['Argument Strength', 'Logic', 'Persuasiveness', 'Counterpoints'],
       [ChatModes.PROBLEM_SOLVING]: ['Solution Quality', 'Feasibility', 'Impact', 'Risks'],
     };
@@ -455,12 +456,13 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const participantAdded = newParticipants.length > participants.length;
 
     expect(modeChange).not.toBeNull();
-    expect(participantAdded).toBe(true);
+    expect(participantAdded).toBeTruthy();
 
-    if (!modeChange)
+    if (!modeChange) {
       throw new Error('expected modeChange');
+    }
     const roundState = createRoundState(1, newMode, true, [modeChange]);
-    expect(roundState.hasChangelog).toBe(true);
+    expect(roundState.hasChangelog).toBeTruthy();
   });
 
   it('should combine mode change with participant removal', () => {
@@ -470,10 +472,12 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     // Round 1: Remove participant + change mode
     const p0 = participants[0];
     const p1 = participants[1];
-    if (!p0)
+    if (!p0) {
       throw new Error('expected p0');
-    if (!p1)
+    }
+    if (!p1) {
       throw new Error('expected p1');
+    }
     const newParticipants = [p0, p1];
     const newMode = ChatModes.PROBLEM_SOLVING;
 
@@ -481,13 +485,13 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const participantRemoved = newParticipants.length < participants.length;
 
     expect(modeChange).not.toBeNull();
-    expect(participantRemoved).toBe(true);
+    expect(participantRemoved).toBeTruthy();
   });
 
   it('should combine mode change with web search toggle', () => {
     const thread = createMockThread({
-      mode: ChatModes.DEBATING,
       enableWebSearch: false,
+      mode: ChatModes.DEBATING,
     });
 
     // Round 1: Enable web search + change mode
@@ -498,12 +502,12 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const webSearchToggled = thread.enableWebSearch !== newWebSearch;
 
     expect(modeChange).not.toBeNull();
-    expect(webSearchToggled).toBe(true);
+    expect(webSearchToggled).toBeTruthy();
 
     // Flow should include both changelog and pre-search
     const flow = simulateSubmissionFlow(true, true, 2);
-    expect(flow.some(f => f.step === 'CHANGELOG')).toBe(true);
-    expect(flow.some(f => f.step === 'PRE_SEARCH')).toBe(true);
+    expect(flow.some(f => f.step === 'CHANGELOG')).toBeTruthy();
+    expect(flow.some(f => f.step === 'PRE_SEARCH')).toBeTruthy();
   });
 
   it('should handle mode change + participant reorder', () => {
@@ -518,12 +522,15 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const p0 = participants[0];
     const p1 = participants[1];
     const p2 = participants[2];
-    if (!p0)
+    if (!p0) {
       throw new Error('expected p0');
-    if (!p1)
+    }
+    if (!p1) {
       throw new Error('expected p1');
-    if (!p2)
+    }
+    if (!p2) {
       throw new Error('expected p2');
+    }
     const reorderedParticipants = [
       { ...p2, priority: 0 },
       { ...p0, priority: 1 },
@@ -533,18 +540,19 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
 
     const modeChange = detectModeChange(thread.mode, newMode, 1);
     const reorderedFirst = reorderedParticipants[0];
-    if (!reorderedFirst)
+    if (!reorderedFirst) {
       throw new Error('expected reorderedFirst');
+    }
     const orderChanged = p0.id !== reorderedFirst.id;
 
     expect(modeChange).not.toBeNull();
-    expect(orderChanged).toBe(true);
+    expect(orderChanged).toBeTruthy();
   });
 
   it('should handle all changes simultaneously', () => {
     const thread = createMockThread({
-      mode: ChatModes.DEBATING,
       enableWebSearch: false,
+      mode: ChatModes.DEBATING,
     });
     const participants = [createMockParticipant(0), createMockParticipant(1)];
 
@@ -558,14 +566,15 @@ describe('conversation Mode Changes - Combined with Other Changes', () => {
     const webSearchChange = thread.enableWebSearch !== newWebSearch;
 
     expect(modeChange).not.toBeNull();
-    expect(participantChange).toBe(true);
-    expect(webSearchChange).toBe(true);
+    expect(participantChange).toBeTruthy();
+    expect(webSearchChange).toBeTruthy();
 
     // Changelog should be created
-    if (!modeChange)
+    if (!modeChange) {
       throw new Error('expected modeChange');
+    }
     const roundState = createRoundState(1, newMode, true, [modeChange]);
-    expect(roundState.hasChangelog).toBe(true);
+    expect(roundState.hasChangelog).toBeTruthy();
   });
 });
 
@@ -581,24 +590,24 @@ describe('conversation Mode Changes - Transition Matrix', () => {
     ChatModes.PROBLEM_SOLVING,
   ];
 
-  modes.forEach((fromMode) => {
-    modes.forEach((toMode) => {
-      const testName = fromMode === toMode
-        ? `should handle ${fromMode} → ${toMode} (no change)`
-        : `should handle ${fromMode} → ${toMode}`;
+  // Generate all mode transition pairs
+  const transitions = modes.flatMap(fromMode =>
+    modes.map(toMode => ({ fromMode, toMode })),
+  );
 
-      it(testName, () => {
-        const change = detectModeChange(fromMode, toMode, 1);
-        const isSameMode = fromMode === toMode;
+  it.each(transitions)(
+    'should handle $fromMode → $toMode mode transition',
+    ({ fromMode, toMode }) => {
+      const change = detectModeChange(fromMode, toMode, 1);
+      const isSameMode = fromMode === toMode;
 
-        // Use unconditional assertions
-        expect(change === null).toBe(isSameMode);
-        expect(change?.oldMode).toBe(isSameMode ? undefined : fromMode);
-        expect(change?.newMode).toBe(isSameMode ? undefined : toMode);
-        expect(change?.type).toBe(isSameMode ? undefined : ChangelogChangeTypesExtended.MODE_CHANGED);
-      });
-    });
-  });
+      // Use unconditional assertions
+      expect(change === null).toBe(isSameMode);
+      expect(change?.oldMode).toBe(isSameMode ? undefined : fromMode);
+      expect(change?.newMode).toBe(isSameMode ? undefined : toMode);
+      expect(change?.type).toBe(isSameMode ? undefined : ChangelogChangeTypesExtended.MODE_CHANGED);
+    },
+  );
 });
 
 // ============================================================================
@@ -627,25 +636,29 @@ describe('conversation Mode Changes - Edge Cases', () => {
     const round1 = rounds[1];
     const round2 = rounds[2];
     const round3 = rounds[3];
-    if (!round0)
+    if (!round0) {
       throw new Error('expected round0');
-    if (!round1)
+    }
+    if (!round1) {
       throw new Error('expected round1');
-    if (!round2)
+    }
+    if (!round2) {
       throw new Error('expected round2');
-    if (!round3)
+    }
+    if (!round3) {
       throw new Error('expected round3');
+    }
 
     // First round: no changelog
-    expect(round0.hasChangelog).toBe(false);
+    expect(round0.hasChangelog).toBeFalsy();
     expect(round0.changelogEntries).toHaveLength(0);
 
     // Subsequent rounds: have changelog with 1 entry each
-    expect(round1.hasChangelog).toBe(true);
+    expect(round1.hasChangelog).toBeTruthy();
     expect(round1.changelogEntries).toHaveLength(1);
-    expect(round2.hasChangelog).toBe(true);
+    expect(round2.hasChangelog).toBeTruthy();
     expect(round2.changelogEntries).toHaveLength(1);
-    expect(round3.hasChangelog).toBe(true);
+    expect(round3.hasChangelog).toBeTruthy();
     expect(round3.changelogEntries).toHaveLength(1);
   });
 
@@ -664,8 +677,8 @@ describe('conversation Mode Changes - Edge Cases', () => {
     expect(rounds[1]?.mode).toBe(ChatModes.BRAINSTORMING);
     expect(rounds[2]?.mode).toBe(ChatModes.DEBATING);
 
-    expect(rounds[1]?.hasChangelog).toBe(true);
-    expect(rounds[2]?.hasChangelog).toBe(true);
+    expect(rounds[1]?.hasChangelog).toBeTruthy();
+    expect(rounds[2]?.hasChangelog).toBeTruthy();
   });
 
   it('should not create changelog when mode unchanged for many rounds', () => {
@@ -674,7 +687,7 @@ describe('conversation Mode Changes - Edge Cases', () => {
 
     rounds.forEach((round) => {
       expect(round.mode).toBe(ChatModes.DEBATING);
-      expect(round.hasChangelog).toBe(false);
+      expect(round.hasChangelog).toBeFalsy();
     });
   });
 
@@ -688,13 +701,13 @@ describe('conversation Mode Changes - Edge Cases', () => {
     ];
 
     expect(rounds[4]?.mode).toBe(ChatModes.DEBATING);
-    expect(rounds[4]?.hasChangelog).toBe(false);
+    expect(rounds[4]?.hasChangelog).toBeFalsy();
 
     expect(rounds[5]?.mode).toBe(ChatModes.BRAINSTORMING);
-    expect(rounds[5]?.hasChangelog).toBe(true);
+    expect(rounds[5]?.hasChangelog).toBeTruthy();
 
     expect(rounds[6]?.mode).toBe(ChatModes.BRAINSTORMING);
-    expect(rounds[6]?.hasChangelog).toBe(false);
+    expect(rounds[6]?.hasChangelog).toBeFalsy();
   });
 
   it('should maintain correct flow order even with mode changes', () => {
@@ -712,7 +725,7 @@ describe('conversation Mode Changes - Edge Cases', () => {
         scenario.participants,
       );
 
-      expect(validateFlowOrder(flow)).toBe(true);
+      expect(validateFlowOrder(flow)).toBeTruthy();
     });
   });
 });
@@ -728,7 +741,7 @@ describe('conversation Mode Changes - Streaming State', () => {
 
     // Attempting to change mode while streaming should be blocked
     const canChangeDuringStreaming = !roundState.isStreaming;
-    expect(canChangeDuringStreaming).toBe(false);
+    expect(canChangeDuringStreaming).toBeFalsy();
   });
 
   it('should allow mode change after round completes', () => {
@@ -737,7 +750,7 @@ describe('conversation Mode Changes - Streaming State', () => {
     roundState.hasModeratorCompleted = true;
 
     const canChangeAfterCompletion = !roundState.isStreaming && roundState.hasModeratorCompleted;
-    expect(canChangeAfterCompletion).toBe(true);
+    expect(canChangeAfterCompletion).toBeTruthy();
   });
 
   it('should preserve mode change for next round submission', () => {
@@ -754,6 +767,6 @@ describe('conversation Mode Changes - Streaming State', () => {
     ]);
 
     expect(round1.mode).toBe(ChatModes.BRAINSTORMING);
-    expect(round1.hasChangelog).toBe(true);
+    expect(round1.hasChangelog).toBeTruthy();
   });
 });

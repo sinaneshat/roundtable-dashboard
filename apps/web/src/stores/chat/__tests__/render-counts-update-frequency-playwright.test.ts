@@ -28,20 +28,20 @@ import type { createChatStore } from '../store';
 type UpdateTracker = {
   count: number;
   timestamps: number[];
-  stateSnapshots: Array<{
+  stateSnapshots: {
     isStreaming: boolean;
     currentParticipantIndex: number;
     messageCount: number;
     streamingRoundNumber: number | null;
     isModeratorStreaming: boolean;
-  }>;
+  }[];
 };
 
 function createUpdateTracker(): UpdateTracker {
   return {
     count: 0,
-    timestamps: [],
     stateSnapshots: [],
+    timestamps: [],
   };
 }
 
@@ -49,28 +49,31 @@ function trackUpdate(tracker: UpdateTracker, state: ReturnType<typeof createChat
   tracker.count++;
   tracker.timestamps.push(Date.now());
   tracker.stateSnapshots.push({
-    isStreaming: state.isStreaming,
     currentParticipantIndex: state.currentParticipantIndex,
+    isModeratorStreaming: state.isModeratorStreaming,
+    isStreaming: state.isStreaming,
     messageCount: state.messages.length,
     streamingRoundNumber: state.streamingRoundNumber,
-    isModeratorStreaming: state.isModeratorStreaming,
   });
 }
 
 function _getUpdatesPerSecond(tracker: UpdateTracker): number {
-  if (tracker.timestamps.length < 2)
+  if (tracker.timestamps.length < 2) {
     return 0;
+  }
   const first = tracker.timestamps[0];
   const last = tracker.timestamps[tracker.timestamps.length - 1];
-  if (first === undefined || last === undefined)
+  if (first === undefined || last === undefined) {
     throw new Error('expected timestamps');
+  }
   const durationSeconds = (last - first) / 1000;
-  if (durationSeconds === 0)
+  if (durationSeconds === 0) {
     return tracker.count;
+  }
   return tracker.count / durationSeconds;
 }
 
-function getUpdatesBetween(tracker: UpdateTracker, startIndex: number, endIndex: number): number {
+function getUpdatesBetween(_tracker: UpdateTracker, startIndex: number, endIndex: number): number {
   return endIndex - startIndex;
 }
 
@@ -85,15 +88,15 @@ function createStreamingMessage(
   finishReason: string = FinishReasons.UNKNOWN,
 ): UIMessage {
   return createTestAssistantMessage({
-    id: `thread_r${roundNumber}_p${participantIndex}`,
     content: textContent,
-    roundNumber,
+    finishReason,
+    id: `thread_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason,
     parts: textContent
-      ? [{ type: MessagePartTypes.TEXT, text: textContent }]
+      ? [{ text: textContent, type: MessagePartTypes.TEXT }]
       : [],
+    roundNumber,
   });
 }
 
@@ -104,18 +107,18 @@ function createModeratorStreamingMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: textContent
-      ? [{ type: MessagePartTypes.TEXT, text: textContent }]
-      : [],
     metadata: {
-      role: UIMessageRoles.ASSISTANT,
-      roundNumber,
-      isModerator: true,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: textContent.length, totalTokens: textContent.length },
+      isModerator: true,
+      role: UIMessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: textContent.length, promptTokens: 0, totalTokens: textContent.length },
     },
+    parts: textContent
+      ? [{ text: textContent, type: MessagePartTypes.TEXT }]
+      : [],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -148,8 +151,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // 4. Add user message
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Hello AI models!',
+        id: 'user_r0',
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -199,8 +202,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const startTime = Date.now();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -251,8 +254,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const startTime = Date.now();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -283,7 +286,6 @@ describe('render Counts and Update Frequency E2E', () => {
       expect(updatesPerSec).toBeGreaterThan(20);
       expect(tracker.count).toBe(50);
 
-      // eslint-disable-next-line no-console
       console.warn(`[PERFORMANCE WARNING] Detected ${updatesPerSec.toFixed(2)} updates/second (threshold: 20/sec)`);
     });
 
@@ -292,8 +294,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const tracker = createUpdateTracker();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -330,8 +332,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const tracker = createUpdateTracker();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -401,8 +403,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const tracker = createUpdateTracker();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -487,14 +489,14 @@ describe('render Counts and Update Frequency E2E', () => {
       // Simulate PATCH response updating thread data
       // Use available setters: setThread and setStreamingRoundNumber
       store.getState().setThread({
+        createdAt: new Date().toISOString(),
+        enableWebSearch: false,
         id: 'thread-123',
-        userId: 'user-1',
+        selectedMode: null,
         slug: 'test-slug',
         title: 'Test Thread',
-        selectedMode: null,
-        enableWebSearch: false,
-        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        userId: 'user-1',
       });
       store.getState().setStreamingRoundNumber(0);
 
@@ -513,8 +515,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Simulate existing round 0 state
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -553,7 +555,7 @@ describe('render Counts and Update Frequency E2E', () => {
         const messages = store.getState().messages;
         const isStreaming = store.getState().isStreaming;
         const currentParticipantIndex = store.getState().currentParticipantIndex;
-        return { messages, isStreaming, currentParticipantIndex };
+        return { currentParticipantIndex, isStreaming, messages };
       };
 
       // ✅ GOOD: Single batched selector (with useShallow in component)
@@ -561,9 +563,9 @@ describe('render Counts and Update Frequency E2E', () => {
       const goodPattern = () => {
         const state = store.getState();
         return {
-          messages: state.messages,
-          isStreaming: state.isStreaming,
           currentParticipantIndex: state.currentParticipantIndex,
+          isStreaming: state.isStreaming,
+          messages: state.messages,
         };
       };
 
@@ -582,8 +584,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Without useShallow, object selector creates new reference every time
       const objectSelector = (state: ReturnType<typeof store.getState>) => ({
-        messages: state.messages,
         isStreaming: state.isStreaming,
+        messages: state.messages,
       });
 
       const unsubscribe = store.subscribe(
@@ -615,7 +617,7 @@ describe('render Counts and Update Frequency E2E', () => {
       let callbackCount = 0;
 
       const unsubscribe = store.subscribe(
-        state => ({ messages: state.messages, isStreaming: state.isStreaming }),
+        state => ({ isStreaming: state.isStreaming, messages: state.messages }),
         () => {
           callbackCount++;
         },
@@ -733,8 +735,9 @@ describe('render Counts and Update Frequency E2E', () => {
       for (let i = 1; i < transitionTimestamps.length; i++) {
         const curr = transitionTimestamps[i];
         const prev = transitionTimestamps[i - 1];
-        if (curr === undefined || prev === undefined)
+        if (curr === undefined || prev === undefined) {
           throw new Error('expected timestamps');
+        }
         const interval = curr - prev;
         expect(interval).toBeGreaterThanOrEqual(190);
         expect(interval).toBeLessThanOrEqual(210);
@@ -798,8 +801,8 @@ describe('render Counts and Update Frequency E2E', () => {
       // 1. User submits message
       store.getState().setInputValue('');
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -871,7 +874,6 @@ describe('render Counts and Update Frequency E2E', () => {
       expect(totalUpdates).toBeGreaterThan(20);
       expect(totalUpdates).toBeLessThan(50);
 
-      // eslint-disable-next-line no-console
       console.log(`[E2E] Complete round updates: ${totalUpdates}`);
     });
 
@@ -879,8 +881,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const store = createTestChatStore();
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -918,8 +920,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Simulate worst-case scenario: 3 participants × 30 chunks each + moderator
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -964,7 +966,6 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Flag if approaching threshold
       if (updateCount > 100) {
-        // eslint-disable-next-line no-console
         console.warn(`[PERFORMANCE] High update count: ${updateCount} (threshold: 100)`);
       }
     });
@@ -975,21 +976,25 @@ describe('render Counts and Update Frequency E2E', () => {
       const store = createTestChatStore();
       const renderTracker = {
         setInputValue: 0,
-        setMessages: 0,
         setIsStreaming: 0,
+        setMessages: 0,
         setStreamingRoundNumber: 0,
       };
 
       // Track individual state changes
       const unsubscribe = store.subscribe((state, prevState) => {
-        if (state.inputValue !== prevState.inputValue)
+        if (state.inputValue !== prevState.inputValue) {
           renderTracker.setInputValue++;
-        if (state.messages !== prevState.messages)
+        }
+        if (state.messages !== prevState.messages) {
           renderTracker.setMessages++;
-        if (state.isStreaming !== prevState.isStreaming)
+        }
+        if (state.isStreaming !== prevState.isStreaming) {
           renderTracker.setIsStreaming++;
-        if (state.streamingRoundNumber !== prevState.streamingRoundNumber)
+        }
+        if (state.streamingRoundNumber !== prevState.streamingRoundNumber) {
           renderTracker.setStreamingRoundNumber++;
+        }
       });
 
       // Simulate submission flow
@@ -999,8 +1004,8 @@ describe('render Counts and Update Frequency E2E', () => {
       store.getState().setStreamingRoundNumber(0);
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Hello',
+        id: 'user_r0',
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -1021,8 +1026,8 @@ describe('render Counts and Update Frequency E2E', () => {
       let messageChanges = 0;
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1063,10 +1068,12 @@ describe('render Counts and Update Frequency E2E', () => {
       let streamingRenders = 0;
 
       const unsubscribe = store.subscribe((state, prevState) => {
-        if (state.messages !== prevState.messages)
+        if (state.messages !== prevState.messages) {
           messagesRenders++;
-        if (state.isStreaming !== prevState.isStreaming)
+        }
+        if (state.isStreaming !== prevState.isStreaming) {
           streamingRenders++;
+        }
       });
 
       // Change unrelated state (inputValue, screen mode, etc.)
@@ -1086,8 +1093,8 @@ describe('render Counts and Update Frequency E2E', () => {
       let messageUpdateCount = 0;
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1122,10 +1129,10 @@ describe('render Counts and Update Frequency E2E', () => {
     it('should batch multiple state changes in completeStreaming', () => {
       const store = createTestChatStore();
       const stateChanges = {
-        isStreaming: 0,
-        streamingRoundNumber: 0,
         currentParticipantIndex: 0,
         isModeratorStreaming: 0,
+        isStreaming: 0,
+        streamingRoundNumber: 0,
       };
 
       store.getState().setIsStreaming(true);
@@ -1133,14 +1140,18 @@ describe('render Counts and Update Frequency E2E', () => {
       store.getState().setCurrentParticipantIndex(2);
 
       const unsubscribe = store.subscribe((state, prevState) => {
-        if (state.isStreaming !== prevState.isStreaming)
+        if (state.isStreaming !== prevState.isStreaming) {
           stateChanges.isStreaming++;
-        if (state.streamingRoundNumber !== prevState.streamingRoundNumber)
+        }
+        if (state.streamingRoundNumber !== prevState.streamingRoundNumber) {
           stateChanges.streamingRoundNumber++;
-        if (state.currentParticipantIndex !== prevState.currentParticipantIndex)
+        }
+        if (state.currentParticipantIndex !== prevState.currentParticipantIndex) {
           stateChanges.currentParticipantIndex++;
-        if (state.isModeratorStreaming !== prevState.isModeratorStreaming)
+        }
+        if (state.isModeratorStreaming !== prevState.isModeratorStreaming) {
           stateChanges.isModeratorStreaming++;
+        }
       });
 
       // completeStreaming() should batch all these changes
@@ -1188,8 +1199,8 @@ describe('render Counts and Update Frequency E2E', () => {
       let batchUpdates = 0;
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1255,8 +1266,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // User submits message
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1266,7 +1277,7 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Placeholder should be visible here
       const placeholderVisible = store.getState().isStreaming && store.getState().messages.length === 1;
-      expect(placeholderVisible).toBe(true);
+      expect(placeholderVisible).toBeTruthy();
 
       // First streaming chunk arrives
       const streamingMsg = createStreamingMessage(0, 0, 'Starting...');
@@ -1274,12 +1285,12 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // Placeholder should disappear (message now present)
       const placeholderHidden = store.getState().messages.length > 1;
-      expect(placeholderHidden).toBe(true);
+      expect(placeholderHidden).toBeTruthy();
 
       unsubscribe();
 
       // Verify placeholder was visible before first chunk
-      expect(placeholderStates.some(visible => visible)).toBe(true);
+      expect(placeholderStates.some(visible => visible)).toBeTruthy();
     });
 
     it('should not cause placeholder flicker during participant transition', () => {
@@ -1287,8 +1298,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const messageCountSnapshots: number[] = [];
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1313,8 +1324,9 @@ describe('render Counts and Update Frequency E2E', () => {
       // Message count should never drop (no flicker)
       for (let i = 1; i < messageCountSnapshots.length; i++) {
         const prev = messageCountSnapshots[i - 1];
-        if (prev === undefined)
+        if (prev === undefined) {
           throw new Error('expected previous snapshot');
+        }
         expect(messageCountSnapshots[i]).toBeGreaterThanOrEqual(prev);
       }
     });
@@ -1324,8 +1336,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const messageOrderSnapshots: string[][] = [];
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1360,8 +1372,9 @@ describe('render Counts and Update Frequency E2E', () => {
       for (let i = 1; i < messageOrderSnapshots.length; i++) {
         const prev = messageOrderSnapshots[i - 1];
         const current = messageOrderSnapshots[i];
-        if (!prev || !current)
+        if (!prev || !current) {
           throw new Error('expected snapshots');
+        }
 
         // Every message from prev should exist in current
         for (const msgId of prev) {
@@ -1372,7 +1385,7 @@ describe('render Counts and Update Frequency E2E', () => {
 
     it('should not remove placeholder prematurely before streaming starts', () => {
       const store = createTestChatStore();
-      const stateSnapshots: Array<{ isStreaming: boolean; messageCount: number }> = [];
+      const stateSnapshots: { isStreaming: boolean; messageCount: number }[] = [];
 
       const unsubscribe = store.subscribe((state) => {
         stateSnapshots.push({
@@ -1383,8 +1396,8 @@ describe('render Counts and Update Frequency E2E', () => {
 
       // User submits message
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1418,8 +1431,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const messageLengthProgression: number[] = [];
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1447,8 +1460,9 @@ describe('render Counts and Update Frequency E2E', () => {
       // Verify progressive increase in content length
       for (let i = 1; i < messageLengthProgression.length; i++) {
         const prev = messageLengthProgression[i - 1];
-        if (prev === undefined)
+        if (prev === undefined) {
           throw new Error('expected previous length');
+        }
         expect(messageLengthProgression[i]).toBeGreaterThan(prev);
       }
     });
@@ -1494,8 +1508,8 @@ describe('render Counts and Update Frequency E2E', () => {
       const participantIndexTimeline: number[] = [];
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 
@@ -1530,9 +1544,10 @@ describe('render Counts and Update Frequency E2E', () => {
       for (let i = 1; i < participantIndexTimeline.length; i++) {
         const curr = participantIndexTimeline[i];
         const prev = participantIndexTimeline[i - 1];
-        if (curr === undefined || prev === undefined)
+        if (curr === undefined || prev === undefined) {
           throw new Error('expected timeline entries');
-        expect(curr >= prev).toBe(true);
+        }
+        expect(curr).toBeGreaterThanOrEqual(prev);
       }
     });
 
@@ -1542,8 +1557,8 @@ describe('render Counts and Update Frequency E2E', () => {
       let lastMessageId: string | null = null;
 
       const userMessage = createTestUserMessage({
-        id: 'user_r0',
         content: 'Question',
+        id: 'user_r0',
         roundNumber: 0,
       });
 

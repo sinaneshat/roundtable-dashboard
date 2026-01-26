@@ -23,8 +23,8 @@ import {
 
 // Mock the database module
 vi.mock('@/db', () => ({
-  chatProject: {},
   chatMessage: {},
+  chatProject: {},
   upload: {},
 }));
 
@@ -53,8 +53,9 @@ describe('streaming Orchestration Memory Safety', () => {
       };
 
       const maxAttachments = memoryLimits.maxAttachments;
-      if (!maxAttachments)
+      if (!maxAttachments) {
         throw new Error('expected maxAttachments');
+      }
 
       const limited = safeSlice(attachmentIds, maxAttachments);
 
@@ -116,10 +117,10 @@ describe('streaming Orchestration Memory Safety', () => {
 
     it('should limit citation sources to maxCitationSources', () => {
       const sources: MockCitableSource[] = Array.from({ length: 25 }, (_, i) => ({
-        id: `source-${i}`,
-        type: 'rag',
-        title: `Document ${i}`,
         content: `Content for document ${i}`,
+        id: `source-${i}`,
+        title: `Document ${i}`,
+        type: 'rag',
       }));
 
       const limited = safeSlice(sources, 15);
@@ -131,10 +132,10 @@ describe('streaming Orchestration Memory Safety', () => {
 
     it('should keep all sources when under limit', () => {
       const sources: MockCitableSource[] = Array.from({ length: 5 }, (_, i) => ({
-        id: `source-${i}`,
-        type: 'attachment',
-        title: `File ${i}`,
         content: '',
+        id: `source-${i}`,
+        title: `File ${i}`,
+        type: 'attachment',
       }));
 
       const limited = safeSlice(sources, 15);
@@ -147,14 +148,14 @@ describe('streaming Orchestration Memory Safety', () => {
     it('should apply stricter limits for complex requests', () => {
       // Simulate a complex request with many features
       const complexConfig: MemoryBudgetConfig = {
-        totalBudget: 80 * 1024 * 1024, // 80MB
-        maxMessages: 40,
-        maxAttachments: 3,
         maxAttachmentContentSize: 20 * 1024,
-        maxTotalAttachmentContent: 200 * 1024,
-        maxSystemPromptSize: 50 * 1024,
-        maxRagResults: 2,
+        maxAttachments: 3,
         maxCitationSources: 10,
+        maxMessages: 40,
+        maxRagResults: 2,
+        maxSystemPromptSize: 50 * 1024,
+        maxTotalAttachmentContent: 200 * 1024,
+        totalBudget: 80 * 1024 * 1024, // 80MB
       };
 
       // Verify limits are stricter than defaults
@@ -165,14 +166,14 @@ describe('streaming Orchestration Memory Safety', () => {
 
     it('should use default limits for simple requests', () => {
       const simpleConfig: MemoryBudgetConfig = {
-        totalBudget: 100 * 1024 * 1024,
-        maxMessages: 75,
-        maxAttachments: 10,
         maxAttachmentContentSize: 50 * 1024,
-        maxTotalAttachmentContent: 500 * 1024,
-        maxSystemPromptSize: 100 * 1024,
-        maxRagResults: 3,
+        maxAttachments: 10,
         maxCitationSources: 15,
+        maxMessages: 75,
+        maxRagResults: 3,
+        maxSystemPromptSize: 100 * 1024,
+        maxTotalAttachmentContent: 500 * 1024,
+        totalBudget: 100 * 1024 * 1024,
       };
 
       expect(simpleConfig.maxMessages).toBe(75);
@@ -235,14 +236,14 @@ describe('memory Budget Scenarios', () => {
     it('should handle maximum allowed configuration', () => {
       // Maximum config: 75 messages, 10 attachments, full RAG
       const maxConfig: MemoryBudgetConfig = {
-        totalBudget: 100 * 1024 * 1024,
-        maxMessages: 75,
-        maxAttachments: 10,
         maxAttachmentContentSize: 50 * 1024,
-        maxTotalAttachmentContent: 500 * 1024,
-        maxSystemPromptSize: 100 * 1024,
-        maxRagResults: 3,
+        maxAttachments: 10,
         maxCitationSources: 15,
+        maxMessages: 75,
+        maxRagResults: 3,
+        maxSystemPromptSize: 100 * 1024,
+        maxTotalAttachmentContent: 500 * 1024,
+        totalBudget: 100 * 1024 * 1024,
       };
 
       // Calculate worst-case memory usage
@@ -265,14 +266,14 @@ describe('memory Budget Scenarios', () => {
     it('should handle minimum configuration for complex requests', () => {
       // Minimum config for very complex request
       const minConfig: MemoryBudgetConfig = {
-        totalBudget: 50 * 1024 * 1024, // Reduced budget
-        maxMessages: 40,
-        maxAttachments: 3,
         maxAttachmentContentSize: 20 * 1024,
-        maxTotalAttachmentContent: 100 * 1024,
-        maxSystemPromptSize: 50 * 1024,
-        maxRagResults: 2,
+        maxAttachments: 3,
         maxCitationSources: 10,
+        maxMessages: 40,
+        maxRagResults: 2,
+        maxSystemPromptSize: 50 * 1024,
+        maxTotalAttachmentContent: 100 * 1024,
+        totalBudget: 50 * 1024 * 1024, // Reduced budget
       };
 
       // Verify all limits are reasonable
@@ -332,10 +333,10 @@ describe('file Upload Memory Safety', () => {
       };
 
       const files: MockFileInfo[] = [
-        { id: '1', mimeType: 'text/plain', fileSize: 10 * 1024 },
-        { id: '2', mimeType: 'image/png', fileSize: 100 * 1024 },
-        { id: '3', mimeType: 'application/pdf', fileSize: 200 * 1024 },
-        { id: '4', mimeType: 'text/markdown', fileSize: 5 * 1024 },
+        { fileSize: 10 * 1024, id: '1', mimeType: 'text/plain' },
+        { fileSize: 100 * 1024, id: '2', mimeType: 'image/png' },
+        { fileSize: 200 * 1024, id: '3', mimeType: 'application/pdf' },
+        { fileSize: 5 * 1024, id: '4', mimeType: 'text/markdown' },
       ];
 
       const totalSize = files.reduce((sum, f) => sum + f.fileSize, 0);

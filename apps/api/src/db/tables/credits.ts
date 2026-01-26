@@ -26,20 +26,24 @@ import { chatThread } from './chat';
 export const userCreditBalance = sqliteTable(
   'user_credit_balance',
   {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .unique()
-      .references(() => user.id, { onDelete: 'cascade' }),
-
     // ============================================================================
     // CREDIT BALANCE
     // ============================================================================
     balance: integer('balance').notNull().default(0),
+    // ============================================================================
+    // TIMESTAMPS
+    // ============================================================================
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 
-    // Reserved credits for in-progress operations (streaming)
-    // Available = balance - reservedCredits
-    reservedCredits: integer('reserved_credits').notNull().default(0),
+    id: text('id').primaryKey(),
+
+    // Refill timestamps
+    lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }),
+
+    // Monthly auto-refill amount (0 for free, 2_000_000 for paid)
+    monthlyCredits: integer('monthly_credits').notNull().default(0),
+
+    nextRefillAt: integer('next_refill_at', { mode: 'timestamp_ms' }),
 
     // ============================================================================
     // PLAN CONFIGURATION
@@ -47,27 +51,23 @@ export const userCreditBalance = sqliteTable(
     planType: text('plan_type', { enum: PLAN_TYPES })
       .notNull()
       .default(PlanTypes.FREE),
+    // Reserved credits for in-progress operations (streaming)
+    // Available = balance - reservedCredits
+    reservedCredits: integer('reserved_credits').notNull().default(0),
 
-    // Monthly auto-refill amount (0 for free, 2_000_000 for paid)
-    monthlyCredits: integer('monthly_credits').notNull().default(0),
-
-    // Refill timestamps
-    lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }),
-    nextRefillAt: integer('next_refill_at', { mode: 'timestamp_ms' }),
-
-    // ============================================================================
-    // OPTIMISTIC LOCKING
-    // ============================================================================
-    version: integer('version').notNull().default(1),
-
-    // ============================================================================
-    // TIMESTAMPS
-    // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
+
+    userId: text('user_id')
+      .notNull()
+      .unique()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    // ============================================================================
+    // OPTIMISTIC LOCKING
+    // ============================================================================
+    version: integer('version').notNull().default(1),
   },
   table => [
     // Indexes
@@ -100,16 +100,10 @@ export const userCreditBalance = sqliteTable(
 export const creditTransaction = sqliteTable(
   'credit_transaction',
   {
-    id: text('id').primaryKey(),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-
     // ============================================================================
-    // TRANSACTION DETAILS
+    // ACTION CONTEXT
     // ============================================================================
-    type: text('type', { enum: CREDIT_TRANSACTION_TYPES }).notNull(),
-
+    action: text('action', { enum: CREDIT_ACTIONS }),
     // Amount: positive for credits in, negative for deductions
     amount: integer('amount').notNull(),
 
@@ -117,43 +111,49 @@ export const creditTransaction = sqliteTable(
     balanceAfter: integer('balance_after').notNull(),
 
     // ============================================================================
-    // TOKEN BREAKDOWN (for deduction transactions)
+    // TIMESTAMP
     // ============================================================================
-    inputTokens: integer('input_tokens'),
-    outputTokens: integer('output_tokens'),
-    totalTokens: integer('total_tokens'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+
     creditsUsed: integer('credits_used'),
-
-    // ============================================================================
-    // REFERENCES
-    // ============================================================================
-    threadId: text('thread_id')
-      .references(() => chatThread.id, { onDelete: 'set null' }),
-    messageId: text('message_id'),
-    streamId: text('stream_id'), // For reservation tracking
-
-    // ============================================================================
-    // ACTION CONTEXT
-    // ============================================================================
-    action: text('action', { enum: CREDIT_ACTIONS }),
-
-    // Model info (for AI response transactions)
-    modelId: text('model_id'),
-    // Store pricing at time of transaction (micro-dollars per million tokens)
-    modelPricingInputPerMillion: integer('model_pricing_input_per_million'),
-    modelPricingOutputPerMillion: integer('model_pricing_output_per_million'),
 
     // ============================================================================
     // METADATA
     // ============================================================================
     description: text('description'),
+    id: text('id').primaryKey(),
+    // ============================================================================
+    // TOKEN BREAKDOWN (for deduction transactions)
+    // ============================================================================
+    inputTokens: integer('input_tokens'),
+    messageId: text('message_id'),
+
     // ✅ TYPE-SAFE: Strictly typed metadata using Zod schema
     metadata: text('metadata', { mode: 'json' }).$type<CreditTransactionMetadata>(),
+    // Model info (for AI response transactions)
+    modelId: text('model_id'),
+    // Store pricing at time of transaction (micro-dollars per million tokens)
+    modelPricingInputPerMillion: integer('model_pricing_input_per_million'),
 
+    modelPricingOutputPerMillion: integer('model_pricing_output_per_million'),
+
+    outputTokens: integer('output_tokens'),
+    streamId: text('stream_id'), // For reservation tracking
     // ============================================================================
-    // TIMESTAMP
+    // REFERENCES
     // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    threadId: text('thread_id')
+      .references(() => chatThread.id, { onDelete: 'set null' }),
+
+    totalTokens: integer('total_tokens'),
+    // ============================================================================
+    // TRANSACTION DETAILS
+    // ============================================================================
+    type: text('type', { enum: CREDIT_TRANSACTION_TYPES }).notNull(),
+
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
   },
   table => [
     // Indexes for efficient queries
@@ -182,12 +182,12 @@ export const userCreditBalanceRelations = relations(userCreditBalance, ({ one })
 }));
 
 export const creditTransactionRelations = relations(creditTransaction, ({ one }) => ({
-  user: one(user, {
-    fields: [creditTransaction.userId],
-    references: [user.id],
-  }),
   thread: one(chatThread, {
     fields: [creditTransaction.threadId],
     references: [chatThread.id],
+  }),
+  user: one(user, {
+    fields: [creditTransaction.userId],
+    references: [user.id],
   }),
 }));

@@ -29,7 +29,7 @@ describe('uRL construction for authenticatedFetch', () => {
 
       // This is what happens when getApiBaseUrl() returns relative URL
       const isRelativeUrl = baseUrl.startsWith('/');
-      expect(isRelativeUrl).toBe(true);
+      expect(isRelativeUrl).toBeTruthy();
 
       // Simulate client-side URL construction
       const origin = 'http://localhost:5173';
@@ -52,13 +52,13 @@ describe('uRL construction for authenticatedFetch', () => {
     it('should handle various path combinations correctly', () => {
       const origin = 'http://localhost:5173';
       const testCases = [
-        { base: '/api/v1', path: '/uploads/ticket', expected: 'http://localhost:5173/api/v1/uploads/ticket' },
-        { base: '/api/v1', path: '/uploads/ticket/upload', expected: 'http://localhost:5173/api/v1/uploads/ticket/upload' },
-        { base: '/api/v1', path: '/uploads/multipart', expected: 'http://localhost:5173/api/v1/uploads/multipart' },
-        { base: '/api/v1', path: '/chat/threads', expected: 'http://localhost:5173/api/v1/chat/threads' },
+        { base: '/api/v1', expected: 'http://localhost:5173/api/v1/uploads/ticket', path: '/uploads/ticket' },
+        { base: '/api/v1', expected: 'http://localhost:5173/api/v1/uploads/ticket/upload', path: '/uploads/ticket/upload' },
+        { base: '/api/v1', expected: 'http://localhost:5173/api/v1/uploads/multipart', path: '/uploads/multipart' },
+        { base: '/api/v1', expected: 'http://localhost:5173/api/v1/chat/threads', path: '/chat/threads' },
       ];
 
-      for (const { base, path, expected } of testCases) {
+      for (const { base, expected, path } of testCases) {
         const fullBaseUrl = `${origin}${base}`;
         const url = new URL(`${fullBaseUrl}${path}`);
         expect(url.toString()).toBe(expected);
@@ -74,7 +74,7 @@ describe('uRL construction for authenticatedFetch', () => {
 
       // When baseUrl is absolute, don't need window.location.origin
       const isRelativeUrl = baseUrl.startsWith('/');
-      expect(isRelativeUrl).toBe(false);
+      expect(isRelativeUrl).toBeFalsy();
 
       const url = new URL(`${baseUrl}${path}`);
       expect(url.toString()).toBe('http://localhost:8787/api/v1/uploads/ticket');
@@ -124,8 +124,8 @@ describe('uRL construction for authenticatedFetch', () => {
       const url = new URL(`${fullBaseUrl}${path}`);
 
       const searchParams = {
-        uploadId: 'upload-456',
         partNumber: '1',
+        uploadId: 'upload-456',
       };
 
       for (const [key, value] of Object.entries(searchParams)) {
@@ -147,11 +147,11 @@ describe('uRL construction for authenticatedFetch', () => {
       ];
 
       for (const url of relativeUrls) {
-        expect(url.startsWith('/')).toBe(true);
+        expect(url.startsWith('/')).toBeTruthy();
       }
 
       for (const url of absoluteUrls) {
-        expect(url.startsWith('/')).toBe(false);
+        expect(url.startsWith('/')).toBeFalsy();
       }
     });
   });

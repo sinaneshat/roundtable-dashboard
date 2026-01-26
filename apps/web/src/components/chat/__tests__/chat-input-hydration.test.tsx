@@ -22,34 +22,33 @@ import { render } from '@/lib/testing';
 
 // Mock all hooks used by ChatInput and its dependencies BEFORE importing
 vi.mock('@/hooks/queries', () => ({
-  useUsageStatsQuery: () => ({ data: null, isLoading: false }),
   useThreadPreSearchesQuery: () => ({ data: null }),
   useThreadQuery: () => ({ data: null }),
+  useUsageStatsQuery: () => ({ data: null, isLoading: false }),
 }));
 
 vi.mock('@/hooks/utils', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/hooks/utils')>();
   return {
     ...actual,
-    useIsMounted: () => true,
     useAutoResizeTextarea: () => ({ handleInput: () => {} }),
     useCreditEstimation: () => ({ canAfford: true, estimatedCredits: 0, isLoading: false }),
-    useDragDrop: () => ({ isDragging: false, dragHandlers: {} }),
-    useFreeTrialState: () => ({ isFreeUser: false, hasUsedTrial: false }),
+    useDragDrop: () => ({ dragHandlers: {}, isDragging: false }),
+    useFreeTrialState: () => ({ hasUsedTrial: false, isFreeUser: false }),
     useHydrationInputCapture: () => {},
+    useIsMounted: () => true,
     useSpeechRecognition: () => ({
-      isListening: false,
-      isSupported: false,
-      toggle: () => {},
-      reset: () => {},
       audioLevels: [],
       finalTranscript: '',
       interimTranscript: '',
+      isListening: false,
+      isSupported: false,
+      reset: () => {},
+      toggle: () => {},
     }),
   };
 });
 
-// eslint-disable-next-line ts/no-explicit-any
 let ChatInput: ComponentType<any>;
 
 beforeAll(async () => {
@@ -84,7 +83,7 @@ describe('chatInput Hydration Safety', () => {
           onChange={() => {}}
           onSubmit={() => {}}
           status="ready"
-          enableAttachments={true}
+          enableAttachments
           onAddAttachments={() => {}}
         />,
       );
@@ -100,7 +99,7 @@ describe('chatInput Hydration Safety', () => {
       // useIsMounted is mocked to always return true in this test file
       // The actual behavior is tested via the component rendering tests
       // which verify SSR/hydration consistency
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 });
@@ -112,11 +111,11 @@ describe('chatView isModelsLoading hydration safety', () => {
     };
 
     // SSR scenario: isMounted=false (server snapshot)
-    expect(getHydrationSafeLoading(false, false)).toBe(true); // Treats as loading
-    expect(getHydrationSafeLoading(false, true)).toBe(true); // Still loading
+    expect(getHydrationSafeLoading(false, false)).toBeTruthy(); // Treats as loading
+    expect(getHydrationSafeLoading(false, true)).toBeTruthy(); // Still loading
 
     // Client after hydration: isMounted=true
-    expect(getHydrationSafeLoading(true, false)).toBe(false); // Not loading
-    expect(getHydrationSafeLoading(true, true)).toBe(true); // Actually loading
+    expect(getHydrationSafeLoading(true, false)).toBeFalsy(); // Not loading
+    expect(getHydrationSafeLoading(true, true)).toBeTruthy(); // Actually loading
   });
 });

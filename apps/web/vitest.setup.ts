@@ -46,7 +46,7 @@ if (typeof window !== 'undefined') {
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = '';
-  readonly thresholds: ReadonlyArray<number> = [];
+  readonly thresholds: readonly number[] = [];
 
   disconnect(): void {}
   observe(): void {}

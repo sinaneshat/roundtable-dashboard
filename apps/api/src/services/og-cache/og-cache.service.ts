@@ -90,10 +90,10 @@ export async function getOgImageFromCache(
   cacheKey: string,
 ): Promise<OgCacheResult> {
   const notFound: OgCacheResult = {
-    found: false,
-    data: null,
-    contentType: 'image/png',
     cacheKey,
+    contentType: 'image/png',
+    data: null,
+    found: false,
   };
 
   if (!r2Bucket) {
@@ -107,10 +107,10 @@ export async function getOgImageFromCache(
     }
 
     return {
-      found: true,
-      data: await object.arrayBuffer(),
-      contentType: object.httpMetadata?.contentType ?? 'image/png',
       cacheKey,
+      contentType: object.httpMetadata?.contentType ?? 'image/png',
+      data: await object.arrayBuffer(),
+      found: true,
     };
   } catch {
     return notFound;
@@ -131,12 +131,12 @@ export async function storeOgImageInCache(
 
   try {
     await r2Bucket.put(cacheKey, imageData, {
-      httpMetadata: {
-        contentType: 'image/png',
-        cacheControl: `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
-      },
       customMetadata: {
         cachedAt: new Date().toISOString(),
+      },
+      httpMetadata: {
+        cacheControl: `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
+        contentType: 'image/png',
       },
     });
     return true;
@@ -170,7 +170,7 @@ export async function deleteOgImageFromCache(
 
     // Delete all matching objects
     await Promise.all(
-      listed.objects.map(obj => r2Bucket.delete(obj.key)),
+      listed.objects.map(async obj => await r2Bucket.delete(obj.key)),
     );
 
     return true;
@@ -188,7 +188,7 @@ export async function deleteOgImageFromCache(
  * Convert ImageResponse to ArrayBuffer for caching
  */
 export async function imageResponseToArrayBuffer(response: Response): Promise<ArrayBuffer> {
-  return response.arrayBuffer();
+  return await response.arrayBuffer();
 }
 
 /**
@@ -199,12 +199,12 @@ export function createCachedImageResponse(
   headers?: Record<string, string>,
 ): Response {
   return new Response(data, {
-    status: 200,
     headers: {
-      'Content-Type': 'image/png',
       'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
+      'Content-Type': 'image/png',
       'X-OG-Cache': 'HIT',
       ...headers,
     },
+    status: 200,
   });
 }

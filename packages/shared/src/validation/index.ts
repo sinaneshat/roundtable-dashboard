@@ -24,9 +24,9 @@ export * from './chat-metadata';
  * Used in error responses and validation logging
  */
 export const ValidationErrorSchema = z.object({
+  code: z.string().optional(),
   field: z.string(),
   message: z.string(),
-  code: z.string().optional(),
 }).strict();
 
 export type ValidationError = z.infer<typeof ValidationErrorSchema>;
@@ -46,8 +46,8 @@ export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema
 // ============================================================================
 
 export const PaginationSchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
+  page: z.coerce.number().int().positive().default(1),
 }).strict();
 
 export const CursorPaginationSchema = z.object({
@@ -58,8 +58,8 @@ export const CursorPaginationSchema = z.object({
 export const SortOrderSchema = z.enum(['asc', 'desc']).default('desc');
 
 export const DateRangeSchema = z.object({
-  start: z.coerce.date().optional(),
   end: z.coerce.date().optional(),
+  start: z.coerce.date().optional(),
 }).strict();
 
 // ============================================================================
@@ -71,12 +71,12 @@ export const DateRangeSchema = z.object({
  */
 export function ApiSuccessResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
-    success: z.literal(true),
     data: dataSchema,
     meta: z.object({
       requestId: z.string().optional(),
       timestamp: z.string().optional(),
     }).strict().optional(),
+    success: z.literal(true),
   }).strict();
 }
 
@@ -98,17 +98,17 @@ export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
  */
 
 export const ApiErrorResponseSchema = z.object({
-  success: z.literal(false),
   error: z.object({
     code: z.string(),
+    details: ErrorDetailsSchema.optional(),
     message: z.string(),
     validation: z.array(ValidationErrorSchema).optional(),
-    details: ErrorDetailsSchema.optional(),
   }).strict(),
   meta: z.object({
     requestId: z.string().optional(),
     timestamp: z.string().optional(),
   }).strict().optional(),
+  success: z.literal(false),
 }).strict();
 
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
@@ -122,11 +122,11 @@ export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
  * Uses BillingIntervalSchema imported from enums/billing
  */
 export const ProductVariantSchema = z.object({
-  id: z.string(),
-  priceId: z.string(),
-  price: z.number(),
-  interval: BillingIntervalSchema,
   currency: z.string().default('usd'),
+  id: z.string(),
+  interval: BillingIntervalSchema,
+  price: z.number(),
+  priceId: z.string(),
 }).strict();
 
 export type ProductVariant = z.infer<typeof ProductVariantSchema>;

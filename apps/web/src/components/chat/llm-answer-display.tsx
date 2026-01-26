@@ -12,10 +12,10 @@ type LLMAnswerDisplayProps = {
   answer: string | null;
   isStreaming?: boolean;
   className?: string;
-  sources?: Array<{ url: string; title: string }>;
+  sources?: { url: string; title: string }[];
 };
 
-export function LLMAnswerDisplay({ answer, isStreaming = false, className, sources }: LLMAnswerDisplayProps) {
+export function LLMAnswerDisplay({ answer, className, isStreaming = false, sources }: LLMAnswerDisplayProps) {
   const t = useTranslations('chat');
 
   if (!answer) {

@@ -16,15 +16,15 @@ type CustomRoleFormProps = {
 };
 
 export const CustomRoleForm = memo(({
-  onSubmit,
-  isPending,
   disabled = false,
+  isPending,
+  onSubmit,
 }: CustomRoleFormProps) => {
   const t = useTranslations();
 
   const form = useForm<CustomRoleFormValues>({
-    resolver: zodResolver(CustomRoleFormSchema),
     defaultValues: { roleName: '' },
+    resolver: zodResolver(CustomRoleFormSchema),
   });
 
   const handleSubmit = async (values: CustomRoleFormValues) => {

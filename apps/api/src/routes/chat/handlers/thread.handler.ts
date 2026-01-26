@@ -83,8 +83,8 @@ import {
 export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: ThreadListQuerySchema,
     operationName: 'listThreads',
+    validateQuery: ThreadListQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -98,11 +98,11 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     // ✅ PROJECT FILTER: If projectId provided, verify ownership and filter by project
     if (query.projectId) {
       const project = await db.query.chatProject.findFirst({
+        columns: { id: true },
         where: and(
           eq(tables.chatProject.id, query.projectId),
           eq(tables.chatProject.userId, user.id),
         ),
-        columns: { id: true },
       });
       if (!project) {
         throw createError.notFound(`Project not found: ${query.projectId}`, {
@@ -141,11 +141,11 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
     let threads = allThreads;
     if (query.search && query.search.trim().length > 0) {
       const fuse = new Fuse(allThreads, {
-        keys: ['title', 'slug'],
-        threshold: 0.3,
         ignoreLocation: true,
-        minMatchCharLength: 2,
         includeScore: false,
+        keys: ['title', 'slug'],
+        minMatchCharLength: 2,
+        threshold: 0.3,
       });
       const searchResults = fuse.search(query.search.trim());
       threads = searchResults.map(result => result.item);
@@ -174,8 +174,8 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
 export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: ThreadListQuerySchema,
     operationName: 'listSidebarThreads',
+    validateQuery: ThreadListQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -190,11 +190,11 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
     // ✅ PROJECT FILTER: If projectId provided, verify ownership and filter by project
     if (query.projectId) {
       const project = await db.query.chatProject.findFirst({
+        columns: { id: true },
         where: and(
           eq(tables.chatProject.id, query.projectId),
           eq(tables.chatProject.userId, user.id),
         ),
-        columns: { id: true },
       });
       if (!project) {
         throw createError.notFound(`Project not found: ${query.projectId}`, {
@@ -231,32 +231,32 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
     // ✅ PROJECT THREADS: Conditionally omit isFavorite for project threads
     const allThreads = allThreadsRaw.map(t => query.projectId
       ? {
-          id: t.id,
-          title: t.title,
-          slug: t.slug,
-          previousSlug: t.previousSlug,
-          isPublic: t.isPublic,
           createdAt: t.createdAt,
+          id: t.id,
+          isPublic: t.isPublic,
+          previousSlug: t.previousSlug,
+          slug: t.slug,
+          title: t.title,
           updatedAt: t.updatedAt,
         }
       : {
+          createdAt: t.createdAt,
           id: t.id,
-          title: t.title,
-          slug: t.slug,
-          previousSlug: t.previousSlug,
           isFavorite: t.isFavorite,
           isPublic: t.isPublic,
-          createdAt: t.createdAt,
+          previousSlug: t.previousSlug,
+          slug: t.slug,
+          title: t.title,
           updatedAt: t.updatedAt,
         });
 
     let threads = allThreads;
     if (query.search?.trim()) {
       const fuse = new Fuse(allThreads, {
-        keys: ['title', 'slug'],
-        threshold: 0.3,
         ignoreLocation: true,
+        keys: ['title', 'slug'],
         minMatchCharLength: 2,
+        threshold: 0.3,
       });
       threads = fuse.search(query.search.trim()).map(r => r.item).slice(0, query.limit + 1);
     }
@@ -277,14 +277,16 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
 export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
-    validateBody: CreateThreadRequestSchema,
     operationName: 'createThread',
+    validateBody: CreateThreadRequestSchema,
   },
   async (c, batch) => {
     const { user } = c.auth();
 
     // 🔍 DEBUG: Log thread creation attempt (enable with DEBUG_REQUESTS=true)
-    const debugRequests = process.env.DEBUG_REQUESTS === 'true';
+    // Use variable to access index signature property safely
+    const debugEnvKey = 'DEBUG_REQUESTS';
+    const debugRequests = process.env[debugEnvKey] === 'true';
     if (debugRequests) {
       console.error('[CREATE-THREAD-DEBUG] Starting thread creation for user:', user.id, user.email);
     }
@@ -294,8 +296,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const creditBalance = await getUserCreditBalance(user.id);
     if (debugRequests) {
       console.error('[CREATE-THREAD-DEBUG] Credit balance:', {
-        planType: creditBalance.planType,
         balance: creditBalance.balance,
+        planType: creditBalance.planType,
         userId: user.id,
       });
     }
@@ -335,8 +337,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // ✅ PROJECT THREAD LIMIT: Check thread count if creating thread in a project
     if (body.projectId) {
       const existingThreads = await db.query.chatThread.findMany({
-        where: eq(tables.chatThread.projectId, body.projectId),
         columns: { id: true },
+        where: eq(tables.chatThread.projectId, body.projectId),
       });
 
       if (existingThreads.length >= PROJECT_LIMITS.MAX_THREADS_PER_PROJECT) {
@@ -363,8 +365,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       const model = getModelById(participant.modelId);
       if (debugRequests) {
         console.error('[CREATE-THREAD-DEBUG] Model lookup:', {
-          modelId: participant.modelId,
           found: !!model,
+          modelId: participant.modelId,
           modelName: model?.name,
         });
       }
@@ -410,20 +412,20 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const [thread] = await db
       .insert(tables.chatThread)
       .values({
+        createdAt: now,
+        enableWebSearch: body.enableWebSearch ?? false,
         id: threadId,
-        userId: user.id,
-        title: tempTitle,
-        slug: tempSlug,
-        mode: body.mode,
-        status: ThreadStatusSchema.enum.active,
         isFavorite: false,
         isPublic: false,
-        enableWebSearch: body.enableWebSearch ?? false,
-        projectId: body.projectId ?? null,
-        metadata: body.metadata,
-        createdAt: now,
-        updatedAt: now,
         lastMessageAt: now,
+        metadata: body.metadata,
+        mode: body.mode,
+        projectId: body.projectId ?? null,
+        slug: tempSlug,
+        status: ThreadStatusSchema.enum.active,
+        title: tempTitle,
+        updatedAt: now,
+        userId: user.id,
       })
       .returning();
     const customRoleIds = body.participants
@@ -463,19 +465,19 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       const hasSettings = systemPrompt || p.temperature !== undefined || p.maxTokens !== undefined;
       const settingsValue = hasSettings
         ? {
+            maxTokens: p.maxTokens,
             systemPrompt,
             temperature: p.temperature,
-            maxTokens: p.maxTokens,
           }
         : undefined;
       return {
-        id: participantId,
-        threadId,
-        modelId: p.modelId,
         customRoleId: p.customRoleId,
-        role,
-        priority: index,
+        id: participantId,
         isEnabled: true,
+        modelId: p.modelId,
+        priority: index,
+        role,
+        threadId,
         ...(settingsValue !== undefined && { settings: settingsValue }),
         createdAt: now,
         updatedAt: now,
@@ -512,16 +514,16 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const [firstMessage] = await db
       .insert(tables.chatMessage)
       .values({
+        createdAt: now,
         id: firstMessageId,
-        threadId,
-        role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: body.firstMessage }],
-        roundNumber: 0, // ✅ 0-BASED: First round is 0
         metadata: {
           role: MessageRoles.USER,
           roundNumber: 0, // ✅ CRITICAL: Must be in metadata for frontend transform
         },
-        createdAt: now,
+        parts: [{ text: body.firstMessage, type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER,
+        roundNumber: 0, // ✅ 0-BASED: First round is 0
+        threadId,
       })
       .returning();
     // ✅ CREDITS: Deduct for thread creation (includes first message)
@@ -539,12 +541,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     if (body.attachmentIds && body.attachmentIds.length > 0 && firstMessage) {
       // Get upload details for constructing file parts
       const uploads = await db.query.upload.findMany({
-        where: inArray(tables.upload.id, body.attachmentIds),
         columns: {
-          id: true,
           filename: true,
+          id: true,
           mimeType: true,
         },
+        where: inArray(tables.upload.id, body.attachmentIds),
       });
 
       // Create map for ordered lookup
@@ -552,11 +554,11 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
       // Insert message-upload associations
       const messageUploadValues = body.attachmentIds.map((uploadId, index) => ({
+        createdAt: now,
+        displayOrder: index,
         id: ulid(),
         messageId: firstMessage.id,
         uploadId,
-        displayOrder: index,
-        createdAt: now,
       }));
       await db.insert(tables.messageUpload).values(messageUploadValues);
 
@@ -572,10 +574,10 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       const dbSignOptions: BatchSignOptions[] = body.attachmentIds
         .filter(uploadId => uploadMap.has(uploadId))
         .map(uploadId => ({
+          expirationMs: 7 * 24 * 60 * 60 * 1000,
+          threadId,
           uploadId,
           userId: user.id,
-          threadId,
-          expirationMs: 7 * 24 * 60 * 60 * 1000,
         }));
       const dbSignedPaths = await generateBatchSignedPaths(c, dbSignOptions);
 
@@ -583,14 +585,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         .map((uploadId): ExtendedFilePart | null => {
           const upload = uploadMap.get(uploadId);
           const signedPath = dbSignedPaths.get(uploadId);
-          if (!upload || !signedPath)
+          if (!upload || !signedPath) {
             return null;
+          }
           return {
-            type: MessagePartTypes.FILE,
-            url: `${baseUrlForDb}${signedPath}`,
             filename: upload.filename,
             mediaType: upload.mimeType,
+            type: MessagePartTypes.FILE,
             uploadId,
+            url: `${baseUrlForDb}${signedPath}`,
           };
         })
         .filter((p): p is ExtendedFilePart => p !== null);
@@ -607,8 +610,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 
       // Cancel scheduled cleanup for attached uploads (non-blocking)
       if (isCleanupSchedulerAvailable(c.env)) {
-        const cancelCleanupTasks = body.attachmentIds.map(uploadId =>
-          cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
+        const cancelCleanupTasks = body.attachmentIds.map(async uploadId =>
+          await cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
         );
         if (c.executionCtx) {
           c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
@@ -621,12 +624,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       if (body.projectId) {
         await autoLinkUploadsToProject({
           db,
+          executionCtx: c.executionCtx,
           projectId: body.projectId,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          threadId,
           uploadIds: body.attachmentIds,
           userId: user.id,
-          r2Bucket: c.env.UPLOADS_R2_BUCKET,
-          executionCtx: c.executionCtx,
-          threadId,
         });
       }
 
@@ -640,10 +643,10 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       const uiSignOptions: BatchSignOptions[] = body.attachmentIds
         .filter(uploadId => uploadMap.has(uploadId))
         .map(uploadId => ({
+          expirationMs: 60 * 60 * 1000,
+          threadId,
           uploadId,
           userId: user.id,
-          threadId,
-          expirationMs: 60 * 60 * 1000,
         }));
       const uiSignedPaths = await generateBatchSignedPaths(c, uiSignOptions);
 
@@ -651,14 +654,15 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         .map((uploadId): ExtendedFilePart | null => {
           const upload = uploadMap.get(uploadId);
           const signedPath = uiSignedPaths.get(uploadId);
-          if (!upload || !signedPath)
+          if (!upload || !signedPath) {
             return null;
+          }
           return {
-            type: MessagePartTypes.FILE,
-            url: `${baseUrl}${signedPath}`,
             filename: upload.filename,
             mediaType: upload.mimeType,
+            type: MessagePartTypes.FILE,
             uploadId,
+            url: `${baseUrl}${signedPath}`,
           };
         })
         .filter((p): p is ExtendedFilePart => p !== null);
@@ -684,12 +688,12 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // Matches moderator summary pattern: database record created upfront
     if (body.enableWebSearch) {
       await db.insert(tables.chatPreSearch).values({
-        id: ulid(),
-        threadId,
-        roundNumber: 0, // ✅ 0-BASED: First round is 0
-        userQuery: body.firstMessage,
-        status: MessageStatuses.PENDING,
         createdAt: now,
+        id: ulid(),
+        roundNumber: 0, // ✅ 0-BASED: First round is 0
+        status: MessageStatuses.PENDING,
+        threadId,
+        userQuery: body.firstMessage,
       });
     }
 
@@ -708,8 +712,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       try {
         // ✅ BILLING: Pass billing context for title generation credit deduction
         const aiTitle = await generateTitleFromMessage(body.firstMessage, c.env, {
-          userId: user.id,
           threadId,
+          userId: user.id,
         });
         await updateThreadTitleAndSlug(threadId, aiTitle);
         const db = await getDbAsync();
@@ -735,16 +739,16 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       try {
         await trackThreadCreated(
           {
-            userId: user.id,
             sessionId: session?.id,
             threadId,
             threadMode: body.mode,
+            userId: user.id,
             userTier,
           },
           {
-            participantCount: participants.length,
             enableWebSearch: body.enableWebSearch ?? false,
             models: participants.map(p => p.modelId),
+            participantCount: participants.length,
           },
         );
       } catch {
@@ -759,14 +763,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     }
 
     return Responses.ok(c, {
-      thread,
-      participants,
-      messages: [messageWithFileParts],
       changelog: [],
+      messages: [messageWithFileParts],
+      participants,
+      thread,
       user: {
         id: user.id,
-        name: user.name,
         image: user.image,
+        name: user.name,
       },
     });
   },
@@ -774,8 +778,8 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
 export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session-optional',
-    validateParams: IdParamSchema,
     operationName: 'getThread',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const user = c.get('user');
@@ -896,14 +900,14 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     };
 
     return Responses.ok(c, {
-      thread,
-      participants,
-      messages,
       changelog,
+      messages,
+      participants,
+      thread,
       user: {
         id: threadOwner.id,
-        name: threadOwner.name,
         image: threadOwner.image,
+        name: threadOwner.name,
       },
       userTierConfig,
     });
@@ -912,9 +916,9 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
 export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateThreadRequestSchema,
     operationName: 'updateThread',
+    validateBody: UpdateThreadRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -968,11 +972,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             participantsToUpdate.push({
               id: existingByModel.id,
               updates: {
-                modelId: newP.modelId,
-                role: newP.role,
                 customRoleId: newP.customRoleId,
-                priority: newP.priority,
                 isEnabled: newP.isEnabled ?? true,
+                modelId: newP.modelId,
+                priority: newP.priority,
+                role: newP.role,
                 updatedAt: now,
               },
             });
@@ -982,22 +986,23 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             // Truly new participant - insert
             const participantId = ulid();
             participantsToInsert.push({
-              id: participantId,
-              threadId: id,
-              modelId: newP.modelId,
-              role: newP.role,
-              customRoleId: newP.customRoleId,
-              priority: newP.priority,
-              isEnabled: newP.isEnabled ?? true,
-              settings: null,
               createdAt: now,
+              customRoleId: newP.customRoleId,
+              id: participantId,
+              isEnabled: newP.isEnabled ?? true,
+              modelId: newP.modelId,
+              priority: newP.priority,
+              role: newP.role,
+              settings: null,
+              threadId: id,
               updatedAt: now,
             });
           }
         } else {
           const current = currentMap.get(newP.id);
-          if (!current)
+          if (!current) {
             continue;
+          }
           const hasChanges
             = current.modelId !== newP.modelId
               || current.role !== (newP.role || null)
@@ -1008,11 +1013,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             participantsToUpdate.push({
               id: newP.id,
               updates: {
-                modelId: newP.modelId,
-                role: newP.role,
                 customRoleId: newP.customRoleId,
-                priority: newP.priority,
                 isEnabled: newP.isEnabled ?? true,
+                modelId: newP.modelId,
+                priority: newP.priority,
+                role: newP.role,
                 updatedAt: now,
               },
             });
@@ -1024,7 +1029,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // Messages reference participants via participantId, so if we delete a participant,
       // summary queries with `with: { participant: true }` will fail because the join returns null.
       // Instead, set isEnabled=false to preserve data integrity while removing from active use.
-      const batchOperations: Array<BatchItem<'sqlite'>> = [];
+      const batchOperations: BatchItem<'sqlite'>[] = [];
       for (const current of currentParticipants) {
         if (!newMap.has(current.id)) {
           batchOperations.push(
@@ -1049,15 +1054,15 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           db.insert(tables.chatParticipant)
             .values(participant)
             .onConflictDoUpdate({
-              target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
               set: {
-                role: participant.role,
                 customRoleId: participant.customRoleId,
-                priority: participant.priority,
                 isEnabled: participant.isEnabled,
+                priority: participant.priority,
+                role: participant.role,
                 settings: participant.settings,
                 updatedAt: participant.updatedAt,
               },
+              target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
             }),
         );
       }
@@ -1075,9 +1080,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       // ✅ CREATE CHANGELOG ENTRIES for participant changes
       // Need to get latest roundNumber from messages
       const latestMessages = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, id),
-        orderBy: [desc(tables.chatMessage.createdAt)],
         limit: 1,
+        orderBy: [desc(tables.chatMessage.createdAt)],
+        where: eq(tables.chatMessage.threadId, id),
       });
 
       // roundNumber is a column, not in metadata
@@ -1126,7 +1131,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         const prevParticipantsMap = new Map(
           currentParticipants
             .filter(p => p.isEnabled)
-            .map(p => [p.modelId, { modelId: p.modelId, role: p.role, id: p.id }]),
+            .map(p => [p.modelId, { id: p.id, modelId: p.modelId, role: p.role }]),
         );
 
         // New state = request body participants
@@ -1144,17 +1149,17 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             const modelName = extractModelName(modelId);
             const displayName = newP.role || modelName;
             changelogEntries.push({
-              id: ulid(),
-              threadId: id,
-              roundNumber: nextRoundNumber,
-              changeType: ChangelogTypes.ADDED,
-              changeSummary: `Added ${displayName}`,
               changeData: {
-                type: ChangelogChangeTypes.PARTICIPANT,
                 modelId,
                 role: newP.role,
+                type: ChangelogChangeTypes.PARTICIPANT,
               },
+              changeSummary: `Added ${displayName}`,
+              changeType: ChangelogTypes.ADDED,
               createdAt: now,
+              id: ulid(),
+              roundNumber: nextRoundNumber,
+              threadId: id,
             });
           }
         }
@@ -1165,18 +1170,18 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             const modelName = extractModelName(modelId);
             const displayName = prevP.role || modelName;
             changelogEntries.push({
-              id: ulid(),
-              threadId: id,
-              roundNumber: nextRoundNumber,
-              changeType: ChangelogTypes.REMOVED,
-              changeSummary: `Removed ${displayName}`,
               changeData: {
-                type: ChangelogChangeTypes.PARTICIPANT,
-                participantId: prevP.id,
                 modelId,
+                participantId: prevP.id,
                 role: prevP.role,
+                type: ChangelogChangeTypes.PARTICIPANT,
               },
+              changeSummary: `Removed ${displayName}`,
+              changeType: ChangelogTypes.REMOVED,
               createdAt: now,
+              id: ulid(),
+              roundNumber: nextRoundNumber,
+              threadId: id,
             });
           }
         }
@@ -1205,9 +1210,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       if (hasAssistantForMode) {
         // Need to get latest roundNumber from messages
         const latestMessagesForMode = await db.query.chatMessage.findMany({
-          where: eq(tables.chatMessage.threadId, id),
-          orderBy: [desc(tables.chatMessage.createdAt)],
           limit: 1,
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          where: eq(tables.chatMessage.threadId, id),
         });
 
         // roundNumber is a column, not in metadata
@@ -1248,12 +1253,12 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             // ✅ NET CHANGE EXISTS: Update entry with baseline oldMode → new newMode
             await db.update(tables.chatThreadChangelog)
               .set({
-                changeSummary: `Changed conversation mode from ${baselineMode} to ${body.mode}`,
                 changeData: {
-                  type: ChangelogChangeTypes.MODE_CHANGE,
-                  oldMode: baselineMode,
                   newMode: body.mode,
+                  oldMode: baselineMode,
+                  type: ChangelogChangeTypes.MODE_CHANGE,
                 },
+                changeSummary: `Changed conversation mode from ${baselineMode} to ${body.mode}`,
                 createdAt: now,
               })
               .where(eq(tables.chatThreadChangelog.id, existingModeChange.id));
@@ -1281,9 +1286,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       if (hasAssistantForWebSearch) {
         // Need to get latest roundNumber from messages
         const latestMessagesForWebSearch = await db.query.chatMessage.findMany({
-          where: eq(tables.chatMessage.threadId, id),
-          orderBy: [desc(tables.chatMessage.createdAt)],
           limit: 1,
+          orderBy: [desc(tables.chatMessage.createdAt)],
+          where: eq(tables.chatMessage.threadId, id),
         });
 
         // roundNumber is a column, not in metadata
@@ -1324,11 +1329,11 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             // ✅ NET CHANGE EXISTS: Update entry with new state
             await db.update(tables.chatThreadChangelog)
               .set({
-                changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
                 changeData: {
-                  type: ChangelogChangeTypes.WEB_SEARCH,
                   enabled: body.enableWebSearch,
+                  type: ChangelogChangeTypes.WEB_SEARCH,
                 },
+                changeSummary: body.enableWebSearch ? 'Enabled web search' : 'Disabled web search',
                 createdAt: now,
               })
               .where(eq(tables.chatThreadChangelog.id, existingWebSearchChange.id));
@@ -1349,18 +1354,24 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     if (body.title !== undefined && body.title !== null && typeof body.title === 'string') {
       updateData.title = body.title;
     }
-    if (body.mode !== undefined)
+    if (body.mode !== undefined) {
       updateData.mode = body.mode;
-    if (body.status !== undefined)
+    }
+    if (body.status !== undefined) {
       updateData.status = body.status;
-    if (body.isFavorite !== undefined)
+    }
+    if (body.isFavorite !== undefined) {
       updateData.isFavorite = body.isFavorite;
-    if (body.isPublic !== undefined)
+    }
+    if (body.isPublic !== undefined) {
       updateData.isPublic = body.isPublic;
-    if (body.enableWebSearch !== undefined)
+    }
+    if (body.enableWebSearch !== undefined) {
       updateData.enableWebSearch = body.enableWebSearch;
-    if (body.metadata !== undefined)
+    }
+    if (body.metadata !== undefined) {
       updateData.metadata = body.metadata ?? undefined;
+    }
     // ✅ PROJECT ASSIGNMENT: Validate user owns target project before assignment
     if (body.projectId !== undefined) {
       if (body.projectId === null) {
@@ -1387,8 +1398,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       where: eq(tables.chatThread.id, id),
       with: {
         participants: {
-          where: eq(tables.chatParticipant.isEnabled, true),
           orderBy: [asc(tables.chatParticipant.priority)],
+          where: eq(tables.chatParticipant.isEnabled, true),
         },
       },
     });
@@ -1422,23 +1433,23 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     let createdMessage: typeof tables.chatMessage.$inferSelect | undefined;
     if (body.newMessage) {
       const messageId = body.newMessage.id || ulid();
-      const messageParts: Array<{ type: 'text'; text: string }> = [
-        { type: MessagePartTypes.TEXT, text: body.newMessage.content },
+      const messageParts: { type: 'text'; text: string }[] = [
+        { text: body.newMessage.content, type: MessagePartTypes.TEXT },
       ];
 
       const [message] = await db
         .insert(tables.chatMessage)
         .values({
+          createdAt: now,
           id: messageId,
-          threadId: id,
-          role: MessageRoles.USER,
-          parts: messageParts,
-          roundNumber: body.newMessage.roundNumber,
           metadata: {
             role: MessageRoles.USER,
             roundNumber: body.newMessage.roundNumber,
           },
-          createdAt: now,
+          parts: messageParts,
+          role: MessageRoles.USER,
+          roundNumber: body.newMessage.roundNumber,
+          threadId: id,
         })
         .returning();
 
@@ -1448,23 +1459,23 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       if (body.newMessage.attachmentIds && body.newMessage.attachmentIds.length > 0) {
         // Get upload details for constructing file parts
         const uploads = await db.query.upload.findMany({
-          where: inArray(tables.upload.id, body.newMessage.attachmentIds),
           columns: {
-            id: true,
             filename: true,
+            id: true,
             mimeType: true,
           },
+          where: inArray(tables.upload.id, body.newMessage.attachmentIds),
         });
 
         const uploadMap = new Map(uploads.map(u => [u.id, u]));
 
         // Insert message-upload associations
         const messageUploadValues = body.newMessage.attachmentIds.map((uploadId, index) => ({
+          createdAt: now,
+          displayOrder: index,
           id: ulid(),
           messageId,
           uploadId,
-          displayOrder: index,
-          createdAt: now,
         }));
         await db.insert(tables.messageUpload).values(messageUploadValues);
 
@@ -1475,10 +1486,10 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         const signOptions: BatchSignOptions[] = body.newMessage.attachmentIds
           .filter(uploadId => uploadMap.has(uploadId))
           .map(uploadId => ({
+            expirationMs: 7 * 24 * 60 * 60 * 1000,
+            threadId: id,
             uploadId,
             userId: user.id,
-            threadId: id,
-            expirationMs: 7 * 24 * 60 * 60 * 1000,
           }));
         const signedPaths = await generateBatchSignedPaths(c, signOptions);
 
@@ -1486,14 +1497,15 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           .map((uploadId): ExtendedFilePart | null => {
             const upload = uploadMap.get(uploadId);
             const signedPath = signedPaths.get(uploadId);
-            if (!upload || !signedPath)
+            if (!upload || !signedPath) {
               return null;
+            }
             return {
-              type: MessagePartTypes.FILE,
-              url: `${baseUrl}${signedPath}`,
               filename: upload.filename,
               mediaType: upload.mimeType,
+              type: MessagePartTypes.FILE,
               uploadId,
+              url: `${baseUrl}${signedPath}`,
             };
           })
           .filter((p): p is ExtendedFilePart => p !== null);
@@ -1514,8 +1526,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
         // Cancel scheduled cleanup for attached uploads (non-blocking)
         if (isCleanupSchedulerAvailable(c.env)) {
-          const cancelCleanupTasks = body.newMessage.attachmentIds.map(uploadId =>
-            cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
+          const cancelCleanupTasks = body.newMessage.attachmentIds.map(async uploadId =>
+            await cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, uploadId).catch(() => {}),
           );
           if (c.executionCtx) {
             c.executionCtx.waitUntil(Promise.all(cancelCleanupTasks));
@@ -1528,12 +1540,12 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         if (thread.projectId) {
           await autoLinkUploadsToProject({
             db,
+            executionCtx: c.executionCtx,
             projectId: thread.projectId,
+            r2Bucket: c.env.UPLOADS_R2_BUCKET,
+            threadId: id,
             uploadIds: body.newMessage.attachmentIds,
             userId: user.id,
-            r2Bucket: c.env.UPLOADS_R2_BUCKET,
-            executionCtx: c.executionCtx,
-            threadId: id,
           });
         }
       }
@@ -1548,9 +1560,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     }
 
     return Responses.ok(c, {
-      thread: updatedThreadWithParticipants,
-      participants: updatedThreadWithParticipants.participants,
       message: createdMessage,
+      participants: updatedThreadWithParticipants.participants,
+      thread: updatedThreadWithParticipants,
     });
   },
 );
@@ -1568,8 +1580,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteThread',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1583,8 +1595,8 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 
     // Get all messages for this thread
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, id),
       columns: { id: true },
+      where: eq(tables.chatMessage.threadId, id),
     });
     const messageIds = messages.map(m => m.id);
 
@@ -1710,8 +1722,8 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'public',
-    validateParams: ThreadSlugParamSchema,
     operationName: 'getPublicThread',
+    validateParams: ThreadSlugParamSchema,
   },
   async (c) => {
     const { slug } = c.validated.params;
@@ -1842,8 +1854,8 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     // Extract only needed fields for response
     const threadOwner = {
       id: ownerRecord.id,
-      name: ownerRecord.name,
       image: ownerRecord.image,
+      name: ownerRecord.name,
     };
 
     // ✅ PUBLIC PAGE FIX: Exclude incomplete rounds from public view
@@ -1894,17 +1906,17 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     const preSearches = allPreSearches.filter(ps => completeRounds.has(ps.roundNumber));
 
     const response = Responses.ok(c, {
-      thread,
-      participants,
-      messages,
-      changelog,
       analyses,
+      changelog,
       feedback,
+      messages,
+      participants,
       preSearches,
+      thread,
       user: {
         id: threadOwner.id,
-        name: threadOwner.name,
         image: threadOwner.image,
+        name: threadOwner.name,
       },
     });
 
@@ -1966,8 +1978,8 @@ export const listPublicThreadSlugsHandler: RouteHandler<typeof listPublicThreadS
 export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadSlugParamSchema,
     operationName: 'getThreadBySlug',
+    validateParams: ThreadSlugParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -2075,12 +2087,12 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     // Transform to flat structure
     const messageAttachments: MessageAttachment[] = messageAttachmentsRaw.map(row => ({
-      messageId: row.message_upload.messageId,
       displayOrder: row.message_upload.displayOrder,
-      uploadId: row.upload.id,
       filename: row.upload.filename,
-      mimeType: row.upload.mimeType,
       fileSize: row.upload.fileSize,
+      messageId: row.message_upload.messageId,
+      mimeType: row.upload.mimeType,
+      uploadId: row.upload.id,
     }));
 
     // Group attachments by message ID
@@ -2097,10 +2109,10 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 
     // ✅ PERF: Batch sign all attachments with single key import
     const allUploads: BatchSignOptions[] = messageAttachments.map(att => ({
+      expirationMs: 60 * 60 * 1000,
+      threadId: thread.id,
       uploadId: att.uploadId,
       userId: thread.userId,
-      threadId: thread.id,
-      expirationMs: 60 * 60 * 1000,
     }));
     const signedPaths = await generateBatchSignedPaths(c, allUploads);
 
@@ -2114,15 +2126,16 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
       const fileParts: ExtendedFilePart[] = attachments.map((att: MessageAttachment): ExtendedFilePart => {
         const signedPath = signedPaths.get(att.uploadId);
-        if (!signedPath)
+        if (!signedPath) {
           throw new Error(`Missing signed path for upload ${att.uploadId}`);
+        }
 
         return {
-          type: MessagePartTypes.FILE,
-          url: `${baseUrl}${signedPath}`,
           filename: att.filename,
           mediaType: att.mimeType,
+          type: MessagePartTypes.FILE,
           uploadId: att.uploadId,
+          url: `${baseUrl}${signedPath}`,
         };
       });
 
@@ -2146,14 +2159,14 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     c.header('CDN-Cache-Control', 'no-store');
 
     return Responses.ok(c, {
-      thread,
-      participants,
       messages,
+      participants,
       preSearches,
+      thread,
       user: {
         id: user.id,
-        name: user.name,
         image: user.image,
+        name: user.name,
       },
       userTierConfig,
     });
@@ -2162,21 +2175,21 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
 export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatusRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getThreadSlugStatus',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, id),
       columns: {
+        isAiGeneratedTitle: true,
         slug: true,
         title: true,
-        isAiGeneratedTitle: true,
         userId: true,
       },
+      where: eq(tables.chatThread.id, id),
     });
     if (!thread) {
       throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', id));
@@ -2188,9 +2201,9 @@ export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatus
       );
     }
     return Responses.ok(c, {
+      isAiGeneratedTitle: thread.isAiGeneratedTitle,
       slug: thread.slug,
       title: thread.title,
-      isAiGeneratedTitle: thread.isAiGeneratedTitle,
     });
   },
 );
@@ -2202,9 +2215,9 @@ export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatus
 export const getThreadMemoryEventsHandler: RouteHandler<typeof getThreadMemoryEventsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'getThreadMemoryEvents',
     validateParams: ThreadIdParamSchema,
     validateQuery: MemoryEventQuerySchema,
-    operationName: 'getThreadMemoryEvents',
   },
   async (c) => {
     const { user } = c.auth();
@@ -2214,8 +2227,8 @@ export const getThreadMemoryEventsHandler: RouteHandler<typeof getThreadMemoryEv
     // Verify thread ownership
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
+      columns: { projectId: true, userId: true },
       where: eq(tables.chatThread.id, threadId),
-      columns: { userId: true, projectId: true },
     });
 
     if (!thread) {

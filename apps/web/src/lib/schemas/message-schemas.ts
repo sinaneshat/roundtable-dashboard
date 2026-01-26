@@ -33,18 +33,18 @@ import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '@ro
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
  */
 export const FilePartSchema = z.object({
-  type: z.literal('file'),
-  url: z.string().openapi({
-    description: 'URL to the file (can be data URL or HTTP URL)',
-    example: 'https://example.com/image.png',
+  filename: z.string().optional().openapi({
+    description: 'Original filename for display',
+    example: 'screenshot.png',
   }),
   mediaType: z.string().openapi({
     description: 'MIME type of the file',
     example: 'image/png',
   }),
-  filename: z.string().optional().openapi({
-    description: 'Original filename for display',
-    example: 'screenshot.png',
+  type: z.literal('file'),
+  url: z.string().openapi({
+    description: 'URL to the file (can be data URL or HTTP URL)',
+    example: 'https://example.com/image.png',
   }),
 });
 
@@ -72,6 +72,14 @@ export const ExtendedFilePartSchema = FilePartSchema.extend({
 
 export type ExtendedFilePart = z.infer<typeof ExtendedFilePartSchema>;
 
+/**
+ * Schema for ExtendedFilePart with required uploadId (non-optional string)
+ */
+const _ExtendedFilePartWithUploadIdSchema = ExtendedFilePartSchema.extend({
+  uploadId: z.string().min(1),
+});
+type ExtendedFilePartWithUploadId = z.infer<typeof _ExtendedFilePartWithUploadIdSchema>;
+
 // ============================================================================
 // FILE PART TYPE GUARDS
 // ============================================================================
@@ -90,10 +98,11 @@ export function isFilePart(part: unknown): part is FilePart {
  */
 export function hasUploadId(
   part: FilePart,
-): part is ExtendedFilePart & { uploadId: string } {
+): part is ExtendedFilePartWithUploadId {
   const result = ExtendedFilePartSchema.safeParse(part);
-  if (!result.success)
+  if (!result.success) {
     return false;
+  }
   return (
     typeof result.data.uploadId === 'string' && result.data.uploadId.length > 0
   );
@@ -173,11 +182,11 @@ export function getUrlFromPart(part: unknown): string | undefined {
  */
 const ValidFilePartForTransmissionSchema = z
   .object({
-    type: z.literal('file'),
-    url: z.string().optional(),
-    mediaType: z.string().optional(),
     filename: z.string().optional(),
+    mediaType: z.string().optional(),
+    type: z.literal('file'),
     uploadId: z.string().optional(),
+    url: z.string().optional(),
   })
   .refine(
     data =>
@@ -216,8 +225,9 @@ export function isValidFilePartForTransmission(
 export function extractValidFileParts(
   parts: unknown[] | undefined,
 ): ExtendedFilePart[] {
-  if (!Array.isArray(parts))
+  if (!Array.isArray(parts)) {
     return [];
+  }
   return parts.filter(isValidFilePartForTransmission);
 }
 
@@ -270,21 +280,26 @@ export function extractValidFileParts(
 export const MessagePartSchema = z
   .discriminatedUnion('type', [
     z.object({
-      type: z.literal('text'),
       text: z.string().openapi({
         description: 'Regular text content',
         example: 'This is a response to your question',
       }),
+      type: z.literal('text'),
     }),
     z.object({
-      type: z.literal('reasoning'),
       text: z.string().openapi({
         description: 'Model internal reasoning content',
         example: 'Let me analyze this step by step...',
       }),
+      type: z.literal('reasoning'),
     }),
     z.object({
-      type: z.literal('tool-call'),
+      // NOTE: Tool args intentionally use z.unknown() - AI SDK tool schemas are defined
+      // per-tool at runtime and can be any valid JSON structure
+      args: z.unknown().openapi({
+        description: 'Arguments passed to the tool (structure defined by tool schema)',
+        example: { query: 'AI SDK documentation' },
+      }),
       toolCallId: z.string().openapi({
         description: 'Unique identifier for this tool call',
         example: 'call_abc123',
@@ -293,15 +308,19 @@ export const MessagePartSchema = z
         description: 'Name of the tool being called',
         example: 'search_web',
       }),
-      // NOTE: Tool args intentionally use z.unknown() - AI SDK tool schemas are defined
-      // per-tool at runtime and can be any valid JSON structure
-      args: z.unknown().openapi({
-        description: 'Arguments passed to the tool (structure defined by tool schema)',
-        example: { query: 'AI SDK documentation' },
-      }),
+      type: z.literal('tool-call'),
     }),
     z.object({
-      type: z.literal('tool-result'),
+      isError: z.boolean().optional().openapi({
+        description: 'Whether the tool execution resulted in an error',
+        example: false,
+      }),
+      // NOTE: Tool results intentionally use z.unknown() - result structure is defined
+      // by each tool's execute function and varies per tool
+      result: z.unknown().openapi({
+        description: 'Result returned from tool execution (structure varies by tool)',
+        example: { results: [] },
+      }),
       toolCallId: z.string().openapi({
         description: 'Unique identifier matching the original tool call',
         example: 'call_abc123',
@@ -310,16 +329,7 @@ export const MessagePartSchema = z
         description: 'Name of the tool that was executed',
         example: 'search_web',
       }),
-      // NOTE: Tool results intentionally use z.unknown() - result structure is defined
-      // by each tool's execute function and varies per tool
-      result: z.unknown().openapi({
-        description: 'Result returned from tool execution (structure varies by tool)',
-        example: { results: [] },
-      }),
-      isError: z.boolean().optional().openapi({
-        description: 'Whether the tool execution resulted in an error',
-        example: false,
-      }),
+      type: z.literal('tool-result'),
     }),
     // ✅ AI SDK v6 FILE PART: Reuse extracted FilePartSchema
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
@@ -373,8 +383,9 @@ export function isMessagePart(value: unknown): value is MessagePart {
  * }
  */
 export function isMessageStatus(value: unknown): value is MessageStatus {
-  if (typeof value !== 'string')
+  if (typeof value !== 'string') {
     return false;
+  }
   return (MESSAGE_STATUSES as readonly string[]).includes(value);
 }
 
@@ -429,8 +440,9 @@ export function extractTextFromParts(parts: MessagePart[]): string {
 export function extractTextFromMessage(
   message: { parts?: unknown } | undefined | null,
 ): string {
-  if (!message?.parts || !Array.isArray(message.parts))
+  if (!message?.parts || !Array.isArray(message.parts)) {
     return '';
+  }
 
   // Filter to only valid MessagePart objects
   const validParts = message.parts.filter(isMessagePart);
@@ -662,7 +674,7 @@ export function hasRenderableContent(parts: MessagePart[]): boolean {
  * // { type: 'text', text: 'Hello world!' }
  */
 export function createTextPart(text: string): MessagePart {
-  return { type: MessagePartTypes.TEXT, text };
+  return { text, type: MessagePartTypes.TEXT };
 }
 
 /**
@@ -676,7 +688,7 @@ export function createTextPart(text: string): MessagePart {
  * // { type: 'reasoning', text: 'Let me think...' }
  */
 export function createReasoningPart(text: string): MessagePart {
-  return { type: MessagePartTypes.REASONING, text };
+  return { text, type: MessagePartTypes.REASONING };
 }
 
 // ============================================================================
@@ -770,10 +782,10 @@ export function createToolCallPart(
   args: unknown,
 ): Extract<MessagePart, { type: 'tool-call' }> {
   return {
-    type: 'tool-call',
+    args,
     toolCallId,
     toolName,
-    args,
+    type: 'tool-call',
   };
 }
 
@@ -798,11 +810,11 @@ export function createToolResultPart(
   isError?: boolean,
 ): Extract<MessagePart, { type: 'tool-result' }> {
   return {
-    type: 'tool-result',
+    isError,
+    result,
     toolCallId,
     toolName,
-    result,
-    isError,
+    type: 'tool-result',
   };
 }
 
@@ -936,10 +948,10 @@ export type StreamingUsage = z.infer<typeof StreamingUsageSchema>;
  * @see https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#reasoning
  */
 export const ReasoningPartSchema = z.object({
+  text: z.string(),
   // AI SDK uses 'reasoning' type; Claude models also use 'thinking' and 'redacted'
   // ✅ Uses centralized ReasoningPartTypeSchema from @/api/core/enums
   type: ReasoningPartTypeSchema.optional(),
-  text: z.string(),
 });
 
 export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
@@ -952,10 +964,10 @@ export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
  */
 export const StreamingToolCallSchema = z.object({
-  type: z.literal('tool-call').optional(),
+  args: z.unknown().optional(),
   toolCallId: z.string(),
   toolName: z.string(),
-  args: z.unknown().optional(),
+  type: z.literal('tool-call').optional(),
 });
 
 export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
@@ -973,13 +985,10 @@ export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
  * @see message-persistence.service.ts extractReasoning
  */
 export const StreamingFinishResultSchema = z.object({
-  text: z.string(),
-  usage: StreamingUsageSchema.optional(),
   finishReason: z.string(),
   // NOTE: providerMetadata/response intentionally use z.unknown() - structure varies
   // by AI provider (OpenAI, Anthropic, etc.) and cannot be statically typed
   providerMetadata: z.unknown().optional(),
-  response: z.unknown().optional(),
   // Reasoning can be string or array of parts
   reasoning: z.union([
     z.string(),
@@ -987,10 +996,13 @@ export const StreamingFinishResultSchema = z.object({
   ]).optional(),
   // Claude 4 models with interleaved thinking
   reasoningText: z.string().optional(),
+  response: z.unknown().optional(),
+  text: z.string(),
   // Tool calls from AI SDK
   toolCalls: z.array(StreamingToolCallSchema).optional(),
   // NOTE: toolResults intentionally uses z.unknown() - result structure varies per tool
   toolResults: z.unknown().optional(),
+  usage: StreamingUsageSchema.optional(),
 });
 
 export type StreamingFinishResult = z.infer<typeof StreamingFinishResultSchema>;

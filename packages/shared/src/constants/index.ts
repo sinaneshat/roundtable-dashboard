@@ -16,7 +16,7 @@ export * from './version';
 
 // Environment detection - uses WEBAPP_ENV (set by each package's runtime)
 // WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
-export const WEBAPP_ENV = process.env['WEBAPP_ENV'] || 'local';
+export const WEBAPP_ENV = process.env['WEBAPP_ENV'] ?? 'local';
 export const IS_PRODUCTION = WEBAPP_ENV === 'prod';
 export const IS_PREVIEW = WEBAPP_ENV === 'preview';
 export const IS_LOCAL = WEBAPP_ENV === 'local';
@@ -28,8 +28,8 @@ export const API_PREFIX = `/api/${API_VERSION}`;
 
 // Cache durations (in seconds)
 export const CACHE_DURATION = {
-  SHORT: 60, // 1 minute
-  MEDIUM: 300, // 5 minutes
-  LONG: 3600, // 1 hour
   DAY: 86400, // 24 hours
+  LONG: 3600, // 1 hour
+  MEDIUM: 300, // 5 minutes
+  SHORT: 60, // 1 minute
 } as const;

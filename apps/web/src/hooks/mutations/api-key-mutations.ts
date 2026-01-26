@@ -31,8 +31,9 @@ export function useDeleteApiKeyMutation() {
     mutationFn: deleteApiKeyService,
     onMutate: async (data) => {
       const keyId = data.param?.keyId;
-      if (!keyId)
+      if (!keyId) {
         return { previousApiKeys: undefined };
+      }
 
       await queryClient.cancelQueries({ queryKey: queryKeys.apiKeys.all });
 
@@ -41,8 +42,9 @@ export function useDeleteApiKeyMutation() {
       queryClient.setQueryData<ListApiKeysResponse>(
         queryKeys.apiKeys.list(),
         (oldData: ListApiKeysResponse | undefined) => {
-          if (!oldData?.success || !oldData.data?.items)
+          if (!oldData?.success || !oldData.data?.items) {
             return oldData;
+          }
 
           return {
             ...oldData,

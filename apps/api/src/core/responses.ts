@@ -93,13 +93,13 @@ export function ok<T>(
   additionalMeta?: ResponseMetadata,
 ): Response {
   const response: ApiResponse<T> = {
-    success: true,
     data,
     meta: {
       ...extractResponseMetadata(c),
       ...getPerformanceMetadata(c),
       ...additionalMeta,
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.OK);
@@ -114,13 +114,13 @@ export function created<T>(
   additionalMeta?: ResponseMetadata,
 ): Response {
   const response: ApiResponse<T> = {
-    success: true,
     data,
     meta: {
       ...extractResponseMetadata(c),
       ...getPerformanceMetadata(c),
       ...additionalMeta,
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.CREATED);
@@ -135,13 +135,13 @@ export function accepted<T>(
   additionalMeta?: ResponseMetadata,
 ): Response {
   const response: ApiResponse<T> = {
-    success: true,
     data,
     meta: {
       ...extractResponseMetadata(c),
       ...getPerformanceMetadata(c),
       ...additionalMeta,
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.ACCEPTED);
@@ -152,11 +152,11 @@ export function accepted<T>(
  */
 export function noContent(c: Context): Response {
   return new Response(null, {
-    status: HttpStatusCodes.NO_CONTENT,
     headers: {
       'x-request-id': c.get('requestId') || '',
       'x-timestamp': new Date().toISOString(),
     },
+    status: HttpStatusCodes.NO_CONTENT,
   });
 }
 
@@ -179,13 +179,12 @@ export function paginated<T>(
 ): Response {
   const paginationMeta = {
     ...pagination,
-    pages: Math.ceil(pagination.total / pagination.limit),
     hasNext: pagination.page * pagination.limit < pagination.total,
     hasPrev: pagination.page > 1,
+    pages: Math.ceil(pagination.total / pagination.limit),
   };
 
   const response: PaginatedResponse<T> = {
-    success: true,
     data: {
       items,
       pagination: paginationMeta,
@@ -194,6 +193,7 @@ export function paginated<T>(
       ...extractResponseMetadata(c),
       ...(additionalMeta || {}),
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.OK);
@@ -214,7 +214,6 @@ export function cursorPaginated<T>(
   additionalMeta?: ResponseMetadata,
 ): Response {
   const response: CursorPaginatedResponse<T> = {
-    success: true,
     data: {
       items,
       pagination,
@@ -224,6 +223,7 @@ export function cursorPaginated<T>(
       ...getPerformanceMetadata(c),
       ...additionalMeta,
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.OK);
@@ -248,21 +248,21 @@ export function validationError(
   };
 
   const response = {
-    success: false as const,
     error: {
       code,
-      message,
       context: errorContext,
+      message,
       validation: errors.map(err => ({
+        code: err.code,
         field: err.field,
         message: err.message,
-        code: err.code,
       })),
     },
     meta: {
       ...extractResponseMetadata(c),
       correlationId: c.get('correlationId'),
     },
+    success: false as const,
   };
 
   // Validate response format
@@ -291,13 +291,13 @@ export function authenticationError(
   };
 
   const response = {
-    success: false as const,
     error: {
       code: 'AUTHENTICATION_ERROR',
-      message,
       context: errorContext,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.UNAUTHORIZED);
@@ -313,20 +313,20 @@ export function authorizationError(
 ): Response {
   const user = c.get('user');
   const errorContext: ErrorContext = {
+    attemptedEmail: user?.email,
     errorType: 'authentication', // Using authentication type as per schema
     failureReason: 'invalid_credentials',
-    attemptedEmail: user?.email,
   };
 
   const response = {
-    success: false as const,
     error: {
       code: 'AUTHORIZATION_ERROR',
-      message,
       context: errorContext,
       details: { detailType: 'role_check', requiredRole, userId: user?.id },
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.FORBIDDEN);
@@ -341,13 +341,13 @@ export function notFound(
   resourceId?: string,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'NOT_FOUND',
-      message: `${resource} not found`,
       details: resourceId ? { resourceId } : undefined,
+      message: `${resource} not found`,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.NOT_FOUND);
@@ -362,13 +362,13 @@ export function conflict(
   conflictingField?: string,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'CONFLICT',
-      message,
       details: conflictingField ? { conflictingField } : undefined,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.CONFLICT);
@@ -384,13 +384,13 @@ export function rateLimitExceeded(
   resetTime?: string,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'RATE_LIMIT_EXCEEDED',
+      details: { detailType: 'rate_limit', limit, resetTime, windowMs },
       message: 'Too many requests',
-      details: { detailType: 'rate_limit', limit, windowMs, resetTime },
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.TOO_MANY_REQUESTS);
@@ -408,19 +408,19 @@ export function externalServiceError(
 ): Response {
   const errorContext: ErrorContext = {
     errorType: 'external_service',
-    serviceName,
     httpStatus,
     responseTime,
+    serviceName,
   };
 
   const response = {
-    success: false as const,
     error: {
       code: 'EXTERNAL_SERVICE_ERROR',
-      message,
       context: errorContext,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.BAD_GATEWAY);
@@ -442,13 +442,13 @@ export function databaseError(
   };
 
   const response = {
-    success: false as const,
     error: {
       code: 'DATABASE_ERROR',
-      message,
       context: errorContext,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.INTERNAL_SERVER_ERROR);
@@ -463,13 +463,13 @@ export function badRequest(
   details?: unknown,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'BAD_REQUEST',
-      message,
       details,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.BAD_REQUEST);
@@ -484,16 +484,16 @@ export function internalServerError(
   component?: string,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'INTERNAL_SERVER_ERROR',
-      message,
       details: component ? { component } : undefined,
+      message,
     },
     meta: {
       ...extractResponseMetadata(c),
       correlationId: c.get('correlationId'),
     },
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.INTERNAL_SERVER_ERROR);
@@ -508,13 +508,13 @@ export function serviceUnavailable(
   details?: unknown,
 ): Response {
   const response = {
-    success: false as const,
     error: {
       code: 'SERVICE_UNAVAILABLE',
-      message,
       details,
+      message,
     },
     meta: extractResponseMetadata(c),
+    success: false as const,
   };
 
   return c.json(response, HttpStatusCodes.SERVICE_UNAVAILABLE);
@@ -569,13 +569,13 @@ export function customResponse<T>(
   c: Context,
   data: T,
   status: number,
-  headers: { [key: string]: string } = {},
+  headers: Record<string, string> = {},
 ): Response {
   const response = {
-    success: status < 400,
     data: status < 400 ? data : undefined,
     error: status >= 400 ? data : undefined,
     meta: extractResponseMetadata(c),
+    success: status < 400,
   };
 
   return c.json(response, status as 200 | 201 | 400 | 404 | 500, headers);
@@ -594,11 +594,11 @@ export function redirect(
     : HttpStatusCodes.MOVED_TEMPORARILY;
 
   return new Response(null, {
-    status,
     headers: {
       'Location': location,
       'x-request-id': c.get('requestId') || '',
     },
+    status,
   });
 }
 
@@ -630,18 +630,18 @@ export function collection<T, M = never>(
 ): Response {
   const data = {
     ...(metadata && typeof metadata === 'object' && Object.keys(metadata).length > 0 ? metadata : {}),
-    items,
     count: items.length,
+    items,
   };
 
   const response: ApiResponse<typeof data> = {
-    success: true,
     data,
     meta: {
       ...extractResponseMetadata(c),
       ...getPerformanceMetadata(c),
       ...additionalMeta,
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.OK);
@@ -673,9 +673,9 @@ export function health(
   };
 
   const response: ApiResponse<typeof data> = {
-    success: true,
     data,
     meta: extractResponseMetadata(c),
+    success: true,
   };
 
   // Return appropriate HTTP status code
@@ -700,42 +700,43 @@ export function health(
 export function detailedHealth(
   c: Context,
   status: HealthStatus,
-  dependencies: { [key: string]: HealthDependency },
+  dependencies: Record<string, HealthDependency>,
   duration?: number,
 ): Response {
   // Calculate summary
-  const summary = Object.values(dependencies).reduce(
+  const summary = Object.values(dependencies).reduce<HealthSummary>(
     (acc, dep) => {
       acc.total++;
-      if (dep.status === HealthStatuses.HEALTHY)
+      if (dep.status === HealthStatuses.HEALTHY) {
         acc.healthy++;
-      else if (dep.status === HealthStatuses.DEGRADED)
+      } else if (dep.status === HealthStatuses.DEGRADED) {
         acc.degraded++;
-      else
+      } else {
         acc.unhealthy++;
+      }
       return acc;
     },
-    { total: 0, healthy: 0, degraded: 0, unhealthy: 0 } as HealthSummary,
+    { degraded: 0, healthy: 0, total: 0, unhealthy: 0 },
   );
 
   const data = {
-    ok: status === HealthStatuses.HEALTHY,
-    status,
-    timestamp: new Date().toISOString(),
+    dependencies,
     duration,
     env: {
+      nodeEnv: c.env.NODE_ENV || 'unknown',
       runtime: 'cloudflare-workers',
       version: globalThis.navigator?.userAgent || 'unknown',
-      nodeEnv: c.env.NODE_ENV || 'unknown',
     },
-    dependencies,
+    ok: status === HealthStatuses.HEALTHY,
+    status,
     summary,
+    timestamp: new Date().toISOString(),
   };
 
   const response: ApiResponse<typeof data> = {
-    success: true,
     data,
     meta: extractResponseMetadata(c),
+    success: true,
   };
 
   // Return appropriate HTTP status code
@@ -755,9 +756,9 @@ export function detailedHealth(
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
  */
 export const SSE_HEADERS = {
-  'Content-Type': 'text/event-stream',
   'Cache-Control': 'no-cache, no-transform',
   'Connection': 'keep-alive',
+  'Content-Type': 'text/event-stream',
   'X-Accel-Buffering': 'no', // Disable nginx buffering
 } as const;
 
@@ -768,8 +769,8 @@ export const SSE_HEADERS = {
  * Build SSE metadata headers from stream metadata
  * @internal
  */
-function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): { [key: string]: string } {
-  const headers: { [key: string]: string } = {};
+function buildSSEMetadataHeaders(metadata: SSEStreamMetadata): Record<string, string> {
+  const headers: Record<string, string> = {};
 
   if (metadata.streamId !== undefined) {
     headers['X-Stream-Id'] = metadata.streamId;
@@ -835,11 +836,11 @@ export function sse(
   const metadataHeaders = metadata ? buildSSEMetadataHeaders(metadata) : {};
 
   return new Response(stream, {
-    status: HttpStatusCodes.OK,
     headers: {
       ...SSE_HEADERS,
       ...metadataHeaders,
     },
+    status: HttpStatusCodes.OK,
   });
 }
 
@@ -866,8 +867,8 @@ export function noContentWithHeaders(
   const metadataHeaders = metadata ? buildSSEMetadataHeaders(metadata) : {};
 
   return new Response(null, {
-    status: HttpStatusCodes.NO_CONTENT,
     headers: metadataHeaders,
+    status: HttpStatusCodes.NO_CONTENT,
   });
 }
 
@@ -876,9 +877,9 @@ export function noContentWithHeaders(
  * Used for streaming JSON text (round summaries, object generation)
  */
 export const TEXT_STREAM_HEADERS = {
-  'Content-Type': 'text/plain; charset=utf-8',
   'Cache-Control': 'no-cache',
   'Connection': 'keep-alive',
+  'Content-Type': 'text/plain; charset=utf-8',
   'X-Accel-Buffering': 'no', // Disable nginx buffering
 } as const;
 
@@ -889,8 +890,8 @@ export const TEXT_STREAM_HEADERS = {
  * Build text stream metadata headers
  * @internal
  */
-function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): { [key: string]: string } {
-  const headers: { [key: string]: string } = {};
+function buildTextStreamMetadataHeaders(metadata: TextStreamMetadata): Record<string, string> {
+  const headers: Record<string, string> = {};
 
   if (metadata.streamId !== undefined) {
     headers['X-Stream-Id'] = metadata.streamId;
@@ -937,11 +938,11 @@ export function textStream(
   const metadataHeaders = metadata ? buildTextStreamMetadataHeaders(metadata) : {};
 
   return new Response(stream, {
-    status: HttpStatusCodes.OK,
     headers: {
       ...TEXT_STREAM_HEADERS,
       ...metadataHeaders,
     },
+    status: HttpStatusCodes.OK,
   });
 }
 
@@ -959,11 +960,11 @@ export function textComplete(
   const metadataHeaders = metadata ? buildTextStreamMetadataHeaders(metadata) : {};
 
   return new Response(content, {
-    status: HttpStatusCodes.OK,
     headers: {
       ...TEXT_STREAM_HEADERS,
       ...metadataHeaders,
     },
+    status: HttpStatusCodes.OK,
   });
 }
 
@@ -1008,8 +1009,8 @@ export function jsonRpc<T>(
   error?: { code: number; message: string; data?: unknown },
 ): Response {
   const response = {
-    jsonrpc: '2.0' as const,
     id,
+    jsonrpc: '2.0' as const,
     ...(error ? { error } : { result }),
   };
 
@@ -1038,11 +1039,11 @@ export function polling(
   },
 ): Response {
   const response: ApiResponse<typeof data> = {
-    success: true,
     data,
     meta: {
       ...extractResponseMetadata(c),
     },
+    success: true,
   };
 
   return c.json(response, HttpStatusCodes.ACCEPTED);
@@ -1056,55 +1057,55 @@ export function polling(
  * Consolidated response helpers for easy importing
  */
 export const Responses = {
-  // Success responses
-  ok,
-  created,
   accepted,
-  noContent,
-  paginated,
-  cursorPaginated,
-  collection,
-
-  // Health checks
-  health,
-  detailedHealth,
-
-  // Error responses
-  validationError,
   authenticationError,
   authorizationError,
-  notFound,
-  conflict,
-  rateLimitExceeded,
-  externalServiceError,
-  databaseError,
   badRequest,
-  internalServerError,
-  serviceUnavailable,
+  collection,
+  conflict,
+  created,
 
-  // Specialized responses
-  raw,
-  jsonRpc,
-  polling,
-
-  // SSE/Streaming responses
-  sse,
-  noContentWithHeaders,
-  textStream,
-  textComplete,
-
+  cursorPaginated,
   // Utilities
   customResponse,
+
+  databaseError,
+  detailedHealth,
+  externalServiceError,
+  // Health checks
+  health,
+  internalServerError,
+  jsonRpc,
+  noContent,
+  noContentWithHeaders,
+  notFound,
+  // Success responses
+  ok,
+  paginated,
+
+  polling,
+  rateLimitExceeded,
+  // Specialized responses
+  raw,
+
   redirect,
+  serviceUnavailable,
+  // SSE/Streaming responses
+  sse,
+  // Constants
+  SSE_HEADERS,
+
+  TEXT_STREAM_HEADERS,
+  textComplete,
+
+  textStream,
+  validateErrorResponse,
+  validatePaginatedResponse,
 
   // Validators
   validateSuccessResponse,
-  validatePaginatedResponse,
-  validateErrorResponse,
-
-  // Constants
-  SSE_HEADERS,
-  TEXT_STREAM_HEADERS,
+  // Error responses
+  validationError,
 } as const;
 
 // ============================================================================

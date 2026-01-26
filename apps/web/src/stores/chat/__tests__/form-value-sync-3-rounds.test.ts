@@ -36,18 +36,18 @@ import { createChatStore } from '../store';
 
 function createMockThread(overrides: Partial<ChatThread> = {}): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORMING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORMING,
+    slug: 'test-thread',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -55,14 +55,14 @@ function createMockThread(overrides: Partial<ChatThread> = {}): ChatThread {
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -83,7 +83,7 @@ class NetworkTracker {
   private calls: NetworkCall[] = [];
 
   log(type: NetworkCall['type'], round: number, payload?: PatchPayload) {
-    this.calls.push({ type, round, payload });
+    this.calls.push({ payload, round, type });
   }
 
   getCallsForRound(round: number): NetworkCall[] {
@@ -126,7 +126,7 @@ describe('form Value Sync After PATCH', () => {
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
       expect(store.getState().selectedMode).toBe(ChatModes.BRAINSTORMING);
-      expect(store.getState().hasPendingConfigChanges).toBe(false);
+      expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
       // Simulate PATCH response with updated mode
       const updatedThread = createMockThread({ mode: ChatModes.ANALYZING });
@@ -140,14 +140,14 @@ describe('form Value Sync After PATCH', () => {
       const thread = createMockThread({ enableWebSearch: false });
       store.getState().initializeThread(thread, createMockParticipants(), []);
 
-      expect(store.getState().enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeFalsy();
 
       // Simulate PATCH response with updated enableWebSearch
       const updatedThread = createMockThread({ enableWebSearch: true });
       store.getState().setThread(updatedThread);
 
       // enableWebSearch should sync to thread value
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
     });
 
     it('preserves selectedMode when hasPendingConfigChanges is true', () => {
@@ -181,7 +181,7 @@ describe('form Value Sync After PATCH', () => {
       store.getState().setThread(serverThread);
 
       // User's selection should be preserved
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
     });
   });
 
@@ -268,8 +268,8 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
 
     // Update thread from "server response"
     const updatedThread = createMockThread({
-      mode: options.changeMode || currentMode || ChatModes.BRAINSTORMING,
       enableWebSearch: options.changeWebSearch ?? currentWebSearch,
+      mode: options.changeMode || currentMode || ChatModes.BRAINSTORMING,
     });
     state.setThread(updatedThread);
 
@@ -291,9 +291,9 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
 
     // Verify expectations
     if (options.expectChangelog) {
-      expect(network.hasChangelog(roundNumber)).toBe(true);
+      expect(network.hasChangelog(roundNumber)).toBeTruthy();
     } else {
-      expect(network.hasChangelog(roundNumber)).toBe(false);
+      expect(network.hasChangelog(roundNumber)).toBeFalsy();
     }
 
     // Verify order
@@ -346,14 +346,14 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
     });
 
     // Verify form values synced
-    expect(store.getState().enableWebSearch).toBe(true);
-    expect(store.getState().thread?.enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
+    expect(store.getState().thread?.enableWebSearch).toBeTruthy();
   });
 
   it('full 3-round scenario: R1 change, R2 no change, R3 change', async () => {
     const thread = createMockThread({
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
     });
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -384,15 +384,15 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
 
     // All values should be in sync
     expect(store.getState().selectedMode).toBe(ChatModes.ANALYZING);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().thread?.mode).toBe(ChatModes.ANALYZING);
-    expect(store.getState().thread?.enableWebSearch).toBe(true);
+    expect(store.getState().thread?.enableWebSearch).toBeTruthy();
   });
 
   it('full 3-round scenario: changes every round', async () => {
     const thread = createMockThread({
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
     });
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -418,9 +418,9 @@ describe('3-Round E2E: PATCH → changelog → streaming', () => {
 
     // All values should be in sync
     expect(store.getState().selectedMode).toBe(ChatModes.DEBATING);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().thread?.mode).toBe(ChatModes.DEBATING);
-    expect(store.getState().thread?.enableWebSearch).toBe(true);
+    expect(store.getState().thread?.enableWebSearch).toBeTruthy();
   });
 });
 
@@ -458,7 +458,7 @@ describe('stale Closure Prevention', () => {
 
     // No false change detection
     expect(freshSelectedMode).toBe(freshThreadMode);
-    expect(freshSelectedMode === freshThreadMode).toBe(true);
+    expect(freshSelectedMode === freshThreadMode).toBeTruthy();
   });
 
   it('after round 2 with web search toggle, round 3 should not detect false change', () => {
@@ -475,8 +475,8 @@ describe('stale Closure Prevention', () => {
     store.getState().setThread(round2Thread);
 
     // Both should be in sync
-    expect(store.getState().enableWebSearch).toBe(false);
-    expect(store.getState().thread?.enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
+    expect(store.getState().thread?.enableWebSearch).toBeFalsy();
 
     // Round 3: Check change detection
     const freshEnableWebSearch = store.getState().enableWebSearch;
@@ -488,8 +488,8 @@ describe('stale Closure Prevention', () => {
 
   it('rEGRESSION: round 3 with same values should NOT include mode/enableWebSearch in PATCH', () => {
     const thread = createMockThread({
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
     });
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
@@ -509,15 +509,17 @@ describe('stale Closure Prevention', () => {
     const webSearchChanged = freshThreadWebSearch !== freshEnableWebSearch;
 
     // Should NOT detect changes
-    expect(modeChanged).toBe(false);
-    expect(webSearchChanged).toBe(false);
+    expect(modeChanged).toBeFalsy();
+    expect(webSearchChanged).toBeFalsy();
 
     // PATCH payload should NOT include mode or enableWebSearch
     const patchPayload: PatchPayload = {};
-    if (modeChanged)
+    if (modeChanged) {
       patchPayload.mode = freshSelectedMode;
-    if (webSearchChanged)
+    }
+    if (webSearchChanged) {
       patchPayload.enableWebSearch = freshEnableWebSearch;
+    }
 
     expect(patchPayload).toEqual({});
   });
@@ -544,20 +546,20 @@ describe('pre-Search Blocking During Config Changes', () => {
     const thread = createMockThread();
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
-    expect(isPreSearchBlocked()).toBe(false);
+    expect(isPreSearchBlocked()).toBeFalsy();
 
     store.getState().setConfigChangeRoundNumber(1);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
   });
 
   it('pre-search blocked when isWaitingForChangelog is true', () => {
     const thread = createMockThread();
     store.getState().initializeThread(thread, createMockParticipants(), []);
 
-    expect(isPreSearchBlocked()).toBe(false);
+    expect(isPreSearchBlocked()).toBeFalsy();
 
     store.getState().setIsWaitingForChangelog(true);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
   });
 
   it('pre-search unblocked only when BOTH flags cleared', () => {
@@ -567,15 +569,15 @@ describe('pre-Search Blocking During Config Changes', () => {
     // Set both flags
     store.getState().setConfigChangeRoundNumber(1);
     store.getState().setIsWaitingForChangelog(true);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
 
     // Clear one flag - still blocked
     store.getState().setConfigChangeRoundNumber(null);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
 
     // Clear both - unblocked
     store.getState().setIsWaitingForChangelog(false);
-    expect(isPreSearchBlocked()).toBe(false);
+    expect(isPreSearchBlocked()).toBeFalsy();
   });
 
   it('round 3 with web search: pre-search waits for changelog', () => {
@@ -587,34 +589,34 @@ describe('pre-Search Blocking During Config Changes', () => {
 
     // Step 1: Set configChangeRoundNumber BEFORE PATCH
     store.getState().setConfigChangeRoundNumber(3);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
 
     // Step 2: Add pre-search placeholder (blocked)
     store.getState().addPreSearch({
-      id: 'presearch-r3',
-      threadId: 'thread-123',
-      roundNumber: 3,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Round 3 query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r3',
+      roundNumber: 3,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Round 3 query',
     });
 
     // Pre-search should NOT execute while blocked
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
 
     // Step 3: PATCH completes, set isWaitingForChangelog
     store.getState().setIsWaitingForChangelog(true);
-    expect(isPreSearchBlocked()).toBe(true);
+    expect(isPreSearchBlocked()).toBeTruthy();
 
     // Step 4: Changelog completes, clear flags
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
 
     // NOW pre-search can execute
-    expect(isPreSearchBlocked()).toBe(false);
+    expect(isPreSearchBlocked()).toBeFalsy();
   });
 });
 
@@ -714,6 +716,6 @@ describe('edge Cases and Blind Spots', () => {
 
     // Flags should be preserved
     expect(store.getState().configChangeRoundNumber).toBe(3);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
   });
 });

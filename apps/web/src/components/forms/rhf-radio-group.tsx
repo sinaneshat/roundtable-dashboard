@@ -21,8 +21,8 @@ type RHFRadioGroupProps<TFieldValues extends FieldValues = FieldValues> = {
 export function RHFRadioGroup<TFieldValues extends FieldValues = FieldValues>({
   name,
   options,
-  title,
   required,
+  title,
 }: RHFRadioGroupProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

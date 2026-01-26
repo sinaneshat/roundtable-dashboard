@@ -51,7 +51,7 @@ describe('useLayoutEffect vs useEffect timing', () => {
   });
 
   it('refs updated in useLayoutEffect are available in useEffect', () => {
-    const capturedValues: Array<{ refValue: number; stateValue: number }> = [];
+    const capturedValues: { refValue: number; stateValue: number }[] = [];
 
     const { result } = renderHook(() => {
       const [value, setValue] = useState(0);
@@ -70,7 +70,7 @@ describe('useLayoutEffect vs useEffect timing', () => {
         });
       }, [value]);
 
-      return { setValue, value, refValue };
+      return { refValue, setValue, value };
     });
 
     // Initial render - ref should match state in useEffect
@@ -86,7 +86,7 @@ describe('useLayoutEffect vs useEffect timing', () => {
   });
 
   it('wITHOUT useLayoutEffect: ref can be stale in useEffect', () => {
-    const capturedValues: Array<{ refValue: number; stateValue: number }> = [];
+    const capturedValues: { refValue: number; stateValue: number }[] = [];
 
     const { result } = renderHook(() => {
       const [value, setValue] = useState(0);
@@ -107,7 +107,7 @@ describe('useLayoutEffect vs useEffect timing', () => {
         });
       }, [value]);
 
-      return { setValue, value, refValue };
+      return { refValue, setValue, value };
     });
 
     // Initial render - both effects run, order might vary
@@ -140,7 +140,7 @@ describe('sendMessageRef stale function scenario', () => {
       });
     };
 
-    const { result, rerender } = renderHook(
+    const { rerender, result } = renderHook(
       ({ threadId }: { threadId: string | undefined }) => {
         // Simulates useChat creating new sendMessage when id changes
         const [sendMessage] = useState(() => createSendMessage(threadId));
@@ -201,7 +201,7 @@ describe('provider ref synchronization', () => {
         // In real code, this would call sendMessageRef.current(pendingMessage)
       }, [threadId]); // Runs when threadId changes
 
-      return { setThreadId, sendMessageRef, threadId };
+      return { sendMessageRef, setThreadId, threadId };
     });
 
     // Clear initial logs

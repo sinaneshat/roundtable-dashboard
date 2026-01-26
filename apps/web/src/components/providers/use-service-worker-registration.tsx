@@ -53,8 +53,9 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
     let updateFoundHandler: (() => void) | null = null;
 
     const handleControllerChange = () => {
-      if (refreshing)
+      if (refreshing) {
         return;
+      }
       refreshing = true;
       window.location.reload();
     };
@@ -80,8 +81,9 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
         // and we lose reference to it after this callback completes
         const handleUpdateFound = () => {
           const newWorker = registration.installing;
-          if (!newWorker)
+          if (!newWorker) {
             return;
+          }
 
           const handleStateChange = () => {
             // Worker is installed and waiting - notify user
@@ -120,8 +122,8 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
         if ('requestIdleCallback' in window) {
           requestIdleCallback(() => {
             navigator.serviceWorker.controller?.postMessage({
-              type: 'WARM_CACHE',
               routes: ['/auth/sign-in', '/chat/pricing', '/legal/terms', '/legal/privacy'],
+              type: 'WARM_CACHE',
             });
           }, { timeout: 5000 });
         }
@@ -159,5 +161,5 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
     };
   }, [waitingWorker]);
 
-  return { updateAvailable, applyUpdate, waitingWorker };
+  return { applyUpdate, updateAvailable, waitingWorker };
 }

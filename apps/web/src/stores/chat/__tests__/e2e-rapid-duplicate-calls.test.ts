@@ -51,19 +51,15 @@ function createCallTracker(): CallTracker {
   let currentTick = 0;
 
   return {
-    calls,
-    currentTick,
-    recordCall: (type: TestCallType, args?: Record<string, string | number | boolean>) => {
-      calls.push({
-        type,
-        timestamp: Date.now(),
-        tick: currentTick,
-        args,
-      });
-    },
     advanceTick: () => {
       currentTick++;
     },
+    calls,
+    clear: () => {
+      calls.length = 0;
+      currentTick = 0;
+    },
+    currentTick,
     getCallsInTick: (tick: number) => {
       return calls.filter(c => c.tick === tick);
     },
@@ -86,9 +82,13 @@ function createCallTracker(): CallTracker {
 
       return duplicates;
     },
-    clear: () => {
-      calls.length = 0;
-      currentTick = 0;
+    recordCall: (type: TestCallType, args?: Record<string, string | number | boolean>) => {
+      calls.push({
+        args,
+        tick: currentTick,
+        timestamp: Date.now(),
+        type,
+      });
     },
   };
 }
@@ -422,11 +422,11 @@ describe('moderator Trigger: tryMarkModeratorCreated Atomic Guard', () => {
     // Second attempt (duplicate)
     const didMark2 = store.getState().tryMarkModeratorCreated(roundNumber);
     if (didMark2) {
-      tracker.recordCall(TestCallTypes.MODERATOR_CREATE, { roundNumber, duplicate: true });
+      tracker.recordCall(TestCallTypes.MODERATOR_CREATE, { duplicate: true, roundNumber });
     }
 
-    expect(didMark1).toBe(true);
-    expect(didMark2).toBe(false);
+    expect(didMark1).toBeTruthy();
+    expect(didMark2).toBeFalsy();
     expect(tracker.calls).toHaveLength(1); // Only ONE moderator creation
   });
 
@@ -444,8 +444,8 @@ describe('moderator Trigger: tryMarkModeratorCreated Atomic Guard', () => {
       tracker.recordCall('moderator-create', { roundNumber: 1 });
     }
 
-    expect(didMarkR0).toBe(true);
-    expect(didMarkR1).toBe(true);
+    expect(didMarkR0).toBeTruthy();
+    expect(didMarkR1).toBeTruthy();
     expect(tracker.calls).toHaveLength(2); // Two separate rounds
   });
 
@@ -455,8 +455,8 @@ describe('moderator Trigger: tryMarkModeratorCreated Atomic Guard', () => {
     const firstAttempt = store.getState().tryMarkModeratorCreated(0);
     const secondAttempt = store.getState().tryMarkModeratorCreated(0);
 
-    expect(firstAttempt).toBe(true);
-    expect(secondAttempt).toBe(false);
+    expect(firstAttempt).toBeTruthy();
+    expect(secondAttempt).toBeFalsy();
   });
 });
 
@@ -473,14 +473,14 @@ describe('pre-Search Execution: tryMarkPreSearchTriggered Atomic Guard', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch_r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      userQuery: 'Test query',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: `presearch_r${roundNumber}`,
+      roundNumber,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // First attempt
@@ -492,11 +492,11 @@ describe('pre-Search Execution: tryMarkPreSearchTriggered Atomic Guard', () => {
     // Second attempt (duplicate)
     const didMark2 = store.getState().tryMarkPreSearchTriggered(roundNumber);
     if (didMark2) {
-      tracker.recordCall(TestCallTypes.PRE_SEARCH_EXECUTE, { roundNumber, duplicate: true });
+      tracker.recordCall(TestCallTypes.PRE_SEARCH_EXECUTE, { duplicate: true, roundNumber });
     }
 
-    expect(didMark1).toBe(true);
-    expect(didMark2).toBe(false);
+    expect(didMark1).toBeTruthy();
+    expect(didMark2).toBeFalsy();
     expect(tracker.calls).toHaveLength(1); // Only ONE pre-search execution
   });
 
@@ -505,25 +505,25 @@ describe('pre-Search Execution: tryMarkPreSearchTriggered Atomic Guard', () => {
     const tracker = createCallTracker();
 
     store.getState().addPreSearch({
-      id: 'presearch_r0',
-      threadId: 'thread-123',
-      roundNumber: 0,
-      userQuery: 'Query 1',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Query 1',
     });
 
     store.getState().addPreSearch({
-      id: 'presearch_r1',
-      threadId: 'thread-123',
-      roundNumber: 1,
-      userQuery: 'Query 2',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r1',
+      roundNumber: 1,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Query 2',
     });
 
     const didMarkR0 = store.getState().tryMarkPreSearchTriggered(0);
@@ -536,8 +536,8 @@ describe('pre-Search Execution: tryMarkPreSearchTriggered Atomic Guard', () => {
       tracker.recordCall('pre-search-execute', { roundNumber: 1 });
     }
 
-    expect(didMarkR0).toBe(true);
-    expect(didMarkR1).toBe(true);
+    expect(didMarkR0).toBeTruthy();
+    expect(didMarkR1).toBeTruthy();
     expect(tracker.calls).toHaveLength(2);
   });
 });
@@ -573,7 +573,7 @@ describe('stop Button: Prevent Duplicate Stop Actions', () => {
     handleStopClick();
 
     expect(tracker.calls).toHaveLength(1);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should verify isStreaming flag prevents double-stop', () => {
@@ -587,8 +587,8 @@ describe('stop Button: Prevent Duplicate Stop Actions', () => {
     store.getState().setIsStreaming(false); // Second call
     const isStreamingAfterSecondStop = store.getState().isStreaming;
 
-    expect(isStreamingAfterFirstStop).toBe(false);
-    expect(isStreamingAfterSecondStop).toBe(false);
+    expect(isStreamingAfterFirstStop).toBeFalsy();
+    expect(isStreamingAfterSecondStop).toBeFalsy();
   });
 
   it('should allow stop button to work again after new streaming starts', () => {
@@ -632,7 +632,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
     });
 
     const handleSubmit = () => {
-      const { pendingMessage, isStreaming, inputValue } = store.getState();
+      const { inputValue, isStreaming, pendingMessage } = store.getState();
 
       // Guard: Block if already submitting or streaming
       if (pendingMessage !== null || isStreaming || !inputValue.trim()) {
@@ -662,7 +662,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
       && !store.getState().isStreaming
       && store.getState().inputValue.trim().length > 0;
 
-    expect(canSubmit1).toBe(true);
+    expect(canSubmit1).toBeTruthy();
 
     // Set pending
     store.setState({ pendingMessage: 'Test' });
@@ -671,7 +671,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
       && !store.getState().isStreaming
       && store.getState().inputValue.trim().length > 0;
 
-    expect(canSubmit2).toBe(false);
+    expect(canSubmit2).toBeFalsy();
   });
 
   it('should allow re-submission after previous message sent', () => {
@@ -692,7 +692,7 @@ describe('message Submission: Rapid Submit Prevention', () => {
     tracker.advanceTick();
 
     // Clear pending (message sent)
-    store.setState({ pendingMessage: null, inputValue: '' });
+    store.setState({ inputValue: '', pendingMessage: null });
 
     // Tick 1: Second submission
     store.setState({ inputValue: 'Message 2' });
@@ -749,7 +749,7 @@ describe('subscription Cascade Prevention', () => {
 
     // Update messages - new reference
     const newMessages = [
-      createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 }),
     ];
     store.getState().setMessages(newMessages);
     const messagesAfterUpdate = store.getState().messages;
@@ -797,7 +797,7 @@ describe('effect Re-entry Detection', () => {
     const duplicates = tracker.getDuplicatesInTick(0);
 
     expect(callsInTick).toHaveLength(2);
-    expect(duplicates.has(TestCallTypes.EFFECT_RUN)).toBe(true);
+    expect(duplicates.has(TestCallTypes.EFFECT_RUN)).toBeTruthy();
   });
 
   it('should use ref to prevent effect re-entry', () => {
@@ -879,8 +879,9 @@ describe('comprehensive Rapid Call Detection', () => {
     const allCalls = tracker.calls.filter(c => c.type === TestCallTypes.RAPID_CALL);
     const firstCall = allCalls[0];
     const lastCall = allCalls[allCalls.length - 1];
-    if (!firstCall || !lastCall)
+    if (!firstCall || !lastCall) {
       throw new Error('expected at least two calls');
+    }
     const timeRange = lastCall.timestamp - firstCall.timestamp;
 
     expect(allCalls).toHaveLength(3);
@@ -985,16 +986,16 @@ describe('store Action Call Frequency', () => {
     // Call multiple times
     store.getState().setMessages([]);
     store.getState().setMessages([
-      createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
     ]);
     store.getState().setMessages([
-      createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'a1',
         content: 'Response',
-        roundNumber: 0,
+        id: 'a1',
         participantId: 'p1',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ]);
 
@@ -1014,7 +1015,7 @@ describe('store Action Call Frequency', () => {
 
     const duplicates = tracker.getDuplicatesInTick(0);
 
-    expect(duplicates.has(TestCallTypes.SET_STREAMING_ROUND_NUMBER)).toBe(true);
+    expect(duplicates.has(TestCallTypes.SET_STREAMING_ROUND_NUMBER)).toBeTruthy();
   });
 });
 
@@ -1037,12 +1038,12 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
 
     // Setup
     store.setState({
+      enableWebSearch: false,
+      inputValue: 'Test question',
       selectedParticipants: [
         { modelId: 'gpt-4', priority: 0 },
         { modelId: 'claude-3', priority: 1 },
       ],
-      inputValue: 'Test question',
-      enableWebSearch: false,
     });
 
     // Tick 0: Submit message
@@ -1073,17 +1074,17 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
 
     // Tick 2: First participant completes
     const userMsg = createTestUserMessage({
-      id: 'thread-123_r0_user',
       content: 'Test question',
+      id: 'thread-123_r0_user',
       roundNumber: 0,
     });
     const p0Msg = createTestAssistantMessage({
-      id: 'thread-123_r0_p0',
       content: 'Response from GPT-4',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-123_r0_p0',
       participantId: 'p0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0Msg]);
@@ -1092,12 +1093,12 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
 
     // Tick 3: Second participant completes
     const p1Msg = createTestAssistantMessage({
-      id: 'thread-123_r0_p1',
       content: 'Response from Claude',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-123_r0_p1',
       participantId: 'p1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0Msg, p1Msg]);
@@ -1118,10 +1119,10 @@ describe('complete E2E: First Round with Rapid Call Detection', () => {
 
     // Tick 5: Moderator completes
     const modMsg = createTestModeratorMessage({
-      id: 'thread-123_r0_moderator',
       content: 'Moderator summary',
-      roundNumber: 0,
       finishReason: FinishReasons.STOP,
+      id: 'thread-123_r0_moderator',
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMsg, p0Msg, p1Msg, modMsg]);

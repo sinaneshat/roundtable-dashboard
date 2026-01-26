@@ -16,21 +16,21 @@ export const SetCreditsRequestSchema = z.object({
 export type SetCreditsRequest = z.infer<typeof SetCreditsRequestSchema>;
 
 const SetCreditsPayloadSchema = z.object({
-  balance: z.number().openapi({
-    description: 'Current credit balance',
-    example: 10000,
-  }),
-  reserved: z.number().openapi({
-    description: 'Reserved credits',
-    example: 0,
-  }),
   available: z.number().openapi({
     description: 'Available credits',
+    example: 10000,
+  }),
+  balance: z.number().openapi({
+    description: 'Current credit balance',
     example: 10000,
   }),
   planType: z.string().openapi({
     description: 'User plan type',
     example: 'free',
+  }),
+  reserved: z.number().openapi({
+    description: 'Reserved credits',
+    example: 0,
   }),
 }).openapi('SetCreditsPayload');
 

@@ -33,8 +33,8 @@ export const TicketExpirationSchema = z.enum([
 export type TicketExpiration = z.infer<typeof TicketExpirationSchema>;
 
 export const TicketExpirations = {
-  FIVE_MIN: '5min' as const,
   FIFTEEN_MIN: '15min' as const,
+  FIVE_MIN: '5min' as const,
 } as const;
 
 export const DEFAULT_TICKET_EXPIRATION_MS = 5 * 60 * 1000;
@@ -49,51 +49,51 @@ const JWT_AUDIENCE = 'roundtable:upload';
 // ============================================================================
 
 export const UploadTicketSchema = z.object({
-  ticketId: z.string(),
-  userId: z.string(),
-  filename: z.string(),
-  mimeType: z.string(),
-  maxFileSize: z.number(),
-  expiresAt: z.number(),
-  used: z.boolean(),
   createdAt: z.number(),
+  expiresAt: z.number(),
+  filename: z.string(),
+  maxFileSize: z.number(),
+  mimeType: z.string(),
+  ticketId: z.string(),
+  used: z.boolean(),
+  userId: z.string(),
 }).strict();
 
 export type UploadTicket = z.infer<typeof UploadTicketSchema>;
 
 export const CreateTicketOptionsSchema = z.object({
-  userId: z.string(),
-  filename: z.string(),
-  mimeType: z.string(),
-  maxFileSize: z.number(),
   expirationMs: z.number().optional(),
+  filename: z.string(),
+  maxFileSize: z.number(),
+  mimeType: z.string(),
+  userId: z.string(),
 }).strict();
 
 export type CreateTicketOptions = z.infer<typeof CreateTicketOptionsSchema>;
 
 export const ValidateTicketResultSchema = z.discriminatedUnion('valid', [
   z.object({
-    valid: z.literal(true),
     ticket: UploadTicketSchema,
+    valid: z.literal(true),
   }),
   z.object({
-    valid: z.literal(false),
     error: z.string(),
+    valid: z.literal(false),
   }),
 ]);
 
 export type ValidateTicketResult = z.infer<typeof ValidateTicketResultSchema>;
 
 const JwtPayloadSchema = z.object({
+  aud: z.union([z.string(), z.array(z.string())]).optional(),
+  exp: z.number().optional(),
+  fn: z.string(),
+  iat: z.number().optional(),
+  iss: z.string().optional(),
+  ms: z.number(),
+  mt: z.string(),
   tid: z.string(),
   uid: z.string(),
-  fn: z.string(),
-  mt: z.string(),
-  ms: z.number(),
-  iat: z.number().optional(),
-  exp: z.number().optional(),
-  iss: z.string().optional(),
-  aud: z.union([z.string(), z.array(z.string())]).optional(),
 }).strict();
 
 type JwtPayload = z.infer<typeof JwtPayloadSchema>;
@@ -120,11 +120,11 @@ export async function createUploadTicket(
   options: CreateTicketOptions,
 ): Promise<{ ticketId: string; token: string; expiresAt: number }> {
   const {
-    userId,
-    filename,
-    mimeType,
-    maxFileSize,
     expirationMs = DEFAULT_TICKET_EXPIRATION_MS,
+    filename,
+    maxFileSize,
+    mimeType,
+    userId,
   } = options;
 
   const secret = c.env.BETTER_AUTH_SECRET;
@@ -141,11 +141,11 @@ export async function createUploadTicket(
   const expiresAt = Date.now() + actualExpiration;
 
   const token = await new SignJWT({
+    fn: filename,
+    ms: maxFileSize,
+    mt: mimeType,
     tid: ticketId,
     uid: userId,
-    fn: filename,
-    mt: mimeType,
-    ms: maxFileSize,
   } satisfies Omit<JwtPayload, 'iat' | 'exp' | 'iss' | 'aud'>)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -155,14 +155,14 @@ export async function createUploadTicket(
     .sign(getSecretKey(secret));
 
   const ticket: UploadTicket = {
-    ticketId,
-    userId,
-    filename,
-    mimeType,
-    maxFileSize,
-    expiresAt,
-    used: false,
     createdAt: Date.now(),
+    expiresAt,
+    filename,
+    maxFileSize,
+    mimeType,
+    ticketId,
+    used: false,
+    userId,
   };
 
   const kv = c.env.KV;
@@ -174,7 +174,7 @@ export async function createUploadTicket(
     ).catch(() => {});
   }
 
-  return { ticketId, token, expiresAt };
+  return { expiresAt, ticketId, token };
 }
 
 /**
@@ -196,14 +196,14 @@ async function markTicketUsedAtomic(
     // No KV entry - create one marked as used to prevent replay
     // This handles edge case where KV wasn't available during ticket creation
     const minimalTicket: UploadTicket = {
-      ticketId,
-      userId: '',
-      filename: '',
-      mimeType: '',
-      maxFileSize: 0,
-      expiresAt: Date.now() + 60000,
-      used: true,
       createdAt: Date.now(),
+      expiresAt: Date.now() + 60000,
+      filename: '',
+      maxFileSize: 0,
+      mimeType: '',
+      ticketId,
+      used: true,
+      userId: '',
     };
     await kv.put(kvKey, JSON.stringify(minimalTicket), { expirationTtl: 60 });
     return { alreadyUsed: false };
@@ -232,56 +232,56 @@ export async function validateUploadTicket(
 ): Promise<ValidateTicketResult> {
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
-    return { valid: false, error: 'Server configuration error' };
+    return { error: 'Server configuration error', valid: false };
   }
 
   let payload: JwtPayload;
   try {
     const result = await jwtVerify(token, getSecretKey(secret), {
-      issuer: JWT_ISSUER,
       audience: JWT_AUDIENCE,
+      issuer: JWT_ISSUER,
     });
 
     const parsed = JwtPayloadSchema.safeParse(result.payload);
     if (!parsed.success) {
-      return { valid: false, error: 'Invalid token payload' };
+      return { error: 'Invalid token payload', valid: false };
     }
     payload = parsed.data;
   } catch (error) {
     if (error instanceof Error) {
       if (error.message.includes('expired')) {
-        return { valid: false, error: 'Ticket has expired' };
+        return { error: 'Ticket has expired', valid: false };
       }
       if (error.message.includes('signature')) {
-        return { valid: false, error: 'Invalid signature' };
+        return { error: 'Invalid signature', valid: false };
       }
     }
-    return { valid: false, error: 'Invalid token' };
+    return { error: 'Invalid token', valid: false };
   }
 
   if (payload.uid !== userId) {
-    return { valid: false, error: 'User mismatch' };
+    return { error: 'User mismatch', valid: false };
   }
 
   // SECURITY: Atomically mark ticket as used BEFORE returning valid
   // Prevents race condition where concurrent uploads can use same ticket
   const { alreadyUsed } = await markTicketUsedAtomic(c.env.KV, payload.tid);
   if (alreadyUsed) {
-    return { valid: false, error: 'Ticket has already been used' };
+    return { error: 'Ticket has already been used', valid: false };
   }
 
   const ticket: UploadTicket = {
-    ticketId: payload.tid,
-    userId: payload.uid,
-    filename: payload.fn,
-    mimeType: payload.mt,
-    maxFileSize: payload.ms,
-    expiresAt: (payload.exp ?? 0) * 1000,
-    used: true, // Marked as used
     createdAt: (payload.iat ?? 0) * 1000,
+    expiresAt: (payload.exp ?? 0) * 1000,
+    filename: payload.fn,
+    maxFileSize: payload.ms,
+    mimeType: payload.mt,
+    ticketId: payload.tid,
+    used: true, // Marked as used
+    userId: payload.uid,
   };
 
-  return { valid: true, ticket };
+  return { ticket, valid: true };
 }
 
 export async function markTicketUsed(

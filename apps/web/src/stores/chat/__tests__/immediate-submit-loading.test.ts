@@ -101,7 +101,7 @@ describe('immediate Submit Loading - waitingToStartStreaming Flag', () => {
     const store = createChatStore();
 
     // Initial state - input should be enabled
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // Simulate what happens at the START of handleUpdateThreadAndSend
     // This is the FIX: set waitingToStartStreaming IMMEDIATELY
@@ -110,18 +110,18 @@ describe('immediate Submit Loading - waitingToStartStreaming Flag', () => {
     // Verify input is now blocked
     const state = store.getState();
     const isBlocked = calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false, // Mutation hasn't started yet
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false, // Mutation hasn't started yet
+      waitingToStartStreaming: state.waitingToStartStreaming,
     });
 
-    expect(isBlocked).toBe(true);
-    expect(state.waitingToStartStreaming).toBe(true);
+    expect(isBlocked).toBeTruthy();
+    expect(state.waitingToStartStreaming).toBeTruthy();
   });
 
   it('waitingToStartStreaming shows loading spinner immediately', () => {
@@ -136,7 +136,7 @@ describe('immediate Submit Loading - waitingToStartStreaming Flag', () => {
       waitingToStartStreaming: state.waitingToStartStreaming,
     });
 
-    expect(showSpinner).toBe(true);
+    expect(showSpinner).toBeTruthy();
   });
 
   it('waitingToStartStreaming is reset on error', () => {
@@ -144,27 +144,27 @@ describe('immediate Submit Loading - waitingToStartStreaming Flag', () => {
 
     // Set loading state
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Simulate error recovery (as done in catch block)
     store.getState().setWaitingToStartStreaming(false);
 
     const state = store.getState();
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.waitingToStartStreaming).toBeFalsy();
 
     // Input should be enabled again
     const isBlocked = calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
+      waitingToStartStreaming: false,
     });
 
-    expect(isBlocked).toBe(false);
+    expect(isBlocked).toBeFalsy();
   });
 });
 
@@ -187,21 +187,21 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Input should be blocked
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
 
     // Spinner should show
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: state.waitingToStartStreaming,
-    })).toBe(true);
+    })).toBeTruthy();
   });
 
   it('phase 2: API request in progress - loading continues', () => {
@@ -218,21 +218,21 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Even with mutation pending, input stays blocked
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: true, // Mutation is now pending
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: true, // Mutation is now pending
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
 
     // Spinner continues
     expect(calculateShowSubmitSpinner({
       isSubmitting: true,
       waitingToStartStreaming: state.waitingToStartStreaming,
-    })).toBe(true);
+    })).toBeTruthy();
   });
 
   it('phase 3: API complete, pendingMessage set - spinner continues until first stream', () => {
@@ -256,23 +256,23 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Input blocked by pendingMessage AND waitingToStartStreaming
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false, // Mutation completed
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false, // Mutation completed
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
 
     // After prepareForNewMessage: waitingToStartStreaming is cleared, spinner stops
     // Input is now blocked by pendingMessage, not waitingToStartStreaming
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.waitingToStartStreaming).toBeFalsy();
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: state.waitingToStartStreaming,
-    })).toBe(false);
+    })).toBeFalsy();
   });
 
   it('phase 4: First stream chunk arrives - spinner stops, button disabled', () => {
@@ -290,21 +290,21 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Input still blocked by isStreaming
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
 
     // Spinner STOPS when first stream chunk arrives - button is disabled but not loading
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false);
+    })).toBeFalsy();
   });
 
   it('phase 5: All participants complete, moderator streaming - input stays disabled', () => {
@@ -322,15 +322,15 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Input blocked by isModeratorStreaming
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('phase 6: Round complete - input enabled', () => {
@@ -350,21 +350,21 @@ describe('submit Lifecycle - From Click to Round Complete', () => {
 
     // Input should be enabled
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(false);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeFalsy();
 
     // No spinner
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false);
+    })).toBeFalsy();
   });
 });
 
@@ -393,15 +393,15 @@ describe('submit Loading - Fire-and-Forget Mutation Scenario', () => {
 
     // Even without isSubmitting (mutation not awaited), input is blocked
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false, // Fire-and-forget: isPending doesn't update
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false, // Fire-and-forget: isPending doesn't update
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('spinner shows even when mutation is fire-and-forget', () => {
@@ -414,7 +414,7 @@ describe('submit Loading - Fire-and-Forget Mutation Scenario', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false, // Fire-and-forget: isPending doesn't update
       waitingToStartStreaming: state.waitingToStartStreaming,
-    })).toBe(true);
+    })).toBeTruthy();
   });
 });
 
@@ -436,15 +436,15 @@ describe('submit Loading - Thread Update Request Lifecycle', () => {
 
     // T0: Submit clicked
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // T1: Mutation starts (isSubmitting would be true if we had the hook)
     // waitingToStartStreaming still true
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // T2: Mutation completes, response processed
     // waitingToStartStreaming still true until prepareForNewMessage
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // T3: prepareForNewMessage called
     // NOTE: prepareForNewMessage sets waitingToStartStreaming=false but sets pendingMessage
@@ -452,7 +452,7 @@ describe('submit Loading - Thread Update Request Lifecycle', () => {
     store.getState().prepareForNewMessage('User message', []);
     expect(store.getState().pendingMessage).toBe('User message');
     // waitingToStartStreaming is now false, but pendingMessage blocks input
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // T4: setNextParticipantToTrigger called (triggers streaming)
     store.getState().setNextParticipantToTrigger(0);
@@ -460,15 +460,15 @@ describe('submit Loading - Thread Update Request Lifecycle', () => {
     // Input should still be blocked by pendingMessage
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('loading persists through fire-and-forget thread update mutation', () => {
@@ -490,15 +490,15 @@ describe('submit Loading - Thread Update Request Lifecycle', () => {
     // Input still blocked - mutation may not have completed yet
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false, // Fire-and-forget: never true
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false, // Fire-and-forget: never true
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
 
     // T4: Streaming actually starts (triggered by orchestrator)
     store.getState().setIsStreaming(true);
@@ -507,15 +507,15 @@ describe('submit Loading - Thread Update Request Lifecycle', () => {
     // Input still blocked by isStreaming
     const streamingState = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: streamingState.isStreaming,
       isCreatingThread: streamingState.isCreatingThread,
-      waitingToStartStreaming: streamingState.waitingToStartStreaming,
       isModeratorStreaming: streamingState.isModeratorStreaming,
+      isStreaming: streamingState.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: streamingState.moderatorResumption,
       pendingMessage: streamingState.pendingMessage,
       preSearchResumption: streamingState.preSearchResumption,
-      moderatorResumption: streamingState.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: streamingState.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 });
 
@@ -535,15 +535,15 @@ describe('submit Loading - State Transition Timing', () => {
 
     // Before submit: input enabled
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(false);
+      waitingToStartStreaming: false,
+    })).toBeFalsy();
 
     // The VERY FIRST action in handleUpdateThreadAndSend
     store.getState().setWaitingToStartStreaming(true);
@@ -551,15 +551,15 @@ describe('submit Loading - State Transition Timing', () => {
     // Immediately after: input blocked
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false, // Still false - mutation hasn't started
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false, // Still false - mutation hasn't started
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('no gap between API complete and streaming start', () => {
@@ -572,15 +572,15 @@ describe('submit Loading - State Transition Timing', () => {
 
     // Input still blocked by multiple flags - using explicit values to test the calculation logic
     expect(calculateIsInputBlocked({
-      isStreaming: false, // Not streaming yet
       isCreatingThread: false,
-      waitingToStartStreaming: true, // Still waiting
       isModeratorStreaming: false,
+      isStreaming: false, // Not streaming yet
+      isSubmitting: false, // API complete
+      moderatorResumption: null,
       pendingMessage: 'Message', // Set
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false, // API complete
-    })).toBe(true);
+      waitingToStartStreaming: true, // Still waiting
+    })).toBeTruthy();
   });
 
   it('no gap between participant complete and moderator start', () => {
@@ -597,30 +597,30 @@ describe('submit Loading - State Transition Timing', () => {
     store.getState().setWaitingToStartStreaming(true);
 
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: true,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: true,
+    })).toBeTruthy();
 
     // Moderator starts
     store.getState().setIsModeratorStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
 
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: true,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
   });
 });
 
@@ -639,15 +639,15 @@ describe('submit Loading - Double Submission Prevention', () => {
     // They shouldn't be able to because input is blocked
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('prevents double submission during streaming', () => {
@@ -657,15 +657,15 @@ describe('submit Loading - Double Submission Prevention', () => {
 
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 
   it('prevents double submission during moderator phase', () => {
@@ -675,15 +675,15 @@ describe('submit Loading - Double Submission Prevention', () => {
 
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeTruthy();
   });
 });
 
@@ -709,15 +709,15 @@ describe('submit Loading - Error Recovery', () => {
     // Input should be enabled again
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming,
       isCreatingThread: state.isCreatingThread,
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      isSubmitting: false,
+      moderatorResumption: state.moderatorResumption,
       pendingMessage: state.pendingMessage,
       preSearchResumption: state.preSearchResumption,
-      moderatorResumption: state.moderatorResumption,
-      isSubmitting: false,
-    })).toBe(false);
+      waitingToStartStreaming: state.waitingToStartStreaming,
+    })).toBeFalsy();
   });
 
   it('spinner hides on API error', () => {
@@ -732,7 +732,7 @@ describe('submit Loading - Error Recovery', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false);
+    })).toBeFalsy();
   });
 });
 
@@ -757,18 +757,18 @@ describe('submit Loading - Regression Prevention', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false, // Not set yet
       waitingToStartStreaming: true, // Set immediately
-    })).toBe(true);
+    })).toBeTruthy();
 
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: true, // Blocks input
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false, // Not set yet
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false, // Not set yet
-    })).toBe(true);
+      waitingToStartStreaming: true, // Blocks input
+    })).toBeTruthy();
   });
 
   it('regression: input must remain disabled throughout entire round', () => {
@@ -777,49 +777,49 @@ describe('submit Loading - Regression Prevention', () => {
      * Input must be blocked at every step.
      */
     const store = createChatStore();
-    const transitions: Array<{ name: string; blocked: boolean }> = [];
+    const transitions: { name: string; blocked: boolean }[] = [];
 
     const checkBlocked = (name: string) => {
       const state = store.getState();
       const blocked = calculateIsInputBlocked({
-        isStreaming: state.isStreaming,
         isCreatingThread: state.isCreatingThread,
-        waitingToStartStreaming: state.waitingToStartStreaming,
         isModeratorStreaming: state.isModeratorStreaming,
+        isStreaming: state.isStreaming,
+        isSubmitting: false,
+        moderatorResumption: state.moderatorResumption,
         pendingMessage: state.pendingMessage,
         preSearchResumption: state.preSearchResumption,
-        moderatorResumption: state.moderatorResumption,
-        isSubmitting: false,
+        waitingToStartStreaming: state.waitingToStartStreaming,
       });
-      transitions.push({ name, blocked });
+      transitions.push({ blocked, name });
       return blocked;
     };
 
     // Step 1: Submit clicked
     store.getState().setWaitingToStartStreaming(true);
-    expect(checkBlocked('submit-clicked')).toBe(true);
+    expect(checkBlocked('submit-clicked')).toBeTruthy();
 
     // Step 2: Prepare for new message (sets pendingMessage, clears waitingToStartStreaming)
     store.getState().prepareForNewMessage('Message', ['model-1']);
-    expect(checkBlocked('message-prepared')).toBe(true);
+    expect(checkBlocked('message-prepared')).toBeTruthy();
 
     // Step 3: Streaming starts - pendingMessage gets cleared when streaming begins
     store.getState().setIsStreaming(true);
     store.getState().setPendingMessage(null); // Cleared when streaming starts
-    expect(checkBlocked('streaming-started')).toBe(true);
+    expect(checkBlocked('streaming-started')).toBeTruthy();
 
     // Step 4: First participant complete, second streaming
     // isStreaming stays true
-    expect(checkBlocked('mid-participant-streaming')).toBe(true);
+    expect(checkBlocked('mid-participant-streaming')).toBeTruthy();
 
     // Step 5: All participants complete, moderator starts
     store.getState().setIsStreaming(false);
     store.getState().setIsModeratorStreaming(true);
-    expect(checkBlocked('moderator-streaming')).toBe(true);
+    expect(checkBlocked('moderator-streaming')).toBeTruthy();
 
     // Step 6: Moderator complete - round is done
     store.getState().setIsModeratorStreaming(false);
-    expect(checkBlocked('round-complete')).toBe(false); // Finally enabled
+    expect(checkBlocked('round-complete')).toBeFalsy(); // Finally enabled
 
     // Verify all transitions
     const blockedStates = transitions.filter(t => t.blocked);
@@ -844,42 +844,42 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
 
     // Submit clicked - loading state starts
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Web search starts streaming - this should clear waitingToStartStreaming
     store.getState().addPreSearch({
       id: 'presearch-1',
-      threadId: 'thread-1',
-      roundNumber: 0,
-      query: 'test query',
-      status: MessageStatuses.PENDING,
       queries: [],
+      query: 'test query',
       results: [],
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-1',
     });
     store.getState().updatePreSearchStatus(0, MessageStatuses.STREAMING);
 
     // ✅ FIX: waitingToStartStreaming should NOT be cleared by pre-search streaming
     // It should only be cleared when actual PARTICIPANT streaming starts
     // Pre-search streaming is not the same as participant streaming
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Spinner should STILL show (waiting for participant streaming to start)
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: store.getState().waitingToStartStreaming,
-    })).toBe(true);
+    })).toBeTruthy();
 
     // Input should still be blocked (pre-search is active, waiting for participants)
     expect(calculateIsInputBlocked({
-      isStreaming: false, // Participant streaming hasn't started yet
       isCreatingThread: false,
-      waitingToStartStreaming: true, // Still true until participant streaming starts
       isModeratorStreaming: false,
+      isStreaming: false, // Participant streaming hasn't started yet
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: { status: MessageStatuses.STREAMING }, // Web search is active
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: true, // Still true until participant streaming starts
+    })).toBeTruthy();
   });
 
   it('participant streaming also clears waitingToStartStreaming when web search is disabled', () => {
@@ -887,7 +887,7 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
 
     // Submit clicked - loading state starts
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // No web search - participant streaming starts directly
     store.getState().setIsStreaming(true);
@@ -896,25 +896,25 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
     // when chatIsStreaming becomes true
     store.getState().setWaitingToStartStreaming(false);
 
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // Spinner should not show
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false);
+    })).toBeFalsy();
 
     // Input still blocked by isStreaming
     expect(calculateIsInputBlocked({
-      isStreaming: true,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: true,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
   });
 
   it('spinner shows during entire pre-submit and API phase', () => {
@@ -925,27 +925,27 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-    })).toBe(true);
+    })).toBeTruthy();
 
     // T1: API mutation starts
     expect(calculateShowSubmitSpinner({
       isSubmitting: true,
       waitingToStartStreaming: true,
-    })).toBe(true);
+    })).toBeTruthy();
 
     // T2: API completes, pendingMessage set, but no streaming yet
     // waitingToStartStreaming still true because streaming hasn't started
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-    })).toBe(true);
+    })).toBeTruthy();
 
     // T3: Web search starts streaming - spinner stops
     store.getState().setWaitingToStartStreaming(false);
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false);
+    })).toBeFalsy();
   });
 
   it('loading state timeline: submit → web search → participants → moderator', () => {
@@ -965,35 +965,35 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-    })).toBe(true); // Spinner ON
+    })).toBeTruthy(); // Spinner ON
 
     // Step 2: Web search starts streaming
     // ✅ FIX: waitingToStartStreaming stays TRUE during pre-search
     // It only clears when PARTICIPANT streaming starts
     store.getState().addPreSearch({
       id: 'presearch-1',
-      threadId: 'thread-1',
-      roundNumber: 0,
-      query: 'test',
-      status: MessageStatuses.PENDING,
       queries: [],
+      query: 'test',
       results: [],
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-1',
     });
     store.getState().updatePreSearchStatus(0, MessageStatuses.STREAMING);
 
-    expect(store.getState().waitingToStartStreaming).toBe(true); // Still true!
+    expect(store.getState().waitingToStartStreaming).toBeTruthy(); // Still true!
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-    })).toBe(true); // Spinner still ON (waiting for participant streaming)
+    })).toBeTruthy(); // Spinner still ON (waiting for participant streaming)
 
     // Step 3: Web search complete
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
-    expect(store.getState().waitingToStartStreaming).toBe(true); // Still true!
+    expect(store.getState().waitingToStartStreaming).toBeTruthy(); // Still true!
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: true,
-    })).toBe(true); // Spinner still ON (waiting for participant streaming)
+    })).toBeTruthy(); // Spinner still ON (waiting for participant streaming)
 
     // Step 4: Participants streaming starts
     // The React effect in use-streaming-trigger.ts clears waitingToStartStreaming
@@ -1003,17 +1003,17 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false); // NOW spinner is OFF
+    })).toBeFalsy(); // NOW spinner is OFF
     expect(calculateIsInputBlocked({
-      isStreaming: true,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: true,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true); // But input blocked
+      waitingToStartStreaming: false,
+    })).toBeTruthy(); // But input blocked
 
     // Step 5: Moderator streaming
     store.getState().setIsStreaming(false);
@@ -1021,30 +1021,30 @@ describe('submit Loading - Web Search Streaming Clears Loading', () => {
     expect(calculateShowSubmitSpinner({
       isSubmitting: false,
       waitingToStartStreaming: false,
-    })).toBe(false); // Spinner still OFF
+    })).toBeFalsy(); // Spinner still OFF
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: true,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(true); // Input still blocked
+      waitingToStartStreaming: false,
+    })).toBeTruthy(); // Input still blocked
 
     // Step 6: Round complete
     store.getState().setIsModeratorStreaming(false);
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
-    })).toBe(false); // Input enabled
+      waitingToStartStreaming: false,
+    })).toBeFalsy(); // Input enabled
   });
 });
 
@@ -1066,16 +1066,16 @@ describe('streamingRoundNumber-based Input Blocking', () => {
 
     // Even with all other flags false, streamingRoundNumber should block input
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: 0,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
   });
 
   it('allows input when streamingRoundNumber is null (no round in progress)', () => {
@@ -1086,16 +1086,16 @@ describe('streamingRoundNumber-based Input Blocking', () => {
 
     // With all flags false and streamingRoundNumber null, input should be enabled
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: null,
-    })).toBe(false);
+      waitingToStartStreaming: false,
+    })).toBeFalsy();
   });
 
   it('blocks input during gap between participants and moderator', () => {
@@ -1113,16 +1113,16 @@ describe('streamingRoundNumber-based Input Blocking', () => {
 
     const state = store.getState();
     expect(calculateIsInputBlocked({
-      isStreaming: state.isStreaming, // false
       isCreatingThread: state.isCreatingThread, // false
-      waitingToStartStreaming: state.waitingToStartStreaming, // false
       isModeratorStreaming: state.isModeratorStreaming, // false
+      isStreaming: state.isStreaming, // false
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: state.pendingMessage, // null
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: state.streamingRoundNumber, // 0 - round in progress
-    })).toBe(true); // Blocked by streamingRoundNumber
+      waitingToStartStreaming: state.waitingToStartStreaming, // false
+    })).toBeTruthy(); // Blocked by streamingRoundNumber
   });
 
   it('blocks input during gap between pre-search and participants', () => {
@@ -1137,16 +1137,16 @@ describe('streamingRoundNumber-based Input Blocking', () => {
     store.getState().setStreamingRoundNumber(1); // Round 1 in progress
 
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: { status: MessageStatuses.COMPLETE }, // Pre-search complete
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: 1, // Round in progress
-    })).toBe(true); // Blocked by streamingRoundNumber
+      waitingToStartStreaming: false,
+    })).toBeTruthy(); // Blocked by streamingRoundNumber
   });
 
   it('enables input only after streamingRoundNumber is cleared (round complete)', () => {
@@ -1156,18 +1156,18 @@ describe('streamingRoundNumber-based Input Blocking', () => {
     store.getState().completeStreaming();
 
     const state = store.getState();
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.streamingRoundNumber).toBeNull();
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: null,
-    })).toBe(false); // Input enabled
+      waitingToStartStreaming: false,
+    })).toBeFalsy(); // Input enabled
   });
 
   it('streamingRoundNumber works for multi-round conversations', () => {
@@ -1176,48 +1176,48 @@ describe('streamingRoundNumber-based Input Blocking', () => {
     // Round 0
     store.getState().setStreamingRoundNumber(0);
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: 0,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
 
     // Round 0 complete
     store.getState().completeStreaming();
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().streamingRoundNumber).toBeNull();
 
     // Round 1 starts
     store.getState().setStreamingRoundNumber(1);
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: 1,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
 
     // Round 2 (higher number)
     store.getState().setStreamingRoundNumber(5);
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: 5,
-    })).toBe(true);
+      waitingToStartStreaming: false,
+    })).toBeTruthy();
   });
 
   it('completeStreaming clears streamingRoundNumber', () => {
@@ -1233,22 +1233,22 @@ describe('streamingRoundNumber-based Input Blocking', () => {
 
     // All flags should be cleared
     const state = store.getState();
-    expect(state.streamingRoundNumber).toBe(null);
-    expect(state.isStreaming).toBe(false);
-    expect(state.isModeratorStreaming).toBe(false);
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.streamingRoundNumber).toBeNull();
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.isModeratorStreaming).toBeFalsy();
+    expect(state.waitingToStartStreaming).toBeFalsy();
 
     // Input should be enabled
     expect(calculateIsInputBlocked({
-      isStreaming: false,
       isCreatingThread: false,
-      waitingToStartStreaming: false,
       isModeratorStreaming: false,
+      isStreaming: false,
+      isSubmitting: false,
+      moderatorResumption: null,
       pendingMessage: null,
       preSearchResumption: null,
-      moderatorResumption: null,
-      isSubmitting: false,
       streamingRoundNumber: null,
-    })).toBe(false);
+      waitingToStartStreaming: false,
+    })).toBeFalsy();
   });
 });

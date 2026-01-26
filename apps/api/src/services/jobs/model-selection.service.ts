@@ -54,15 +54,15 @@ export async function selectModelsForPrompt(
 
   try {
     const result = await openRouterService.generateText({
-      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+      maxTokens: 500,
       messages: [{
         id: 'select-models',
+        parts: [{ text: `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"`, type: 'text' }],
         role: 'user',
-        parts: [{ type: 'text', text: `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"` }],
       }],
+      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
       system: MODEL_SELECTION_SYSTEM_PROMPT,
       temperature: 0.3,
-      maxTokens: 500,
     });
 
     // Parse the JSON response

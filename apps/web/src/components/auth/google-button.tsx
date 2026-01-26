@@ -29,11 +29,11 @@ type GoogleButtonProps = {
  */
 export function GoogleButton({
   callbackURL = '/chat',
-  errorCallbackURL = '/auth/error',
-  newUserCallbackURL = '/chat',
   children,
   className,
   disabled = false,
+  errorCallbackURL = '/auth/error',
+  newUserCallbackURL = '/chat',
   size,
 }: GoogleButtonProps) {
   const t = useTranslations();
@@ -45,10 +45,10 @@ export function GoogleButton({
     const appBaseUrl = getAppBaseUrl();
 
     await authClient.signIn.social({
-      provider: 'google',
       callbackURL: `${appBaseUrl}${callbackURL}`,
       errorCallbackURL: `${appBaseUrl}${errorCallbackURL}`,
       newUserCallbackURL: `${appBaseUrl}${newUserCallbackURL}`,
+      provider: 'google',
     });
   };
 

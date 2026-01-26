@@ -15,8 +15,6 @@
 import { ChatModes, DEFAULT_CHAT_MODE, ModelIds, RoundFlowStates, ScreenModes } from '@roundtable/shared';
 import { z } from 'zod';
 
-import type { ApiChangelog } from '@/services/api';
-
 import type {
   AnimationState,
   AttachmentsState,
@@ -70,21 +68,21 @@ type RegenerationStateResetType = Pick<FlagsState, 'isRegenerating'> & Pick<Data
 export const DEFAULT_PRESET_MODE = ChatModes.ANALYZING; // Matches Quick Perspectives preset
 
 export const DEFAULT_PRESET_PARTICIPANTS = [
-  { id: ModelIds.OPENAI_GPT_4O_MINI, modelId: ModelIds.OPENAI_GPT_4O_MINI, role: 'Analyst', priority: 0 },
-  { id: ModelIds.GOOGLE_GEMINI_2_5_FLASH, modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: 'Challenger', priority: 1 },
-  { id: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, role: 'Synthesizer', priority: 2 },
+  { id: ModelIds.OPENAI_GPT_4O_MINI, modelId: ModelIds.OPENAI_GPT_4O_MINI, priority: 0, role: 'Analyst' },
+  { id: ModelIds.GOOGLE_GEMINI_2_5_FLASH, modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, priority: 1, role: 'Challenger' },
+  { id: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, priority: 2, role: 'Synthesizer' },
 ];
 
 export const FORM_DEFAULTS = {
+  animatedMessageIds: new Set<string>(), // Set of message IDs that have been animated
+  animationStartIndex: 0, // Starting index for message animations
+  autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt
+  enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
   inputValue: '',
+  modelOrder: [], // Visual order of models for drag-and-drop
   selectedMode: DEFAULT_PRESET_MODE, // ✅ Matches first preset (Quick Perspectives)
   selectedParticipants: DEFAULT_PRESET_PARTICIPANTS, // ✅ First preset models pre-selected
-  enableWebSearch: false, // ⚠️ NOTE: This is ONLY used for new chats - thread screen syncs from thread.enableWebSearch
-  modelOrder: [], // Visual order of models for drag-and-drop
-  autoMode: true, // ✅ Auto mode ON by default - AI selects models/roles/mode based on prompt
-  animationStartIndex: 0, // Starting index for message animations
   shouldSkipAnimation: false, // Whether to skip entrance animations
-  animatedMessageIds: new Set<string>(), // Set of message IDs that have been animated
 } satisfies FormState;
 
 // ============================================================================
@@ -99,12 +97,12 @@ export const AUTO_MODE_FALLBACK_CONFIG: {
   mode: typeof DEFAULT_CHAT_MODE;
   enableWebSearch: boolean;
 } = {
+  enableWebSearch: false,
+  mode: DEFAULT_CHAT_MODE,
   participants: [
     { modelId: ModelIds.OPENAI_GPT_4O_MINI, role: null },
     { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, role: null },
   ],
-  mode: DEFAULT_CHAT_MODE,
-  enableWebSearch: false,
 };
 
 // ============================================================================
@@ -113,8 +111,8 @@ export const AUTO_MODE_FALLBACK_CONFIG: {
 
 export const FEEDBACK_DEFAULTS = {
   feedbackByRound: new Map(),
-  pendingFeedback: null,
   hasLoadedFeedback: false,
+  pendingFeedback: null,
 } satisfies FeedbackState;
 
 // ============================================================================
@@ -122,12 +120,12 @@ export const FEEDBACK_DEFAULTS = {
 // ============================================================================
 
 export const UI_DEFAULTS = {
-  showInitialUI: true,
-  waitingToStartStreaming: false,
-  isCreatingThread: false,
   createdThreadId: null,
   createdThreadProjectId: null, // Project ID for created thread - used for cache updates
   isAnalyzingPrompt: false, // ✅ True when AI is analyzing prompt for auto mode
+  isCreatingThread: false,
+  showInitialUI: true,
+  waitingToStartStreaming: false,
 } satisfies UIState;
 
 // ============================================================================
@@ -135,37 +133,44 @@ export const UI_DEFAULTS = {
 // ============================================================================
 
 export const PRESEARCH_DEFAULTS = {
-  preSearches: [],
   preSearchActivityTimes: new Map(),
+  preSearches: [],
 } satisfies PreSearchState;
 
 // ============================================================================
 // CHANGELOG SLICE DEFAULTS
 // ============================================================================
 
-export const CHANGELOG_DEFAULTS = {
-  changelogItems: [] as ApiChangelog[],
-} satisfies ChangelogState;
+/**
+ * Changelog state defaults
+ *
+ * JUSTIFIED EMPTY ARRAY TYPE: The empty array literal `[]` infers as `never[]` by default.
+ * The type annotation `ApiChangelog[]` is required to match the ChangelogState interface.
+ * This is not a type cast - it's a type annotation on the initial value.
+ */
+export const CHANGELOG_DEFAULTS: ChangelogState = {
+  changelogItems: [],
+};
 
 // ============================================================================
 // THREAD SLICE DEFAULTS
 // ============================================================================
 
 export const THREAD_DEFAULTS = {
-  thread: null,
-  participants: [],
-  messages: [],
-  isStreaming: false,
-  currentParticipantIndex: 0,
-  error: null,
-  // AI SDK methods
-  sendMessage: undefined,
-  startRound: undefined,
   chatSetMessages: undefined,
   // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming
   chatStop: undefined,
+  currentParticipantIndex: 0,
+  error: null,
+  isStreaming: false,
+  messages: [],
+  participants: [],
+  // AI SDK methods
+  sendMessage: undefined,
+  startRound: undefined,
   // ✅ RACE CONDITION FIX: Explicit completion signal for stream settling
   streamFinishAcknowledged: false,
+  thread: null,
 } satisfies ThreadState;
 
 // ============================================================================
@@ -183,12 +188,12 @@ export const NAVIGATION_DEFAULTS = {
 
 export const FLAGS_DEFAULTS = {
   hasInitiallyLoaded: false,
-  isRegenerating: false,
-  isModeratorStreaming: false,
-  isWaitingForChangelog: false,
   hasPendingConfigChanges: false,
+  isModeratorStreaming: false,
   /** ✅ PATCH BLOCKING: Prevents streaming from starting during PATCH */
   isPatchInProgress: false,
+  isRegenerating: false,
+  isWaitingForChangelog: false,
   /** ✅ HANDOFF FIX: True during P0→P1 participant transition to prevent 10s cleanup */
   participantHandoffInProgress: false,
 } satisfies FlagsState;
@@ -198,22 +203,22 @@ export const FLAGS_DEFAULTS = {
 // ============================================================================
 
 export const DATA_DEFAULTS = {
-  regeneratingRoundNumber: null,
-  pendingMessage: null,
+  /** Track round number when config changes submitted (for incremental changelog fetch) */
+  configChangeRoundNumber: null,
+  currentRoundNumber: null,
+  expectedParticipantIds: null,
   pendingAttachmentIds: null,
   /** File parts for AI SDK message creation - set before clearAttachments() */
   // ✅ Uses ExtendedFilePart schema which includes uploadId for backend fallback loading
   pendingFileParts: null,
-  expectedParticipantIds: null,
-  streamingRoundNumber: null,
-  currentRoundNumber: null,
-  /** Track round number when config changes submitted (for incremental changelog fetch) */
-  configChangeRoundNumber: null,
+  pendingMessage: null,
+  regeneratingRoundNumber: null,
   /**
    * ✅ RACE CONDITION FIX: Round epoch counter
    * Increments each time a new round starts. Used to detect stale operations.
    */
   roundEpoch: 0,
+  streamingRoundNumber: null,
 } satisfies DataState;
 
 // ============================================================================
@@ -224,15 +229,15 @@ export const DATA_DEFAULTS = {
 // This prevents reusing the same Set instances created at module load,
 // which would cause state pollution across thread navigations.
 export const TRACKING_DEFAULTS = {
-  hasSentPendingMessage: false,
   createdModeratorRounds: new Set<number>(),
-  triggeredPreSearchRounds: new Set<number>(),
-  /** Moderator stream tracking: Prevents duplicate stream submissions by round number */
-  triggeredModeratorRounds: new Set<number>(),
-  /** Moderator stream tracking: Prevents duplicate stream submissions by moderator ID */
-  triggeredModeratorIds: new Set<string>(),
   /** ✅ IMMEDIATE UI FEEDBACK: Track when early optimistic message added by handleUpdateThreadAndSend */
   hasEarlyOptimisticMessage: false,
+  hasSentPendingMessage: false,
+  /** Moderator stream tracking: Prevents duplicate stream submissions by moderator ID */
+  triggeredModeratorIds: new Set<string>(),
+  /** Moderator stream tracking: Prevents duplicate stream submissions by round number */
+  triggeredModeratorRounds: new Set<number>(),
+  triggeredPreSearchRounds: new Set<number>(),
 } satisfies TrackingState;
 
 // ============================================================================
@@ -248,8 +253,8 @@ export const CALLBACKS_DEFAULTS = {
 // ============================================================================
 
 export const SCREEN_DEFAULTS = {
-  screenMode: ScreenModes.OVERVIEW,
   isReadOnly: false,
+  screenMode: ScreenModes.OVERVIEW,
 } satisfies ScreenState;
 
 // ============================================================================
@@ -257,25 +262,25 @@ export const SCREEN_DEFAULTS = {
 // ============================================================================
 
 export const STREAM_RESUMPTION_DEFAULTS = {
-  streamResumptionState: null,
-  resumptionAttempts: new Set<string>(),
-  nextParticipantToTrigger: null,
-  /** Flag set when server-side prefilled resumption state - guards AI SDK phantom resume */
-  streamResumptionPrefilled: false,
-  /** Thread ID that the prefilled state is for - ensures state matches current thread */
-  prefilledForThreadId: null,
   /** ✅ UNIFIED PHASES: Current phase for resumption logic */
   currentResumptionPhase: null,
-  /** Pre-search resumption state (null if web search not enabled) */
-  preSearchResumption: null,
   /** Moderator resumption state */
   moderatorResumption: null,
+  nextParticipantToTrigger: null,
+  /** Thread ID that the prefilled state is for - ensures state matches current thread */
+  prefilledForThreadId: null,
+  /** Pre-search resumption state (null if web search not enabled) */
+  preSearchResumption: null,
+  resumptionAttempts: new Set<string>(),
   /** Current round number for resumption */
   resumptionRoundNumber: null,
   /** ✅ SCOPE VERSIONING: Thread ID for current resumption scope */
   resumptionScopeThreadId: null as string | null,
   /** ✅ SCOPE VERSIONING: Version counter - increments on each navigation to invalidate stale effects */
   resumptionScopeVersion: 0,
+  /** Flag set when server-side prefilled resumption state - guards AI SDK phantom resume */
+  streamResumptionPrefilled: false,
+  streamResumptionState: null,
 } satisfies StreamResumptionSliceState;
 
 // ============================================================================
@@ -283,30 +288,30 @@ export const STREAM_RESUMPTION_DEFAULTS = {
 // ============================================================================
 
 export const ROUND_FLOW_DEFAULTS = {
-  /** Current FSM state - starts in IDLE */
-  flowState: RoundFlowStates.IDLE,
-  /** Round number being orchestrated */
-  flowRoundNumber: null,
-  /** Current participant index within round */
-  flowParticipantIndex: 0,
-  /** Total enabled participants for current round */
-  flowParticipantCount: 0,
-  /** Last error that occurred */
-  flowLastError: null,
   /** Event history for debugging (dev mode only) */
   flowEventHistory: [],
+  /** Last error that occurred */
+  flowLastError: null,
+  /** Total enabled participants for current round */
+  flowParticipantCount: 0,
+  /** Current participant index within round */
+  flowParticipantIndex: 0,
+  /** Round number being orchestrated */
+  flowRoundNumber: null,
+  /** Current FSM state - starts in IDLE */
+  flowState: RoundFlowStates.IDLE,
 } satisfies RoundFlowState;
 
 /**
  * Round flow state reset - clears FSM state when round completes or navigation occurs
  */
 export const ROUND_FLOW_STATE_RESET = {
-  flowState: RoundFlowStates.IDLE,
-  flowRoundNumber: null,
-  flowParticipantIndex: 0,
-  flowParticipantCount: 0,
-  flowLastError: null,
   flowEventHistory: [],
+  flowLastError: null,
+  flowParticipantCount: 0,
+  flowParticipantIndex: 0,
+  flowRoundNumber: null,
+  flowState: RoundFlowStates.IDLE,
 } satisfies RoundFlowState;
 
 // ============================================================================
@@ -314,8 +319,8 @@ export const ROUND_FLOW_STATE_RESET = {
 // ============================================================================
 
 export const ANIMATION_DEFAULTS = {
-  pendingAnimations: new Set<number>(), // Set of participant indices with pending animations
   animationResolvers: new Map(), // Resolve functions for animation completion promises
+  pendingAnimations: new Set<number>(), // Set of participant indices with pending animations
 } satisfies AnimationState;
 
 // ============================================================================
@@ -333,9 +338,9 @@ export const ATTACHMENTS_DEFAULTS = {
 export const SIDEBAR_ANIMATION_DEFAULTS = {
   animatingThreadId: null,
   animationPhase: 'idle' as const,
-  oldTitle: null,
-  newTitle: null,
   displayedTitle: null,
+  newTitle: null,
+  oldTitle: null,
 } satisfies SidebarAnimationState;
 
 // ============================================================================
@@ -350,15 +355,15 @@ export const SIDEBAR_ANIMATION_DEFAULTS = {
  * Used when streaming completes (participants or moderator)
  */
 export const STREAMING_STATE_RESET = {
-  isStreaming: false,
-  streamingRoundNumber: null,
-  currentRoundNumber: null,
-  waitingToStartStreaming: false,
   currentParticipantIndex: 0,
+  currentRoundNumber: null,
+  isStreaming: false,
   /** ✅ HANDOFF FIX: Clear handoff flag when streaming completes */
   participantHandoffInProgress: false,
   /** ✅ RACE CONDITION FIX: Reset stream finish acknowledgment */
   streamFinishAcknowledged: false,
+  streamingRoundNumber: null,
+  waitingToStartStreaming: false,
 } satisfies StreamingStateResetType;
 
 /**
@@ -381,12 +386,12 @@ export const MODERATOR_STATE_RESET = {
  * Used when a message is fully processed
  */
 export const PENDING_MESSAGE_STATE_RESET = {
-  pendingMessage: null,
+  expectedParticipantIds: null,
+  hasSentPendingMessage: false,
   pendingAttachmentIds: null,
   // ✅ Uses ExtendedFilePart schema which includes uploadId for backend fallback loading
   pendingFileParts: null,
-  expectedParticipantIds: null,
-  hasSentPendingMessage: false,
+  pendingMessage: null,
 } satisfies PendingMessageStateResetType;
 
 /**
@@ -405,11 +410,11 @@ export const REGENERATION_STATE_RESET = {
  */
 export const STREAM_RESUMPTION_STATE_RESET = {
   currentResumptionPhase: null,
-  resumptionRoundNumber: null,
-  preSearchResumption: null,
   moderatorResumption: null,
-  streamResumptionPrefilled: false,
   nextParticipantToTrigger: null,
+  preSearchResumption: null,
+  resumptionRoundNumber: null,
+  streamResumptionPrefilled: false,
 } satisfies Pick<StreamResumptionSliceState, 'currentResumptionPhase' | 'resumptionRoundNumber' | 'preSearchResumption' | 'moderatorResumption' | 'streamResumptionPrefilled' | 'nextParticipantToTrigger'>;
 
 // ============================================================================
@@ -423,107 +428,107 @@ export const STREAM_RESUMPTION_STATE_RESET = {
  * Used by: resetToOverview
  */
 export const COMPLETE_RESET_STATE = {
-  // Form state
-  inputValue: FORM_DEFAULTS.inputValue,
-  selectedMode: FORM_DEFAULTS.selectedMode,
-  selectedParticipants: FORM_DEFAULTS.selectedParticipants,
-  enableWebSearch: FORM_DEFAULTS.enableWebSearch,
-  modelOrder: FORM_DEFAULTS.modelOrder,
-  autoMode: FORM_DEFAULTS.autoMode,
-  animationStartIndex: FORM_DEFAULTS.animationStartIndex,
-  shouldSkipAnimation: FORM_DEFAULTS.shouldSkipAnimation,
   animatedMessageIds: new Set<string>(),
-  // Feedback state - create fresh Map instance to prevent state pollution
-  feedbackByRound: new Map(),
-  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
-  hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
-  // UI state
-  showInitialUI: UI_DEFAULTS.showInitialUI,
-  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
-  isCreatingThread: UI_DEFAULTS.isCreatingThread,
-  createdThreadId: UI_DEFAULTS.createdThreadId,
-  createdThreadProjectId: UI_DEFAULTS.createdThreadProjectId,
-  isAnalyzingPrompt: UI_DEFAULTS.isAnalyzingPrompt,
-  // Pre-search state
-  preSearches: PRESEARCH_DEFAULTS.preSearches,
-  preSearchActivityTimes: new Map<number, number>(),
-  // Changelog state
-  changelogItems: CHANGELOG_DEFAULTS.changelogItems,
-  // Thread state
-  thread: THREAD_DEFAULTS.thread,
-  participants: THREAD_DEFAULTS.participants,
-  messages: THREAD_DEFAULTS.messages,
-  isStreaming: THREAD_DEFAULTS.isStreaming,
-  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
-  error: THREAD_DEFAULTS.error,
-  sendMessage: THREAD_DEFAULTS.sendMessage,
-  startRound: THREAD_DEFAULTS.startRound,
-  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
-  chatStop: THREAD_DEFAULTS.chatStop,
-  // ✅ RACE CONDITION FIX: Explicit stream completion signal
-  streamFinishAcknowledged: THREAD_DEFAULTS.streamFinishAcknowledged,
-  // Flags state
-  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
-  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
-  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
-  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
-  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
-  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
-  // Data state
-  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
-  pendingMessage: DATA_DEFAULTS.pendingMessage,
-  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
-  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
-  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
-  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
-  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
-  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
-  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
-  roundEpoch: DATA_DEFAULTS.roundEpoch,
-  // Tracking state
-  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  // Create fresh Set instances for each complete reset
-  createdModeratorRounds: new Set<number>(),
-  triggeredPreSearchRounds: new Set<number>(),
-  triggeredModeratorRounds: new Set<number>(),
-  triggeredModeratorIds: new Set<string>(),
-  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
-  // Callbacks state
-  onComplete: CALLBACKS_DEFAULTS.onComplete,
-  // Screen state
-  screenMode: SCREEN_DEFAULTS.screenMode,
-  isReadOnly: SCREEN_DEFAULTS.isReadOnly,
-  // Stream resumption state
-  streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
-  resumptionAttempts: new Set<string>(),
-  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
-  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
-  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
-  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
-  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
-  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
-  // Animation state
-  pendingAnimations: new Set<number>(),
-  animationResolvers: new Map(),
-  // Attachments state
-  pendingAttachments: ATTACHMENTS_DEFAULTS.pendingAttachments,
   // Sidebar animation state
   animatingThreadId: SIDEBAR_ANIMATION_DEFAULTS.animatingThreadId,
   animationPhase: SIDEBAR_ANIMATION_DEFAULTS.animationPhase,
-  oldTitle: SIDEBAR_ANIMATION_DEFAULTS.oldTitle,
-  newTitle: SIDEBAR_ANIMATION_DEFAULTS.newTitle,
+  animationResolvers: new Map(),
+  animationStartIndex: FORM_DEFAULTS.animationStartIndex,
+  autoMode: FORM_DEFAULTS.autoMode,
+  // Changelog state
+  changelogItems: CHANGELOG_DEFAULTS.changelogItems,
+  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  chatStop: THREAD_DEFAULTS.chatStop,
+  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
+  // Create fresh Set instances for each complete reset
+  createdModeratorRounds: new Set<number>(),
+  createdThreadId: UI_DEFAULTS.createdThreadId,
+  createdThreadProjectId: UI_DEFAULTS.createdThreadProjectId,
+  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
+  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
+  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   displayedTitle: SIDEBAR_ANIMATION_DEFAULTS.displayedTitle,
+  enableWebSearch: FORM_DEFAULTS.enableWebSearch,
+  error: THREAD_DEFAULTS.error,
+  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
+  // Feedback state - create fresh Map instance to prevent state pollution
+  feedbackByRound: new Map(),
+  flowEventHistory: [],
+  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
+  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
+  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
+  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
   // Round flow state (FSM orchestration)
   flowState: ROUND_FLOW_DEFAULTS.flowState,
-  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
-  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
-  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
-  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
-  flowEventHistory: [],
+  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
+  // Flags state
+  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
+  hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
+  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  // Tracking state
+  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
+  // Form state
+  inputValue: FORM_DEFAULTS.inputValue,
+  isAnalyzingPrompt: UI_DEFAULTS.isAnalyzingPrompt,
+  isCreatingThread: UI_DEFAULTS.isCreatingThread,
+  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
+  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
+  isReadOnly: SCREEN_DEFAULTS.isReadOnly,
+  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
+  isStreaming: THREAD_DEFAULTS.isStreaming,
+  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
+  messages: THREAD_DEFAULTS.messages,
+  modelOrder: FORM_DEFAULTS.modelOrder,
+  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
+  newTitle: SIDEBAR_ANIMATION_DEFAULTS.newTitle,
+  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  oldTitle: SIDEBAR_ANIMATION_DEFAULTS.oldTitle,
+  // Callbacks state
+  onComplete: CALLBACKS_DEFAULTS.onComplete,
+  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
+  participants: THREAD_DEFAULTS.participants,
+  // Animation state
+  pendingAnimations: new Set<number>(),
+  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
+  // Attachments state
+  pendingAttachments: ATTACHMENTS_DEFAULTS.pendingAttachments,
+  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
+  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
+  pendingMessage: DATA_DEFAULTS.pendingMessage,
   // Navigation state
   pendingNavigationTargetSlug: NAVIGATION_DEFAULTS.pendingNavigationTargetSlug,
+  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
+  preSearchActivityTimes: new Map<number, number>(),
+  // Pre-search state
+  preSearches: PRESEARCH_DEFAULTS.preSearches,
+  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
+  // Data state
+  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
+  resumptionAttempts: new Set<string>(),
+  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
+  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
+  roundEpoch: DATA_DEFAULTS.roundEpoch,
+  // Screen state
+  screenMode: SCREEN_DEFAULTS.screenMode,
+  selectedMode: FORM_DEFAULTS.selectedMode,
+  selectedParticipants: FORM_DEFAULTS.selectedParticipants,
+  sendMessage: THREAD_DEFAULTS.sendMessage,
+  shouldSkipAnimation: FORM_DEFAULTS.shouldSkipAnimation,
+  // UI state
+  showInitialUI: UI_DEFAULTS.showInitialUI,
+  startRound: THREAD_DEFAULTS.startRound,
+  // ✅ RACE CONDITION FIX: Explicit stream completion signal
+  streamFinishAcknowledged: THREAD_DEFAULTS.streamFinishAcknowledged,
+  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
+  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
+  // Stream resumption state
+  streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
+  // Thread state
+  thread: THREAD_DEFAULTS.thread,
+  triggeredModeratorIds: new Set<string>(),
+  triggeredModeratorRounds: new Set<number>(),
+  triggeredPreSearchRounds: new Set<number>(),
+  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
 };
 
 /**
@@ -533,68 +538,68 @@ export const COMPLETE_RESET_STATE = {
  * Used by: resetThreadState (when unmounting thread screen)
  */
 export const THREAD_RESET_STATE = {
+  animationResolvers: new Map(),
+  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  chatStop: THREAD_DEFAULTS.chatStop,
+  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
+  // Create fresh Set/Map instances for each thread reset
+  createdModeratorRounds: new Set<number>(),
+  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
+  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
+  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
+  flowEventHistory: [],
+  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
+  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
+  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
+  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
+  // Round flow state (FSM orchestration)
+  flowState: ROUND_FLOW_DEFAULTS.flowState,
+  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
+  // Flags state
+  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
+  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
+  // Tracking state
+  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
+  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
+  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
+  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
+  isStreaming: THREAD_DEFAULTS.isStreaming,
+  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
+  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
+  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
+  // Callbacks (included in thread reset)
+  onComplete: CALLBACKS_DEFAULTS.onComplete,
+  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
+  // Animation state
+  pendingAnimations: new Set<number>(),
+  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
+  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
+  pendingMessage: DATA_DEFAULTS.pendingMessage,
+  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
+  preSearchActivityTimes: new Map<number, number>(),
+  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
+  // Data state
+  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
+  resumptionAttempts: new Set<string>(),
+  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
+  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
+  roundEpoch: DATA_DEFAULTS.roundEpoch,
+  // AI SDK methods (thread-related)
+  sendMessage: THREAD_DEFAULTS.sendMessage,
   // UI state - includes streaming state properties
   // ✅ FIX: Include showInitialUI to reset form visibility after thread unmount
   showInitialUI: UI_DEFAULTS.showInitialUI,
-  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
-  isStreaming: THREAD_DEFAULTS.isStreaming,
-  // Flags state
-  hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
-  isRegenerating: FLAGS_DEFAULTS.isRegenerating,
-  isModeratorStreaming: FLAGS_DEFAULTS.isModeratorStreaming,
-  isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
-  hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
-  isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
-  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
-  // Data state
-  regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
-  pendingMessage: DATA_DEFAULTS.pendingMessage,
-  pendingAttachmentIds: DATA_DEFAULTS.pendingAttachmentIds,
-  pendingFileParts: DATA_DEFAULTS.pendingFileParts,
-  expectedParticipantIds: DATA_DEFAULTS.expectedParticipantIds,
-  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
-  currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
-  configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
-  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
-  roundEpoch: DATA_DEFAULTS.roundEpoch,
-  // Tracking state
-  hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
-  // Create fresh Set/Map instances for each thread reset
-  createdModeratorRounds: new Set<number>(),
-  triggeredPreSearchRounds: new Set<number>(),
-  triggeredModeratorRounds: new Set<number>(),
-  triggeredModeratorIds: new Set<string>(),
-  preSearchActivityTimes: new Map<number, number>(),
-  hasEarlyOptimisticMessage: TRACKING_DEFAULTS.hasEarlyOptimisticMessage,
-  // AI SDK methods (thread-related)
-  sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
-  chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
-  chatStop: THREAD_DEFAULTS.chatStop,
   // ✅ RACE CONDITION FIX: Explicit stream completion signal
   streamFinishAcknowledged: THREAD_DEFAULTS.streamFinishAcknowledged,
-  // Callbacks (included in thread reset)
-  onComplete: CALLBACKS_DEFAULTS.onComplete,
+  streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
+  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
   // Stream resumption state
   streamResumptionState: STREAM_RESUMPTION_DEFAULTS.streamResumptionState,
-  resumptionAttempts: new Set<string>(),
-  nextParticipantToTrigger: STREAM_RESUMPTION_DEFAULTS.nextParticipantToTrigger,
-  streamResumptionPrefilled: STREAM_RESUMPTION_DEFAULTS.streamResumptionPrefilled,
-  prefilledForThreadId: STREAM_RESUMPTION_DEFAULTS.prefilledForThreadId,
-  currentResumptionPhase: STREAM_RESUMPTION_DEFAULTS.currentResumptionPhase,
-  preSearchResumption: STREAM_RESUMPTION_DEFAULTS.preSearchResumption,
-  moderatorResumption: STREAM_RESUMPTION_DEFAULTS.moderatorResumption,
-  resumptionRoundNumber: STREAM_RESUMPTION_DEFAULTS.resumptionRoundNumber,
-  // Animation state
-  pendingAnimations: new Set<number>(),
-  animationResolvers: new Map(),
-  // Round flow state (FSM orchestration)
-  flowState: ROUND_FLOW_DEFAULTS.flowState,
-  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
-  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
-  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
-  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
-  flowEventHistory: [],
+  triggeredModeratorIds: new Set<string>(),
+  triggeredModeratorRounds: new Set<number>(),
+  triggeredPreSearchRounds: new Set<number>(),
+  waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   // ✅ FIX: Removed pendingAttachments from reset state
   // Attachments should ONLY be cleared via clearAttachments() after the message is created
   // This prevents attachments from being cleared prematurely during navigation
@@ -610,27 +615,27 @@ export const THREAD_RESET_STATE = {
 export const THREAD_NAVIGATION_RESET_STATE = {
   // Include all from THREAD_RESET_STATE
   ...THREAD_RESET_STATE,
-  // 🚨 CRITICAL: Also clear thread data to prevent state leakage
-  thread: THREAD_DEFAULTS.thread,
-  participants: THREAD_DEFAULTS.participants,
-  messages: THREAD_DEFAULTS.messages,
-  error: THREAD_DEFAULTS.error,
-  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
-  // 🚨 CRITICAL: Clear pre-searches from previous thread
-  preSearches: PRESEARCH_DEFAULTS.preSearches,
   // ✅ FIX: Do NOT clear changelogItems here - changelog should persist across navigation
   // Previously clearing changelogItems caused it to disappear when navigating back to thread
   // because useSyncHydrateStore guard skips re-hydration for same thread (isInitialized && isSameThread)
   // Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
   createdThreadProjectId: UI_DEFAULTS.createdThreadProjectId,
-  isCreatingThread: UI_DEFAULTS.isCreatingThread,
+  currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
+  error: THREAD_DEFAULTS.error,
   // Clear feedback state on thread navigation (thread-specific data)
   feedbackByRound: new Map(),
-  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
+  isCreatingThread: UI_DEFAULTS.isCreatingThread,
+  messages: THREAD_DEFAULTS.messages,
+  participants: THREAD_DEFAULTS.participants,
+  pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   // ✅ ATOMIC SWITCH: Clear pending navigation target
   pendingNavigationTargetSlug: null,
+  // 🚨 CRITICAL: Clear pre-searches from previous thread
+  preSearches: PRESEARCH_DEFAULTS.preSearches,
+  // 🚨 CRITICAL: Also clear thread data to prevent state leakage
+  thread: THREAD_DEFAULTS.thread,
 };
 
 // ============================================================================
@@ -645,14 +650,14 @@ export const THREAD_NAVIGATION_RESET_STATE = {
  * from preferences cookie
  */
 export const ResetFormPreferencesSchema = z.object({
-  /** Selected model IDs from preferences cookie */
-  selectedModelIds: z.array(z.string()).optional(),
+  /** Web search enabled from preferences cookie */
+  enableWebSearch: z.boolean().optional(),
   /** Model order from preferences cookie */
   modelOrder: z.array(z.string()).optional(),
   /** Selected mode from preferences cookie */
   selectedMode: z.string().nullable().optional(),
-  /** Web search enabled from preferences cookie */
-  enableWebSearch: z.boolean().optional(),
+  /** Selected model IDs from preferences cookie */
+  selectedModelIds: z.array(z.string()).optional(),
 });
 
 export type ResetFormPreferences = z.infer<typeof ResetFormPreferencesSchema>;

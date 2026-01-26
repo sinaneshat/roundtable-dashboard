@@ -31,21 +31,22 @@ type MockDb = {
 let mockDb: MockDb;
 
 function withCache<T>(value: T) {
-  const promise = Promise.resolve(value) as Promise<T> & { $withCache: ReturnType<typeof vi.fn> };
-  promise.$withCache = vi.fn(() => promise);
+  const promise = Promise.resolve(value) as Promise<T> & { $withCache: () => Promise<T> };
+  // Assign the $withCache method directly - it returns the same promise to simulate caching
+  promise.$withCache = () => promise;
   return promise;
 }
 
 function setupSelectMock(
   transactionResult: unknown[],
   messageResult: unknown[],
-  participantCount: number = 2,
+  participantCount = 2,
 ) {
   // Create participant array based on count
   const participantArray = Array.from({ length: participantCount }, (_, i) => ({
     id: `p${i + 1}`,
-    threadId: 'thread-1',
     isEnabled: true,
+    threadId: 'thread-1',
   }));
 
   // Mock db.select() - handles 4 sequential calls:
@@ -95,26 +96,26 @@ function setupSelectMock(
 
 beforeEach(() => {
   mockDb = {
-    select: vi.fn(),
-    update: vi.fn(),
     insert: vi.fn(),
     query: {
-      chatThread: { findFirst: vi.fn() },
-      chatParticipant: { findMany: vi.fn() },
       chatMessage: { findFirst: vi.fn() },
+      chatParticipant: { findMany: vi.fn() },
+      chatThread: { findFirst: vi.fn() },
       creditTransaction: { findFirst: vi.fn() },
     },
+    select: vi.fn(),
+    update: vi.fn(),
   };
 
   (mockDb.select as ReturnType<typeof vi.fn>).mockReturnValue({
     from: vi.fn().mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([]))),
-      }),
       innerJoin: vi.fn().mockReturnValue({
         where: vi.fn().mockReturnValue({
           limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([]))),
         }),
+      }),
+      where: vi.fn().mockReturnValue({
+        limit: vi.fn().mockImplementation(() => withCache(Promise.resolve([]))),
       }),
     }),
   });
@@ -173,8 +174,8 @@ describe('round completion - multiple participants', () => {
     });
 
     mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-      { id: 'p2', modelId: 'model-2', isEnabled: true },
+      { id: 'p1', isEnabled: true, modelId: 'model-1' },
+      { id: 'p2', isEnabled: true, modelId: 'model-2' },
     ]);
 
     mockDb.query.chatMessage.findFirst.mockResolvedValue(undefined);
@@ -199,8 +200,8 @@ describe('round completion - multiple participants', () => {
     });
 
     mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-      { id: 'p2', modelId: 'model-2', isEnabled: true },
+      { id: 'p1', isEnabled: true, modelId: 'model-1' },
+      { id: 'p2', isEnabled: true, modelId: 'model-2' },
     ]);
 
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
@@ -228,13 +229,13 @@ describe('round completion - multiple participants', () => {
     });
 
     mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-      { id: 'p2', modelId: 'model-2', isEnabled: true },
+      { id: 'p1', isEnabled: true, modelId: 'model-1' },
+      { id: 'p2', isEnabled: true, modelId: 'model-2' },
     ]);
 
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
       id: 'thread-2_r0_moderator',
-      parts: [{ type: 'text', text: 'Round summary content' }],
+      parts: [{ text: 'Round summary content', type: 'text' }],
     });
 
     const result = await checkFreeUserHasCompletedRound('user-2');
@@ -246,11 +247,11 @@ describe('round completion - multiple participants', () => {
 describe('credit zeroing', () => {
   it('zeros balance and reserved credits', async () => {
     const userBalance = {
-      id: 'balance-1',
-      userId: 'user-zero',
       balance: 4900,
-      reservedCredits: 100,
+      id: 'balance-1',
       planType: PlanTypes.FREE,
+      reservedCredits: 100,
+      userId: 'user-zero',
       version: 1,
     };
 
@@ -286,11 +287,11 @@ describe('credit zeroing', () => {
 
   it('creates FREE_ROUND_COMPLETE transaction', async () => {
     const userBalance = {
-      id: 'balance-tx',
-      userId: 'user-tx',
       balance: 3000,
-      reservedCredits: 0,
+      id: 'balance-tx',
       planType: PlanTypes.FREE,
+      reservedCredits: 0,
+      userId: 'user-tx',
       version: 1,
     };
 
@@ -317,22 +318,22 @@ describe('credit zeroing', () => {
 
     expect(insertValuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: 'user-tx',
-        type: CreditTransactionTypes.DEDUCTION,
         action: CreditActions.FREE_ROUND_COMPLETE,
         amount: -3000,
         balanceAfter: 0,
+        type: CreditTransactionTypes.DEDUCTION,
+        userId: 'user-tx',
       }),
     );
   });
 
   it('only affects FREE plan users', async () => {
     const paidUserBalance = {
-      id: 'balance-paid',
-      userId: 'user-paid',
       balance: 50000,
-      reservedCredits: 0,
+      id: 'balance-paid',
       planType: PlanTypes.PAID,
+      reservedCredits: 0,
+      userId: 'user-paid',
       version: 1,
     };
 
@@ -356,11 +357,11 @@ describe('credit zeroing', () => {
 
   it('is idempotent when balance already zero', async () => {
     const zeroBalance = {
-      id: 'balance-zero',
-      userId: 'user-already-zero',
       balance: 0,
-      reservedCredits: 0,
+      id: 'balance-zero',
       planType: PlanTypes.FREE,
+      reservedCredits: 0,
+      userId: 'user-already-zero',
       version: 1,
     };
 
@@ -392,19 +393,19 @@ describe('credit zeroing', () => {
 describe('subsequent operations blocked', () => {
   it('blocks free users after round completion', async () => {
     const userBalance = {
-      id: 'balance-1',
-      userId: 'user-blocked',
       balance: 1000,
-      reservedCredits: 0,
-      planType: PlanTypes.FREE,
+      id: 'balance-1',
       monthlyCredits: 0,
       nextRefillAt: null,
+      planType: PlanTypes.FREE,
+      reservedCredits: 0,
+      userId: 'user-blocked',
     };
 
     const freeRoundTransaction = {
+      action: CreditActions.FREE_ROUND_COMPLETE,
       id: 'tx-complete',
       userId: 'user-blocked',
-      action: CreditActions.FREE_ROUND_COMPLETE,
     };
 
     // Mock db.select() - handles multiple queries with proper chaining
@@ -437,19 +438,19 @@ describe('subsequent operations blocked', () => {
 
   it('provides upgrade message in error', async () => {
     const userBalance = {
-      id: 'balance-2',
-      userId: 'user-upgrade',
       balance: 1000,
-      reservedCredits: 0,
-      planType: PlanTypes.FREE,
+      id: 'balance-2',
       monthlyCredits: 0,
       nextRefillAt: null,
+      planType: PlanTypes.FREE,
+      reservedCredits: 0,
+      userId: 'user-upgrade',
     };
 
     const freeRoundTransaction = {
+      action: CreditActions.FREE_ROUND_COMPLETE,
       id: 'tx-complete',
       userId: 'user-upgrade',
-      action: CreditActions.FREE_ROUND_COMPLETE,
     };
 
     // Mock db.select() - handles multiple queries with proper chaining
@@ -484,9 +485,9 @@ describe('subsequent operations blocked', () => {
 describe('transaction marker', () => {
   it('returns true when transaction exists', async () => {
     const freeRoundTransaction = {
+      action: CreditActions.FREE_ROUND_COMPLETE,
       id: 'tx-complete',
       userId: 'user-tx',
-      action: CreditActions.FREE_ROUND_COMPLETE,
     };
 
     // Mock db.select() for transaction check - returns existing transaction
@@ -507,9 +508,9 @@ describe('transaction marker', () => {
 
   it('prevents redundant queries after completion', async () => {
     const freeRoundTransaction = {
+      action: CreditActions.FREE_ROUND_COMPLETE,
       id: 'tx-complete',
       userId: 'user-redundant',
-      action: CreditActions.FREE_ROUND_COMPLETE,
     };
 
     // Mock db.select() for transaction check - returns existing transaction
@@ -572,13 +573,13 @@ describe('edge cases', () => {
     });
 
     mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-      { id: 'p2', modelId: 'model-2', isEnabled: true },
+      { id: 'p1', isEnabled: true, modelId: 'model-1' },
+      { id: 'p2', isEnabled: true, modelId: 'model-2' },
     ]);
 
     mockDb.query.chatMessage.findFirst.mockResolvedValue({
       id: 'thread-empty_r0_moderator',
-      parts: [{ type: 'text', text: '   ' }],
+      parts: [{ text: '   ', type: 'text' }],
     });
 
     const result = await checkFreeUserHasCompletedRound('user-empty');
@@ -601,8 +602,8 @@ describe('edge cases', () => {
     });
 
     mockDb.query.chatParticipant.findMany.mockResolvedValue([
-      { id: 'p1', modelId: 'model-1', isEnabled: true },
-      { id: 'p2', modelId: 'model-2', isEnabled: true },
+      { id: 'p1', isEnabled: true, modelId: 'model-1' },
+      { id: 'p2', isEnabled: true, modelId: 'model-2' },
     ]);
 
     mockDb.query.chatMessage.findFirst.mockResolvedValue({

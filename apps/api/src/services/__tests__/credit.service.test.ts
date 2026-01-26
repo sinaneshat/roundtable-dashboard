@@ -28,13 +28,6 @@ function createMockDb() {
     })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => withCache(mockDbSelect)),
-          orderBy: vi.fn(() => ({
-            limit: vi.fn(() => withCache(mockDbSelect)),
-            offset: vi.fn(() => mockDbSelect),
-          })),
-        })),
         innerJoin: vi.fn(() => ({
           where: vi.fn(() => ({
             limit: vi.fn(() => withCache(mockDbSelect)),
@@ -43,6 +36,13 @@ function createMockDb() {
         orderBy: vi.fn(() => ({
           limit: vi.fn(() => withCache(mockDbSelect)),
           offset: vi.fn(() => mockDbSelect),
+        })),
+        where: vi.fn(() => ({
+          limit: vi.fn(() => withCache(mockDbSelect)),
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(() => withCache(mockDbSelect)),
+            offset: vi.fn(() => mockDbSelect),
+          })),
         })),
       })),
     })),
@@ -66,17 +66,17 @@ vi.mock('@/db', async () => {
 
 function createMockCreditRecord(overrides?: Partial<UserCreditBalance>): Partial<UserCreditBalance> {
   return {
-    id: 'credit_123',
-    userId: 'user_123',
     balance: 5_000,
-    reservedCredits: 0,
-    planType: PlanTypes.FREE,
-    monthlyCredits: 0,
-    lastRefillAt: null,
-    nextRefillAt: null,
-    version: 1,
     createdAt: new Date(),
+    id: 'credit_123',
+    lastRefillAt: null,
+    monthlyCredits: 0,
+    nextRefillAt: null,
+    planType: PlanTypes.FREE,
+    reservedCredits: 0,
     updatedAt: new Date(),
+    userId: 'user_123',
+    version: 1,
     ...overrides,
   };
 }
@@ -211,10 +211,10 @@ describe('finalizeCredits', () => {
     mockDbUpdate = [recordAfter];
 
     await creditService.finalizeCredits('user_123', 'stream_123', {
-      inputTokens: 500,
-      outputTokens: 1_500,
       action: CreditActions.AI_RESPONSE,
+      inputTokens: 500,
       modelId: 'gpt-4',
+      outputTokens: 1_500,
     });
 
     expect(mockDbUpdate[0]?.version).toBe(2);
@@ -225,8 +225,8 @@ describe('zeroOutFreeUserCredits', () => {
   it('zeros balance for free user', async () => {
     const record = createMockCreditRecord({
       balance: 4_900,
-      reservedCredits: 100,
       planType: PlanTypes.FREE,
+      reservedCredits: 100,
     });
 
     mockDbSelect = [record];

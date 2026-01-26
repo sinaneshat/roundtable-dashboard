@@ -44,13 +44,13 @@ type _MessageStore = {
 // Helper functions for optimistic message handling
 function createOptimisticMessage(content: string, tempId: string): OptimisticMessage {
   return {
-    id: tempId,
-    tempId,
-    role: MessageRoles.USER,
     content,
     createdAt: new Date(),
+    id: tempId,
     isOptimistic: true,
+    role: MessageRoles.USER,
     status: 'pending',
+    tempId,
   };
 }
 
@@ -61,14 +61,14 @@ function createConfirmedMessage(
   roundNumber: number,
 ): ConfirmedMessage {
   return {
-    id: serverId,
-    serverId,
-    role: MessageRoles.USER,
     content,
     createdAt: new Date(),
+    id: serverId,
     isOptimistic: false,
-    threadId,
+    role: MessageRoles.USER,
     roundNumber,
+    serverId,
+    threadId,
   };
 }
 
@@ -132,7 +132,7 @@ describe('optimistic Update and Replacement', () => {
 
       const optimistic = createOptimisticMessage(content, tempId);
 
-      expect(optimistic.isOptimistic).toBe(true);
+      expect(optimistic.isOptimistic).toBeTruthy();
       expect(optimistic.tempId).toBe(tempId);
       expect(optimistic.id).toBe(tempId);
       expect(optimistic.content).toBe(content);
@@ -174,7 +174,7 @@ describe('optimistic Update and Replacement', () => {
       expect(result).toHaveLength(2);
       expect(result[1].id).toBe('srv-2');
       expect((result[1] as ConfirmedMessage).serverId).toBe('srv-2');
-      expect(result[1].isOptimistic).toBe(false);
+      expect(result[1].isOptimistic).toBeFalsy();
     });
 
     it('should maintain message order after replacement', () => {
@@ -261,7 +261,7 @@ describe('optimistic Update and Replacement', () => {
 
       const result = markOptimisticFailed(messages, 'temp-1');
 
-      expect(result[0].isOptimistic).toBe(false);
+      expect(result[0].isOptimistic).toBeFalsy();
       expect((result[1] as OptimisticMessage).status).toBe('failed');
     });
   });
@@ -291,7 +291,7 @@ describe('optimistic Update and Replacement', () => {
 
       // Should only remove the optimistic one
       expect(result).toHaveLength(1);
-      expect(result[0].isOptimistic).toBe(false);
+      expect(result[0].isOptimistic).toBeFalsy();
     });
 
     it('should handle multiple optimistic messages', () => {
@@ -320,7 +320,7 @@ describe('optimistic Update and Replacement', () => {
       const optimistics = getOptimisticMessages(messages);
 
       expect(optimistics).toHaveLength(2);
-      expect(optimistics.every(m => m.isOptimistic)).toBe(true);
+      expect(optimistics.every(m => m.isOptimistic)).toBeTruthy();
       expect(optimistics.map(m => m.tempId)).toEqual(['temp-1', 'temp-2']);
     });
 
@@ -340,16 +340,16 @@ describe('optimistic Update and Replacement', () => {
         createOptimisticMessage('Test', 'temp-exists'),
       ];
 
-      expect(hasOptimisticMessage(messages, 'temp-exists')).toBe(true);
-      expect(hasOptimisticMessage(messages, 'temp-not-exists')).toBe(false);
+      expect(hasOptimisticMessage(messages, 'temp-exists')).toBeTruthy();
+      expect(hasOptimisticMessage(messages, 'temp-not-exists')).toBeFalsy();
     });
 
     it('should correctly identify optimistic messages with type guard', () => {
       const optimistic = createOptimisticMessage('Test', 'temp-1');
       const confirmed = createConfirmedMessage('Test', 'srv-1', 'thread-1', 0);
 
-      expect(isMessageOptimistic(optimistic)).toBe(true);
-      expect(isMessageOptimistic(confirmed)).toBe(false);
+      expect(isMessageOptimistic(optimistic)).toBeTruthy();
+      expect(isMessageOptimistic(confirmed)).toBeFalsy();
     });
   });
 
@@ -390,8 +390,8 @@ describe('optimistic Update and Replacement', () => {
       messages = [...messages, createOptimisticMessage('Second', 'temp-2')];
 
       expect(messages).toHaveLength(2);
-      expect(messages[0].isOptimistic).toBe(false);
-      expect(messages[1].isOptimistic).toBe(true);
+      expect(messages[0].isOptimistic).toBeFalsy();
+      expect(messages[1].isOptimistic).toBeTruthy();
 
       // Submit third while confirming second
       messages = [...messages, createOptimisticMessage('Third', 'temp-3')];
@@ -399,8 +399,8 @@ describe('optimistic Update and Replacement', () => {
       messages = replaceOptimisticMessage(messages, 'temp-2', confirmed2);
 
       expect(messages).toHaveLength(3);
-      expect(messages[1].isOptimistic).toBe(false);
-      expect(messages[2].isOptimistic).toBe(true);
+      expect(messages[1].isOptimistic).toBeFalsy();
+      expect(messages[2].isOptimistic).toBeTruthy();
     });
   });
 
@@ -419,11 +419,11 @@ describe('optimistic Update and Replacement', () => {
       const failed = optimistics.filter(m => m.status === 'failed');
 
       return {
-        isSubmitting: pending.length > 0,
-        hasPendingOptimistic: pending.length > 0,
-        hasFailedOptimistic: failed.length > 0,
-        pendingCount: pending.length,
         failedCount: failed.length,
+        hasFailedOptimistic: failed.length > 0,
+        hasPendingOptimistic: pending.length > 0,
+        isSubmitting: pending.length > 0,
+        pendingCount: pending.length,
       };
     }
 
@@ -434,8 +434,8 @@ describe('optimistic Update and Replacement', () => {
 
       const state = computeUIState(messages);
 
-      expect(state.isSubmitting).toBe(true);
-      expect(state.hasPendingOptimistic).toBe(true);
+      expect(state.isSubmitting).toBeTruthy();
+      expect(state.hasPendingOptimistic).toBeTruthy();
       expect(state.pendingCount).toBe(1);
     });
 
@@ -447,8 +447,8 @@ describe('optimistic Update and Replacement', () => {
 
       const state = computeUIState(messages);
 
-      expect(state.isSubmitting).toBe(false);
-      expect(state.hasFailedOptimistic).toBe(true);
+      expect(state.isSubmitting).toBeFalsy();
+      expect(state.hasFailedOptimistic).toBeTruthy();
       expect(state.failedCount).toBe(1);
     });
 
@@ -461,9 +461,9 @@ describe('optimistic Update and Replacement', () => {
 
       const state = computeUIState(messages);
 
-      expect(state.isSubmitting).toBe(true);
-      expect(state.hasPendingOptimistic).toBe(true);
-      expect(state.hasFailedOptimistic).toBe(true);
+      expect(state.isSubmitting).toBeTruthy();
+      expect(state.hasPendingOptimistic).toBeTruthy();
+      expect(state.hasFailedOptimistic).toBeTruthy();
       expect(state.pendingCount).toBe(1);
       expect(state.failedCount).toBe(1);
     });
@@ -478,9 +478,9 @@ describe('optimistic Update and Replacement', () => {
 
       const state = computeUIState(messages);
 
-      expect(state.isSubmitting).toBe(false);
-      expect(state.hasPendingOptimistic).toBe(false);
-      expect(state.hasFailedOptimistic).toBe(false);
+      expect(state.isSubmitting).toBeFalsy();
+      expect(state.hasPendingOptimistic).toBeFalsy();
+      expect(state.hasFailedOptimistic).toBeFalsy();
     });
   });
 
@@ -504,10 +504,10 @@ describe('optimistic Update and Replacement', () => {
       const failed = messages[failedIndex] as OptimisticMessage;
       const retryMessage: OptimisticMessage = {
         ...failed,
-        id: newTempId,
-        tempId: newTempId,
-        status: 'pending',
         createdAt: new Date(),
+        id: newTempId,
+        status: 'pending',
+        tempId: newTempId,
       };
 
       const newMessages = [...messages];
@@ -599,8 +599,9 @@ describe('optimistic Update and Replacement', () => {
 
     function getMessagesForRound(messages: UIMessage[], round: number): UIMessage[] {
       return messages.filter((m) => {
-        if (m.isOptimistic)
+        if (m.isOptimistic) {
           return false;
+        }
         return (m as ConfirmedMessage).roundNumber === round;
       });
     }
@@ -691,9 +692,6 @@ describe('optimistic Update and Replacement', () => {
       let messages: UIMessage[] = [];
 
       return {
-        get messages() {
-          return messages;
-        },
         addOptimistic: (content: string, tempId: string) => {
           messages = [...messages, createOptimisticMessage(content, tempId)];
         },
@@ -702,6 +700,9 @@ describe('optimistic Update and Replacement', () => {
         },
         failOptimistic: (tempId: string) => {
           messages = markOptimisticFailed(messages, tempId);
+        },
+        get messages() {
+          return messages;
         },
         removeOptimistic: (tempId: string) => {
           messages = removeOptimisticMessage(messages, tempId);
@@ -715,13 +716,13 @@ describe('optimistic Update and Replacement', () => {
       // Add optimistic
       store.addOptimistic('Hello', 'temp-1');
       expect(store.messages).toHaveLength(1);
-      expect(store.messages[0].isOptimistic).toBe(true);
+      expect(store.messages[0].isOptimistic).toBeTruthy();
 
       // Confirm
       const confirmed = createConfirmedMessage('Hello', 'srv-1', 'thread-1', 0);
       store.confirmOptimistic('temp-1', confirmed);
       expect(store.messages).toHaveLength(1);
-      expect(store.messages[0].isOptimistic).toBe(false);
+      expect(store.messages[0].isOptimistic).toBeFalsy();
     });
 
     it('should support failure and retry through store', () => {
@@ -745,7 +746,7 @@ describe('optimistic Update and Replacement', () => {
       const optimistic = createOptimisticMessage('', 'temp-empty');
 
       expect(optimistic.content).toBe('');
-      expect(optimistic.isOptimistic).toBe(true);
+      expect(optimistic.isOptimistic).toBeTruthy();
     });
 
     it('should handle very long tempIds', () => {

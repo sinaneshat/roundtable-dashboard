@@ -65,22 +65,24 @@ export type WebSearchDisplayExtendedProps = {
 };
 
 function getStreamingStage(query: string | undefined, answer: string | null | undefined): WebSearchStreamingStage {
-  if (!query)
+  if (!query) {
     return WebSearchStreamingStages.QUERY;
-  if (!answer)
+  }
+  if (!answer) {
     return WebSearchStreamingStages.SEARCH;
+  }
   return WebSearchStreamingStages.SYNTHESIZE;
 }
 
 function WebSearchDisplayComponent({
-  results,
-  className,
-  meta: _meta,
   answer,
-  isStreaming = false,
-  requestId: _requestId,
-  query,
   autoParameters: _autoParameters,
+  className,
+  isStreaming = false,
+  meta: _meta,
+  query,
+  requestId: _requestId,
+  results,
 }: WebSearchDisplayExtendedProps) {
   const t = useTranslations();
   const isOpen = useBoolean(true);
@@ -195,7 +197,7 @@ function WebSearchDisplayComponent({
                   <LLMAnswerDisplay
                     answer={answer ?? null}
                     isStreaming={isStreaming}
-                    sources={successfulResults.map(r => ({ url: r.url, title: r.title }))}
+                    sources={successfulResults.map(r => ({ title: r.title, url: r.url }))}
                   />
                 </div>
               </ChainOfThoughtStep>

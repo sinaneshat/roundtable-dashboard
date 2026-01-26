@@ -102,170 +102,170 @@ describe('pre-search orphan detection', () => {
   describe('isPotentialOrphan', () => {
     it('returns false for COMPLETE status', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.COMPLETE,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 minutes ago
+        threadId: 't-1',
       };
 
-      expect(isPotentialOrphan(search)).toBe(false);
+      expect(isPotentialOrphan(search)).toBeFalsy();
     });
 
     it('returns false for FAILED status', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000),
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.FAILED,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000),
+        threadId: 't-1',
       };
 
-      expect(isPotentialOrphan(search)).toBe(false);
+      expect(isPotentialOrphan(search)).toBeFalsy();
     });
 
     it('returns false for STREAMING status created recently', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 30 * 1000), // 30 seconds ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 30 * 1000), // 30 seconds ago
+        threadId: 't-1',
       };
 
-      expect(isPotentialOrphan(search)).toBe(false);
+      expect(isPotentialOrphan(search)).toBeFalsy();
     });
 
     it('returns true for STREAMING status older than 2 minutes', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 minutes ago
+        threadId: 't-1',
       };
 
-      expect(isPotentialOrphan(search)).toBe(true);
+      expect(isPotentialOrphan(search)).toBeTruthy();
     });
 
     it('returns true for PENDING status older than 2 minutes', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000),
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.PENDING,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000),
+        threadId: 't-1',
       };
 
-      expect(isPotentialOrphan(search)).toBe(true);
+      expect(isPotentialOrphan(search)).toBeTruthy();
     });
   });
 
   describe('hasRecentKVActivity', () => {
     it('returns false for null chunks', () => {
-      expect(hasRecentKVActivity(null)).toBe(false);
+      expect(hasRecentKVActivity(null)).toBeFalsy();
     });
 
     it('returns false for empty chunks array', () => {
-      expect(hasRecentKVActivity([])).toBe(false);
+      expect(hasRecentKVActivity([])).toBeFalsy();
     });
 
     it('returns false for chunks older than 30 seconds', () => {
       const oldChunks: KVChunk[] = [
-        { index: 0, event: 'data', data: '{}', timestamp: Date.now() - 60_000 }, // 60s ago
+        { data: '{}', event: 'data', index: 0, timestamp: Date.now() - 60_000 }, // 60s ago
       ];
 
-      expect(hasRecentKVActivity(oldChunks)).toBe(false);
+      expect(hasRecentKVActivity(oldChunks)).toBeFalsy();
     });
 
     it('returns true for chunks within last 30 seconds', () => {
       const recentChunks: KVChunk[] = [
-        { index: 0, event: 'data', data: '{}', timestamp: Date.now() - 10_000 }, // 10s ago
+        { data: '{}', event: 'data', index: 0, timestamp: Date.now() - 10_000 }, // 10s ago
       ];
 
-      expect(hasRecentKVActivity(recentChunks)).toBe(true);
+      expect(hasRecentKVActivity(recentChunks)).toBeTruthy();
     });
 
     it('returns true if ANY chunk is recent (uses max timestamp)', () => {
       const mixedChunks: KVChunk[] = [
-        { index: 0, event: 'data', data: '{}', timestamp: Date.now() - 120_000 }, // 2 min ago
-        { index: 1, event: 'data', data: '{}', timestamp: Date.now() - 60_000 }, // 1 min ago
-        { index: 2, event: 'data', data: '{}', timestamp: Date.now() - 5_000 }, // 5s ago (recent!)
+        { data: '{}', event: 'data', index: 0, timestamp: Date.now() - 120_000 }, // 2 min ago
+        { data: '{}', event: 'data', index: 1, timestamp: Date.now() - 60_000 }, // 1 min ago
+        { data: '{}', event: 'data', index: 2, timestamp: Date.now() - 5_000 }, // 5s ago (recent!)
       ];
 
-      expect(hasRecentKVActivity(mixedChunks)).toBe(true);
+      expect(hasRecentKVActivity(mixedChunks)).toBeTruthy();
     });
   });
 
   describe('shouldMarkAsOrphaned', () => {
     it('returns false for recently created STREAMING search', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 30_000), // 30 seconds ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 30_000), // 30 seconds ago
+        threadId: 't-1',
       };
 
-      expect(shouldMarkAsOrphaned(search, null)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, null)).toBeFalsy();
     });
 
     it('returns false for old STREAMING search WITH recent KV activity', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        threadId: 't-1',
       };
 
       const recentChunks: KVChunk[] = [
-        { index: 0, event: 'data', data: '{}', timestamp: Date.now() - 10_000 }, // 10s ago
+        { data: '{}', event: 'data', index: 0, timestamp: Date.now() - 10_000 }, // 10s ago
       ];
 
       // Key test: old search but recent KV activity = NOT orphaned
-      expect(shouldMarkAsOrphaned(search, recentChunks)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, recentChunks)).toBeFalsy();
     });
 
     it('returns true for old STREAMING search WITHOUT recent KV activity', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        threadId: 't-1',
       };
 
       const staleChunks: KVChunk[] = [
-        { index: 0, event: 'data', data: '{}', timestamp: Date.now() - 60_000 }, // 1 min ago (stale)
+        { data: '{}', event: 'data', index: 0, timestamp: Date.now() - 60_000 }, // 1 min ago (stale)
       ];
 
-      expect(shouldMarkAsOrphaned(search, staleChunks)).toBe(true);
+      expect(shouldMarkAsOrphaned(search, staleChunks)).toBeTruthy();
     });
 
     it('returns true for old STREAMING search with null KV chunks (local dev)', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
+        threadId: 't-1',
       };
 
       // No KV available = assume orphaned (local dev fallback)
-      expect(shouldMarkAsOrphaned(search, null)).toBe(true);
+      expect(shouldMarkAsOrphaned(search, null)).toBeTruthy();
     });
 
     it('returns false for COMPLETE status regardless of age or KV', () => {
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
         id: 'ps-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.COMPLETE,
-        createdAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
+        threadId: 't-1',
       };
 
-      expect(shouldMarkAsOrphaned(search, null)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, null)).toBeFalsy();
     });
   });
 
@@ -274,72 +274,72 @@ describe('pre-search orphan detection', () => {
       // Simulates: search started 3 minutes ago, user just refreshed
       // KV shows activity from 5 seconds ago (stream still running in background)
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 min ago
         id: 'ps-refresh-1',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 min ago
+        threadId: 't-1',
       };
 
       const activeChunks: KVChunk[] = [
-        { index: 0, event: 'query', data: '{}', timestamp: Date.now() - 60_000 },
-        { index: 1, event: 'search', data: '{}', timestamp: Date.now() - 30_000 },
-        { index: 2, event: 'search', data: '{}', timestamp: Date.now() - 5_000 }, // Recent!
+        { data: '{}', event: 'query', index: 0, timestamp: Date.now() - 60_000 },
+        { data: '{}', event: 'search', index: 1, timestamp: Date.now() - 30_000 },
+        { data: '{}', event: 'search', index: 2, timestamp: Date.now() - 5_000 }, // Recent!
       ];
 
-      expect(shouldMarkAsOrphaned(search, activeChunks)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, activeChunks)).toBeFalsy();
     });
 
     it('scenario: user refreshes after connection died - SHOULD orphan', () => {
       // Simulates: search started 3 minutes ago, connection died 1 minute ago
       // KV shows last activity was 1 minute ago (stale - no new chunks)
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 min ago
         id: 'ps-refresh-2',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 3 * 60 * 1000), // 3 min ago
+        threadId: 't-1',
       };
 
       const staleChunks: KVChunk[] = [
-        { index: 0, event: 'query', data: '{}', timestamp: Date.now() - 2 * 60_000 },
-        { index: 1, event: 'search', data: '{}', timestamp: Date.now() - 60_000 }, // Last chunk 1 min ago
+        { data: '{}', event: 'query', index: 0, timestamp: Date.now() - 2 * 60_000 },
+        { data: '{}', event: 'search', index: 1, timestamp: Date.now() - 60_000 }, // Last chunk 1 min ago
       ];
 
-      expect(shouldMarkAsOrphaned(search, staleChunks)).toBe(true);
+      expect(shouldMarkAsOrphaned(search, staleChunks)).toBeTruthy();
     });
 
     it('scenario: quick refresh within 2 minutes - should NOT orphan', () => {
       // Simulates: search started 1 minute ago, user refreshed quickly
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 60_000), // 1 min ago (under 2 min threshold)
         id: 'ps-quick-refresh',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 60_000), // 1 min ago (under 2 min threshold)
+        threadId: 't-1',
       };
 
       // Doesn't matter if KV is null - createdAt is too recent
-      expect(shouldMarkAsOrphaned(search, null)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, null)).toBeFalsy();
     });
 
     it('scenario: long-running search with slow model - should NOT orphan if active', () => {
       // Simulates: complex query that takes 5 minutes, but model is still working
       // KV shows sparse activity but last chunk was 20 seconds ago (within threshold)
       const search: PreSearchRecord = {
+        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 min ago
         id: 'ps-slow-model',
-        threadId: 't-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(Date.now() - 5 * 60 * 1000), // 5 min ago
+        threadId: 't-1',
       };
 
       const sparseChunks: KVChunk[] = [
-        { index: 0, event: 'query', data: '{}', timestamp: Date.now() - 4 * 60_000 }, // 4 min ago
-        { index: 1, event: 'thinking', data: '{}', timestamp: Date.now() - 20_000 }, // 20s ago (active!)
+        { data: '{}', event: 'query', index: 0, timestamp: Date.now() - 4 * 60_000 }, // 4 min ago
+        { data: '{}', event: 'thinking', index: 1, timestamp: Date.now() - 20_000 }, // 20s ago (active!)
       ];
 
-      expect(shouldMarkAsOrphaned(search, sparseChunks)).toBe(false);
+      expect(shouldMarkAsOrphaned(search, sparseChunks)).toBeFalsy();
     });
   });
 });

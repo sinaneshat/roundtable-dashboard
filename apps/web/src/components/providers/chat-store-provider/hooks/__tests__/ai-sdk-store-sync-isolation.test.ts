@@ -92,15 +92,15 @@ function hasAnyFrozenProperty(obj: unknown, path = ''): string | null {
 function createAiSdkMessage(id: string, roundNumber: number, participantIndex = 0): UIMessage {
   return {
     id,
-    role: MessageRoles.ASSISTANT,
-    parts: [], // Mutable empty array for streaming
     metadata: {
-      role: UIMessageRoles.ASSISTANT,
-      roundNumber,
+      model: 'test-model',
       participantId: `participant-${participantIndex}`,
       participantIndex,
-      model: 'test-model',
+      role: UIMessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [], // Mutable empty array for streaming
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -110,12 +110,12 @@ function createAiSdkMessage(id: string, roundNumber: number, participantIndex = 
 function createUserMessage(id: string, text: string, roundNumber: number): UIMessage {
   return {
     id,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: UIMessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -137,7 +137,7 @@ describe('message Cloning Verification', () => {
       expect(cloned.metadata).not.toBe(original.metadata);
 
       // Modifying clone should not affect original
-      cloned.parts.push({ type: 'text', text: 'Hello', state: TextPartStates.STREAMING });
+      cloned.parts.push({ state: TextPartStates.STREAMING, text: 'Hello', type: 'text' });
       expect(original.parts).toHaveLength(0);
       expect(cloned.parts).toHaveLength(1);
     });
@@ -153,13 +153,13 @@ describe('message Cloning Verification', () => {
       // Clone should be mutable
       const cloned = structuredClone(original);
 
-      expect(isFrozen(original)).toBe(true);
-      expect(isFrozen(original.parts)).toBe(true);
-      expect(isFrozen(cloned)).toBe(false);
-      expect(isFrozen(cloned.parts)).toBe(false);
+      expect(isFrozen(original)).toBeTruthy();
+      expect(isFrozen(original.parts)).toBeTruthy();
+      expect(isFrozen(cloned)).toBeFalsy();
+      expect(isFrozen(cloned.parts)).toBeFalsy();
 
       // Can modify cloned
-      expect(() => cloned.parts.push({ type: 'text', text: 'Hello' })).not.toThrow();
+      expect(() => cloned.parts.push({ text: 'Hello', type: 'text' })).not.toThrow();
     });
   });
 });
@@ -183,9 +183,9 @@ describe('store setMessages Freeze Behavior (Simulated)', () => {
     const frozenMessages = simulateStoreFreeze([message]);
 
     // Store messages should be frozen
-    expect(isFrozen(frozenMessages)).toBe(true);
-    expect(isFrozen(frozenMessages[0])).toBe(true);
-    expect(isFrozen(frozenMessages[0].parts)).toBe(true);
+    expect(isFrozen(frozenMessages)).toBeTruthy();
+    expect(isFrozen(frozenMessages[0])).toBeTruthy();
+    expect(isFrozen(frozenMessages[0].parts)).toBeTruthy();
   });
 
   it('should NOT freeze the original message if cloned before store sync', () => {
@@ -196,15 +196,15 @@ describe('store setMessages Freeze Behavior (Simulated)', () => {
     const frozenStoreMessages = simulateStoreFreeze(clonedMessages);
 
     // Store messages are frozen
-    expect(isFrozen(frozenStoreMessages[0])).toBe(true);
-    expect(isFrozen(frozenStoreMessages[0].parts)).toBe(true);
+    expect(isFrozen(frozenStoreMessages[0])).toBeTruthy();
+    expect(isFrozen(frozenStoreMessages[0].parts)).toBeTruthy();
 
     // Original remains mutable!
-    expect(isFrozen(originalMessage)).toBe(false);
-    expect(isFrozen(originalMessage.parts)).toBe(false);
+    expect(isFrozen(originalMessage)).toBeFalsy();
+    expect(isFrozen(originalMessage.parts)).toBeFalsy();
 
     // Can still push to original
-    expect(() => originalMessage.parts.push({ type: 'text', text: 'Streaming...' })).not.toThrow();
+    expect(() => originalMessage.parts.push({ text: 'Streaming...', type: 'text' })).not.toThrow();
     expect(originalMessage.parts).toHaveLength(1);
   });
 
@@ -220,11 +220,11 @@ describe('store setMessages Freeze Behavior (Simulated)', () => {
     deepFreeze(messagesWithoutClone[0]);
 
     // BUG: Original is now frozen because it's the same reference!
-    expect(isFrozen(originalMessage)).toBe(true);
-    expect(isFrozen(originalMessage.parts)).toBe(true);
+    expect(isFrozen(originalMessage)).toBeTruthy();
+    expect(isFrozen(originalMessage.parts)).toBeTruthy();
 
     // Trying to push now fails
-    expect(() => originalMessage.parts.push({ type: 'text', text: 'Hello' }))
+    expect(() => originalMessage.parts.push({ text: 'Hello', type: 'text' }))
       .toThrow(/Cannot add property/);
   });
 });
@@ -241,23 +241,23 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     // Initialize with thread data
     act(() => {
       store.getState().setThread({
+        createdAt: new Date().toISOString(),
+        enableWebSearch: false,
         id: 'thread-1',
-        userId: 'user-1',
-        projectId: null,
-        title: 'Test Thread',
-        slug: 'test-thread',
-        previousSlug: null,
-        mode: 'debating',
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        metadata: null,
-        version: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
         lastMessageAt: new Date().toISOString(),
+        metadata: null,
+        mode: 'debating',
+        previousSlug: null,
+        projectId: null,
+        slug: 'test-thread',
+        status: 'active',
+        title: 'Test Thread',
+        updatedAt: new Date().toISOString(),
+        userId: 'user-1',
+        version: 1,
       });
     });
   });
@@ -283,15 +283,15 @@ describe('e2E Simulation: Full Streaming Flow', () => {
 
     // STEP 4: AI SDK's original is still mutable - CAN CONTINUE STREAMING
     // This is the CRITICAL invariant - clone breaks reference so original stays mutable
-    expect(isFrozen(aiSdkMessage)).toBe(false);
-    expect(isFrozen(aiSdkMessage.parts)).toBe(false);
+    expect(isFrozen(aiSdkMessage)).toBeFalsy();
+    expect(isFrozen(aiSdkMessage.parts)).toBeFalsy();
 
     // STEP 5: AI SDK pushes streaming content (this is what fails with the bug)
     expect(() => {
       aiSdkMessage.parts.push({
-        type: 'text',
-        text: 'Hello, world!',
         state: TextPartStates.STREAMING,
+        text: 'Hello, world!',
+        type: 'text',
       });
     }).not.toThrow();
 
@@ -308,7 +308,7 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     });
 
     // AI SDK streams first chunk
-    aiSdkMessage.parts.push({ type: 'text', text: 'First ', state: TextPartStates.STREAMING });
+    aiSdkMessage.parts.push({ state: TextPartStates.STREAMING, text: 'First ', type: 'text' });
 
     // Sync cycle 2: After first chunk
     act(() => {
@@ -316,10 +316,10 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     });
 
     // AI SDK still mutable
-    expect(isFrozen(aiSdkMessage.parts)).toBe(false);
+    expect(isFrozen(aiSdkMessage.parts)).toBeFalsy();
 
     // AI SDK streams second chunk
-    aiSdkMessage.parts[0] = { type: 'text', text: 'First Second ', state: TextPartStates.STREAMING };
+    aiSdkMessage.parts[0] = { state: TextPartStates.STREAMING, text: 'First Second ', type: 'text' };
 
     // Sync cycle 3: After second chunk
     act(() => {
@@ -327,10 +327,10 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     });
 
     // AI SDK still mutable after 3 sync cycles
-    expect(isFrozen(aiSdkMessage.parts)).toBe(false);
+    expect(isFrozen(aiSdkMessage.parts)).toBeFalsy();
 
     // Final verification: AI SDK can complete the stream
-    aiSdkMessage.parts[0] = { type: 'text', text: 'First Second Third!', state: TextPartStates.DONE };
+    aiSdkMessage.parts[0] = { state: TextPartStates.DONE, text: 'First Second Third!', type: 'text' };
     expect(aiSdkMessage.parts[0].text).toBe('First Second Third!');
   });
 
@@ -340,7 +340,7 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     const participant2 = createAiSdkMessage('thread-1_r0_p2', 0, 2);
 
     // Participant 0 starts streaming
-    participant0.parts.push({ type: 'text', text: 'P0: ', state: TextPartStates.STREAMING });
+    participant0.parts.push({ state: TextPartStates.STREAMING, text: 'P0: ', type: 'text' });
 
     // Sync to store
     act(() => {
@@ -348,10 +348,10 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     });
 
     // Participant 0 completes
-    participant0.parts[0] = { type: 'text', text: 'P0: Complete', state: TextPartStates.DONE };
+    participant0.parts[0] = { state: TextPartStates.DONE, text: 'P0: Complete', type: 'text' };
 
     // Participant 1 starts streaming
-    participant1.parts.push({ type: 'text', text: 'P1: ', state: TextPartStates.STREAMING });
+    participant1.parts.push({ state: TextPartStates.STREAMING, text: 'P1: ', type: 'text' });
 
     // Sync both to store
     act(() => {
@@ -359,18 +359,18 @@ describe('e2E Simulation: Full Streaming Flow', () => {
     });
 
     // All AI SDK messages still mutable
-    expect(isFrozen(participant0.parts)).toBe(false);
-    expect(isFrozen(participant1.parts)).toBe(false);
-    expect(isFrozen(participant2.parts)).toBe(false);
+    expect(isFrozen(participant0.parts)).toBeFalsy();
+    expect(isFrozen(participant1.parts)).toBeFalsy();
+    expect(isFrozen(participant2.parts)).toBeFalsy();
 
     // Participant 1 continues streaming (this would fail with the bug)
     expect(() => {
-      participant1.parts[0] = { type: 'text', text: 'P1: Still streaming...', state: TextPartStates.STREAMING };
+      participant1.parts[0] = { state: TextPartStates.STREAMING, text: 'P1: Still streaming...', type: 'text' };
     }).not.toThrow();
 
     // Participant 2 starts streaming
     expect(() => {
-      participant2.parts.push({ type: 'text', text: 'P2: Starting...', state: TextPartStates.STREAMING });
+      participant2.parts.push({ state: TextPartStates.STREAMING, text: 'P2: Starting...', type: 'text' });
     }).not.toThrow();
   });
 });
@@ -403,9 +403,9 @@ describe('regression Tests: Sync Isolation Invariants', () => {
 
     // Verify originals are still mutable
     for (const msg of aiSdkMessages) {
-      expect(isFrozen(msg)).toBe(false);
-      expect(isFrozen(msg.parts)).toBe(false);
-      expect(() => msg.parts.push({ type: 'text', text: 'test' })).not.toThrow();
+      expect(isFrozen(msg)).toBeFalsy();
+      expect(isFrozen(msg.parts)).toBeFalsy();
+      expect(() => msg.parts.push({ text: 'test', type: 'text' })).not.toThrow();
     }
   });
 
@@ -421,10 +421,10 @@ describe('regression Tests: Sync Isolation Invariants', () => {
     const frozenMessages = simulateStoreFreeze([message]);
 
     // In production, store state would be frozen
-    expect(isFrozen(frozenMessages)).toBe(true);
-    expect(isFrozen(frozenMessages[0])).toBe(true);
-    expect(isFrozen(frozenMessages[0].parts)).toBe(true);
-    expect(isFrozen(frozenMessages[0].metadata)).toBe(true);
+    expect(isFrozen(frozenMessages)).toBeTruthy();
+    expect(isFrozen(frozenMessages[0])).toBeTruthy();
+    expect(isFrozen(frozenMessages[0].parts)).toBeTruthy();
+    expect(isFrozen(frozenMessages[0].metadata)).toBeTruthy();
 
     // Verify that modifying frozen state throws
     expect(() => frozenMessages.push(createUserMessage('user-2', 'Hello2', 0))).toThrow();
@@ -446,9 +446,9 @@ describe('regression Tests: Sync Isolation Invariants', () => {
       // AI SDK must be able to push after each sync
       expect(() => {
         aiSdkMessage.parts.push({
-          type: 'text',
-          text: `Chunk ${i}`,
           state: TextPartStates.STREAMING,
+          text: `Chunk ${i}`,
+          type: 'text',
         });
       }).not.toThrow();
     }
@@ -497,15 +497,15 @@ describe('edge Cases: OpenRouter Model Variations', () => {
   it.each(openRouterModels)('should handle %s streaming without frozen array errors', (model) => {
     const aiSdkMessage: UIMessage = {
       id: 'thread-1_r0_p0',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: {
-        role: UIMessageRoles.ASSISTANT,
-        roundNumber: 0,
+        model,
         participantId: 'p0',
         participantIndex: 0,
-        model,
+        role: UIMessageRoles.ASSISTANT,
+        roundNumber: 0,
       },
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
     // Simulate streaming flow
@@ -513,15 +513,15 @@ describe('edge Cases: OpenRouter Model Variations', () => {
       // AI SDK receives chunk
       if (chunk === 0) {
         aiSdkMessage.parts.push({
-          type: 'text',
-          text: `Chunk ${chunk} from ${model}`,
           state: TextPartStates.STREAMING,
+          text: `Chunk ${chunk} from ${model}`,
+          type: 'text',
         });
       } else {
         aiSdkMessage.parts[0] = {
-          type: 'text',
-          text: `Chunks 0-${chunk} from ${model}`,
           state: TextPartStates.STREAMING,
+          text: `Chunks 0-${chunk} from ${model}`,
+          type: 'text',
         };
       }
 
@@ -531,14 +531,14 @@ describe('edge Cases: OpenRouter Model Variations', () => {
       });
 
       // Verify AI SDK can continue
-      expect(isFrozen(aiSdkMessage.parts)).toBe(false);
+      expect(isFrozen(aiSdkMessage.parts)).toBeFalsy();
     }
 
     // Complete the stream
     aiSdkMessage.parts[0] = {
-      type: 'text',
-      text: `Complete response from ${model}`,
       state: TextPartStates.DONE,
+      text: `Complete response from ${model}`,
+      type: 'text',
     };
 
     expect(aiSdkMessage.parts[0].state).toBe(TextPartStates.DONE);
@@ -547,42 +547,42 @@ describe('edge Cases: OpenRouter Model Variations', () => {
   it('should handle reasoning models with multiple part types', () => {
     const reasoningMessage: UIMessage = {
       id: 'thread-1_r0_p0',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: {
-        role: UIMessageRoles.ASSISTANT,
-        roundNumber: 0,
+        model: ModelIds.OPENAI_O3,
         participantId: 'p0',
         participantIndex: 0,
-        model: ModelIds.OPENAI_O3,
+        role: UIMessageRoles.ASSISTANT,
+        roundNumber: 0,
       },
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
     // Reasoning models emit reasoning parts first
     reasoningMessage.parts.push({
-      type: 'reasoning',
-      text: 'Let me think about this...',
       state: TextPartStates.STREAMING,
+      text: 'Let me think about this...',
+      type: 'reasoning',
     });
 
     act(() => {
       store.getState().setMessages(structuredClone([reasoningMessage]));
     });
 
-    expect(isFrozen(reasoningMessage.parts)).toBe(false);
+    expect(isFrozen(reasoningMessage.parts)).toBeFalsy();
 
     // Then text part
     reasoningMessage.parts.push({
-      type: 'text',
-      text: 'Here is my answer:',
       state: TextPartStates.STREAMING,
+      text: 'Here is my answer:',
+      type: 'text',
     });
 
     act(() => {
       store.getState().setMessages(structuredClone([reasoningMessage]));
     });
 
-    expect(isFrozen(reasoningMessage.parts)).toBe(false);
+    expect(isFrozen(reasoningMessage.parts)).toBeFalsy();
     expect(reasoningMessage.parts).toHaveLength(2);
   });
 });
@@ -604,9 +604,9 @@ describe('stress Tests: High-Frequency Sync', () => {
     for (let i = 0; i < 100; i++) {
       // Simulate streaming chunk
       if (i === 0) {
-        aiSdkMessage.parts.push({ type: 'text', text: `${i}`, state: TextPartStates.STREAMING });
+        aiSdkMessage.parts.push({ state: TextPartStates.STREAMING, text: `${i}`, type: 'text' });
       } else {
-        aiSdkMessage.parts[0] = { type: 'text', text: `${i}`, state: TextPartStates.STREAMING };
+        aiSdkMessage.parts[0] = { state: TextPartStates.STREAMING, text: `${i}`, type: 'text' };
       }
 
       // Sync to store
@@ -615,7 +615,7 @@ describe('stress Tests: High-Frequency Sync', () => {
       });
 
       // Verify still mutable
-      expect(isFrozen(aiSdkMessage.parts)).toBe(false);
+      expect(isFrozen(aiSdkMessage.parts)).toBeFalsy();
     }
   });
 
@@ -629,9 +629,9 @@ describe('stress Tests: High-Frequency Sync', () => {
       for (let p = 0; p < participants.length; p++) {
         const msg = participants[p];
         if (round === 0) {
-          msg.parts.push({ type: 'text', text: `P${p}R${round}`, state: TextPartStates.STREAMING });
+          msg.parts.push({ state: TextPartStates.STREAMING, text: `P${p}R${round}`, type: 'text' });
         } else {
-          msg.parts[0] = { type: 'text', text: `P${p}R${round}`, state: TextPartStates.STREAMING };
+          msg.parts[0] = { state: TextPartStates.STREAMING, text: `P${p}R${round}`, type: 'text' };
         }
       }
 
@@ -642,7 +642,7 @@ describe('stress Tests: High-Frequency Sync', () => {
 
       // All participants still mutable
       for (let p = 0; p < participants.length; p++) {
-        expect(isFrozen(participants[p].parts)).toBe(false);
+        expect(isFrozen(participants[p].parts)).toBeFalsy();
       }
     }
   });

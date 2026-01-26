@@ -92,7 +92,7 @@ type RunnableQuery = {
  * - Runtime batch operations don't require schema introspection
  * - Type safety is maintained through the operations array type parameter
  */
-type BatchCapableDatabase<TSchema extends { [key: string]: unknown } = { [key: string]: unknown }>
+type BatchCapableDatabase<TSchema extends Record<string, unknown> = Record<string, unknown>>
   = | DrizzleD1Database<TSchema>
     | BetterSQLite3Database<TSchema>
     | (DrizzleD1Database<TSchema> & { $client: unknown })
@@ -148,7 +148,7 @@ type BatchCapableDatabase<TSchema extends { [key: string]: unknown } = { [key: s
  * ```
  */
 export async function executeBatch<
-  TSchema extends { [key: string]: unknown } = { [key: string]: unknown },
+  TSchema extends Record<string, unknown> = Record<string, unknown>,
   T extends BatchQuery[] = BatchQuery[],
 >(
   db: BatchCapableDatabase<TSchema>,
@@ -239,7 +239,7 @@ export async function executeBatch<
  * await executeBatch(db, operations);
  * ```
  */
-export function validateBatchSize(operationCount: number, maxBatchSize: number = 100): void {
+export function validateBatchSize(operationCount: number, maxBatchSize = 100): void {
   if (operationCount > maxBatchSize) {
     throw createError.badRequest(
       `Batch size limit exceeded: ${operationCount} operations (max: ${maxBatchSize}). `

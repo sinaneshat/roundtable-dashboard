@@ -24,17 +24,17 @@ export const MAX_MODEL_ICONS = 5;
 // ============================================================================
 
 export const OgDefaultsSchema = z.object({
-  title: z.string(),
-  participantCount: z.number().int().nonnegative(),
   messageCount: z.number().int().nonnegative(),
+  participantCount: z.number().int().nonnegative(),
+  title: z.string(),
 });
 
 export type OgDefaults = z.infer<typeof OgDefaultsSchema>;
 
 export const OG_DEFAULTS: OgDefaults = {
-  title: 'AI Conversation',
-  participantCount: 3,
   messageCount: 10,
+  participantCount: 3,
+  title: 'AI Conversation',
 };
 
 // ============================================================================
@@ -42,11 +42,11 @@ export const OG_DEFAULTS: OgDefaults = {
 // ============================================================================
 
 export const OgImageParamsSchema = z.object({
-  title: z.string(),
+  messageCount: z.number().int().nonnegative(),
   mode: ChatModeSchema.optional(),
   participantCount: z.number().int().nonnegative(),
-  messageCount: z.number().int().nonnegative(),
   participantModelIds: z.array(z.string()),
+  title: z.string(),
 });
 
 export type OgImageParams = z.infer<typeof OgImageParamsSchema>;
@@ -56,36 +56,36 @@ export type OgImageParams = z.infer<typeof OgImageParamsSchema>;
 // ============================================================================
 
 export const OG_COLORS = {
+  // Mode-specific colors
+  analyzing: '#8b5cf6',
   // Background
   background: '#000000',
-  backgroundGradientStart: '#0a0a0a',
   backgroundGradientEnd: '#1a1a1a',
+
+  backgroundGradientStart: '#0a0a0a',
+  brainstorming: '#f59e0b',
+
+  debating: '#ef4444',
+  error: '#ef4444',
+  // Glass-morphism
+  glassBackground: 'rgba(24, 24, 27, 0.8)',
+
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
+  glassHighlight: 'rgba(255, 255, 255, 0.05)',
+  info: '#3b82f6',
 
   // Brand colors
   primary: BRAND.colors.primary,
   secondary: BRAND.colors.secondary,
+  solving: '#10b981',
+  // Status colors
+  success: '#22c55e',
 
+  textMuted: '#71717a',
   // Text colors
   textPrimary: '#ffffff',
   textSecondary: '#a1a1aa',
-  textMuted: '#71717a',
-
-  // Glass-morphism
-  glassBackground: 'rgba(24, 24, 27, 0.8)',
-  glassBorder: 'rgba(255, 255, 255, 0.1)',
-  glassHighlight: 'rgba(255, 255, 255, 0.05)',
-
-  // Mode-specific colors
-  analyzing: '#8b5cf6',
-  brainstorming: '#f59e0b',
-  debating: '#ef4444',
-  solving: '#10b981',
-
-  // Status colors
-  success: '#22c55e',
   warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#3b82f6',
 } as const;
 
 // ============================================================================
@@ -94,12 +94,17 @@ export const OG_COLORS = {
 
 /**
  * Mode colors derived from OG_COLORS using CHAT_MODES array as single source of truth
+ *
+ * ✅ JUSTIFIED TYPE ASSERTION: The reduce iterates over CHAT_MODES (const array
+ * of all ChatMode values), so the accumulator is guaranteed to have all ChatMode
+ * keys after completion. TypeScript cannot infer this from reduce's signature.
  */
 export const MODE_COLORS = CHAT_MODES.reduce(
   (acc, mode) => {
     acc[mode] = OG_COLORS[mode];
     return acc;
   },
+  // ✅ JUSTIFIED: CHAT_MODES iteration fills all ChatMode keys
   {} as Record<ChatMode, string>,
 );
 
@@ -120,7 +125,7 @@ export function getModeColor(mode: ChatMode): string {
 // ============================================================================
 
 export function createGradient(
-  angle: number = 135,
+  angle = 135,
   start: string = OG_COLORS.backgroundGradientStart,
   end: string = OG_COLORS.backgroundGradientEnd,
 ): string {

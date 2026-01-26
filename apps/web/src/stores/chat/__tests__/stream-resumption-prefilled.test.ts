@@ -42,20 +42,20 @@ type UIMessage = {
 };
 
 type PreSearchData = {
-  queries: Array<{
+  queries: {
     query: string;
     rationale: string;
     searchDepth: string;
     index: number;
     total: number;
-  }>;
-  results: Array<{
+  }[];
+  results: {
     query: string;
     answer: string | null;
-    results: Array<Record<string, unknown>>;
+    results: Record<string, unknown>[];
     responseTime: number;
     index: number;
-  }>;
+  }[];
   summary: string;
   successCount: number;
   failureCount: number;
@@ -108,20 +108,20 @@ type ChatThread = {
 /**
  * Creates mock participants for testing
  */
-function createMockParticipants(count: number = 3): ChatParticipant[] {
+function createMockParticipants(count = 3): ChatParticipant[] {
   const models = [ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, ModelIds.X_AI_GROK_4_FAST, ModelIds.GOOGLE_GEMINI_2_5_FLASH];
   const roles = ['Space Futurist', 'Climate Scientist', 'Resource Economist'];
 
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: models[i] || `model-${i}`,
-    role: roles[i] || '',
-    customRoleId: null,
-    isEnabled: true,
-    priority: i,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: models[i] || `model-${i}`,
+    priority: i,
+    role: roles[i] || '',
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   }));
 }
@@ -131,14 +131,14 @@ function createMockParticipants(count: number = 3): ChatParticipant[] {
  */
 function createMockThread(): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: true,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Mars: Backup Plan or Escapism?',
     mode: 'debating',
     status: 'active',
-    enableWebSearch: true,
-    createdAt: new Date(),
+    title: 'Mars: Backup Plan or Escapism?',
     updatedAt: new Date(),
+    userId: 'user-123',
   };
 }
 
@@ -150,25 +150,25 @@ function createMockPreSearch(
   status: typeof MessageStatuses[keyof typeof MessageStatuses],
 ): PreSearch {
   return {
+    completedAt: new Date(),
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    status,
-    userQuery: 'Is Mars colonization humanity\'s backup plan or escapism?',
     searchData: {
-      queries: [
-        { query: 'Mars colonization technical feasibility', rationale: 'test', searchDepth: 'advanced', index: 0, total: 3 },
-      ],
-      results: [{ query: 'Mars colonization', answer: null, results: [], responseTime: 1000, index: 0 }],
-      summary: 'test summary',
-      successCount: 3,
       failureCount: 0,
+      queries: [
+        { index: 0, query: 'Mars colonization technical feasibility', rationale: 'test', searchDepth: 'advanced', total: 3 },
+      ],
+      results: [{ answer: null, index: 0, query: 'Mars colonization', responseTime: 1000, results: [] }],
+      successCount: 3,
+      summary: 'test summary',
       totalResults: 9,
       totalTime: 17000,
     } satisfies PreSearchData,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: new Date(),
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Is Mars colonization humanity\'s backup plan or escapism?',
   };
 }
 
@@ -178,13 +178,13 @@ function createMockPreSearch(
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'Is Mars colonization humanity\'s backup plan or escapism?' }],
     metadata: {
+      createdAt: new Date().toISOString(),
       role: MessageRoles.USER,
       roundNumber,
-      createdAt: new Date().toISOString(),
     },
+    parts: [{ text: 'Is Mars colonization humanity\'s backup plan or escapism?', type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -198,21 +198,21 @@ function createEmptyParticipantMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [], // Empty - no content received yet
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: FinishReasons.UNKNOWN,
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: modelId,
       participantId: `participant-${participantIndex}`,
       participantIndex,
       participantRole: participantIndex === 0 ? 'Space Futurist' : '',
-      model: modelId,
-      finishReason: FinishReasons.UNKNOWN,
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: [], // Empty - no content received yet
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -257,82 +257,82 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Simulate the store state after refresh
       const storeState = {
+        animationResolvers: {},
+        createdModeratorRounds: {},
+        createdThreadId: null,
+        currentParticipantIndex: 0,
+        currentRoundNumber: null,
+        enableWebSearch: true,
+        error: null,
+        expectedParticipantIds: null,
+        feedbackByRound: {},
+        hasEarlyOptimisticMessage: false,
+        hasInitiallyLoaded: true,
+        hasLoadedFeedback: false,
+        hasPendingConfigChanges: false,
+        hasSentPendingMessage: false,
         inputValue: '',
+        isCreatingThread: false,
+        isModeratorStreaming: false,
+        isReadOnly: false,
+        isRegenerating: false,
+        isStreaming: false, // BUG: should be true when AI SDK resumes
+        isWaitingForChangelog: false,
+        messages, // Has empty parts
+        modelOrder: [],
+        nextParticipantToTrigger: 0,
+        participants,
+        pendingAnimations: {},
+        pendingAttachmentIds: null,
+        pendingAttachments: [],
+        pendingFeedback: null,
+        pendingFileParts: null,
+        pendingMessage: null,
+        prefilledForThreadId: thread.id,
+        preSearchActivityTimes: {},
+        preSearches,
+        regeneratingRoundNumber: null,
+        resumptionAttempts: {},
+        screenMode: 'thread',
         selectedMode: 'debating',
         selectedParticipants: participants.map((p, i) => ({
           id: p.id,
           modelId: p.modelId,
-          role: p.role,
           priority: i,
+          role: p.role,
         })),
-        enableWebSearch: true,
-        modelOrder: [],
-        feedbackByRound: {},
-        pendingFeedback: null,
-        hasLoadedFeedback: false,
         showInitialUI: false,
-        waitingToStartStreaming: true, // Key flag - set by incomplete-round-resumption
-        isCreatingThread: false,
-        createdThreadId: null,
-        preSearches,
-        preSearchActivityTimes: {},
-        thread,
-        participants,
-        messages, // Has empty parts
-        isStreaming: false, // BUG: should be true when AI SDK resumes
-        currentParticipantIndex: 0,
-        error: null,
-        hasInitiallyLoaded: true,
-        isRegenerating: false,
-        isModeratorStreaming: false,
-        isWaitingForChangelog: false,
-        hasPendingConfigChanges: false,
-        regeneratingRoundNumber: null,
-        pendingMessage: null,
-        pendingAttachmentIds: null,
-        pendingFileParts: null,
-        expectedParticipantIds: null,
         streamingRoundNumber: 0,
-        currentRoundNumber: null,
-        hasSentPendingMessage: false,
-        createdModeratorRounds: {},
-        triggeredPreSearchRounds: {},
-        triggeredModeratorRounds: {},
-        triggeredModeratorIds: {},
-        hasEarlyOptimisticMessage: false,
-        screenMode: 'thread',
-        isReadOnly: false,
-        streamResumptionState: null,
-        resumptionAttempts: {},
-        nextParticipantToTrigger: 0,
         streamResumptionPrefilled: true, // Key flag - server prefilled
-        prefilledForThreadId: thread.id,
-        pendingAnimations: {},
-        animationResolvers: {},
-        pendingAttachments: [],
+        streamResumptionState: null,
+        thread,
+        triggeredModeratorIds: {},
+        triggeredModeratorRounds: {},
+        triggeredPreSearchRounds: {},
+        waitingToStartStreaming: true, // Key flag - set by incomplete-round-resumption
       };
 
       // Verify initial state has the bug conditions
-      expect(storeState.streamResumptionPrefilled).toBe(true);
-      expect(storeState.waitingToStartStreaming).toBe(true);
-      expect(storeState.isStreaming).toBe(false);
+      expect(storeState.streamResumptionPrefilled).toBeTruthy();
+      expect(storeState.waitingToStartStreaming).toBeTruthy();
+      expect(storeState.isStreaming).toBeFalsy();
       expect(storeState.messages[1]?.parts).toHaveLength(0);
 
       // Simulate AI SDK receiving stream data (from curl response)
       const streamEvents = [
-        { type: 'start', messageMetadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 } },
+        { messageMetadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 }, type: 'start' },
         { type: 'start-step' },
-        { type: 'text-start', id: 'gen-123' },
-        { type: 'text-delta', id: 'gen-123', delta: 'Mars' },
-        { type: 'text-delta', id: 'gen-123', delta: ' colonization' },
-        { type: 'text-delta', id: 'gen-123', delta: ' is' },
-        { type: 'text-delta', id: 'gen-123', delta: ' neither' },
-        { type: 'text-delta', id: 'gen-123', delta: ' pure' },
+        { id: 'gen-123', type: 'text-start' },
+        { delta: 'Mars', id: 'gen-123', type: 'text-delta' },
+        { delta: ' colonization', id: 'gen-123', type: 'text-delta' },
+        { delta: ' is', id: 'gen-123', type: 'text-delta' },
+        { delta: ' neither', id: 'gen-123', type: 'text-delta' },
+        { delta: ' pure', id: 'gen-123', type: 'text-delta' },
       ];
 
       // Expected: After processing these events, the store should have updated parts
       // The bug is that parts stay empty because isStreaming is never set to true
-      const expectedParts = [{ type: 'text', text: 'Mars colonization is neither pure', state: TextPartStates.STREAMING }];
+      const expectedParts = [{ state: TextPartStates.STREAMING, text: 'Mars colonization is neither pure', type: 'text' }];
 
       // This assertion will FAIL with the current bug
       // After the fix, it should pass
@@ -368,13 +368,13 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Current buggy behavior
       const currentBehaviorSetsStreaming = !streamResumptionPrefilled && aiSdkStatus === 'streaming' && !hasEarlyOptimisticMessage;
-      expect(currentBehaviorSetsStreaming).toBe(false); // Bug: doesn't set streaming
+      expect(currentBehaviorSetsStreaming).toBeFalsy(); // Bug: doesn't set streaming
 
       // Expected fixed behavior
       // When AI SDK is actively streaming, we MUST set isExplicitlyStreaming=true
       // regardless of streamResumptionPrefilled (that flag only affects resumption trigger logic)
       const fixedBehaviorShouldSetStreaming = aiSdkStatus === 'streaming' && !hasEarlyOptimisticMessage;
-      expect(fixedBehaviorShouldSetStreaming).toBe(true); // Fix: should set streaming
+      expect(fixedBehaviorShouldSetStreaming).toBeTruthy(); // Fix: should set streaming
     });
 
     it('should allow message sync to update store parts during resumed stream', () => {
@@ -397,12 +397,12 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Current buggy behavior - sync is skipped
       const willSyncWithBug = chatIsStreaming && chatMessagesLength > 0;
-      expect(willSyncWithBug).toBe(false); // Bug: sync skipped
+      expect(willSyncWithBug).toBeFalsy(); // Bug: sync skipped
 
       // Fixed behavior - sync should happen
       const chatIsStreamingFixed = true;
       const willSyncWithFix = chatIsStreamingFixed && chatMessagesLength > 0;
-      expect(willSyncWithFix).toBe(true); // Fix: sync happens
+      expect(willSyncWithFix).toBeTruthy(); // Fix: sync happens
     });
   });
 
@@ -436,31 +436,31 @@ describe('stream Resumption with Prefilled State', () => {
       // Test that documents the expected coordination
       const scenarios = [
         {
-          name: 'No active stream (204)',
-          streamResumptionPrefilled: true,
           aiSdkStatus: 'ready',
           expectedIsStreaming: false,
+          name: 'No active stream (204)',
           shouldTriggerIncompleteRoundResumption: true,
+          streamResumptionPrefilled: true,
         },
         {
-          name: 'Active stream exists (SSE)',
-          streamResumptionPrefilled: true,
           aiSdkStatus: 'streaming',
           expectedIsStreaming: true, // BUG: currently false
+          name: 'Active stream exists (SSE)',
           shouldTriggerIncompleteRoundResumption: false, // Already resuming via AI SDK
+          streamResumptionPrefilled: true,
         },
       ];
 
       for (const scenario of scenarios) {
-        expect(scenario.streamResumptionPrefilled).toBe(true);
+        expect(scenario.streamResumptionPrefilled).toBeTruthy();
       }
 
       // When AI SDK is streaming, isExplicitlyStreaming must be true for sync
       const streamingScenarios = scenarios.filter(s => s.aiSdkStatus === 'streaming');
       expect(streamingScenarios.length).toBeGreaterThan(0);
       for (const scenario of streamingScenarios) {
-        expect(scenario.expectedIsStreaming).toBe(true);
-        expect(scenario.shouldTriggerIncompleteRoundResumption).toBe(false);
+        expect(scenario.expectedIsStreaming).toBeTruthy();
+        expect(scenario.shouldTriggerIncompleteRoundResumption).toBeFalsy();
       }
     });
   });
@@ -486,7 +486,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // This test serves as documentation of the fix
       const fixApplied = true;
-      expect(fixApplied).toBe(true);
+      expect(fixApplied).toBeTruthy();
     });
   });
 
@@ -539,23 +539,23 @@ describe('stream Resumption with Prefilled State', () => {
 
       // State after resumed stream dies
       const stateAfterDeadStream = {
-        streamResumptionPrefilled: true,
-        isStreaming: true, // Set by my fix when AI SDK was streaming
-        waitingToStartStreaming: false, // Cleared when streaming detected
         currentParticipantIndex: 0,
-        nextParticipantToTrigger: 0, // Should retry participant 0
+        isStreaming: true, // Set by my fix when AI SDK was streaming
         messages: [
-          { id: 'user-msg', role: MessageRoles.USER, parts: [{ type: 'text', text: 'Question?' }] },
+          { id: 'user-msg', parts: [{ text: 'Question?', type: 'text' }], role: MessageRoles.USER },
           {
             id: 'p0-msg',
-            role: MessageRoles.ASSISTANT,
+            metadata: { finishReason: FinishReasons.UNKNOWN, participantIndex: 0 },
             parts: [
               { type: 'step-start' },
-              { type: 'text', text: 'Mars colonization is neither pure', state: TextPartStates.STREAMING },
+              { state: TextPartStates.STREAMING, text: 'Mars colonization is neither pure', type: 'text' },
             ],
-            metadata: { participantIndex: 0, finishReason: FinishReasons.UNKNOWN },
+            role: MessageRoles.ASSISTANT,
           },
         ],
+        nextParticipantToTrigger: 0, // Should retry participant 0
+        streamResumptionPrefilled: true,
+        waitingToStartStreaming: false, // Cleared when streaming detected
       };
 
       // AI SDK status is now 'ready' (stream ended)
@@ -564,7 +564,7 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Expected: Detect stream ended without completion
       const streamEndedWithoutCompletion = aiSdkStatus === 'ready' && participantFinishReason === FinishReasons.UNKNOWN;
-      expect(streamEndedWithoutCompletion).toBe(true);
+      expect(streamEndedWithoutCompletion).toBeTruthy();
 
       // Expected: isExplicitlyStreaming should be cleared
       // So incomplete-round-resumption can retry
@@ -591,28 +591,28 @@ describe('stream Resumption with Prefilled State', () => {
 
       // State after successful completion
       const stateAfterCompletion = {
-        streamResumptionPrefilled: true,
-        isStreaming: false, // Cleared after completion
         currentParticipantIndex: 0,
-        nextParticipantToTrigger: 1, // Move to next participant
+        isStreaming: false, // Cleared after completion
         messages: [
-          { id: 'user-msg', role: MessageRoles.USER, parts: [{ type: 'text', text: 'Question?' }] },
+          { id: 'user-msg', parts: [{ text: 'Question?', type: 'text' }], role: MessageRoles.USER },
           {
             id: 'p0-msg',
-            role: MessageRoles.ASSISTANT,
+            metadata: { finishReason: FinishReasons.STOP, participantIndex: 0 },
             parts: [
               { type: 'step-start' },
-              { type: 'text', text: 'Complete response from participant 0', state: TextPartStates.DONE },
+              { state: TextPartStates.DONE, text: 'Complete response from participant 0', type: 'text' },
             ],
-            metadata: { participantIndex: 0, finishReason: FinishReasons.STOP },
+            role: MessageRoles.ASSISTANT,
           },
         ],
+        nextParticipantToTrigger: 1, // Move to next participant
+        streamResumptionPrefilled: true,
       };
 
       const participantFinishReason = stateAfterCompletion.messages[1]?.metadata?.finishReason;
       const participantCompleted = participantFinishReason === FinishReasons.STOP || participantFinishReason === FinishReasons.LENGTH;
 
-      expect(participantCompleted).toBe(true);
+      expect(participantCompleted).toBeTruthy();
       expect(stateAfterCompletion.nextParticipantToTrigger).toBe(1);
     });
 
@@ -637,20 +637,20 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Test documents the bug
       const currentBehavior = {
-        streamResumptionPrefilled: true,
         skipsPhantomTimeout: true, // Current (buggy) behavior
+        streamResumptionPrefilled: true,
       };
 
       const correctBehavior = {
-        streamResumptionPrefilled: true,
         skipsPhantomTimeout: false, // Should still detect dead streams
+        streamResumptionPrefilled: true,
         usesStatusChangeDetection: true, // Alternative: detect when AI SDK status changes
       };
 
       // Current behavior skips phantom timeout - this is the bug
-      expect(currentBehavior.skipsPhantomTimeout).toBe(true);
+      expect(currentBehavior.skipsPhantomTimeout).toBeTruthy();
       // Correct behavior should either use phantom timeout or status change detection
-      expect(correctBehavior.skipsPhantomTimeout || correctBehavior.usesStatusChangeDetection).toBe(true);
+      expect(correctBehavior.skipsPhantomTimeout || correctBehavior.usesStatusChangeDetection).toBeTruthy();
     });
   });
 
@@ -680,20 +680,20 @@ describe('stream Resumption with Prefilled State', () => {
 
       const participantMessage = {
         id: 'p0-msg',
-        role: MessageRoles.ASSISTANT,
+        metadata: {
+          finishReason: 'unknown',
+          participantIndex: 0,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
+        },
         parts: [
           { type: 'step-start' },
           {
-            type: 'text',
-            text: 'The debate around nuclear power\'s role in climate change mitigation...',
             state: TextPartStates.STREAMING,
+            text: 'The debate around nuclear power\'s role in climate change mitigation...',
+            type: 'text',
           },
         ],
-        metadata: {
-          participantIndex: 0,
-          finishReason: 'unknown',
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        },
+        role: MessageRoles.ASSISTANT,
       };
 
       // Determine if participant is complete
@@ -702,9 +702,9 @@ describe('stream Resumption with Prefilled State', () => {
       const hasContent = participantMessage.parts.length > 0;
       const hasTextPart = participantMessage.parts.some(p => p.type === 'text' && p.text);
 
-      expect(isComplete).toBe(false);
-      expect(hasContent).toBe(true);
-      expect(hasTextPart).toBe(true);
+      expect(isComplete).toBeFalsy();
+      expect(hasContent).toBeTruthy();
+      expect(hasTextPart).toBeTruthy();
 
       // Expected: nextParticipantToTrigger should be 0 (retry incomplete participant)
       // The server is calculating this wrong
@@ -722,9 +722,9 @@ describe('stream Resumption with Prefilled State', () => {
        */
 
       const participantStatuses = [
-        { index: 0, hasContent: true, finishReason: FinishReasons.UNKNOWN }, // Incomplete
-        { index: 1, hasContent: false, finishReason: FinishReasons.UNKNOWN }, // Not started
-        { index: 2, hasContent: false, finishReason: FinishReasons.UNKNOWN }, // Not started
+        { finishReason: FinishReasons.UNKNOWN, hasContent: true, index: 0 }, // Incomplete
+        { finishReason: FinishReasons.UNKNOWN, hasContent: false, index: 1 }, // Not started
+        { finishReason: FinishReasons.UNKNOWN, hasContent: false, index: 2 }, // Not started
       ];
 
       // Wrong logic: skip if has content
@@ -769,9 +769,9 @@ describe('stream Resumption with Prefilled State', () => {
        */
 
       const invalidPreSearch = {
-        status: MessageStatuses.COMPLETE,
-        searchData: null,
         completedAt: null,
+        searchData: null,
+        status: MessageStatuses.COMPLETE,
       };
 
       // Validate: if status is complete, must have searchData and completedAt
@@ -779,7 +779,7 @@ describe('stream Resumption with Prefilled State', () => {
         = invalidPreSearch.status !== MessageStatuses.COMPLETE
           || (invalidPreSearch.searchData !== null && invalidPreSearch.completedAt !== null);
 
-      expect(isValidComplete).toBe(false); // Shows the bug - invalid state exists
+      expect(isValidComplete).toBeFalsy(); // Shows the bug - invalid state exists
     });
 
     it('should correctly parse pre-search done event', () => {
@@ -797,11 +797,11 @@ describe('stream Resumption with Prefilled State', () => {
        */
 
       const doneEventData = JSON.stringify({
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' }],
-        results: [{ query: 'test', answer: null, results: [] }],
-        summary: 'test',
-        successCount: 1,
         failureCount: 0,
+        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' }],
+        results: [{ answer: null, query: 'test', results: [] }],
+        successCount: 1,
+        summary: 'test',
         totalResults: 3,
         totalTime: 5000,
       });
@@ -813,9 +813,9 @@ describe('stream Resumption with Prefilled State', () => {
 
       // Frontend should update both status AND searchData together
       const correctUpdate = {
-        status: MessageStatuses.COMPLETE,
-        searchData: parsed,
         completedAt: new Date(),
+        searchData: parsed,
+        status: MessageStatuses.COMPLETE,
       };
 
       expect(correctUpdate.status).toBe(MessageStatuses.COMPLETE);
@@ -840,13 +840,13 @@ describe('stream Resumption with Prefilled State', () => {
       });
 
       const parsed = JSON.parse(interruptedEventData);
-      expect(parsed.interrupted).toBe(true);
+      expect(parsed.interrupted).toBeTruthy();
 
       // Frontend should handle this as failure/retry, not success
       const isInterrupted = parsed.interrupted === true;
       const shouldSetComplete = !isInterrupted;
 
-      expect(shouldSetComplete).toBe(false);
+      expect(shouldSetComplete).toBeFalsy();
     });
   });
 });

@@ -29,10 +29,10 @@ type ProjectDetailScreenProps = {
 };
 
 export function ProjectDetailScreen({
-  projectId,
   initialProject,
   initialThreads,
   openSettings,
+  projectId,
 }: ProjectDetailScreenProps) {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -57,10 +57,10 @@ export function ProjectDetailScreen({
   useEffect(() => {
     if (openSettings && project) {
       navigate({
-        to: '/chat/projects/$projectId',
         params: { projectId },
-        search: {},
         replace: true,
+        search: {},
+        to: '/chat/projects/$projectId',
       });
     }
   }, [openSettings, project, navigate, projectId]);
@@ -219,8 +219,8 @@ function ProjectDetailSkeleton() {
 }
 
 function ThreadList({
-  projectId,
   initialData,
+  projectId,
 }: {
   projectId: string;
   initialData?: InfiniteData<ListThreadsResponse, string | undefined>;
@@ -230,10 +230,10 @@ function ThreadList({
 
   const {
     data,
-    isLoading,
-    hasNextPage,
     fetchNextPage,
+    hasNextPage,
     isFetchingNextPage,
+    isLoading,
   } = useProjectThreadsQuery(projectId, { initialData });
 
   const threads = useMemo(() => {
@@ -310,9 +310,9 @@ type ThreadItem = {
 };
 
 function ThreadListItem({
-  thread,
-  projectId,
   onDelete,
+  projectId,
+  thread,
 }: {
   thread: ThreadItem;
   projectId: string;
@@ -327,10 +327,10 @@ function ThreadListItem({
     const isCurrentYear = date.getFullYear() === now.getFullYear();
 
     if (isCurrentYear) {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
     }
     // Show year if different
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   }, [thread.updatedAt]);
 
   return (

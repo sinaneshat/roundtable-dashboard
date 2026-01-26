@@ -42,35 +42,35 @@ import {
  * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
  */
 export const FlowContextSchema = z.object({
+  allParticipantsResponded: z.boolean(),
+  currentRound: z.number().int().nonnegative(),
+  hasAiGeneratedTitle: z.boolean(),
+  hasMessages: z.boolean(),
+  hasNavigated: z.boolean(),
+  isAiSdkStreaming: z.boolean(),
+  isCreatingModerator: z.boolean(),
+  isCreatingThread: z.boolean(),
+  moderatorExists: z.boolean(),
+  moderatorStatus: MessageStatusSchema.nullable(),
+  participantCount: z.number().int().nonnegative(),
+  pendingAnimations: z.custom<Set<number>>(val => val instanceof Set),
+  screenMode: ScreenModeSchema.nullable(),
+  streamingJustCompleted: z.boolean(),
   threadId: z.string().nullable(),
   threadSlug: z.string().nullable(),
-  hasAiGeneratedTitle: z.boolean(),
-  currentRound: z.number().int().nonnegative(),
-  hasMessages: z.boolean(),
-  participantCount: z.number().int().nonnegative(),
-  allParticipantsResponded: z.boolean(),
-  moderatorStatus: MessageStatusSchema.nullable(),
-  moderatorExists: z.boolean(),
-  isAiSdkStreaming: z.boolean(),
-  streamingJustCompleted: z.boolean(),
-  pendingAnimations: z.custom<Set<number>>(val => val instanceof Set),
-  isCreatingThread: z.boolean(),
-  isCreatingModerator: z.boolean(),
-  hasNavigated: z.boolean(),
-  screenMode: ScreenModeSchema.nullable(),
 });
 
 export type FlowContext = z.infer<typeof FlowContextSchema>;
 
 const FlowActionTypes = {
-  CREATE_THREAD: 'CREATE_THREAD',
-  START_PARTICIPANT_STREAMING: 'START_PARTICIPANT_STREAMING',
+  COMPLETE_FLOW: 'COMPLETE_FLOW',
   CREATE_MODERATOR: 'CREATE_MODERATOR',
-  START_MODERATOR_STREAMING: 'START_MODERATOR_STREAMING',
+  CREATE_THREAD: 'CREATE_THREAD',
   INVALIDATE_CACHE: 'INVALIDATE_CACHE',
   NAVIGATE: 'NAVIGATE',
-  COMPLETE_FLOW: 'COMPLETE_FLOW',
   RESET: 'RESET',
+  START_MODERATOR_STREAMING: 'START_MODERATOR_STREAMING',
+  START_PARTICIPANT_STREAMING: 'START_PARTICIPANT_STREAMING',
 } as const;
 
 export type FlowAction
@@ -180,7 +180,7 @@ function getNextAction(
     if (prevState === FlowStates.STREAMING_MODERATOR) {
       return null;
     }
-    return { type: FlowActionTypes.NAVIGATE, slug: context.threadSlug };
+    return { slug: context.threadSlug, type: FlowActionTypes.NAVIGATE };
   }
 
   return null;
@@ -218,25 +218,25 @@ export function useFlowStateMachine(
 
   // State subscriptions (batched)
   const {
-    thread,
     createdThreadId,
+    isAiSdkStreaming,
+    isCreatingModerator,
     isCreatingThread,
     messages,
     participants,
-    isCreatingModerator,
-    isAiSdkStreaming,
-    screenMode,
     pendingAnimations,
+    screenMode,
+    thread,
   } = useChatStore(useShallow(s => ({
-    thread: s.thread,
     createdThreadId: s.createdThreadId,
+    isAiSdkStreaming: s.isStreaming,
+    isCreatingModerator: s.isModeratorStreaming,
     isCreatingThread: s.isCreatingThread,
     messages: s.messages,
     participants: s.participants,
-    isCreatingModerator: s.isModeratorStreaming,
-    isAiSdkStreaming: s.isStreaming,
-    screenMode: s.screenMode,
     pendingAnimations: s.pendingAnimations,
+    screenMode: s.screenMode,
+    thread: s.thread,
   })));
 
   // ✅ RACE CONDITION FIX: Get store API for fresh state reads inside effects
@@ -305,10 +305,12 @@ export function useFlowStateMachine(
     let completedCount = 0;
 
     for (const m of messages) {
-      if (m.role !== MessageRoles.ASSISTANT)
+      if (m.role !== MessageRoles.ASSISTANT) {
         continue;
-      if (getRoundNumber(m.metadata) !== currentRound)
+      }
+      if (getRoundNumber(m.metadata) !== currentRound) {
         continue;
+      }
 
       // Check if moderator message (use type-safe utility)
       const modMeta = getModeratorMetadata(m.metadata);
@@ -349,22 +351,22 @@ export function useFlowStateMachine(
     }
 
     return {
+      allParticipantsResponded,
+      currentRound,
+      hasAiGeneratedTitle: thread?.isAiGeneratedTitle ?? false,
+      hasMessages: messages.length > 0,
+      hasNavigated,
+      isAiSdkStreaming,
+      isCreatingModerator,
+      isCreatingThread,
+      moderatorExists: !!currentRoundModeratorMessage,
+      moderatorStatus,
+      participantCount: participants.length,
+      pendingAnimations,
+      screenMode,
+      streamingJustCompleted,
       threadId,
       threadSlug: thread?.slug || null,
-      hasAiGeneratedTitle: thread?.isAiGeneratedTitle ?? false,
-      currentRound,
-      hasMessages: messages.length > 0,
-      participantCount: participants.length,
-      allParticipantsResponded,
-      moderatorStatus,
-      moderatorExists: !!currentRoundModeratorMessage,
-      isAiSdkStreaming,
-      streamingJustCompleted,
-      pendingAnimations,
-      isCreatingThread,
-      isCreatingModerator,
-      hasNavigated,
-      screenMode,
     };
   }, [
     thread,
@@ -396,7 +398,7 @@ export function useFlowStateMachine(
         case FlowActionTypes.CREATE_MODERATOR: {
           // ✅ TEXT STREAMING: Mark moderator as ready to create
           // The actual moderator streaming is triggered by useModeratorTrigger hook
-          const { threadId, currentRound } = context;
+          const { currentRound, threadId } = context;
 
           if (threadId && messages.length > 0) {
             // ✅ RACE CONDITION FIX: Get FRESH state directly from store
@@ -509,9 +511,9 @@ export function useFlowStateMachine(
   const loadingMessage = getLoadingMessage(flowState);
 
   return {
+    currentRound: context.currentRound,
     flowState,
     isLoading,
     loadingMessage,
-    currentRound: context.currentRound,
   };
 }

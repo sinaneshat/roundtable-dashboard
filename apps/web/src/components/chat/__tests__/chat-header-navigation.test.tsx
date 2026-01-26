@@ -21,11 +21,14 @@ let mockedPathname = '/chat';
 
 // Mock TanStack Router components and hooks
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children, to, className, ...props }: { children: ReactNode; to: string; className?: string }) => (
+  Link: ({ children, className, to, ...props }: { children: ReactNode; to: string; className?: string }) => (
     <a href={to} className={className} {...props}>
       {children}
     </a>
   ),
+  useLocation: vi.fn(() => ({ pathname: mockedPathname })),
+  useMatches: vi.fn(() => []),
+  useNavigate: vi.fn(() => vi.fn()),
   useRouter: vi.fn(() => ({
     navigate: vi.fn(),
     state: {
@@ -34,9 +37,6 @@ vi.mock('@tanstack/react-router', () => ({
       },
     },
   })),
-  useNavigate: vi.fn(() => vi.fn()),
-  useLocation: vi.fn(() => ({ pathname: mockedPathname })),
-  useMatches: vi.fn(() => []),
 }));
 
 // Helper to set mocked pathname for useLocation
@@ -51,8 +51,8 @@ vi.mock('@/hooks/queries', async (importOriginal) => {
     ...original,
     useThreadQuery: vi.fn(() => ({
       data: null,
-      isLoading: false,
       isError: false,
+      isLoading: false,
     })),
   };
 });
@@ -63,12 +63,12 @@ vi.mock('@/components/ui/sidebar', async (importOriginal) => {
   return {
     ...original,
     useSidebar: () => ({
-      state: 'expanded' as const,
-      open: true,
-      setOpen: vi.fn(),
-      openMobile: false,
-      setOpenMobile: vi.fn(),
       isMobile: false,
+      open: true,
+      openMobile: false,
+      setOpen: vi.fn(),
+      setOpenMobile: vi.fn(),
+      state: 'expanded' as const,
       toggleSidebar: vi.fn(),
     }),
   };
@@ -81,13 +81,13 @@ vi.mock('@/stores/chat', () => ({
 
 // Mock useChatStore
 const mockStoreState = {
-  showInitialUI: true,
   createdThreadId: null as string | null,
-  thread: null as { id: string; title: string; slug: string } | null,
-  isStreaming: false,
   isCreatingThread: false,
-  waitingToStartStreaming: false,
   isModeratorStreaming: false,
+  isStreaming: false,
+  showInitialUI: true,
+  thread: null as { id: string; title: string; slug: string } | null,
+  waitingToStartStreaming: false,
 };
 
 vi.mock('@/components/providers', async (importOriginal) => {
@@ -140,8 +140,8 @@ describe('chatHeaderSwitch navigation behavior', () => {
       mockStoreState.createdThreadId = 'thread-123';
       mockStoreState.thread = {
         id: 'thread-123',
-        title: 'Test Thread Title',
         slug: 'test-thread-slug',
+        title: 'Test Thread Title',
       } as typeof mockStoreState.thread;
 
       render(<ChatHeaderSwitch />);
@@ -160,8 +160,8 @@ describe('chatHeaderSwitch navigation behavior', () => {
       mockStoreState.createdThreadId = 'thread-123';
       mockStoreState.thread = {
         id: 'thread-123',
-        title: 'Previous Thread Title',
         slug: 'previous-thread-slug',
+        title: 'Previous Thread Title',
       } as typeof mockStoreState.thread;
 
       render(<ChatHeaderSwitch />);
@@ -179,8 +179,8 @@ describe('chatHeaderSwitch navigation behavior', () => {
       mockStoreState.createdThreadId = 'thread-123';
       mockStoreState.thread = {
         id: 'thread-123',
-        title: 'Old Thread Title',
         slug: 'old-thread-slug',
+        title: 'Old Thread Title',
       } as typeof mockStoreState.thread;
 
       render(<ChatHeaderSwitch />);
@@ -208,8 +208,8 @@ describe('navigationHeader - static routes detection', () => {
     mockStoreState.createdThreadId = 'old-thread';
     mockStoreState.thread = {
       id: 'old-thread',
-      title: 'Stale Thread',
       slug: 'stale-slug',
+      title: 'Stale Thread',
     } as typeof mockStoreState.thread;
 
     render(<NavigationHeader />);
@@ -240,8 +240,8 @@ describe('navigationHeader - static routes detection', () => {
     mockStoreState.showInitialUI = false;
     mockStoreState.thread = {
       id: 'thread-123',
-      title: 'Actual Thread',
       slug: 'some-thread-slug',
+      title: 'Actual Thread',
     } as typeof mockStoreState.thread;
 
     render(<NavigationHeader />);

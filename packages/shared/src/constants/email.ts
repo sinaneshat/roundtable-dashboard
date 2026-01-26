@@ -4,10 +4,11 @@
  */
 
 /**
- * RFC 5322 compliant email validation regex
- * Handles most real-world email formats
+ * Email validation regex - simplified to avoid ReDoS vulnerability
+ * Uses a practical pattern that catches most invalid emails without exponential backtracking
+ * For full RFC 5322 compliance, use a library like email-validator
  */
-export const EMAIL_REGEX = /^[\w.!#$%&'*+/=?^`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+export const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 
 /**
  * Maximum allowed email length per RFC 5321
@@ -62,19 +63,19 @@ export const PROBLEMATIC_EMAIL_CHARS = ['<', '>', '"', '\\', '|'];
  * Email service configuration constants
  */
 export const EMAIL_SERVICE_CONFIG = {
+  AWS_REGION: 'eu-north-1',
   FROM_ADDRESS: 'noreply@roundtable.now',
   FROM_NAME: 'Roundtable',
   REPLY_TO: 'support@roundtable.now',
-  AWS_REGION: 'eu-north-1',
 } as const;
 
 /**
  * Email expiration times for various purposes
  */
 export const EMAIL_EXPIRATION_TIMES = {
-  MAGIC_LINK: '10 minutes',
-  EMAIL_VERIFICATION: '24 hours',
   ACCOUNT_DELETION: '24 hours',
-  PASSWORD_RESET: '1 hour',
+  EMAIL_VERIFICATION: '24 hours',
   INVITATION: '7 days',
+  MAGIC_LINK: '10 minutes',
+  PASSWORD_RESET: '1 hour',
 } as const;

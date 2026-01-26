@@ -111,7 +111,7 @@ async function generateCouncilModerator(
   // ✅ LAZY LOAD AI SDK: Load at invocation, not module startup
   const { streamText } = await getAiSdk();
 
-  const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx, projectContext, projectId } = config;
+  const { env, executionCtx, messageId, mode, participantResponses, projectContext, projectId, roundNumber, sessionId, threadId, userId, userQuestion } = config;
 
   const llmTraceId = generateTraceId();
   const llmStartTime = performance.now();
@@ -133,50 +133,41 @@ async function generateCouncilModerator(
 
   // Build initial moderator metadata (streaming state)
   const streamMetadata: DbModeratorMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    isModerator: true,
-    roundNumber,
-    model: moderatorModelId,
     hasError: false,
+    isModerator: true,
+    model: moderatorModelId,
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
   };
 
   // ✅ TEXT STREAMING: Use streamText like participants
   const finalResult = streamText({
-    model: client.chat(moderatorModelId),
-    system: systemPrompt,
-    prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
-    temperature: 0.3,
-    maxOutputTokens: 8192,
-    // ✅ MIDDLE-OUT TRANSFORM: Enable automatic context compression
-    providerOptions: {
-      openrouter: {
-        transforms: ['middle-out'],
-      },
-    },
     // ✅ STREAMING TIMEOUT: 15 min for complex moderator analysis
     // Cloudflare has UNLIMITED wall-clock - only constraint is 100s idle timeout
     abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs),
     // ✅ TELEMETRY: Enable OpenTelemetry for moderator analysis streaming
     // Exports traces to configured OTEL collector when instrumentation.ts registers @vercel/otel
     experimental_telemetry: {
-      isEnabled: true,
       functionId: `chat.thread.${threadId}.moderator`,
-      recordInputs: true,
-      recordOutputs: true,
+      isEnabled: true,
       metadata: {
-        thread_id: threadId,
-        round_number: roundNumber,
         conversation_mode: mode,
+        is_moderator: true,
+        model_id: moderatorModelId,
+        model_name: moderatorModelName,
+        participant_count: participantResponses.length,
         participant_id: 'moderator',
         participant_index: MODERATOR_PARTICIPANT_INDEX,
         participant_role: 'AI Moderator',
-        model_id: moderatorModelId,
-        model_name: moderatorModelName,
-        is_moderator: true,
-        participant_count: participantResponses.length,
+        round_number: roundNumber,
+        thread_id: threadId,
         user_id: userId,
       },
+      recordInputs: true,
+      recordOutputs: true,
     },
+    maxOutputTokens: 8192,
+    model: client.chat(moderatorModelId),
     onFinish: async (finishResult) => {
       try {
         const db = await getDbAsync();
@@ -192,40 +183,40 @@ async function generateCouncilModerator(
         // Build complete moderator metadata
         const completeMetadata: DbModeratorMessageMetadata = {
           ...streamMetadata,
+          createdAt: new Date().toISOString(),
           finishReason: finishResult.finishReason,
           usage: finishResult.usage
             ? {
+                completionTokens: safeOutputTokens,
                 // Map AI SDK format (inputTokens/outputTokens) to schema format (promptTokens/completionTokens)
                 promptTokens: safeInputTokens,
-                completionTokens: safeOutputTokens,
                 totalTokens: safeTotalTokens,
               }
             : undefined,
-          createdAt: new Date().toISOString(),
         };
 
         // ✅ PERSISTENCE: Save council moderator as chatMessage with isModerator metadata
         await db.insert(tables.chatMessage).values({
+          createdAt: new Date(),
           id: messageId,
-          threadId,
-          role: MessageRoles.ASSISTANT,
+          metadata: completeMetadata,
           participantId: null, // No participant for moderator
           parts: [{
-            type: MessagePartTypes.TEXT,
             text: finishResult.text,
+            type: MessagePartTypes.TEXT,
           }],
+          role: MessageRoles.ASSISTANT,
           roundNumber,
-          metadata: completeMetadata,
-          createdAt: new Date(),
+          threadId,
         }).onConflictDoUpdate({
-          target: tables.chatMessage.id,
           set: {
-            parts: [{
-              type: MessagePartTypes.TEXT,
-              text: finishResult.text,
-            }],
             metadata: completeMetadata,
+            parts: [{
+              text: finishResult.text,
+              type: MessagePartTypes.TEXT,
+            }],
           },
+          target: tables.chatMessage.id,
         });
 
         // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
@@ -246,12 +237,12 @@ async function generateCouncilModerator(
         // Uses actual token counts instead of fixed estimate for accurate billing
         // =========================================================================
         await finalizeCredits(userId, messageId, {
-          inputTokens: safeInputTokens,
-          outputTokens: safeOutputTokens,
           action: 'ai_response',
-          threadId,
+          inputTokens: safeInputTokens,
           messageId,
           modelId: moderatorModelId,
+          outputTokens: safeOutputTokens,
+          threadId,
         });
 
         // =========================================================================
@@ -269,8 +260,8 @@ async function generateCouncilModerator(
 
         // Track analytics with actual provider cost
         const finishData = {
-          text: finishResult.text,
           finishReason: finishResult.finishReason,
+          text: finishResult.text,
           usage: {
             inputTokens: safeInputTokens,
             outputTokens: safeOutputTokens,
@@ -286,30 +277,30 @@ async function generateCouncilModerator(
           try {
             await trackLLMGeneration(
               {
-                userId,
-                sessionId,
-                threadId,
-                roundNumber,
+                modelId: moderatorModelId,
+                modelName: moderatorModelName,
                 participantId: 'moderator',
                 participantIndex: MODERATOR_PARTICIPANT_INDEX,
                 participantRole: 'AI Moderator',
-                modelId: moderatorModelId,
-                modelName: moderatorModelName,
+                roundNumber,
+                sessionId,
+                threadId,
                 threadMode: mode,
+                userId,
               },
               finishData,
-              [{ role: MessageRoles.USER, content: 'Analyze this council discussion and produce the moderator analysis in markdown format.' }],
+              [{ content: 'Analyze this council discussion and produce the moderator analysis in markdown format.', role: MessageRoles.USER }],
               llmTraceId,
               llmStartTime,
               {
-                modelPricing: moderatorPricing,
-                modelConfig: { temperature: 0.3 },
-                promptTracking: { promptId: 'moderator_summary', promptVersion: 'v3.0' },
                 additionalProperties: {
                   message_id: messageId,
                   moderator_type: 'text_stream',
                   participant_count: participantResponses.length,
                 },
+                modelConfig: { temperature: 0.3 },
+                modelPricing: moderatorPricing,
+                promptTracking: { promptId: 'moderator_summary', promptVersion: 'v3.0' },
               },
             );
           } catch {
@@ -332,36 +323,36 @@ async function generateCouncilModerator(
             try {
               console.error('[Memory Extraction] Starting extraction:', {
                 projectId,
-                threadId,
                 roundNumber,
                 summaryLength: finishResult.text.length,
+                threadId,
               });
               const extractionResult = await extractMemoriesFromRound({
-                projectId,
-                threadId,
-                roundNumber,
-                userQuestion,
-                moderatorSummary: finishResult.text,
-                userId,
                 ai: env.AI,
                 db: await getDbAsync(),
+                moderatorSummary: finishResult.text,
+                projectId,
+                roundNumber,
+                threadId,
+                userId,
+                userQuestion,
               });
               console.error('[Memory Extraction] Completed:', extractionResult);
 
               // ✅ Store memory event in KV for frontend to poll
               if (extractionResult.extracted.length > 0) {
                 const memoriesForKV = extractionResult.extracted.map((m, idx) => ({
+                  content: m.content.slice(0, 200),
                   id: extractionResult.memoryIds[idx] ?? '',
                   summary: m.summary,
-                  content: m.content.slice(0, 200),
                 }));
 
                 const memoryEventKey = `memory-event:${threadId}:${roundNumber}`;
                 const memoryEventData = {
-                  memoryIds: extractionResult.memoryIds,
-                  memories: memoriesForKV,
-                  projectId,
                   createdAt: Date.now(),
+                  memories: memoriesForKV,
+                  memoryIds: extractionResult.memoryIds,
+                  projectId,
                 };
 
                 try {
@@ -408,8 +399,8 @@ async function generateCouncilModerator(
         console.error('[Council Moderator] Failed to persist message:', {
           error: errorMsg,
           messageId,
-          threadId,
           roundNumber,
+          threadId,
         });
 
         // Track error
@@ -417,16 +408,16 @@ async function generateCouncilModerator(
           try {
             await trackLLMError(
               {
-                userId,
-                sessionId,
-                threadId,
-                roundNumber,
+                modelId: moderatorModelId,
+                modelName: moderatorModelName,
                 participantId: 'moderator',
                 participantIndex: MODERATOR_PARTICIPANT_INDEX,
                 participantRole: 'AI Moderator',
-                modelId: moderatorModelId,
-                modelName: moderatorModelName,
+                roundNumber,
+                sessionId,
+                threadId,
                 threadMode: mode,
+                userId,
               },
               toError(error),
               llmTraceId,
@@ -444,44 +435,19 @@ async function generateCouncilModerator(
         }
       }
     },
+    prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
+    // ✅ MIDDLE-OUT TRANSFORM: Enable automatic context compression
+    providerOptions: {
+      openrouter: {
+        transforms: ['middle-out'],
+      },
+    },
+    system: systemPrompt,
+    temperature: 0.3,
   });
 
   // ✅ PATTERN: Return toUIMessageStreamResponse like participants
   return finalResult.toUIMessageStreamResponse({
-    generateMessageId: () => messageId,
-
-    // Inject moderator metadata at stream lifecycle events
-    messageMetadata: ({ part }) => {
-      if (part.type === 'start') {
-        return streamMetadata;
-      }
-
-      if (part.type === 'finish') {
-        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
-        const rawInput = part.totalUsage?.inputTokens ?? 0;
-        const rawOutput = part.totalUsage?.outputTokens ?? 0;
-        const rawTotal = part.totalUsage?.totalTokens ?? 0;
-        const safeInput = Number.isFinite(rawInput) ? rawInput : 0;
-        const safeOutput = Number.isFinite(rawOutput) ? rawOutput : 0;
-        const safeTotal = Number.isFinite(rawTotal) ? rawTotal : safeInput + safeOutput;
-
-        return {
-          ...streamMetadata,
-          finishReason: part.finishReason,
-          usage: part.totalUsage
-            ? {
-                // Map AI SDK format to schema format
-                promptTokens: safeInput,
-                completionTokens: safeOutput,
-                totalTokens: safeTotal,
-              }
-            : undefined,
-        };
-      }
-
-      return undefined;
-    },
-
     // Buffer SSE chunks for stream resumption
     consumeSseStream: async ({ stream }) => {
       const bufferStream = async () => {
@@ -521,23 +487,57 @@ async function generateCouncilModerator(
       }
     },
 
+    generateMessageId: () => messageId,
+
+    // Inject moderator metadata at stream lifecycle events
+    messageMetadata: ({ part }) => {
+      if (part.type === 'start') {
+        return streamMetadata;
+      }
+
+      if (part.type === 'finish') {
+        // ✅ NaN HANDLING: Use Number.isFinite() to handle NaN from failed AI responses
+        const rawInput = part.totalUsage?.inputTokens ?? 0;
+        const rawOutput = part.totalUsage?.outputTokens ?? 0;
+        const rawTotal = part.totalUsage?.totalTokens ?? 0;
+        const safeInput = Number.isFinite(rawInput) ? rawInput : 0;
+        const safeOutput = Number.isFinite(rawOutput) ? rawOutput : 0;
+        const safeTotal = Number.isFinite(rawTotal) ? rawTotal : safeInput + safeOutput;
+
+        return {
+          ...streamMetadata,
+          finishReason: part.finishReason,
+          usage: part.totalUsage
+            ? {
+                completionTokens: safeOutput,
+                // Map AI SDK format to schema format
+                promptTokens: safeInput,
+                totalTokens: safeTotal,
+              }
+            : undefined,
+        };
+      }
+
+      return undefined;
+    },
+
     onError: (error) => {
       const streamErrorMessage = getErrorMessage(error);
       const errorName = getErrorName(error);
 
       console.error('[Council Moderator Error]', {
-        errorName,
         errorMessage: streamErrorMessage,
-        threadId,
+        errorName,
         roundNumber,
+        threadId,
         traceId: llmTraceId,
       });
 
       // Return error as JSON for frontend handling
       return JSON.stringify({
+        errorMessage: streamErrorMessage,
         errorName,
         errorType: 'moderator_error',
-        errorMessage: streamErrorMessage,
         isModerator: true,
         roundNumber,
         traceId: llmTraceId,
@@ -553,13 +553,13 @@ async function generateCouncilModerator(
 export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorRoundRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadRoundParamSchema,
-    validateBody: RoundModeratorRequestSchema,
     operationName: 'councilModeratorRound',
+    validateBody: RoundModeratorRequestSchema,
+    validateParams: ThreadRoundParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId, roundNumber } = c.validated.params;
+    const { roundNumber, threadId } = c.validated.params;
     // Note: body.participantMessageIds is validated but D1 is source of truth for finding messages
 
     const db = await getDbAsync();
@@ -583,13 +583,13 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         where: eq(tables.chatMessage.id, messageId),
       }),
       db.query.chatMessage.findFirst({
+        orderBy: [asc(tables.chatMessage.createdAt)],
         where: (fields, { and: andOp, eq: eqOp }) =>
           andOp(
             eqOp(fields.threadId, threadId),
             eqOp(fields.role, MessageRoles.USER),
             eqOp(fields.roundNumber, roundNum),
           ),
-        orderBy: [asc(tables.chatMessage.createdAt)],
       }),
     ]);
 
@@ -597,9 +597,9 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       // Already exists - return the message data
       return Responses.raw(c, {
         id: existingMessage.id,
-        role: existingMessage.role,
-        parts: existingMessage.parts,
         metadata: existingMessage.metadata,
+        parts: existingMessage.parts,
+        role: existingMessage.role,
         roundNumber: existingMessage.roundNumber,
       });
     }
@@ -629,6 +629,11 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
     // Query by round number (most reliable - doesn't depend on frontend IDs)
     const roundMessages = await db.query.chatMessage.findMany({
+      orderBy: [
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      ],
       where: (fields, { and: andOp, eq: eqOp }) =>
         andOp(
           eqOp(fields.threadId, threadId),
@@ -636,11 +641,6 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
           eqOp(fields.roundNumber, roundNum),
         ),
       with: { participant: true },
-      orderBy: [
-        asc(tables.chatMessage.roundNumber),
-        asc(tables.chatMessage.createdAt),
-        asc(tables.chatMessage.id),
-      ],
     });
 
     const participantMessages = filterDbToParticipantMessages(roundMessages);
@@ -656,17 +656,17 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         // KV shows participants still running - return detailed status
         const completedCount = roundState.completedParticipants + roundState.failedParticipants;
         return Responses.polling(c, {
-          status: PollingStatuses.PENDING,
           message: `Waiting for participants to complete (${completedCount}/${roundState.totalParticipants}). Please poll for completion.`,
           retryAfterMs: 1000,
+          status: PollingStatuses.PENDING,
         });
       }
 
       // KV is null or shows MODERATOR phase but D1 has no messages - still processing
       return Responses.polling(c, {
-        status: PollingStatuses.PENDING,
         message: `Messages for round ${roundNum} are still being processed. Please poll for completion.`,
         retryAfterMs: 1000,
+        status: PollingStatuses.PENDING,
       });
     }
 
@@ -701,10 +701,10 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         const participantIndex = getParticipantIndex(msg.metadata) ?? idx;
 
         return {
-          participantIndex,
-          participantRole: participant.role || 'AI Assistant',
           modelId: participant.modelId,
           modelName,
+          participantIndex,
+          participantRole: participant.role || 'AI Assistant',
           responseContent: extractTextFromParts(msg.parts),
         };
       })
@@ -741,11 +741,11 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     let projectContext: ModeratorProjectContext | undefined;
     if (thread.projectId) {
       const ragResult = await getProjectRagContext({
-        projectId: thread.projectId,
-        query: userQuestion,
         ai: c.env.AI,
         db,
         maxResults: 5,
+        projectId: thread.projectId,
+        query: userQuestion,
         userId: session.userId,
       });
       if (ragResult.instructions || ragResult.ragContext) {
@@ -760,18 +760,18 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     // ✅ SINGLE SOURCE: Mode validated via ChatModeSchema in prompts.service.ts
     return await generateCouncilModerator(
       {
-        roundNumber: roundNum,
-        mode: thread.mode,
-        userQuestion,
-        participantResponses,
         env: c.env,
-        messageId,
-        threadId,
-        userId: user.id,
         executionCtx: c.executionCtx,
-        sessionId: session?.id,
+        messageId,
+        mode: thread.mode,
+        participantResponses,
         projectContext,
         projectId: thread.projectId,
+        roundNumber: roundNum,
+        sessionId: session?.id,
+        threadId,
+        userId: user.id,
+        userQuestion,
       },
       c,
     );

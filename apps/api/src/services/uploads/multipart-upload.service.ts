@@ -22,14 +22,14 @@ const DEFAULT_MULTIPART_TTL_SECONDS = 4 * 60 * 60;
 // ============================================================================
 
 export const MultipartUploadMetadataSchema = z.object({
-  uploadId: z.string(),
-  userId: z.string(),
+  createdAt: z.number(),
+  filename: z.string(),
+  fileSize: z.number(),
+  mimeType: z.string(),
   r2Key: z.string(),
   r2UploadId: z.string(),
-  filename: z.string(),
-  mimeType: z.string(),
-  fileSize: z.number(),
-  createdAt: z.number(),
+  uploadId: z.string(),
+  userId: z.string(),
 }).strict();
 
 export type MultipartUploadMetadata = z.infer<typeof MultipartUploadMetadataSchema>;
@@ -56,13 +56,15 @@ export async function getMultipartMetadata(
   kv: KVNamespace | undefined,
   uploadId: string,
 ): Promise<MultipartUploadMetadata | null> {
-  if (!kv)
+  if (!kv) {
     return null;
+  }
 
   const key = `${MULTIPART_KV_PREFIX}${uploadId}`;
   const data = await kv.get(key);
-  if (!data)
+  if (!data) {
     return null;
+  }
 
   const parsed = MultipartUploadMetadataSchema.safeParse(JSON.parse(data));
   return parsed.success ? parsed.data : null;
@@ -72,8 +74,9 @@ export async function deleteMultipartMetadata(
   kv: KVNamespace | undefined,
   uploadId: string,
 ): Promise<void> {
-  if (!kv)
+  if (!kv) {
     return;
+  }
   await kv.delete(`${MULTIPART_KV_PREFIX}${uploadId}`);
 }
 
@@ -83,7 +86,7 @@ export async function validateMultipartOwnership(
   userId: string,
 ): Promise<MultipartUploadMetadata | null> {
   const metadata = await getMultipartMetadata(kv, uploadId);
-  if (!metadata || metadata.userId !== userId) {
+  if (metadata?.userId !== userId) {
     return null;
   }
   return metadata;

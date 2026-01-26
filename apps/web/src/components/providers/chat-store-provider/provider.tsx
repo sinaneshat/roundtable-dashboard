@@ -70,31 +70,31 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // CRITICAL: Do NOT include `messages` here - it changes on every stream chunk
   // Components that need messages should subscribe directly via useChatStore
   const {
-    thread,
-    participants,
-    enableWebSearch,
     createdThreadId,
+    enableWebSearch,
     hasEarlyOptimisticMessage,
-    streamResumptionPrefilled,
+    nextParticipantToTrigger,
+    participants,
     pendingAttachmentIds,
     pendingFileParts,
     // ✅ SMART STALE DETECTION: Prefilled state for stream validation
     resumptionRoundNumber,
-    nextParticipantToTrigger,
+    streamResumptionPrefilled,
+    thread,
   } = useStore(store, useShallow(s => ({
-    thread: s.thread,
-    participants: s.participants,
-    enableWebSearch: s.enableWebSearch,
     createdThreadId: s.createdThreadId,
+    enableWebSearch: s.enableWebSearch,
     hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
-    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    nextParticipantToTrigger: typeof s.nextParticipantToTrigger === 'object' && s.nextParticipantToTrigger !== null
+      ? s.nextParticipantToTrigger.index
+      : s.nextParticipantToTrigger,
+    participants: s.participants,
     pendingAttachmentIds: s.pendingAttachmentIds,
     pendingFileParts: s.pendingFileParts,
     // ✅ SMART STALE DETECTION: Prefilled state for stream validation
     resumptionRoundNumber: s.resumptionRoundNumber,
-    nextParticipantToTrigger: typeof s.nextParticipantToTrigger === 'object' && s.nextParticipantToTrigger !== null
-      ? s.nextParticipantToTrigger.index
-      : s.nextParticipantToTrigger,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    thread: s.thread,
   })));
 
   // ✅ PERF FIX: Get stable action references separately (actions don't change)
@@ -143,8 +143,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           // ✅ CRITICAL FIX: Clone SDK data to prevent Immer from freezing AI SDK's objects
           return {
             ...storeMsg,
-            parts: structuredClone(sdkMatch.parts),
             metadata: structuredClone(sdkMatch.metadata),
+            parts: structuredClone(sdkMatch.parts),
           };
         }
         return storeMsg;
@@ -164,11 +164,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       const storeMessages = store.getState().messages;
 
       const participantMessages = storeMessages.filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         const meta = getMessageMetadata(m.metadata);
-        if (!meta)
+        if (!meta) {
           return false;
+        }
         const msgRound = getRoundNumber(m.metadata);
         const isModerator = 'isModerator' in meta && meta.isModerator === true;
         return msgRound === roundNumber && !isModerator;
@@ -185,7 +187,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         return true;
       }
 
-      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      await new Promise((resolve) => {
+        setTimeout(resolve, checkInterval);
+      });
     }
 
     rlog.sync('timeout', 'store sync timed out, proceeding');
@@ -203,7 +207,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     rlog.stream('end', `r${roundNumber} msgs=${sdkMessages.length} wait=${currentState.waitingToStartStreaming ? 1 : 0} nextP=${currentState.nextParticipantToTrigger !== null ? currentState.nextParticipantToTrigger : '-'} modTrig=${moderatorTriggered ? 1 : 0}`);
 
     if (currentState.thread || currentState.createdThreadId) {
-      const { thread: storeThread, selectedMode, createdThreadId: storeCreatedThreadId } = currentState;
+      const { createdThreadId: storeCreatedThreadId, selectedMode, thread: storeThread } = currentState;
       const threadId = storeThread?.id || storeCreatedThreadId;
       const mode = storeThread?.mode || selectedMode;
 
@@ -285,8 +289,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           const participantMessageIds = sdkMessages
             .filter((m) => {
               const meta = getMessageMetadata(m.metadata);
-              if (!meta)
+              if (!meta) {
                 return false;
+              }
 
               return (
                 meta.role === MessageRoles.ASSISTANT
@@ -318,66 +323,66 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const [initialMessages] = useState(() => store.getState().messages);
 
   const chat = useMultiParticipantChat({
-    threadId: effectiveThreadId,
-    participants,
-    messages: initialMessages, // Use stable initial value, not live messages
-    mode: thread?.mode,
-    enableWebSearch,
-    pendingAttachmentIds,
-    pendingFileParts,
-    onError: handleError,
-    onComplete: handleComplete,
+    // ✅ RACE CONDITION FIX: Pass acknowledgeStreamFinish to signal onFinish completion
+    // This replaces the 50ms timeout workaround for stream settling
+    acknowledgeStreamFinish: () => {
+      store.getState().acknowledgeStreamFinish();
+    },
     clearAnimations,
     completeAnimation,
-    hasEarlyOptimisticMessage,
-    streamResumptionPrefilled,
-    onResumedStreamComplete: (roundNumber, participantIndex) => {
-      store.getState().handleResumedStreamComplete(roundNumber, participantIndex);
+    enableWebSearch,
+    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
+    // Used in continueFromParticipant as defense in depth
+    getPreSearches: () => {
+      return store.getState().preSearches;
     },
-    // ✅ SMART STALE DETECTION: Pass prefilled state for stream validation
-    resumptionRoundNumber,
+    hasEarlyOptimisticMessage,
+    messages: initialMessages, // Use stable initial value, not live messages
+    mode: thread?.mode,
     nextParticipantToTrigger,
+    onComplete: handleComplete,
+    onError: handleError,
     onReconcileWithActiveStream: (streamingParticipantIndex) => {
       store.getState().reconcileWithActiveStream(streamingParticipantIndex);
     },
-    // ✅ HANDOFF FIX: Notify store when next participant is being triggered
-    // This prevents stale-streaming-cleanup from firing during P0->P1 handoff
-    setNextParticipantToTrigger: (value) => {
-      store.getState().setNextParticipantToTrigger(value);
+    onResumedStreamComplete: (roundNumber, participantIndex) => {
+      store.getState().handleResumedStreamComplete(roundNumber, participantIndex);
     },
-    // ✅ NAVIGATION CLEANUP: Clear pending state on navigation abort
-    // Prevents stale file parts from persisting across thread navigations
-    setPendingFileParts: (value) => {
-      store.getState().setPendingFileParts(value);
-    },
-    setPendingAttachmentIds: (value) => {
-      store.getState().setPendingAttachmentIds(value);
+    participants,
+    pendingAttachmentIds,
+    pendingFileParts,
+    // ✅ SMART STALE DETECTION: Pass prefilled state for stream validation
+    resumptionRoundNumber,
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    // Called by startRound AFTER aiSendMessage returns (not synchronously)
+    setHasSentPendingMessage: (value) => {
+      store.getState().setHasSentPendingMessage(value);
     },
     // ✅ HANDOFF FIX: Pass setIsStreaming so hook can update store directly
     // This ensures cleanup sees isStreaming=true immediately during P0→P1 handoff
     setIsStreaming: (value) => {
       store.getState().setIsStreaming(value);
     },
+    // ✅ HANDOFF FIX: Notify store when next participant is being triggered
+    // This prevents stale-streaming-cleanup from firing during P0->P1 handoff
+    setNextParticipantToTrigger: (value) => {
+      store.getState().setNextParticipantToTrigger(value);
+    },
     // ✅ HANDOFF FIX: Pass setParticipantHandoffInProgress to clear flag when participant starts
     // This flag is set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
     setParticipantHandoffInProgress: (value) => {
       store.getState().setParticipantHandoffInProgress(value);
     },
-    // ✅ RACE CONDITION FIX: Pass acknowledgeStreamFinish to signal onFinish completion
-    // This replaces the 50ms timeout workaround for stream settling
-    acknowledgeStreamFinish: () => {
-      store.getState().acknowledgeStreamFinish();
+    setPendingAttachmentIds: (value) => {
+      store.getState().setPendingAttachmentIds(value);
     },
-    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
-    // Called by startRound AFTER aiSendMessage returns (not synchronously)
-    setHasSentPendingMessage: (value) => {
-      store.getState().setHasSentPendingMessage(value);
+    // ✅ NAVIGATION CLEANUP: Clear pending state on navigation abort
+    // Prevents stale file parts from persisting across thread navigations
+    setPendingFileParts: (value) => {
+      store.getState().setPendingFileParts(value);
     },
-    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
-    // Used in continueFromParticipant as defense in depth
-    getPreSearches: () => {
-      return store.getState().preSearches;
-    },
+    streamResumptionPrefilled,
+    threadId: effectiveThreadId,
   });
 
   const sendMessageRef = useRef(chat.sendMessage);
@@ -391,9 +396,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // Currently running alongside existing hooks; will replace them in Phase 5.
   // The orchestrator's dispatch and flowState will be used to replace existing hooks.
   const roundOrchestrator = useRoundOrchestrator({
-    store,
     chat,
     effectiveThreadId,
+    store,
   });
   // Mark as intentionally unused during parallel integration phase
   void roundOrchestrator;
@@ -409,57 +414,57 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [store, chat.stop]);
 
   useStateSync({
-    store,
     chat,
     queryClientRef,
     sendMessageRef,
-    startRoundRef,
     setMessagesRef,
+    startRoundRef,
+    store,
   });
 
   // Minimal message sync: AI SDK → Store
   // Replaces the 965-line use-message-sync.ts with a simple sync
   // Store's setMessages handles smart merging, deduplicateMessages runs on completeStreaming
-  useMinimalMessageSync({ store, chat });
+  useMinimalMessageSync({ chat, store });
 
   // Stream activity tracking for stuck stream detection
   // This is a simplified replacement for the activity tracking in useMessageSync
   const { lastStreamActivityRef } = useStreamActivityTracker({ store });
 
   useStreamingTrigger({
-    store,
     chat,
     effectiveThreadId,
     queryClientRef,
+    store,
   });
 
-  useRoundResumption({ store, chat });
+  useRoundResumption({ chat, store });
 
   usePreSearchResumption({
-    store,
     effectiveThreadId,
     queryClientRef,
+    store,
   });
 
   usePendingMessage({
-    store,
     chat,
-    sendMessageRef,
-    queryClientRef,
     effectiveThreadId,
+    queryClientRef,
+    sendMessageRef,
+    store,
   });
 
   useStuckStreamDetection({
-    store,
     lastStreamActivityRef,
+    store,
   });
 
   // ✅ VISIBILITY GUARD: Detect tab visibility changes and reconnect streams
   // Prevents streams from stopping when browser tab loses focus
   useVisibilityStreamGuard({
-    store,
     chat,
     effectiveThreadId,
+    store,
   });
 
   // ✅ STALE STATE CLEANUP: Detect and clean up stale streaming state
@@ -467,19 +472,19 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useStaleStreamingCleanup({ store });
 
   useNavigationCleanup({
-    store,
     prevPathnameRef,
+    store,
   });
 
   // ✅ CHANGELOG: Fetch and merge changelog when config changes between rounds
   useChangelogSync({
-    store,
     effectiveThreadId,
     queryClientRef,
+    store,
   });
 
   // ✅ TITLE ANIMATION: Poll for AI-generated title and animate typewriter effect
-  useTitlePolling({ store, queryClientRef });
+  useTitlePolling({ queryClientRef, store });
   useTitleAnimationController({ store });
 
   const { triggerModerator } = useModeratorTrigger({ store });

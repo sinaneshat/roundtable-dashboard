@@ -51,9 +51,9 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
     // Setup thread with participants
     thread = createMockThread({
+      enableWebSearch: true,
       id: 'thread-123',
       mode: ChatModes.BRAINSTORM,
-      enableWebSearch: true,
     });
 
     participants = [
@@ -72,23 +72,23 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
     // Complete Round 0
     const round0Messages = [
       createTestUserMessage({
-        id: 'user-r0',
         content: 'Round 0 question',
+        id: 'user-r0',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'P0 response',
-        roundNumber: 0,
+        id: 'thread-123_r0_p0',
         participantId: 'p1',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'P1 response',
-        roundNumber: 0,
+        id: 'thread-123_r0_p1',
         participantId: 'p2',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
@@ -112,8 +112,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Add optimistic message (form-actions.ts:285)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question with web search',
+        id: 'opt-msg',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -123,15 +123,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // THEN add pre-search placeholder (form-actions.ts:297-303)
       store.getState().addPreSearch({
-        id: `placeholder-r${nextRoundNumber}`,
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Question with web search',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `placeholder-r${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Question with web search',
       });
 
       // ASSERT: Both optimistic message and placeholder exist
@@ -148,23 +148,23 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // ACT: Simulate order from form-actions.ts:297-312
       // 1. Add optimistic message
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // 2. Add pre-search placeholder
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // Verify placeholder added
@@ -178,7 +178,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ASSERT: Placeholder created before waiting flag
       expect(store.getState().preSearches[0]?.status).toBe('pending');
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
 
     it('should NOT create pre-search placeholder when web search disabled', () => {
@@ -188,8 +188,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Add optimistic message (no pre-search placeholder)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -205,15 +205,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Add placeholder
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ASSERT: Round number matches user message
@@ -233,22 +233,22 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Add message + placeholder
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ASSERT: PENDING status blocks streaming
@@ -261,15 +261,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const nextRoundNumber = 1;
 
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ACT: Simulate pre-search completion
@@ -283,15 +283,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // ARRANGE: PENDING pre-search
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ACT: Check if streaming should wait
@@ -299,30 +299,30 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const shouldWait = preSearch?.status === 'pending' || preSearch?.status === 'streaming';
 
       // ASSERT: Streaming blocked
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
 
     it('should allow streaming when pre-search is COMPLETE', () => {
       // ARRANGE: COMPLETE pre-search
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
+        completedAt: new Date(),
+        createdAt: new Date(),
+        errorMessage: null,
         id: 'placeholder',
-        threadId: 'thread-123',
         roundNumber: 1,
-        status: 'complete',
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Results',
           successCount: 1,
-          failureCount: 0,
+          summary: 'Results',
           totalResults: 3,
           totalTime: 1000,
         },
+        status: 'complete',
+        threadId: 'thread-123',
         userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
-        completedAt: new Date(),
       });
 
       // ACT: Check if streaming should wait
@@ -330,7 +330,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const shouldWait = preSearch?.status === 'pending' || preSearch?.status === 'streaming';
 
       // ASSERT: Streaming allowed
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
   });
 
@@ -346,23 +346,23 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT 1: Add optimistic message (form-actions.ts:285)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question with web search',
+        id: 'opt-msg',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT 2: Add pre-search placeholder (form-actions.ts:297-303)
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Question with web search',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Question with web search',
       });
 
       // ACT 3: Block streaming (form-actions.ts:309)
@@ -377,8 +377,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT 4: PATCH completes - replace message (form-actions.ts:343-346)
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Question with web search',
+        id: 'thread-123_r1_user',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -392,7 +392,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ASSERT PHASE 2: After PATCH
       expect(store.getState().messages[3]?.id).toBe('thread-123_r1_user');
-      expect(store.getState().configChangeRoundNumber).toBe(null);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
       expect(store.getState().preSearches[0]?.status).toBe('pending'); // Still waiting for pre-search
 
       // CRITICAL: Streaming still blocked by PENDING pre-search
@@ -405,30 +405,30 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Complete flow up to PATCH
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       store.getState().setConfigChangeRoundNumber(nextRoundNumber);
 
       // PATCH completes
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Q',
+        id: 'thread-123_r1_user',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -441,8 +441,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const preSearchPending = store.getState().preSearches[0]?.status === 'pending';
 
       // ASSERT: Patch complete but pre-search still blocks
-      expect(patchComplete).toBe(true);
-      expect(preSearchPending).toBe(true);
+      expect(patchComplete).toBeTruthy();
+      expect(preSearchPending).toBeTruthy();
 
       // ACT: Pre-search completes
       store.getState().updatePreSearchStatus(nextRoundNumber, 'complete');
@@ -451,8 +451,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const preSearchComplete = store.getState().preSearches[0]?.status === 'complete';
 
       // ASSERT: Now both conditions met
-      expect(patchComplete).toBe(true);
-      expect(preSearchComplete).toBe(true);
+      expect(patchComplete).toBeTruthy();
+      expect(preSearchComplete).toBeTruthy();
     });
   });
 
@@ -470,22 +470,22 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT 1: Add optimistic message + pre-search
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ACT 2: Block streaming
@@ -494,8 +494,8 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT 3: PATCH completes
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Q',
+        id: 'thread-123_r1_user',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -507,7 +507,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ASSERT PHASE 1: After PATCH, waiting for changelog
       expect(store.getState().configChangeRoundNumber).toBe(1); // Still blocked
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().preSearches[0]?.status).toBe('pending');
 
       // CRITICAL: Streaming blocked by BOTH configChangeRoundNumber AND PENDING pre-search
@@ -521,23 +521,23 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Complete flow including pre-search completion
       store.getState().addPreSearch({
+        completedAt: new Date(),
+        createdAt: new Date(),
+        errorMessage: null,
         id: 'placeholder',
-        threadId: 'thread-123',
         roundNumber: nextRoundNumber,
-        status: 'complete',
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Results',
           successCount: 1,
-          failureCount: 0,
+          summary: 'Results',
           totalResults: 3,
           totalTime: 1000,
         },
+        status: 'complete',
+        threadId: 'thread-123',
         userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
-        completedAt: new Date(),
       });
 
       store.getState().setConfigChangeRoundNumber(nextRoundNumber);
@@ -549,9 +549,9 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       const configBlocked = store.getState().configChangeRoundNumber === nextRoundNumber;
 
       // ASSERT: Pre-search complete but still blocked by changelog
-      expect(preSearchComplete).toBe(true);
-      expect(waitingForChangelog).toBe(true);
-      expect(configBlocked).toBe(true);
+      expect(preSearchComplete).toBeTruthy();
+      expect(waitingForChangelog).toBeTruthy();
+      expect(configBlocked).toBeTruthy();
     });
   });
 
@@ -564,30 +564,30 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // TEST 1: No config changes
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
-        id: 'placeholder-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q1',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder-1',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q1',
       });
       const noChangesPreSearchCount = store.getState().preSearches.length;
 
       // TEST 2: With config changes
       store.getState().setHasPendingConfigChanges(true);
       store.getState().addPreSearch({
-        id: 'placeholder-2',
-        threadId: 'thread-123',
-        roundNumber: 2,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q2',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder-2',
+        roundNumber: 2,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q2',
       });
       const withChangesPreSearchCount = store.getState().preSearches.length;
 
@@ -597,37 +597,37 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
     it('should add optimistic message + pre-search in same order for both scenarios', () => {
       // SCENARIO 1: No config changes
-      const opt1 = createTestUserMessage({ id: 'opt1', content: 'Q1', roundNumber: 1 });
+      const opt1 = createTestUserMessage({ content: 'Q1', id: 'opt1', roundNumber: 1 });
       store.getState().setMessages([...store.getState().messages, opt1]);
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
-        id: 'ps1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q1',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'ps1',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q1',
       });
       const scenario1Messages = store.getState().messages.length;
       const scenario1PreSearches = store.getState().preSearches.length;
 
       // SCENARIO 2: With config changes
       store.getState().setHasPendingConfigChanges(true);
-      const opt2 = createTestUserMessage({ id: 'opt2', content: 'Q2', roundNumber: 2 });
+      const opt2 = createTestUserMessage({ content: 'Q2', id: 'opt2', roundNumber: 2 });
       store.getState().setMessages([...store.getState().messages, opt2]);
       store.getState().addPreSearch({
-        id: 'ps2',
-        threadId: 'thread-123',
-        roundNumber: 2,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q2',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'ps2',
+        roundNumber: 2,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q2',
       });
       const scenario2Messages = store.getState().messages.length;
       const scenario2PreSearches = store.getState().preSearches.length;
@@ -647,15 +647,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // ARRANGE: Pre-search placeholder created
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       const preSearchCount = store.getState().preSearches.length;
@@ -671,15 +671,15 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       // ARRANGE: Pre-search placeholder created
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
-        id: 'placeholder',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q',
       });
 
       // ACT: Pre-search execution fails
@@ -691,7 +691,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ASSERT: FAILED status allows streaming to proceed
       expect(store.getState().preSearches[0]?.status).toBe('failed');
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
   });
 
@@ -706,28 +706,28 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ACT: Add pre-search for Round 1
       store.getState().addPreSearch({
-        id: 'placeholder-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q1',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q1',
       });
 
       // Add pre-search for Round 2
       store.getState().addPreSearch({
-        id: 'placeholder-r2',
-        threadId: 'thread-123',
-        roundNumber: 2,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q2',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder-r2',
+        roundNumber: 2,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q2',
       });
 
       // ASSERT: Two separate pre-searches
@@ -741,35 +741,35 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
       store.getState().setEnableWebSearch(true);
 
       store.getState().addPreSearch({
+        completedAt: new Date(),
+        createdAt: new Date(),
+        errorMessage: null,
         id: 'ps-r1',
-        threadId: 'thread-123',
         roundNumber: 1,
-        status: 'complete',
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'R1 results',
           successCount: 1,
-          failureCount: 0,
+          summary: 'R1 results',
           totalResults: 3,
           totalTime: 1000,
         },
+        status: 'complete',
+        threadId: 'thread-123',
         userQuery: 'Q1',
-        errorMessage: null,
-        createdAt: new Date(),
-        completedAt: new Date(),
       });
 
       store.getState().addPreSearch({
-        id: 'ps-r2',
-        threadId: 'thread-123',
-        roundNumber: 2,
-        status: 'pending',
-        searchData: null,
-        userQuery: 'Q2',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'ps-r2',
+        roundNumber: 2,
+        searchData: null,
+        status: 'pending',
+        threadId: 'thread-123',
+        userQuery: 'Q2',
       });
 
       // ACT: Check Round 2 status
@@ -779,7 +779,7 @@ describe('pre-Search Placeholder and Message Patching Flow - Timing', () => {
 
       // ASSERT: Round 2 still pending despite Round 1 complete
       expect(round2PreSearch?.status).toBe('pending');
-      expect(shouldWaitForRound2).toBe(true);
+      expect(shouldWaitForRound2).toBeTruthy();
     });
   });
 });

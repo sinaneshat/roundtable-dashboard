@@ -33,15 +33,15 @@ export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<CreateProjectResult, Error, Parameters<typeof createProjectService>[0]>({
-    mutationKey: ['projects', 'create'],
     mutationFn: createProjectService,
+    mutationKey: ['projects', 'create'],
+    onError: () => {
+      toastManager.error(enCommon.projects.createError);
+    },
     onSuccess: () => {
       invalidationPatterns.projects.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
-    },
-    onError: () => {
-      toastManager.error(enCommon.projects.createError);
     },
     retry: false,
     throwOnError: false,
@@ -52,8 +52,8 @@ export function useUpdateProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectResult, Error, Parameters<typeof updateProjectService>[0]>({
-    mutationKey: ['projects', 'update'],
     mutationFn: updateProjectService,
+    mutationKey: ['projects', 'update'],
     onSuccess: (response, variables) => {
       if (response.success && response.data) {
         const updatedProject = response.data;
@@ -61,22 +61,25 @@ export function useUpdateProjectMutation() {
         // 1. Update infinite query caches (sidebar and list use useInfiniteQuery with pages structure)
         queryClient.setQueriesData<InfiniteData<ListProjectsResponse>>(
           {
-            queryKey: queryKeys.projects.all,
             predicate: (query) => {
-              if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+              if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
                 return false;
+              }
               return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
             },
+            queryKey: queryKeys.projects.all,
           },
           (old) => {
-            if (!old?.pages)
+            if (!old?.pages) {
               return old;
+            }
 
             return {
               ...old,
               pages: old.pages.map((page) => {
-                if (!page.success || !page.data?.items)
+                if (!page.success || !page.data?.items) {
                   return page;
+                }
 
                 return {
                   ...page,
@@ -96,8 +99,9 @@ export function useUpdateProjectMutation() {
         queryClient.setQueryData(
           queryKeys.projects.detail(variables.param.id),
           (old: GetProjectResponse | undefined) => {
-            if (!old?.success || !old.data)
+            if (!old?.success || !old.data) {
               return old;
+            }
             return { ...old, data: updatedProject };
           },
         );
@@ -120,12 +124,13 @@ export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<DeleteProjectResult, Error, Parameters<typeof deleteProjectService>[0], { previousProjects?: ListProjectsResponse }>({
-    mutationKey: ['projects', 'delete'],
     mutationFn: deleteProjectService,
+    mutationKey: ['projects', 'delete'],
     onMutate: async (data) => {
       const projectId = data.param?.id;
-      if (!projectId)
+      if (!projectId) {
         return { previousProjects: undefined };
+      }
 
       await queryClient.cancelQueries({ queryKey: queryKeys.projects.all });
 
@@ -134,8 +139,9 @@ export function useDeleteProjectMutation() {
       queryClient.setQueryData<ListProjectsResponse>(
         queryKeys.projects.list(),
         (oldData: ListProjectsResponse | undefined) => {
-          if (!oldData?.success || !oldData.data?.items)
+          if (!oldData?.success || !oldData.data?.items) {
             return oldData;
+          }
 
           return {
             ...oldData,
@@ -178,11 +184,21 @@ export function useAddAttachmentToProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<AddUploadToProjectResult, Error, Parameters<typeof addUploadToProjectService>[0]>({
-    mutationKey: ['projects', 'attachments', 'add'],
     mutationFn: addUploadToProjectService,
+    mutationKey: ['projects', 'attachments', 'add'],
+    onError: (_error, variables) => {
+      // On error, invalidate to get fresh state
+      const projectId = variables.param.id;
+      invalidationPatterns.projectAttachments(projectId).forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+      // Notify user of failure
+      toastManager.error('Failed to add file to project');
+    },
     onSuccess: (data, variables) => {
-      if (!data.success || !data.data)
+      if (!data.success || !data.data) {
         return;
+      }
 
       const projectId = variables.param.id;
       const newAttachment = data.data;
@@ -192,22 +208,25 @@ export function useAddAttachmentToProjectMutation() {
       // (the actual query key includes indexStatus param which varies)
       queryClient.setQueriesData<InfiniteData<ListProjectAttachmentsResponse>>(
         {
-          queryKey: queryKeys.projects.attachments(projectId),
           predicate: (query) => {
             const key = query.queryKey;
-            if (!Array.isArray(key) || key.length < 3)
+            if (!Array.isArray(key) || key.length < 3) {
               return false;
+            }
             return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
           },
+          queryKey: queryKeys.projects.attachments(projectId),
         },
         (oldData) => {
-          if (!oldData?.pages)
+          if (!oldData?.pages) {
             return oldData;
+          }
           return {
             ...oldData,
             pages: oldData.pages.map((page, index) => {
-              if (index !== 0 || !page.success || !page.data)
+              if (index !== 0 || !page.success || !page.data) {
                 return page;
+              }
               return {
                 ...page,
                 data: {
@@ -227,15 +246,6 @@ export function useAddAttachmentToProjectMutation() {
       });
       queryClient.refetchQueries({ queryKey: queryKeys.projects.detail(projectId) });
     },
-    onError: (_error, variables) => {
-      // On error, invalidate to get fresh state
-      const projectId = variables.param.id;
-      invalidationPatterns.projectAttachments(projectId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-      // Notify user of failure
-      toastManager.error('Failed to add file to project');
-    },
     retry: false,
     throwOnError: false,
   });
@@ -245,8 +255,8 @@ export function useUpdateProjectAttachmentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectAttachmentResult, Error, Parameters<typeof updateProjectAttachmentService>[0]>({
-    mutationKey: ['projects', 'attachments', 'update'],
     mutationFn: updateProjectAttachmentService,
+    mutationKey: ['projects', 'attachments', 'update'],
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
@@ -254,8 +264,9 @@ export function useUpdateProjectAttachmentMutation() {
       queryClient.invalidateQueries({
         predicate: (query) => {
           const key = query.queryKey;
-          if (!Array.isArray(key) || key.length < 3)
+          if (!Array.isArray(key) || key.length < 3) {
             return false;
+          }
           return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
         },
       });
@@ -269,8 +280,8 @@ export function useRemoveAttachmentFromProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<RemoveAttachmentFromProjectResult, Error, Parameters<typeof removeAttachmentFromProjectService>[0]>({
-    mutationKey: ['projects', 'attachments', 'remove'],
     mutationFn: removeAttachmentFromProjectService,
+    mutationKey: ['projects', 'attachments', 'remove'],
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
       const attachmentId = variables.param.attachmentId;
@@ -279,22 +290,25 @@ export function useRemoveAttachmentFromProjectMutation() {
       // (actual query key includes indexStatus param which varies)
       queryClient.setQueriesData<InfiniteData<ListProjectAttachmentsResponse>>(
         {
-          queryKey: queryKeys.projects.attachments(projectId),
           predicate: (query) => {
             const key = query.queryKey;
-            if (!Array.isArray(key) || key.length < 3)
+            if (!Array.isArray(key) || key.length < 3) {
               return false;
+            }
             return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
           },
+          queryKey: queryKeys.projects.attachments(projectId),
         },
         (oldData) => {
-          if (!oldData?.pages)
+          if (!oldData?.pages) {
             return oldData;
+          }
           return {
             ...oldData,
             pages: oldData.pages.map((page) => {
-              if (!page.success || !page.data)
+              if (!page.success || !page.data) {
                 return page;
+              }
               return {
                 ...page,
                 data: {
@@ -321,8 +335,8 @@ export function useCreateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<CreateProjectMemoryResult, Error, Parameters<typeof createProjectMemoryService>[0]>({
-    mutationKey: ['projects', 'memories', 'create'],
     mutationFn: createProjectMemoryService,
+    mutationKey: ['projects', 'memories', 'create'],
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
@@ -339,8 +353,8 @@ export function useUpdateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectMemoryResult, Error, Parameters<typeof updateProjectMemoryService>[0]>({
-    mutationKey: ['projects', 'memories', 'update'],
     mutationFn: updateProjectMemoryService,
+    mutationKey: ['projects', 'memories', 'update'],
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
@@ -355,8 +369,8 @@ export function useDeleteProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<DeleteProjectMemoryResult, Error, Parameters<typeof deleteProjectMemoryService>[0]>({
-    mutationKey: ['projects', 'memories', 'delete'],
     mutationFn: deleteProjectMemoryService,
+    mutationKey: ['projects', 'memories', 'delete'],
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 

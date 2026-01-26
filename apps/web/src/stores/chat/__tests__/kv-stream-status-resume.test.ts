@@ -70,12 +70,12 @@ function createStreamKVEntry(
 ): StreamKVEntry {
   const streamId = generateStreamId(threadId, roundNumber, participantIndex);
   return {
+    createdAt: new Date().toISOString(),
+    participantIndex,
+    roundNumber,
+    status,
     streamId,
     threadId,
-    roundNumber,
-    participantIndex,
-    status,
-    createdAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -99,8 +99,8 @@ function mockGetStreamStatus(
 
   // Stream completed or failed
   return {
-    status: 200,
     body: entry,
+    status: 200,
   };
 }
 
@@ -126,8 +126,9 @@ function simulateStreamLifecycle(
 
   // Step 2: Update to final status
   const entry = kvStore.get(streamId);
-  if (!entry)
+  if (!entry) {
     throw new Error('expected stream entry');
+  }
 
   if (outcome === 'complete') {
     entry.status = StreamStatuses.COMPLETED;
@@ -328,8 +329,9 @@ describe('gET Stream Status Endpoint', () => {
       const response = mockGetStreamStatus(kvStore, streamId);
 
       const body = response.body;
-      if (!body)
+      if (!body) {
         throw new Error('expected response body');
+      }
       expect(body.streamId).toBe(streamId);
       expect(body.threadId).toBe('thread-123');
       expect(body.roundNumber).toBe(0);
@@ -381,7 +383,7 @@ describe('page Refresh Scenarios', () => {
       expect(response.status).toBe(204);
 
       const showLoading = response.status === 204;
-      expect(showLoading).toBe(true);
+      expect(showLoading).toBeTruthy();
     });
 
     it('shows completed message when stream finishes during refresh', () => {
@@ -399,7 +401,7 @@ describe('page Refresh Scenarios', () => {
 
       // Should fetch message from database using messageId
       const shouldFetchFromDb = response.body?.messageId !== undefined;
-      expect(shouldFetchFromDb).toBe(true);
+      expect(shouldFetchFromDb).toBeTruthy();
     });
   });
 
@@ -431,9 +433,9 @@ describe('page Refresh Scenarios', () => {
 
       // Simulate DB fetch
       const dbMessage = {
-        id: messageId,
         content: 'Complete response from database',
         finishReason: 'stop',
+        id: messageId,
       };
 
       expect(dbMessage.content).toBe('Complete response from database');
@@ -548,12 +550,12 @@ describe('tTL and Expiration', () => {
 
       // Entry is fresh
       const isExpired = now - entryTime > TTL_MS;
-      expect(isExpired).toBe(false);
+      expect(isExpired).toBeFalsy();
 
       // Simulate 2 hours later
       const futureTime = entryTime + (2 * TTL_MS);
       const wouldBeExpired = futureTime - entryTime > TTL_MS;
-      expect(wouldBeExpired).toBe(true);
+      expect(wouldBeExpired).toBeTruthy();
     });
 
     it('prevents stale status from blocking future rounds', () => {
@@ -574,7 +576,7 @@ describe('tTL and Expiration', () => {
         StreamStatuses.ACTIVE,
       ));
 
-      expect(kvStore.has(streamId)).toBe(true);
+      expect(kvStore.has(streamId)).toBeTruthy();
     });
   });
 });
@@ -591,7 +593,7 @@ describe('stop Button Compatibility', () => {
       resume: false, // Default, NOT true
     };
 
-    expect(usesChatConfig.resume).toBe(false);
+    expect(usesChatConfig.resume).toBeFalsy();
   });
 
   it('stop button works normally (no stream resumption)', () => {
@@ -609,8 +611,9 @@ describe('stop Button Compatibility', () => {
     // User clicks stop - abort signal sent
     // Stream status updated to FAILED or just removed
     const entry = kvStore.get(streamId);
-    if (!entry)
+    if (!entry) {
       throw new Error('expected stream entry');
+    }
     entry.status = StreamStatuses.FAILED;
     entry.errorMessage = 'Aborted by user';
     kvStore.set(streamId, entry);
@@ -640,7 +643,7 @@ describe('error Scenarios', () => {
       };
 
       const result = handleStreamCheck();
-      expect(result.fallbackToDb).toBe(true);
+      expect(result.fallbackToDb).toBeTruthy();
     });
   });
 
@@ -660,14 +663,14 @@ describe('error Scenarios', () => {
 
       // But DB has the complete message
       const dbMessage = {
-        id: streamId,
         content: 'Complete response',
         finishReason: 'stop',
+        id: streamId,
       };
 
       // Should trust DB if message exists with finishReason
       const hasCompleteDbMessage = dbMessage.finishReason === 'stop';
-      expect(hasCompleteDbMessage).toBe(true);
+      expect(hasCompleteDbMessage).toBeTruthy();
     });
   });
 });
@@ -735,8 +738,9 @@ describe('edge Cases', () => {
 
       // Immediately complete
       const entry = kvStore.get(streamId);
-      if (!entry)
+      if (!entry) {
         throw new Error('expected stream entry');
+      }
       entry.status = StreamStatuses.COMPLETED;
       entry.messageId = streamId;
       entry.completedAt = new Date().toISOString();

@@ -63,7 +63,7 @@ export function runBackgroundTask(
  */
 export function runBackgroundTasks(
   executionCtx: ExecutionContext | undefined,
-  tasks: Array<() => Promise<unknown>>,
+  tasks: (() => Promise<unknown>)[],
   options?: {
     /** Operation name for error logging */
     operationName?: string;
@@ -78,7 +78,7 @@ export function runBackgroundTasks(
   const { operationName = 'background tasks', swallowErrors = true } = options ?? {};
 
   const wrappedTasks = async () => {
-    const results = await Promise.allSettled(tasks.map(fn => fn()));
+    const results = await Promise.allSettled(tasks.map(async fn => await fn()));
 
     const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
 

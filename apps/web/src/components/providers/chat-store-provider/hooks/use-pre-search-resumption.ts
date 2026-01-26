@@ -19,24 +19,24 @@ type UsePreSearchResumptionParams = {
 };
 
 export function usePreSearchResumption({
-  store,
   effectiveThreadId,
   queryClientRef,
+  store,
 }: UsePreSearchResumptionParams) {
   const {
+    enableWebSearch,
+    hasInitiallyLoaded,
+    isStreaming,
     messages,
     preSearches,
     thread,
-    hasInitiallyLoaded,
-    isStreaming,
-    enableWebSearch,
   } = useStore(store, useShallow(s => ({
+    enableWebSearch: s.enableWebSearch,
+    hasInitiallyLoaded: s.hasInitiallyLoaded,
+    isStreaming: s.isStreaming,
     messages: s.messages,
     preSearches: s.preSearches,
     thread: s.thread,
-    hasInitiallyLoaded: s.hasInitiallyLoaded,
-    isStreaming: s.isStreaming,
-    enableWebSearch: s.enableWebSearch,
   })));
 
   const attemptedResumptionRef = useRef<Set<number>>(new Set());
@@ -82,8 +82,9 @@ export function usePreSearchResumption({
     attemptedResumptionRef.current.add(currentRound);
 
     const userMessageForRound = messages.find((msg) => {
-      if (msg.role !== MessageRoles.USER)
+      if (msg.role !== MessageRoles.USER) {
         return false;
+      }
       const msgRound = getRoundNumber(msg.metadata);
       return msgRound === currentRound;
     });
@@ -99,8 +100,8 @@ export function usePreSearchResumption({
       const resumeSearch = async () => {
         try {
           const response = await executePreSearchStreamService({
-            param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
             json: { userQuery },
+            param: { roundNumber: String(currentRound), threadId: threadIdForSearch },
           });
 
           if (response.status === 202 || response.status === 409) {

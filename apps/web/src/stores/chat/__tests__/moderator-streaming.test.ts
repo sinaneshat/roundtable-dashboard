@@ -80,46 +80,46 @@ function createStreamingStates(): PartialSummary[] {
 
     // Step 4: Summary complete, metrics start
     {
-      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
       metrics: {},
+      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
     },
 
     // Step 5: First metric appears
     {
-      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
       metrics: {
         engagement: 85,
       },
+      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
     },
 
     // Step 6: More metrics
     {
-      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
       metrics: {
         engagement: 85,
         insight: 78,
       },
+      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
     },
 
     // Step 7: More metrics
     {
-      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
       metrics: {
+        balance: 82,
         engagement: 85,
         insight: 78,
-        balance: 82,
       },
+      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
     },
 
     // Step 8: Complete summary with all metrics
     {
-      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
       metrics: {
-        engagement: 85,
-        insight: 78,
         balance: 82,
         clarity: 90,
+        engagement: 85,
+        insight: 78,
       },
+      summary: 'The participants provided diverse perspectives on market timing strategy, reaching consensus on key factors.',
     },
   ];
 }
@@ -131,23 +131,23 @@ function createStreamingStates(): PartialSummary[] {
 describe('hasModeratorData - Progressive Detection', () => {
   describe('empty and Null States', () => {
     it('returns false for null', () => {
-      expect(hasModeratorData(null)).toBe(false);
+      expect(hasModeratorData(null)).toBeFalsy();
     });
 
     it('returns false for undefined', () => {
-      expect(hasModeratorData(undefined)).toBe(false);
+      expect(hasModeratorData(undefined)).toBeFalsy();
     });
 
     it('returns false for empty object', () => {
-      expect(hasModeratorData({})).toBe(false);
+      expect(hasModeratorData({})).toBeFalsy();
     });
 
     it('returns false for object with only empty nested objects', () => {
-      expect(hasModeratorData({ metrics: {} })).toBe(false);
+      expect(hasModeratorData({ metrics: {} })).toBeFalsy();
     });
 
     it('returns false for empty summary string', () => {
-      expect(hasModeratorData({ summary: '' })).toBe(false);
+      expect(hasModeratorData({ summary: '' })).toBeFalsy();
     });
   });
 
@@ -156,14 +156,14 @@ describe('hasModeratorData - Progressive Detection', () => {
       const partial: PartialSummary = {
         summary: 'Test summary content',
       };
-      expect(hasModeratorData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBeTruthy();
     });
 
     it('returns false when moderator text is empty string', () => {
       const partial: PartialSummary = {
         summary: '',
       };
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('returns false when moderator text is only whitespace', () => {
@@ -171,7 +171,7 @@ describe('hasModeratorData - Progressive Detection', () => {
         summary: '   ',
       };
       // Current implementation uses .trim().length > 0
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
   });
 
@@ -180,33 +180,33 @@ describe('hasModeratorData - Progressive Detection', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 50 },
       };
-      expect(hasModeratorData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBeTruthy();
     });
 
     it('returns false when all metrics are 0', () => {
       const partial: PartialSummary = {
-        metrics: { engagement: 0, insight: 0, balance: 0, clarity: 0 },
+        metrics: { balance: 0, clarity: 0, engagement: 0, insight: 0 },
       };
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('returns false when metrics is empty object', () => {
       const partial: PartialSummary = {
         metrics: {},
       };
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('returns true when multiple metrics have values', () => {
       const partial: PartialSummary = {
         metrics: {
-          engagement: 85,
-          insight: 78,
           balance: 82,
           clarity: 90,
+          engagement: 85,
+          insight: 78,
         },
       };
-      expect(hasModeratorData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBeTruthy();
     });
   });
 
@@ -216,17 +216,17 @@ describe('hasModeratorData - Progressive Detection', () => {
       const results = streamingStates.map(state => hasModeratorData(state));
 
       // Step 0: Empty - should be false
-      expect(results[0]).toBe(false);
+      expect(results[0]).toBeFalsy();
 
       // Step 1: moderator text: '' - should be false (no actual content)
-      expect(results[1]).toBe(false);
+      expect(results[1]).toBeFalsy();
 
       // Step 2: moderator text with partial content - should be TRUE (first displayable data)
-      expect(results[2]).toBe(true);
+      expect(results[2]).toBeTruthy();
 
       // All subsequent steps should be true
       for (let i = 3; i < results.length; i++) {
-        expect(results[i]).toBe(true);
+        expect(results[i]).toBeTruthy();
       }
     });
 
@@ -248,13 +248,13 @@ describe('hasModeratorData - Progressive Detection', () => {
   describe('combined Field Detection (OR logic)', () => {
     it('returns true if ANY displayable field has content', () => {
       // Only summary
-      expect(hasModeratorData({ summary: 'Test' })).toBe(true);
+      expect(hasModeratorData({ summary: 'Test' })).toBeTruthy();
 
       // Only metrics
-      expect(hasModeratorData({ metrics: { engagement: 50 } })).toBe(true);
+      expect(hasModeratorData({ metrics: { engagement: 50 } })).toBeTruthy();
 
       // Both
-      expect(hasModeratorData({ summary: 'Test', metrics: { engagement: 50 } })).toBe(true);
+      expect(hasModeratorData({ metrics: { engagement: 50 }, summary: 'Test' })).toBeTruthy();
     });
   });
 });
@@ -315,8 +315,8 @@ describe('moderator Streaming Chunk Buffer Behavior', () => {
       // Should have one successful parse at the end
       expect(updates).toHaveLength(1);
       expect(updates[0]).toEqual({
-        summary: 'Test content',
         metrics: { engagement: 85 },
+        summary: 'Test content',
       });
     });
   });
@@ -326,21 +326,21 @@ describe('moderator Factory Integration Tests', () => {
   describe('complete Moderator Flow with Factories', () => {
     it('creates moderator message and payload data together', () => {
       const payload = createMockModeratorPayload({
-        summary: 'Test summary content',
         metrics: createMockModeratorMetrics({
           engagement: 95,
           insight: 88,
         }),
+        summary: 'Test summary content',
       });
 
       const message = createTestModeratorMessage({
-        id: 'moderator-r0',
         content: payload.summary,
+        id: 'moderator-r0',
         roundNumber: 0,
       });
 
       // Verify moderator message structure
-      expect(message.metadata.isModerator).toBe(true);
+      expect(message.metadata.isModerator).toBeTruthy();
       expect(message.metadata.roundNumber).toBe(0);
 
       // Verify payload data
@@ -349,7 +349,7 @@ describe('moderator Factory Integration Tests', () => {
       expect(payload.metrics.insight).toBe(88);
 
       // Verify data is displayable
-      expect(hasModeratorData(payload)).toBe(true);
+      expect(hasModeratorData(payload)).toBeTruthy();
     });
 
     it('simulates progressive streaming with partial payloads', () => {
@@ -357,51 +357,51 @@ describe('moderator Factory Integration Tests', () => {
       const step1 = createPartialModeratorPayload({
         summary: 'The discussion explored',
       });
-      expect(hasModeratorData(step1)).toBe(true);
+      expect(hasModeratorData(step1)).toBeTruthy();
 
       // Streaming step 2: Summary complete, metrics starting
       const step2 = createPartialModeratorPayload({
-        summary: 'The discussion explored key concepts.',
         metrics: createMockModeratorMetrics({ engagement: 80 }) as Partial<TestModeratorMetrics>,
+        summary: 'The discussion explored key concepts.',
       });
-      expect(hasModeratorData(step2)).toBe(true);
+      expect(hasModeratorData(step2)).toBeTruthy();
 
       // Streaming step 3: Complete
       const step3 = createMockModeratorPayload({
-        summary: 'The discussion explored key concepts.',
         metrics: createMockModeratorMetrics({
-          engagement: 80,
-          insight: 85,
           balance: 75,
           clarity: 90,
+          engagement: 80,
+          insight: 85,
         }),
+        summary: 'The discussion explored key concepts.',
       });
-      expect(hasModeratorData(step3)).toBe(true);
+      expect(hasModeratorData(step3)).toBeTruthy();
     });
 
     it('creates empty/invalid states correctly', () => {
       // Empty partial
       const emptyPartial = createPartialModeratorPayload();
-      expect(hasModeratorData(emptyPartial)).toBe(false);
+      expect(hasModeratorData(emptyPartial)).toBeFalsy();
 
       // Partial with empty summary
       const emptyText = createPartialModeratorPayload({ summary: '' });
-      expect(hasModeratorData(emptyText)).toBe(false);
+      expect(hasModeratorData(emptyText)).toBeFalsy();
 
       // Partial with whitespace summary
       const whitespace = createPartialModeratorPayload({ summary: '   ' });
-      expect(hasModeratorData(whitespace)).toBe(false);
+      expect(hasModeratorData(whitespace)).toBeFalsy();
 
       // Zero metrics
       const zeroMetrics = createPartialModeratorPayload({
         metrics: createMockModeratorMetrics({
-          engagement: 0,
-          insight: 0,
           balance: 0,
           clarity: 0,
+          engagement: 0,
+          insight: 0,
         }) as Partial<TestModeratorMetrics>,
       });
-      expect(hasModeratorData(zeroMetrics)).toBe(false);
+      expect(hasModeratorData(zeroMetrics)).toBeFalsy();
     });
   });
 
@@ -420,15 +420,15 @@ describe('moderator Factory Integration Tests', () => {
 
     it('factory creates message matching isModerator pattern', () => {
       const message = createTestModeratorMessage({
-        id: 'mod-test',
         content: 'Test',
+        id: 'mod-test',
         roundNumber: 1,
       });
 
       // Verify pattern matches implementation
       expect(message.role).toBe(MessageRoles.ASSISTANT);
       expect(message.metadata.role).toBe(MessageRoles.ASSISTANT);
-      expect(message.metadata.isModerator).toBe(true);
+      expect(message.metadata.isModerator).toBeTruthy();
       expect(typeof message.metadata.roundNumber).toBe('number');
     });
   });
@@ -539,10 +539,10 @@ describe('moderator JSON Streaming Limitation - Why Progressive Updates May Not 
       };
 
       // This should trigger content display
-      expect(hasModeratorData(firstMeaningfulUpdate)).toBe(true);
+      expect(hasModeratorData(firstMeaningfulUpdate)).toBeTruthy();
 
       // These intermediate states should NOT trigger display
-      const intermediateStates: Array<DeepPartial<ModeratorPayload>> = [
+      const intermediateStates: DeepPartial<ModeratorPayload>[] = [
         {},
         { summary: '' },
         { summary: '   ' },
@@ -550,7 +550,7 @@ describe('moderator JSON Streaming Limitation - Why Progressive Updates May Not 
       ];
 
       for (const state of intermediateStates) {
-        expect(hasModeratorData(state)).toBe(false);
+        expect(hasModeratorData(state)).toBeFalsy();
       }
     });
   });
@@ -560,26 +560,26 @@ describe('moderator Message Structure Tests', () => {
   describe('moderator Message Factory', () => {
     it('creates moderator message with isModerator: true metadata', () => {
       const moderatorMsg = createTestModeratorMessage({
-        id: 'moderator-123',
         content: 'Test moderator content',
+        id: 'moderator-123',
         roundNumber: 0,
       });
 
       expect(moderatorMsg.metadata).toBeDefined();
-      expect(moderatorMsg.metadata.isModerator).toBe(true);
+      expect(moderatorMsg.metadata.isModerator).toBeTruthy();
       expect(moderatorMsg.metadata.roundNumber).toBe(0);
       expect(moderatorMsg.role).toBe(MessageRoles.ASSISTANT);
     });
 
     it('creates moderator message with proper parts array', () => {
       const moderatorMsg = createTestModeratorMessage({
-        id: 'moderator-123',
         content: 'Test content',
+        id: 'moderator-123',
         roundNumber: 0,
       });
 
       expect(moderatorMsg.parts).toBeDefined();
-      expect(Array.isArray(moderatorMsg.parts)).toBe(true);
+      expect(Array.isArray(moderatorMsg.parts)).toBeTruthy();
       expect(moderatorMsg.parts.length).toBeGreaterThan(0);
       expect(moderatorMsg.parts[0]?.type).toBe('text');
       expect(moderatorMsg.parts[0]?.text).toBe('Test content');
@@ -625,8 +625,8 @@ describe('moderator Message Structure Tests', () => {
 
     it('allows overriding moderator metrics', () => {
       const metrics = createMockModeratorMetrics({
-        engagement: 50,
         clarity: 75,
+        engagement: 50,
       });
 
       expect(metrics.engagement).toBe(50);
@@ -641,16 +641,16 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
       // 0 is falsy but could be a valid generated value
       // However, 0 for all metrics means "no data" so should not display
       const partial: PartialSummary = {
-        metrics: { engagement: 0, insight: 0, balance: 0, clarity: 0 },
+        metrics: { balance: 0, clarity: 0, engagement: 0, insight: 0 },
       };
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('metrics with any value > 0 should trigger display', () => {
       const partial: PartialSummary = {
         metrics: { engagement: 1 },
       };
-      expect(hasModeratorData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBeTruthy();
     });
   });
 
@@ -660,14 +660,14 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
         summary: '   ',
       };
       // Implementation uses .trim().length > 0
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('moderator text with whitespace and content should trigger display', () => {
       const partial: PartialSummary = {
         summary: '  Test  ',
       };
-      expect(hasModeratorData(partial)).toBe(true);
+      expect(hasModeratorData(partial)).toBeTruthy();
     });
   });
 
@@ -683,7 +683,7 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
         metrics: { engagement: '75' },
       };
       // typeof '75' === 'string', not 'number', so this should fail
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
 
     it('handles NaN for metrics', () => {
@@ -691,7 +691,7 @@ describe('moderator Edge Cases for Progressive UI Updates', () => {
         metrics: { engagement: Number.NaN },
       };
       // NaN > 0 is false
-      expect(hasModeratorData(partial)).toBe(false);
+      expect(hasModeratorData(partial)).toBeFalsy();
     });
   });
 });

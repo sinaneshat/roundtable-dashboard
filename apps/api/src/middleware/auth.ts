@@ -83,7 +83,7 @@ export const attachSession = createMiddleware<ApiEnv>(async (c, next) => {
     c.set('session', null);
     c.set('user', null);
   }
-  return next();
+  return await next();
 });
 
 // Require an authenticated session using Better Auth
@@ -98,14 +98,14 @@ export const requireSession = createMiddleware<ApiEnv>(async (c, next) => {
       // Indicate both authentication methods are accepted
       const res = new Response(JSON.stringify({
         code: HttpStatusCodes.UNAUTHORIZED,
-        message: 'Authentication required',
         details: 'Valid session cookie or API key required to access this resource',
+        message: 'Authentication required',
       }), {
-        status: HttpStatusCodes.UNAUTHORIZED,
         headers: {
           'Content-Type': 'application/json',
           'WWW-Authenticate': 'Session realm="api", ApiKey realm="api"',
         },
+        status: HttpStatusCodes.UNAUTHORIZED,
       });
       throw new HTTPException(mapStatusCode(HttpStatusCodes.UNAUTHORIZED), { res });
     }
@@ -119,15 +119,15 @@ export const requireSession = createMiddleware<ApiEnv>(async (c, next) => {
     // Handle unexpected authentication errors gracefully
     const res = new Response(JSON.stringify({
       code: HttpStatusCodes.UNAUTHORIZED,
-      message: 'Authentication failed',
       details: 'Session or API key validation error',
+      message: 'Authentication failed',
     }), {
-      status: HttpStatusCodes.UNAUTHORIZED,
       headers: {
         'Content-Type': 'application/json',
         'WWW-Authenticate': 'Session realm="api", ApiKey realm="api"',
       },
+      status: HttpStatusCodes.UNAUTHORIZED,
     });
-    throw new HTTPException(mapStatusCode(HttpStatusCodes.UNAUTHORIZED), { res, cause: e });
+    throw new HTTPException(mapStatusCode(HttpStatusCodes.UNAUTHORIZED), { cause: e, res });
   }
 });

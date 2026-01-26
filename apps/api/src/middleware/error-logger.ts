@@ -58,7 +58,10 @@ function createSanitizedDatabaseError(originalError: Error): Error {
   const sanitizedError = new Error('A database operation failed. Please try again later.');
   sanitizedError.name = 'DatabaseError';
   // Preserve stack for internal logging but use sanitized message
-  sanitizedError.stack = originalError.stack;
+  // Only assign stack if it exists to satisfy exactOptionalPropertyTypes
+  if (originalError.stack !== undefined) {
+    sanitizedError.stack = originalError.stack;
+  }
   return sanitizedError;
 }
 
@@ -115,7 +118,7 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   // Skip verbose logging for expected 401 auth errors
   // These are normal on protected endpoints when user isn't logged in
   if (isExpected401(err, status)) {
-    return onError(err, c);
+    return await onError(err, c);
   }
 
   // Extract Cloudflare request context
@@ -127,22 +130,22 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   // Build structured error log (Cloudflare auto-indexes JSON fields)
   // Always log the ORIGINAL error message for debugging (never sanitized)
   const errorLog = {
-    log_type: 'api_error',
-    timestamp: new Date().toISOString(),
-    method: c.req.method,
-    path: c.req.path,
-    status,
-    error_type: errorType,
-    error_name: err.name,
-    error_message: err.message, // Original message for debugging
-    error_stack: err.stack,
-    // Cloudflare context
-    request_id: cfRay,
     cf_colo: cf?.colo,
     cf_country: cf?.country,
+    error_message: err.message, // Original message for debugging
+    error_name: err.name,
+    error_stack: err.stack,
+    error_type: errorType,
+    log_type: 'api_error',
+    method: c.req.method,
+    path: c.req.path,
+    query: c.req.query(),
+    // Cloudflare context
+    request_id: cfRay,
+    status,
+    timestamp: new Date().toISOString(),
     // URL details for debugging
     url: c.req.url,
-    query: c.req.query(),
   };
 
   // Log as structured JSON for Cloudflare Workers Logs
@@ -157,13 +160,13 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
     // Log that we sanitized this error for debugging
     console.error({
       log_type: 'error_sanitized',
-      timestamp: new Date().toISOString(),
-      request_id: cfRay,
       original_message: err.message,
+      request_id: cfRay,
       sanitized_message: errorToReturn.message,
+      timestamp: new Date().toISOString(),
     });
   }
 
   // Delegate to Stoker's onError for response formatting
-  return onError(errorToReturn, c);
+  return await onError(errorToReturn, c);
 };

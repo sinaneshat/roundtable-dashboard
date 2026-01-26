@@ -246,47 +246,47 @@ export function isRoundFullyComplete(ctx: RoundContext): boolean {
  * All guards exported as a namespace for convenient access
  */
 export const guards = {
-  // Pre-search
-  shouldRunPreSearch,
-  isPreSearchInProgress,
-  isPreSearchComplete,
-  isPreSearchFailed,
-  canResumePreSearch,
-
-  // Participants
-  hasNextParticipant,
-  isValidParticipantIndex,
   allParticipantsComplete,
-  hasResumptionParticipant,
-  participantHasMessage,
-  isParticipantStreaming,
-
+  canResumeModerator,
+  canResumePreSearch,
+  // Composite
+  canStartRound,
   // Moderator
   canTriggerModerator,
-  hasModeratorMessage,
-  canResumeModerator,
 
+  getEffectiveThreadId,
+  // Error
+  hasError,
+  hasModeratorMessage,
+  // Participants
+  hasNextParticipant,
+  hasResumptionParticipant,
   // Resumption
   hasResumptionState,
-  isResumingFromPreSearch,
-  isResumingFromParticipants,
-  isResumingFromModerator,
-  isRoundComplete,
 
+  // Thread
+  hasThread,
   // AI SDK
   isAiSdkReady,
   isAiSdkStreaming,
 
-  // Thread
-  hasThread,
   isNewThread,
-  getEffectiveThreadId,
+  isParticipantStreaming,
+  isPreSearchComplete,
+  isPreSearchFailed,
+  isPreSearchInProgress,
 
-  // Error
-  hasError,
+  isResumingFromModerator,
+  isResumingFromParticipants,
 
-  // Composite
-  canStartRound,
-  shouldProceedToParticipants,
+  isResumingFromPreSearch,
+  isRoundComplete,
   isRoundFullyComplete,
+
+  isValidParticipantIndex,
+
+  participantHasMessage,
+  shouldProceedToParticipants,
+  // Pre-search
+  shouldRunPreSearch,
 } as const;

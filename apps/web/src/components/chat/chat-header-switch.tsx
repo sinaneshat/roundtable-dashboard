@@ -12,10 +12,10 @@ export function ChatHeaderSwitch() {
 
   // Store state to detect active thread even when URL is still /chat
   // ✅ OPTIMIZATION: Batch all selectors with useShallow to prevent multiple re-renders
-  const { showInitialUI, createdThreadId, thread } = useChatStore(
+  const { createdThreadId, showInitialUI, thread } = useChatStore(
     useShallow(s => ({
-      showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
+      showInitialUI: s.showInitialUI,
       thread: s.thread,
     })),
   );

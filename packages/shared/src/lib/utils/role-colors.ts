@@ -47,9 +47,9 @@ export function getRoleColors(roleName: string): {
 
   const seed = hashString(roleName);
   const hexColor = randomColor({
+    format: 'hex',
     luminosity: 'bright',
     seed,
-    format: 'hex',
   });
 
   return {
@@ -73,7 +73,7 @@ export function getRoleBadgeStyle(roleName: string): {
 
   return {
     backgroundColor: colors.bgColor,
-    color: lightenColor(baseColor, 0.2),
     borderColor: hexToRgba(baseColor, 0.3),
+    color: lightenColor(baseColor, 0.2),
   };
 }

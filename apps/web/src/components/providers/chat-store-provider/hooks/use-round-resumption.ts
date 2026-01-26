@@ -68,13 +68,16 @@ function validateAndCorrectNextParticipant(
   // Get participant indices that have messages in the current round
   const participantIndicesWithMessages = new Set<number>();
   for (const msg of messages) {
-    if (msg.role !== MessageRoles.ASSISTANT)
+    if (msg.role !== MessageRoles.ASSISTANT) {
       continue;
-    if (isModeratorMessage(msg))
+    }
+    if (isModeratorMessage(msg)) {
       continue;
+    }
     const msgRound = getRoundNumber(msg.metadata);
-    if (msgRound !== currentRound)
+    if (msgRound !== currentRound) {
       continue;
+    }
     const pIdx = getParticipantIndexFromMetadata(msg.metadata);
     if (pIdx !== null) {
       participantIndicesWithMessages.add(pIdx);
@@ -98,54 +101,54 @@ function validateAndCorrectNextParticipant(
 /**
  * Handles incomplete round resumption from specific participant
  */
-export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
+export function useRoundResumption({ chat, store }: UseRoundResumptionParams) {
   // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
   const {
-    waitingToStart,
     chatIsStreaming,
-    nextParticipantToTrigger,
-    storeParticipants,
-    storeMessages,
-    storePreSearches,
-    storeThread,
-    storeScreenMode,
-    isWaitingForChangelog,
     configChangeRoundNumber,
     isPatchInProgress,
+    isWaitingForChangelog,
+    nextParticipantToTrigger,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    // Prevents consuming stale prefill state after rapid navigation
+    prefilledForThreadId,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion,
     // ✅ BUG FIX: Use form state for web search, NOT thread.enableWebSearch
     // Form state is the source of truth for current round web search decision
     // Thread's enableWebSearch is just a default/preference synced on load
     storeEnableWebSearch,
-    // ✅ SCOPE VERSIONING: Track version for stale effect detection
-    resumptionScopeVersion,
-    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
-    // Prevents consuming stale prefill state after rapid navigation
-    prefilledForThreadId,
+    storeMessages,
+    storeParticipants,
+    storePreSearches,
+    storeScreenMode,
+    storeThread,
     // ✅ RACE CONDITION FIX: Track if prefill was done
     streamResumptionPrefilled,
+    waitingToStart,
   } = useStore(store, useShallow(s => ({
-    waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
-    nextParticipantToTrigger: s.nextParticipantToTrigger,
-    storeParticipants: s.participants,
-    storeMessages: s.messages,
-    storePreSearches: s.preSearches,
-    storeThread: s.thread,
-    storeScreenMode: s.screenMode,
-    // Wait for changelog before streaming when config changed
-    isWaitingForChangelog: s.isWaitingForChangelog,
     // configChangeRoundNumber signals pending config changes (set before PATCH)
     configChangeRoundNumber: s.configChangeRoundNumber,
     // ✅ PATCH BLOCKING: Wait for PATCH to complete before streaming
     isPatchInProgress: s.isPatchInProgress,
-    // ✅ BUG FIX: Form state for web search toggle (user's current intent)
-    storeEnableWebSearch: s.enableWebSearch,
-    // ✅ SCOPE VERSIONING: Track version for stale effect detection
-    resumptionScopeVersion: s.resumptionScopeVersion,
+    // Wait for changelog before streaming when config changed
+    isWaitingForChangelog: s.isWaitingForChangelog,
+    nextParticipantToTrigger: s.nextParticipantToTrigger,
     // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
     prefilledForThreadId: s.prefilledForThreadId,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion: s.resumptionScopeVersion,
+    // ✅ BUG FIX: Form state for web search toggle (user's current intent)
+    storeEnableWebSearch: s.enableWebSearch,
+    storeMessages: s.messages,
+    storeParticipants: s.participants,
+    storePreSearches: s.preSearches,
+    storeScreenMode: s.screenMode,
+    storeThread: s.thread,
     // ✅ RACE CONDITION FIX: Track if prefill was done
     streamResumptionPrefilled: s.streamResumptionPrefilled,
+    waitingToStart: s.waitingToStartStreaming,
   })));
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking

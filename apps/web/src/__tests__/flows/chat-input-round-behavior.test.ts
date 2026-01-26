@@ -87,16 +87,16 @@ function calculateShowSubmitSpinner(state: SpinnerState): boolean {
 function extractInputState(store: ReturnType<typeof createChatStore>) {
   const state = store.getState();
   return {
-    isStreaming: state.isStreaming,
     isCreatingThread: state.isCreatingThread,
-    waitingToStartStreaming: state.waitingToStartStreaming,
+    isModelsLoading: state.isModelsLoading,
     isModeratorStreaming: state.isModeratorStreaming,
+    isStreaming: state.isStreaming,
+    moderatorResumption: state.moderatorResumption,
     pendingMessage: state.pendingMessage,
     preSearchResumption: state.preSearchResumption,
-    moderatorResumption: state.moderatorResumption,
-    streamingRoundNumber: state.streamingRoundNumber,
     showLoader: state.showLoader,
-    isModelsLoading: state.isModelsLoading,
+    streamingRoundNumber: state.streamingRoundNumber,
+    waitingToStartStreaming: state.waitingToStartStreaming,
   };
 }
 
@@ -118,8 +118,8 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false, // API mutation hasn't started yet
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('should show loading spinner immediately on submit', () => {
@@ -132,7 +132,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         waitingToStartStreaming: true,
       });
 
-      expect(showSpinner).toBe(true);
+      expect(showSpinner).toBeTruthy();
     });
 
     it('should disable input during thread creation', () => {
@@ -147,8 +147,8 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.isCreatingThread).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isCreatingThread).toBeTruthy();
     });
 
     it('should disable input during participant streaming', () => {
@@ -165,8 +165,8 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.isStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(1);
     });
 
@@ -182,7 +182,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         waitingToStartStreaming: false,
       });
 
-      expect(showSpinner).toBe(false);
+      expect(showSpinner).toBeFalsy();
     });
 
     it('should disable input during moderator streaming', () => {
@@ -198,8 +198,8 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.isModeratorStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isModeratorStreaming).toBeTruthy();
     });
 
     it('should re-enable input after round completes', () => {
@@ -217,7 +217,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 
@@ -229,14 +229,14 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
       store.getState().setStreamingRoundNumber(1);
       // Use prefillStreamResumptionState to set pre-search state
       store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 1,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_1',
           status: MessageStatuses.STREAMING,
           streamId: 'presearch_1',
-          preSearchId: 'presearch_1',
         },
+        roundNumber: 1,
       });
 
       const state = extractInputState(store);
@@ -245,7 +245,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
       expect(state.preSearchResumption?.status).toBe(MessageStatuses.STREAMING);
     });
 
@@ -255,14 +255,14 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
       // Pre-search complete but participants haven't started
       store.getState().setStreamingRoundNumber(1); // Round in progress
       store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 1,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_1',
           status: MessageStatuses.COMPLETE,
           streamId: 'presearch_1',
-          preSearchId: 'presearch_1',
         },
+        roundNumber: 1,
       });
       store.getState().setIsStreaming(false); // Participants not streaming yet
 
@@ -273,7 +273,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
       });
 
       // Should be blocked because streamingRoundNumber is set
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(1);
     });
   });
@@ -292,7 +292,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
 
     it('should re-enable input on streaming error', () => {
@@ -308,7 +308,7 @@ describe('chat Input - Initial Round (Round 1) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 });
@@ -331,8 +331,8 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('should show loading spinner immediately on submit (identical to Round 1)', () => {
@@ -345,7 +345,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         waitingToStartStreaming: true,
       });
 
-      expect(showSpinner).toBe(true);
+      expect(showSpinner).toBeTruthy();
     });
 
     it('should disable input during participant streaming (identical to Round 1)', () => {
@@ -362,8 +362,8 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.isStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(2);
     });
 
@@ -378,7 +378,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         waitingToStartStreaming: false,
       });
 
-      expect(showSpinner).toBe(false);
+      expect(showSpinner).toBeFalsy();
     });
 
     it('should disable input during moderator streaming (identical to Round 1)', () => {
@@ -394,8 +394,8 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
-      expect(state.isModeratorStreaming).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isModeratorStreaming).toBeTruthy();
     });
 
     it('should re-enable input after round completes (identical to Round 1)', () => {
@@ -413,7 +413,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 
@@ -424,14 +424,14 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
       // Round 2 pre-search
       store.getState().setStreamingRoundNumber(2);
       store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 2,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_2',
           status: MessageStatuses.STREAMING,
           streamId: 'presearch_2',
-          preSearchId: 'presearch_2',
         },
+        roundNumber: 2,
       });
 
       const state = extractInputState(store);
@@ -440,7 +440,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
       expect(state.preSearchResumption?.status).toBe(MessageStatuses.STREAMING);
     });
 
@@ -450,14 +450,14 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
       // Round 2 - pre-search complete, participants pending
       store.getState().setStreamingRoundNumber(2);
       store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 2,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_2',
           status: MessageStatuses.COMPLETE,
           streamId: 'presearch_2',
-          preSearchId: 'presearch_2',
         },
+        roundNumber: 2,
       });
       store.getState().setIsStreaming(false);
 
@@ -467,7 +467,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(2);
     });
   });
@@ -486,7 +486,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
 
     it('should re-enable input on moderator error (identical to Round 1)', () => {
@@ -502,7 +502,7 @@ describe('chat Input - Follow-up Round (Round 2+) Behavior', () => {
         isSubmitting: false,
       });
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 });
@@ -527,7 +527,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       let r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(true);
+      expect(r1Blocked).toBeTruthy();
 
       // === Step 2: Streaming started ===
       round1Store.getState().setIsStreaming(true);
@@ -544,7 +544,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(true);
+      expect(r1Blocked).toBeTruthy();
 
       // === Step 3: Moderator streaming ===
       round1Store.getState().setIsStreaming(false);
@@ -559,7 +559,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(true);
+      expect(r1Blocked).toBeTruthy();
 
       // === Step 4: Round complete ===
       round1Store.getState().setIsModeratorStreaming(false);
@@ -574,7 +574,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(false);
+      expect(r1Blocked).toBeFalsy();
     });
 
     it('should show loading spinner at identical points in Round 1 and Round 2', () => {
@@ -595,7 +595,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       });
 
       expect(r1Spinner).toBe(r2Spinner);
-      expect(r1Spinner).toBe(true);
+      expect(r1Spinner).toBeTruthy();
 
       // Streaming started
       round1Store.getState().setWaitingToStartStreaming(false);
@@ -611,7 +611,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       });
 
       expect(r1Spinner).toBe(r2Spinner);
-      expect(r1Spinner).toBe(false);
+      expect(r1Spinner).toBeFalsy();
     });
   });
 
@@ -623,26 +623,26 @@ describe('chat Input - Cross-Round Consistency', () => {
       // Pre-search STREAMING
       round1Store.getState().setStreamingRoundNumber(1);
       round1Store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 1,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_1',
           status: MessageStatuses.STREAMING,
           streamId: 'presearch_1',
-          preSearchId: 'presearch_1',
         },
+        roundNumber: 1,
       });
 
       round2Store.getState().setStreamingRoundNumber(2);
       round2Store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 2,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_2',
           status: MessageStatuses.STREAMING,
           streamId: 'presearch_2',
-          preSearchId: 'presearch_2',
         },
+        roundNumber: 2,
       });
 
       const r1State = extractInputState(round1Store);
@@ -651,7 +651,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       const r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(true);
+      expect(r1Blocked).toBeTruthy();
     });
 
     it('should handle pre-search completion identically in Round 1 and Round 2', () => {
@@ -661,26 +661,26 @@ describe('chat Input - Cross-Round Consistency', () => {
       // Pre-search COMPLETE, round still in progress
       round1Store.getState().setStreamingRoundNumber(1);
       round1Store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 1,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_1',
           status: MessageStatuses.COMPLETE,
           streamId: 'presearch_1',
-          preSearchId: 'presearch_1',
         },
+        roundNumber: 1,
       });
 
       round2Store.getState().setStreamingRoundNumber(2);
       round2Store.getState().prefillStreamResumptionState('thread_1', {
-        roundNumber: 2,
         currentPhase: RoundPhases.PRE_SEARCH,
         preSearch: {
           enabled: true,
+          preSearchId: 'presearch_2',
           status: MessageStatuses.COMPLETE,
           streamId: 'presearch_2',
-          preSearchId: 'presearch_2',
         },
+        roundNumber: 2,
       });
 
       const r1State = extractInputState(round1Store);
@@ -689,7 +689,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       const r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(true); // Blocked by streamingRoundNumber
+      expect(r1Blocked).toBeTruthy(); // Blocked by streamingRoundNumber
     });
   });
 
@@ -715,7 +715,7 @@ describe('chat Input - Cross-Round Consistency', () => {
       const r2Blocked = calculateIsInputBlocked({ ...r2State, isSubmitting: false });
 
       expect(r1Blocked).toBe(r2Blocked);
-      expect(r1Blocked).toBe(false);
+      expect(r1Blocked).toBeFalsy();
     });
   });
 });
@@ -741,7 +741,7 @@ describe('chat Input - Edge Cases', () => {
       isSubmitting: false,
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should block input when pendingMessage exists', () => {
@@ -755,7 +755,7 @@ describe('chat Input - Edge Cases', () => {
       isSubmitting: false,
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
     expect(state.pendingMessage).toBe('Test message');
   });
 
@@ -788,7 +788,7 @@ describe('chat Input - Edge Cases', () => {
       isSubmitting: true, // Only this flag
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 });
 
@@ -810,7 +810,7 @@ describe('chat Input - FLOW_DOCUMENTATION.md Compliance', () => {
       isSubmitting: false,
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should match documented behavior: loading during pre-search phase', () => {
@@ -819,14 +819,14 @@ describe('chat Input - FLOW_DOCUMENTATION.md Compliance', () => {
     // Per documentation: "Loading indicator shows 'Searching the web...'"
     store.getState().setStreamingRoundNumber(1);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 1,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_1',
         status: MessageStatuses.STREAMING,
         streamId: 'presearch_1',
-        preSearchId: 'presearch_1',
       },
+      roundNumber: 1,
     });
 
     const state = extractInputState(store);
@@ -835,7 +835,7 @@ describe('chat Input - FLOW_DOCUMENTATION.md Compliance', () => {
       isSubmitting: false,
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should match documented behavior: stop button replaces send during streaming', () => {
@@ -852,8 +852,8 @@ describe('chat Input - FLOW_DOCUMENTATION.md Compliance', () => {
     });
 
     // Input should be blocked (stop button shown, not send)
-    expect(isBlocked).toBe(true);
-    expect(state.isStreaming).toBe(true);
+    expect(isBlocked).toBeTruthy();
+    expect(state.isStreaming).toBeTruthy();
   });
 
   it('should match documented behavior: input re-enables after round completes', () => {
@@ -871,6 +871,6 @@ describe('chat Input - FLOW_DOCUMENTATION.md Compliance', () => {
       isSubmitting: false,
     });
 
-    expect(isBlocked).toBe(false);
+    expect(isBlocked).toBeFalsy();
   });
 });

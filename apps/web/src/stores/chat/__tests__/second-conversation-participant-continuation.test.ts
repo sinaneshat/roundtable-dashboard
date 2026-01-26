@@ -77,12 +77,12 @@ function simulateBuggyNavigationReset(state: {
 }): typeof state {
   return {
     ...state,
-    currentRound: 0,
     currentIndex: 0,
-    roundParticipants: [],
+    currentRound: 0,
     isStreaming: false,
     isTriggeringRef: false,
     queuedParticipants: new Set(),
+    roundParticipants: [],
     // BUG: triggeredNextForRef (phantomGuard) is NOT cleared!
   };
 }
@@ -112,17 +112,17 @@ function triggerNextParticipant(
   // PHANTOM GUARD: Check if already triggered
   const _triggerKey = `r${currentRound}_p${currentIndex}`;
   if (phantomGuard.hasTriggered(currentRound, currentIndex)) {
-    return { triggered: false, nextIndex: null, blockedByPhantomGuard: true };
+    return { blockedByPhantomGuard: true, nextIndex: null, triggered: false };
   }
   phantomGuard.markTriggered(currentRound, currentIndex);
 
   // Round complete check
   if (nextIndex >= totalParticipants) {
-    return { triggered: true, nextIndex: null, blockedByPhantomGuard: false };
+    return { blockedByPhantomGuard: false, nextIndex: null, triggered: true };
   }
 
   // More participants to process
-  return { triggered: true, nextIndex, blockedByPhantomGuard: false };
+  return { blockedByPhantomGuard: false, nextIndex, triggered: true };
 }
 
 describe('second Conversation Participant Continuation', () => {
@@ -130,18 +130,18 @@ describe('second Conversation Participant Continuation', () => {
     it('should track triggered (round, participant) pairs', () => {
       const guard = new PhantomGuard();
 
-      expect(guard.hasTriggered(0, 0)).toBe(false);
-      expect(guard.hasTriggered(0, 1)).toBe(false);
+      expect(guard.hasTriggered(0, 0)).toBeFalsy();
+      expect(guard.hasTriggered(0, 1)).toBeFalsy();
 
       guard.markTriggered(0, 0);
 
-      expect(guard.hasTriggered(0, 0)).toBe(true);
-      expect(guard.hasTriggered(0, 1)).toBe(false);
+      expect(guard.hasTriggered(0, 0)).toBeTruthy();
+      expect(guard.hasTriggered(0, 1)).toBeFalsy();
 
       guard.markTriggered(0, 1);
 
-      expect(guard.hasTriggered(0, 0)).toBe(true);
-      expect(guard.hasTriggered(0, 1)).toBe(true);
+      expect(guard.hasTriggered(0, 0)).toBeTruthy();
+      expect(guard.hasTriggered(0, 1)).toBeTruthy();
     });
 
     it('should clear all entries', () => {
@@ -156,9 +156,9 @@ describe('second Conversation Participant Continuation', () => {
       guard.clear();
 
       expect(guard.getEntries()).toHaveLength(0);
-      expect(guard.hasTriggered(0, 0)).toBe(false);
-      expect(guard.hasTriggered(0, 1)).toBe(false);
-      expect(guard.hasTriggered(1, 0)).toBe(false);
+      expect(guard.hasTriggered(0, 0)).toBeFalsy();
+      expect(guard.hasTriggered(0, 1)).toBeFalsy();
+      expect(guard.hasTriggered(1, 0)).toBeFalsy();
     });
   });
 
@@ -173,21 +173,21 @@ describe('second Conversation Participant Continuation', () => {
 
       // Round 0, Participant 0 completes
       let result = triggerNextParticipant(0, 0, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBe(1);
-      expect(result.blockedByPhantomGuard).toBe(false);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
 
       // Round 0, Participant 1 completes
       result = triggerNextParticipant(1, 0, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBe(2);
-      expect(result.blockedByPhantomGuard).toBe(false);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
 
       // Round 0, Participant 2 completes (last)
       result = triggerNextParticipant(2, 0, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBeNull(); // Round complete
-      expect(result.blockedByPhantomGuard).toBe(false);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
 
       // Verify phantom guard has entries from first conversation
       expect(phantomGuard.getEntries()).toEqual(['r0_p0', 'r0_p1', 'r0_p2']);
@@ -199,12 +199,12 @@ describe('second Conversation Participant Continuation', () => {
       // Simulate BUGGY navigation reset (does NOT clear phantomGuard)
       // This is what the current code does
       let state = {
-        currentRound: 0,
         currentIndex: 0,
-        roundParticipants: participants,
+        currentRound: 0,
         isStreaming: false,
         isTriggeringRef: false,
         queuedParticipants: new Set<number>(),
+        roundParticipants: participants,
       };
       state = simulateBuggyNavigationReset(state);
 
@@ -227,8 +227,8 @@ describe('second Conversation Participant Continuation', () => {
       // FAILING ASSERTION: This is the bug!
       // Expected: triggered=true, nextIndex=1
       // Actual: triggered=false (blocked by phantom guard)
-      expect(result.blockedByPhantomGuard).toBe(true); // BUG: Blocked!
-      expect(result.triggered).toBe(false); // BUG: Not triggered!
+      expect(result.blockedByPhantomGuard).toBeTruthy(); // BUG: Blocked!
+      expect(result.triggered).toBeFalsy(); // BUG: Not triggered!
       expect(result.nextIndex).toBeNull(); // BUG: No next participant!
 
       // This is what we WANT (after fix):
@@ -258,12 +258,12 @@ describe('second Conversation Participant Continuation', () => {
 
       // Simulate FIXED navigation reset (clears phantomGuard)
       const state = {
-        currentRound: 0,
         currentIndex: 0,
-        roundParticipants: participants,
+        currentRound: 0,
         isStreaming: false,
         isTriggeringRef: false,
         queuedParticipants: new Set<number>(),
+        roundParticipants: participants,
       };
       const _resetState = simulateFixedNavigationReset(state, phantomGuard);
 
@@ -276,20 +276,20 @@ describe('second Conversation Participant Continuation', () => {
 
       // Round 0, Participant 0 completes - should trigger next!
       let result = triggerNextParticipant(0, 0, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBe(1);
 
       // Round 0, Participant 1 completes - should trigger next!
       result = triggerNextParticipant(1, 0, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBe(2);
 
       // Round 0, Participant 2 completes (last)
       result = triggerNextParticipant(2, 0, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
       expect(result.nextIndex).toBeNull(); // Round complete
     });
   });
@@ -314,12 +314,12 @@ describe('second Conversation Participant Continuation', () => {
 
       // Round 1 should work without issues
       let result = triggerNextParticipant(0, 1, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
 
       result = triggerNextParticipant(1, 1, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
     });
   });
 
@@ -336,8 +336,8 @@ describe('second Conversation Participant Continuation', () => {
 
       // User starts conversation 2
       const result = triggerNextParticipant(0, 0, participants.length, phantomGuard);
-      expect(result.blockedByPhantomGuard).toBe(false);
-      expect(result.triggered).toBe(true);
+      expect(result.blockedByPhantomGuard).toBeFalsy();
+      expect(result.triggered).toBeTruthy();
     });
 
     it('should handle switching between multiple threads', () => {
@@ -353,17 +353,17 @@ describe('second Conversation Participant Continuation', () => {
 
       // Thread B - round 0 works fine
       let result = triggerNextParticipant(0, 0, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
 
       result = triggerNextParticipant(1, 0, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
 
       // Navigate back to Thread A (should clear phantom guard)
       phantomGuard.clear();
 
       // Thread A - starting round 1 works fine
       result = triggerNextParticipant(0, 1, participants.length, phantomGuard);
-      expect(result.triggered).toBe(true);
+      expect(result.triggered).toBeTruthy();
     });
   });
 });

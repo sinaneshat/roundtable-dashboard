@@ -50,13 +50,17 @@ function createActionSpy(store: ReturnType<typeof createChatStore>) {
   const originalClearModeratorTracking = store.getState().clearModeratorTracking;
 
   store.setState({
-    setMessages: (messages) => {
-      trackAction('thread/setMessages');
-      return originalSetMessages(messages);
+    clearAnimations: () => {
+      trackAction('animation/clearAnimations');
+      return originalClearAnimations();
     },
-    setIsModeratorStreaming: (value) => {
-      trackAction('flags/setIsModeratorStreaming');
-      return originalSetIsModeratorStreaming(value);
+    clearModeratorTracking: (roundNumber) => {
+      trackAction('tracking/clearModeratorTracking');
+      return originalClearModeratorTracking(roundNumber);
+    },
+    completeAnimation: (index) => {
+      trackAction('animation/completeAnimation');
+      return originalCompleteAnimation(index);
     },
     completeModeratorStream: () => {
       trackAction('flags/completeModeratorStream');
@@ -78,21 +82,17 @@ function createActionSpy(store: ReturnType<typeof createChatStore>) {
       trackAction('animation/registerAnimation');
       return originalRegisterAnimation(index);
     },
-    completeAnimation: (index) => {
-      trackAction('animation/completeAnimation');
-      return originalCompleteAnimation(index);
-    },
-    clearAnimations: () => {
-      trackAction('animation/clearAnimations');
-      return originalClearAnimations();
+    setIsModeratorStreaming: (value) => {
+      trackAction('flags/setIsModeratorStreaming');
+      return originalSetIsModeratorStreaming(value);
     },
     setIsStreaming: (value) => {
       trackAction('thread/setIsStreaming');
       return originalSetIsStreaming(value);
     },
-    clearModeratorTracking: (roundNumber) => {
-      trackAction('tracking/clearModeratorTracking');
-      return originalClearModeratorTracking(roundNumber);
+    setMessages: (messages) => {
+      trackAction('thread/setMessages');
+      return originalSetMessages(messages);
     },
   });
 
@@ -120,15 +120,15 @@ function simulateModeratorStreaming(
   // Create placeholder
   const placeholder: UIMessage = {
     id: moderatorId,
-    role: MessageRoles.ASSISTANT,
-    parts: [],
     metadata: {
       isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       model: MODERATOR_NAME,
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [],
+    role: MessageRoles.ASSISTANT,
   };
 
   // Add placeholder to existing messages (preserve previous messages)
@@ -144,7 +144,7 @@ function simulateModeratorStreaming(
         msg.id === moderatorId
           ? {
               ...msg,
-              parts: [{ type: MessagePartTypes.TEXT, text: accumulatedText }],
+              parts: [{ text: accumulatedText, type: MessagePartTypes.TEXT }],
             }
           : msg,
       ),
@@ -157,11 +157,11 @@ function simulateModeratorStreaming(
       msg.id === moderatorId
         ? {
             ...msg,
-            parts: [{ type: MessagePartTypes.TEXT, text: accumulatedText, state: 'done' as const }],
             metadata: {
               ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
               finishReason: 'stop',
             },
+            parts: [{ state: 'done' as const, text: accumulatedText, type: MessagePartTypes.TEXT }],
           }
         : msg,
     ),
@@ -212,9 +212,9 @@ describe('moderator Action Call Frequency', () => {
 
       const message: UIMessage = {
         id: 'thread-1_r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Same content' }],
         metadata: { isModerator: true, roundNumber: 0 },
+        parts: [{ text: 'Same content', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.ASSISTANT,
       };
 
       // First call
@@ -278,9 +278,9 @@ describe('moderator Action Call Frequency', () => {
 
       const placeholder: UIMessage = {
         id: 'thread-1_r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [],
         metadata: { isModerator: true, roundNumber: 0 },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       };
       store.getState().setMessages([placeholder]);
 
@@ -363,7 +363,7 @@ describe('moderator Action Call Frequency', () => {
       expect(markCount).toBe(2);
 
       // Verify tracking is working
-      expect(store.getState().hasModeratorStreamBeenTriggered(moderatorId, 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered(moderatorId, 0)).toBeTruthy();
     });
   });
 
@@ -376,21 +376,21 @@ describe('moderator Action Call Frequency', () => {
       const participantMessages: UIMessage[] = [
         {
           id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'Participant 0', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 0' }],
-          metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
         },
         {
           id: 'thread-1_r0_p1',
+          metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'Participant 1', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 1' }],
-          metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
         },
         {
           id: 'thread-1_r0_p2',
+          metadata: { participantIndex: 2, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'Participant 2', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 2' }],
-          metadata: { roundNumber: 0, participantIndex: 2, role: MessageRoles.ASSISTANT },
         },
       ];
 
@@ -429,8 +429,8 @@ describe('moderator Action Call Frequency', () => {
       expect(actionSpy.getCallCount('flags/setIsModeratorStreaming')).toBe(2);
 
       // Final state should be stable
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
   });
 
@@ -455,10 +455,10 @@ describe('moderator Action Call Frequency', () => {
       expect(completeCount).toBe(1);
 
       // Verify all flags cleared
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().streamingRoundNumber).toBe(null);
-      expect(store.getState().pendingMessage).toBe(null);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().streamingRoundNumber).toBeNull();
+      expect(store.getState().pendingMessage).toBeNull();
     });
 
     it('should not call completeStreaming multiple times unnecessarily', () => {
@@ -602,8 +602,8 @@ describe('moderator Streaming Performance Benchmarks', () => {
       expect(messages).toHaveLength(1); // Only final moderator message
 
       // No orphaned state
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -618,10 +618,10 @@ describe('moderator Streaming Performance Benchmarks', () => {
       store.getState().markModeratorCreated(2);
 
       // Verify tracking is independent
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(2)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(3)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(2)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(3)).toBeFalsy();
 
       // Action count should match round count
       expect(actionSpy.getCallCount('tracking/markModeratorCreated')).toBe(3);

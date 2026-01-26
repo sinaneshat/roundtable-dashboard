@@ -29,9 +29,9 @@ type PreSearchResultsSkeletonProps = {
  * @param props.className - Optional CSS class names
  */
 export function PreSearchSkeleton({
+  className,
   queryCount = 2,
   resultsPerQuery = 3,
-  className,
   ...props
 }: PreSearchSkeletonProps) {
   return (
@@ -59,9 +59,9 @@ export function PreSearchSkeleton({
  * @param props.className - Optional CSS class names
  */
 export function PreSearchQuerySkeleton({
+  className,
   resultsPerQuery = 3,
   showSeparator = false,
-  className,
   ...props
 }: PreSearchQuerySkeletonProps) {
   return (
@@ -96,8 +96,8 @@ export function PreSearchQuerySkeleton({
  * @param props.className - Optional CSS class names
  */
 export function PreSearchResultsSkeleton({
-  count = 3,
   className,
+  count = 3,
   ...props
 }: PreSearchResultsSkeletonProps) {
   return (

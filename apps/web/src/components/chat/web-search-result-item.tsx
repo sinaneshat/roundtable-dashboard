@@ -22,9 +22,9 @@ type WebSearchResultItemProps = {
 };
 
 export function WebSearchResultItem({
+  className,
   result,
   showDivider = true,
-  className,
 }: WebSearchResultItemProps) {
   const t = useTranslations('webSearch.result');
   const faviconError = useBoolean(false);
@@ -65,7 +65,7 @@ export function WebSearchResultItem({
   const pageImages = result.images || [];
   const metaImage = result.metadata?.imageUrl;
   const allImages = [
-    ...(metaImage ? [{ url: metaImage, alt: result.title }] : []),
+    ...(metaImage ? [{ alt: result.title, url: metaImage }] : []),
     ...pageImages,
   ];
 
@@ -104,7 +104,7 @@ export function WebSearchResultItem({
             </a>
             <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground mt-0.5">
               <span>{cleanDomain}</span>
-              {result.score != null && result.score >= 0.01 && (
+              {result.score !== null && result.score !== undefined && result.score >= 0.01 && (
                 <Badge variant="outline" className="h-4 px-1 text-[10px] font-normal">
                   {Math.round(result.score * 100)}
                   %
@@ -171,8 +171,9 @@ export function WebSearchResultItem({
               const isLoaded = loadedImages.has(img.url);
               const isFailed = failedImages.has(img.url);
 
-              if (isFailed)
+              if (isFailed) {
                 return null;
+              }
 
               return (
                 <a

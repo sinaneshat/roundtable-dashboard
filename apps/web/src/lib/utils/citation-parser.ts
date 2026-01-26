@@ -40,9 +40,7 @@ export type CitableSource = {
 /**
  * Map of citation source IDs to their citable source details
  */
-export type CitationSourceMap = {
-  [key: string]: CitableSource;
-};
+export type CitationSourceMap = Record<string, CitableSource>;
 
 /**
  * Information about an attachment used in a citation
@@ -149,8 +147,9 @@ function normalizeMultipleCitations(text: string): string {
     // Extract all individual citation IDs from the match
     SINGLE_ID_PATTERN.lastIndex = 0;
     const ids = match.match(SINGLE_ID_PATTERN);
-    if (!ids || ids.length === 0)
+    if (!ids || ids.length === 0) {
       return match;
+    }
     // Convert to individual bracketed citations
     return ids.map(id => `[${id}]`).join('');
   });
@@ -206,8 +205,8 @@ export function parseCitations(text: string): ParsedCitationResult {
     // Add preceding text as segment
     if (match.index > lastIndex) {
       segments.push({
-        type: CitationSegmentTypes.TEXT,
         content: normalizedText.slice(lastIndex, match.index),
+        type: CitationSegmentTypes.TEXT,
       });
     }
 
@@ -220,20 +219,20 @@ export function parseCitations(text: string): ParsedCitationResult {
 
     // Create parsed citation
     const citation: ParsedCitation = {
+      displayNumber,
+      endIndex: match.index + marker.length,
       marker,
       sourceId,
-      typePrefix: prefix,
       sourceType,
-      displayNumber,
       startIndex: match.index,
-      endIndex: match.index + marker.length,
+      typePrefix: prefix,
     };
 
     // Add citation segment
     segments.push({
-      type: CitationSegmentTypes.CITATION,
-      content: marker,
       citation,
+      content: marker,
+      type: CitationSegmentTypes.CITATION,
     });
 
     // Track unique citations
@@ -249,8 +248,8 @@ export function parseCitations(text: string): ParsedCitationResult {
   // Add remaining text as segment
   if (lastIndex < normalizedText.length) {
     segments.push({
-      type: CitationSegmentTypes.TEXT,
       content: normalizedText.slice(lastIndex),
+      type: CitationSegmentTypes.TEXT,
     });
   }
 
@@ -261,10 +260,10 @@ export function parseCitations(text: string): ParsedCitationResult {
     .join('');
 
   return {
-    segments,
     citations,
     originalText: text,
     plainText,
+    segments,
   };
 }
 
@@ -294,18 +293,18 @@ export function toDbCitations(
     const sourceData = sourceDataResolver?.(citation.sourceId);
 
     return {
-      id: citation.sourceId,
-      sourceType: citation.sourceType,
-      sourceId: citation.sourceId,
       displayNumber: citation.displayNumber,
+      downloadUrl: sourceData?.downloadUrl,
+      excerpt: sourceData?.excerpt,
+      filename: sourceData?.filename,
+      fileSize: sourceData?.fileSize,
+      id: citation.sourceId,
+      mimeType: sourceData?.mimeType,
+      sourceId: citation.sourceId,
+      sourceType: citation.sourceType,
+      threadTitle: sourceData?.threadTitle,
       title: sourceData?.title,
       url: sourceData?.url,
-      excerpt: sourceData?.excerpt,
-      downloadUrl: sourceData?.downloadUrl,
-      filename: sourceData?.filename,
-      mimeType: sourceData?.mimeType,
-      fileSize: sourceData?.fileSize,
-      threadTitle: sourceData?.threadTitle,
     };
   });
 }

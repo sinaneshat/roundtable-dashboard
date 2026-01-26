@@ -37,11 +37,11 @@ describe('message ID Generation', () => {
 
       // Create message with this pattern
       const msg = createTestAssistantMessage({
-        id: expectedPattern,
         content: 'Test',
-        roundNumber,
+        id: expectedPattern,
         participantId: 'p1',
         participantIndex,
+        roundNumber,
       });
 
       expect(msg.id).toBe(expectedPattern);
@@ -94,8 +94,8 @@ describe('message ID Generation', () => {
       const userMsgId = `${threadId}_r${roundNumber}_user`;
 
       const msg = createTestUserMessage({
-        id: userMsgId,
         content: 'User message',
+        id: userMsgId,
         roundNumber,
       });
 
@@ -119,14 +119,14 @@ describe('iD Collision Prevention', () => {
     // Note: setMessages replaces the entire array without deduplication
     // Deduplication happens at the data source level (backend) or UI level
     const msg1 = createTestUserMessage({
-      id: 'msg-1',
       content: 'First message',
+      id: 'msg-1',
       roundNumber: 0,
     });
 
     const msg2 = createTestUserMessage({
-      id: 'msg-1', // Same ID
       content: 'Second message with same ID',
+      id: 'msg-1', // Same ID
       roundNumber: 0,
     });
 
@@ -144,33 +144,33 @@ describe('iD Collision Prevention', () => {
   it('should deduplicate changelog entries by ID', () => {
     const changelog = [
       {
-        id: 'changelog-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
+        changeData: { newMode: 'analyzing', oldMode: 'brainstorm' },
         changeType: 'mode_change' as const,
-        changeData: { oldMode: 'brainstorm', newMode: 'analyzing' },
         createdAt: new Date(),
+        id: 'changelog-1',
+        roundNumber: 1,
+        threadId: 'thread-123',
       },
       {
-        id: 'changelog-1', // Duplicate ID
-        threadId: 'thread-123',
-        roundNumber: 1,
+        changeData: { newMode: 'analyzing', oldMode: 'brainstorm' },
         changeType: 'mode_change' as const,
-        changeData: { oldMode: 'brainstorm', newMode: 'analyzing' },
         createdAt: new Date(),
+        id: 'changelog-1', // Duplicate ID
+        roundNumber: 1,
+        threadId: 'thread-123',
       },
     ];
 
     const userMsg = createTestUserMessage({
-      id: 'user-msg-1',
       content: 'Test',
+      id: 'user-msg-1',
       roundNumber: 1,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [userMsg],
         changelog,
+        messages: [userMsg],
         moderators: [],
       }),
     );
@@ -186,33 +186,33 @@ describe('iD Collision Prevention', () => {
   it('should allow same change type with different IDs', () => {
     const changelog = [
       {
-        id: 'changelog-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        changeType: 'participant_added' as const,
         changeData: { participantId: 'p1' },
+        changeType: 'participant_added' as const,
         createdAt: new Date(),
+        id: 'changelog-1',
+        roundNumber: 1,
+        threadId: 'thread-123',
       },
       {
-        id: 'changelog-2', // Different ID
-        threadId: 'thread-123',
-        roundNumber: 1,
-        changeType: 'participant_added' as const, // Same type
         changeData: { participantId: 'p2' },
+        changeType: 'participant_added' as const, // Same type
         createdAt: new Date(),
+        id: 'changelog-2', // Different ID
+        roundNumber: 1,
+        threadId: 'thread-123',
       },
     ];
 
     const userMsg = createTestUserMessage({
-      id: 'user-msg-1',
       content: 'Test',
+      id: 'user-msg-1',
       roundNumber: 1,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [userMsg],
         changelog,
+        messages: [userMsg],
         moderators: [],
       }),
     );
@@ -232,11 +232,11 @@ describe('round Number Consistency', () => {
     const threadId = 'thread-123';
 
     const msg = createTestAssistantMessage({
-      id: `${threadId}_r${roundNumber}_p0`,
       content: 'Test',
-      roundNumber,
+      id: `${threadId}_r${roundNumber}_p0`,
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber,
     });
 
     const metadata = msg.metadata as DbAssistantMessageMetadata;
@@ -252,11 +252,11 @@ describe('round Number Consistency', () => {
   it('should detect roundNumber mismatch', () => {
     // This test documents the potential bug: ID says r2 but metadata says r3
     const msg = createTestAssistantMessage({
-      id: 'thread-123_r2_p0', // ID says round 2
       content: 'Test',
-      roundNumber: 3, // Metadata says round 3 (MISMATCH!)
+      id: 'thread-123_r2_p0', // ID says round 2
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber: 3, // Metadata says round 3 (MISMATCH!)
     });
 
     const metadata = msg.metadata as DbAssistantMessageMetadata;
@@ -274,23 +274,23 @@ describe('round Number Consistency', () => {
   it('should group messages by metadata roundNumber (not ID)', () => {
     // Messages with mismatched IDs but correct metadata
     const msg1 = createTestUserMessage({
-      id: 'msg-wrong-id-format',
       content: 'User message',
+      id: 'msg-wrong-id-format',
       roundNumber: 0,
     });
 
     const msg2 = createTestAssistantMessage({
-      id: 'another-wrong-format',
       content: 'Assistant message',
-      roundNumber: 0,
+      id: 'another-wrong-format',
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg1, msg2],
         changelog: [],
+        messages: [msg1, msg2],
         moderators: [],
       }),
     );
@@ -311,34 +311,34 @@ describe('round Number Consistency', () => {
 describe('participant Index Consistency', () => {
   it('should maintain participantIndex order in timeline', () => {
     const msgs = [
-      createTestUserMessage({ id: 'user-0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'thread_r0_p2',
         content: 'P2',
-        roundNumber: 0,
+        id: 'thread_r0_p2',
         participantId: 'p2',
         participantIndex: 2,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'P0',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'P1',
-        roundNumber: 0,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: msgs,
         changelog: [],
+        messages: msgs,
         moderators: [],
       }),
     );
@@ -358,23 +358,23 @@ describe('participant Index Consistency', () => {
 
   it('should handle missing participantIndex gracefully', () => {
     const msgs = [
-      createTestUserMessage({ id: 'user-0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-0', roundNumber: 0 }),
       {
         id: 'msg-no-index',
-        role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: 'text' as const, text: 'Response' }],
         metadata: {
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
           // participantIndex intentionally missing
         },
+        parts: [{ text: 'Response', type: 'text' as const }],
+        role: MessageRoles.ASSISTANT as const,
       },
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: msgs,
         changelog: [],
+        messages: msgs,
         moderators: [],
       }),
     );
@@ -387,27 +387,27 @@ describe('participant Index Consistency', () => {
   it('should handle duplicate participantIndex (edge case)', () => {
     // Two messages claim to be participantIndex 0 - should both appear
     const msgs = [
-      createTestUserMessage({ id: 'user-0', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'msg-p0-first',
         content: 'First P0',
-        roundNumber: 0,
+        id: 'msg-p0-first',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'msg-p0-second',
         content: 'Second P0',
-        roundNumber: 0,
+        id: 'msg-p0-second',
         participantId: 'p0-dupe',
         participantIndex: 0, // Same index!
+        roundNumber: 0,
       }),
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: msgs,
         changelog: [],
+        messages: msgs,
         moderators: [],
       }),
     );
@@ -428,22 +428,22 @@ describe('participant Index Consistency', () => {
 describe('metadata Integrity', () => {
   it('should preserve all metadata fields through timeline', () => {
     const msg = createTestAssistantMessage({
-      id: 'msg-full-meta',
       content: 'Full metadata message',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'msg-full-meta',
+      model: 'gpt-4-turbo',
       participantId: 'participant-123',
       participantIndex: 2,
-      model: 'gpt-4-turbo',
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
+        changelog: [],
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Q', roundNumber: 1 }),
+          createTestUserMessage({ content: 'Q', id: 'user-1', roundNumber: 1 }),
           msg,
         ],
-        changelog: [],
         moderators: [],
       }),
     );
@@ -465,15 +465,15 @@ describe('metadata Integrity', () => {
 
   it('should preserve user message metadata', () => {
     const msg = createTestUserMessage({
-      id: 'user-detailed',
       content: 'User question',
+      id: 'user-detailed',
       roundNumber: 5,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );
@@ -492,11 +492,11 @@ describe('metadata Integrity', () => {
 
   it('should handle null/undefined metadata values', () => {
     const msg = createTestAssistantMessage({
-      id: 'msg-nullable',
       content: 'Message with nulls',
-      roundNumber: 0,
+      id: 'msg-nullable',
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     // The helper sets participantRole to null by default
@@ -505,11 +505,11 @@ describe('metadata Integrity', () => {
 
     const { result } = renderHook(() =>
       useThreadTimeline({
+        changelog: [],
         messages: [
-          createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
           msg,
         ],
-        changelog: [],
         moderators: [],
       }),
     );
@@ -526,39 +526,39 @@ describe('metadata Integrity', () => {
 describe('timeline Key Uniqueness', () => {
   it('should generate unique keys for each timeline item', () => {
     const msgs = [
-      createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'a0',
         content: 'A0',
+        id: 'a0',
+        participantId: 'p0',
+        participantIndex: 0,
         roundNumber: 0,
-        participantId: 'p0',
-        participantIndex: 0,
       }),
-      createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'a1',
         content: 'A1',
-        roundNumber: 1,
+        id: 'a1',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 
     const changelog = [
       {
-        id: 'cl-1',
-        threadId: 'thread',
-        roundNumber: 1,
-        changeType: 'mode_change' as const,
         changeData: {},
+        changeType: 'mode_change' as const,
         createdAt: new Date(),
+        id: 'cl-1',
+        roundNumber: 1,
+        threadId: 'thread',
       },
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: msgs,
         changelog,
+        messages: msgs,
         moderators: [],
       }),
     );
@@ -573,15 +573,15 @@ describe('timeline Key Uniqueness', () => {
 
   it('should include roundNumber in timeline item keys', () => {
     const msgs = [
-      createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
-      createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
-      createTestUserMessage({ id: 'u2', content: 'R2', roundNumber: 2 }),
+      createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'R2', id: 'u2', roundNumber: 2 }),
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: msgs,
         changelog: [],
+        messages: msgs,
         moderators: [],
       }),
     );
@@ -601,8 +601,8 @@ describe('edge Cases', () => {
   it('should handle empty messages array', () => {
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [],
         changelog: [],
+        messages: [],
         moderators: [],
       }),
     );
@@ -614,15 +614,15 @@ describe('edge Cases', () => {
     const largeRound = 999999;
 
     const msg = createTestUserMessage({
-      id: `user-r${largeRound}`,
       content: 'Large round',
+      id: `user-r${largeRound}`,
       roundNumber: largeRound,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );
@@ -635,15 +635,15 @@ describe('edge Cases', () => {
     // This shouldn't happen in practice, but test resilience
     // Negative round numbers are rejected by Zod validation and default to 0
     const msg = createTestUserMessage({
-      id: 'user-negative',
       content: 'Negative round',
+      id: 'user-negative',
       roundNumber: -1,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         preSearches: [],
       }),
     );
@@ -658,15 +658,15 @@ describe('edge Cases', () => {
     const longId = 'a'.repeat(1000);
 
     const msg = createTestUserMessage({
-      id: longId,
       content: 'Long ID message',
+      id: longId,
       roundNumber: 0,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );
@@ -678,15 +678,15 @@ describe('edge Cases', () => {
     const specialId = 'msg-with-special_chars.and/slashes:colons';
 
     const msg = createTestUserMessage({
-      id: specialId,
       content: 'Special ID',
+      id: specialId,
       roundNumber: 0,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );
@@ -696,15 +696,15 @@ describe('edge Cases', () => {
 
   it('should handle messages with empty content', () => {
     const msg = createTestUserMessage({
-      id: 'empty-content',
       content: '',
+      id: 'empty-content',
       roundNumber: 0,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );
@@ -714,15 +714,15 @@ describe('edge Cases', () => {
 
   it('should handle messages with only whitespace content', () => {
     const msg = createTestUserMessage({
-      id: 'whitespace-content',
       content: '   \n\t  ',
+      id: 'whitespace-content',
       roundNumber: 0,
     });
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [msg],
         changelog: [],
+        messages: [msg],
         moderators: [],
       }),
     );

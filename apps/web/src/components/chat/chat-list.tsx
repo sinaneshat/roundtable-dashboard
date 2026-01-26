@@ -54,14 +54,14 @@ type ChatItemProps = {
 function ChatItem({
   chat,
   isActive,
-  onDeleteClick,
-  onPinClick,
-  onRenameClick,
-  onShareClick,
   isEditing,
   isRenaming,
-  onRenameSubmit,
+  onDeleteClick,
+  onPinClick,
   onRenameCancel,
+  onRenameClick,
+  onRenameSubmit,
+  onShareClick,
 }: ChatItemProps) {
   const t = useTranslations();
 
@@ -171,9 +171,9 @@ export function ChatList({
 
   const handlePinClick = useCallback((chat: ChatSidebarItem) => {
     toggleFavoriteMutation.mutate({
-      threadId: chat.id,
       isFavorite: !chat.isFavorite,
       slug: chat.slug ?? undefined,
+      threadId: chat.id,
     });
   }, [toggleFavoriteMutation]);
 
@@ -185,8 +185,8 @@ export function ChatList({
     // Don't exit edit mode yet - stay in edit mode with loading state
     updateThreadMutation.mutate(
       {
-        param: { id: chat.id },
         json: { title: newTitle },
+        param: { id: chat.id },
       },
       {
         onSettled: () => {
@@ -222,13 +222,13 @@ export function ChatList({
         initial={shouldAnimate ? 'initial' : false}
         animate={shouldAnimate ? 'animate' : false}
         variants={{
-          initial: {},
           animate: {
             transition: {
-              staggerChildren: 0.02,
               delayChildren: 0.05,
+              staggerChildren: 0.02,
             },
           },
+          initial: {},
         }}
       >
         <SidebarMenu>
@@ -257,8 +257,8 @@ export function ChatList({
         isOpen={!!chatToDelete}
         onOpenChange={handleDeleteDialogClose}
         threadId={chatToDelete?.id ?? ''}
-        threadSlug={chatToDelete?.slug ?? undefined}
-        redirectIfCurrent={true}
+        {...(chatToDelete?.slug ? { threadSlug: chatToDelete.slug } : {})}
+        redirectIfCurrent
       />
     </>
   );

@@ -23,7 +23,7 @@ import { JobDetailDialog } from './-components/job-detail-dialog';
 import { TrendDiscoveryDialog } from './-components/trend-discovery-dialog';
 
 export const Route = createFileRoute('/_protected/admin/jobs/')({
-  staleTime: 0,
+  component: JobsListPage,
 
   loader: async ({ context }) => {
     const { queryClient } = context;
@@ -35,11 +35,11 @@ export const Route = createFileRoute('/_protected/admin/jobs/')({
     }
   },
 
-  component: JobsListPage,
+  staleTime: 0,
 });
 
 function JobStatusBadge({ status }: { status: AutomatedJobStatus }) {
-  const { icon: StatusIcon, variant, isAnimated } = getJobStatusConfig(status);
+  const { icon: StatusIcon, isAnimated, variant } = getJobStatusConfig(status);
 
   return (
     <Badge variant={variant} className="flex items-center gap-1 shrink-0">
@@ -86,15 +86,15 @@ function JobCard({
 
   const handleRetry = () => {
     updateMutation.mutate({
-      param: { id: job.id },
       json: { status: 'running' as const },
+      param: { id: job.id },
     });
   };
 
   const handleTogglePublic = () => {
     updateMutation.mutate({
-      param: { id: job.id },
       json: { isPublic: true },
+      param: { id: job.id },
     });
   };
 
@@ -104,134 +104,132 @@ function JobCard({
   const errorMessage = job.metadata?.errorMessage as string | undefined;
 
   return (
-    <>
-      <div className="rounded-lg border border-border p-4 space-y-3 hover:bg-muted/20 transition-colors">
-        {/* Header: Prompt + Status */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-sm line-clamp-2">{job.initialPrompt}</p>
-            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-              <span>{new Date(job.createdAt).toLocaleDateString()}</span>
-              <span>&middot;</span>
-              <span>{t('admin.jobs.roundProgress', { current: job.currentRound + 1, total: job.totalRounds })}</span>
-            </div>
+    <div className="rounded-lg border border-border p-4 space-y-3 hover:bg-muted/20 transition-colors">
+      {/* Header: Prompt + Status */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm line-clamp-2">{job.initialPrompt}</p>
+          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+            <span>{new Date(job.createdAt).toLocaleDateString()}</span>
+            <span>&middot;</span>
+            <span>{t('admin.jobs.roundProgress', { current: job.currentRound + 1, total: job.totalRounds })}</span>
           </div>
-          <JobStatusBadge status={job.status} />
         </div>
+        <JobStatusBadge status={job.status} />
+      </div>
 
-        {/* Model badges + autoPublish */}
-        <div className="flex flex-wrap gap-1">
-          {job.selectedModels?.map((model: string) => (
-            <Badge key={model} variant="secondary" className="text-xs">
-              {model.split('/')[1] ?? model}
-            </Badge>
-          ))}
-          {job.autoPublish && (
-            <Badge variant="outline" className="text-xs">
-              <Icons.globe className="size-3 mr-1" />
-              {t('admin.jobs.autoPublish')}
-            </Badge>
+      {/* Model badges + autoPublish */}
+      <div className="flex flex-wrap gap-1">
+        {job.selectedModels?.map((model: string) => (
+          <Badge key={model} variant="secondary" className="text-xs">
+            {model.split('/')[1] ?? model}
+          </Badge>
+        ))}
+        {job.autoPublish && (
+          <Badge variant="outline" className="text-xs">
+            <Icons.globe className="size-3 mr-1" />
+            {t('admin.jobs.autoPublish')}
+          </Badge>
+        )}
+      </div>
+
+      {/* Progress bar for running jobs */}
+      {job.status === 'running' && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{t('admin.jobs.roundProgress', { current: job.currentRound + 1, total: job.totalRounds })}</span>
+            <span>
+              {progressPercent}
+              %
+            </span>
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Error message for failed jobs */}
+      {job.status === 'failed' && errorMessage && (
+        <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-3 border-t border-border">
+        <div className="flex items-center gap-2">
+          {canRetry && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleRetry}
+              disabled={updateMutation.isPending}
+              startIcon={<Icons.refreshCw />}
+            >
+              {t('admin.jobs.retry')}
+            </Button>
+          )}
+
+          {job.threadSlug && (
+            <Button variant="outline" size="sm" asChild startIcon={<Icons.messageSquare />}>
+              <Link to="/chat/$slug" params={{ slug: job.threadSlug }}>
+                {t('admin.jobs.viewThread')}
+              </Link>
+            </Button>
           )}
         </div>
 
-        {/* Progress bar for running jobs */}
-        {job.status === 'running' && (
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{t('admin.jobs.roundProgress', { current: job.currentRound + 1, total: job.totalRounds })}</span>
-              <span>
-                {progressPercent}
-                %
-              </span>
-            </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
+        <div className="flex items-center gap-1 ml-auto">
+          {/* Job details button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onViewDetails(job)}
+            aria-label={t('admin.jobs.details')}
+          >
+            <Icons.info />
+          </Button>
 
-        {/* Error message for failed jobs */}
-        {job.status === 'failed' && errorMessage && (
-          <div className="text-xs text-destructive bg-destructive/10 rounded px-2 py-1.5">
-            {errorMessage}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 pt-3 border-t border-border">
-          <div className="flex items-center gap-2">
-            {canRetry && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleRetry}
-                disabled={updateMutation.isPending}
-                startIcon={<Icons.refreshCw />}
-              >
-                {t('admin.jobs.retry')}
-              </Button>
-            )}
-
-            {job.threadSlug && (
-              <Button variant="outline" size="sm" asChild startIcon={<Icons.messageSquare />}>
-                <Link to="/chat/$slug" params={{ slug: job.threadSlug }}>
-                  {t('admin.jobs.viewThread')}
-                </Link>
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 ml-auto">
-            {/* Job details button */}
+          {job.status === 'completed' && job.threadId && !job.isPublic && (
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => onViewDetails(job)}
-              aria-label={t('admin.jobs.details')}
+              onClick={handleTogglePublic}
+              disabled={updateMutation.isPending}
+              aria-label={t('admin.jobs.publish')}
             >
-              <Icons.info />
+              <Icons.globe />
             </Button>
+          )}
 
-            {job.status === 'completed' && job.threadId && !job.isPublic && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleTogglePublic}
-                disabled={updateMutation.isPending}
-                aria-label={t('admin.jobs.publish')}
+          {job.status === 'completed' && job.threadSlug && job.isPublic && (
+            <Button variant="ghost" size="icon" asChild aria-label={t('accessibility.openPublicThread')}>
+              <a
+                href={`/public/chat/${job.threadSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                <Icons.globe />
-              </Button>
-            )}
-
-            {job.status === 'completed' && job.threadSlug && job.isPublic && (
-              <Button variant="ghost" size="icon" asChild aria-label={t('accessibility.openPublicThread')}>
-                <a
-                  href={`/public/chat/${job.threadSlug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Icons.externalLink />
-                </a>
-              </Button>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onDelete(job)}
-              className="text-destructive hover:text-destructive"
-              aria-label={t('actions.delete')}
-            >
-              <Icons.trash />
+                <Icons.externalLink />
+              </a>
             </Button>
-          </div>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDelete(job)}
+            className="text-destructive hover:text-destructive"
+            aria-label={t('actions.delete')}
+          >
+            <Icons.trash />
+          </Button>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -250,11 +248,11 @@ function JobsListPage() {
 
   const {
     data,
-    isError,
-    isLoading,
     fetchNextPage,
     hasNextPage,
+    isError,
     isFetchingNextPage,
+    isLoading,
   } = useAdminJobsInfiniteQuery();
 
   const allJobs = data?.pages.flatMap(page => page.data.jobs) ?? [];
@@ -269,9 +267,10 @@ function JobsListPage() {
 
   // Infinite scroll handler - fetch at 80% scroll
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current)
+    if (!scrollRef.current) {
       return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    }
+    const { clientHeight, scrollHeight, scrollTop } = scrollRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
     if (scrollPercentage > 0.8 && hasNextPage && !isFetchingNextPage) {
@@ -282,8 +281,9 @@ function JobsListPage() {
   // Setup scroll listener
   useEffect(() => {
     const viewport = scrollRef.current;
-    if (!viewport)
+    if (!viewport) {
       return;
+    }
     viewport.addEventListener('scroll', handleScroll);
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);

@@ -52,8 +52,9 @@ export async function getUIIconBase64(iconName: string): Promise<string> {
 export async function getModelIconBase64(modelId: string): Promise<string> {
   // Try embedded asset first (covers common providers)
   const embedded = getModelIconBase64Sync(modelId);
-  if (embedded)
+  if (embedded) {
     return embedded;
+  }
 
   // Fallback to fetch for uncommon models (with caching)
   return fetchImageBase64(`static/icons/ai-models/openrouter.png`);
@@ -71,16 +72,18 @@ const imageCache = new Map<string, string>();
  */
 async function fetchImageBase64(relativePath: string): Promise<string> {
   const cached = imageCache.get(relativePath);
-  if (cached)
+  if (cached) {
     return cached;
+  }
 
   try {
     const baseUrl = getAppBaseUrl();
     const imageUrl = `${baseUrl}/${relativePath}`;
     const response = await fetch(imageUrl);
 
-    if (!response.ok)
+    if (!response.ok) {
       return '';
+    }
 
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
@@ -112,36 +115,36 @@ async function fetchImageBase64(relativePath: string): Promise<string> {
 // ============================================================================
 
 export const OG_COLORS = {
+  // Mode-specific colors
+  analyzing: '#8b5cf6',
   // Background
   background: '#000000',
-  backgroundGradientStart: '#0a0a0a',
   backgroundGradientEnd: '#1a1a1a',
+
+  backgroundGradientStart: '#0a0a0a',
+  brainstorming: '#f59e0b',
+
+  debating: '#ef4444',
+  error: '#ef4444',
+  // Glass-morphism
+  glassBackground: 'rgba(24, 24, 27, 0.8)',
+
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
+  glassHighlight: 'rgba(255, 255, 255, 0.05)',
+  info: '#3b82f6',
 
   // Brand colors
   primary: BRAND.colors.primary,
   secondary: BRAND.colors.secondary,
+  solving: '#10b981',
+  // Status colors
+  success: '#22c55e',
 
+  textMuted: '#71717a',
   // Text colors
   textPrimary: '#ffffff',
   textSecondary: '#a1a1aa',
-  textMuted: '#71717a',
-
-  // Glass-morphism
-  glassBackground: 'rgba(24, 24, 27, 0.8)',
-  glassBorder: 'rgba(255, 255, 255, 0.1)',
-  glassHighlight: 'rgba(255, 255, 255, 0.05)',
-
-  // Mode-specific colors
-  analyzing: '#8b5cf6',
-  brainstorming: '#f59e0b',
-  debating: '#ef4444',
-  solving: '#10b981',
-
-  // Status colors
-  success: '#22c55e',
   warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#3b82f6',
 } as const;
 
 // ============================================================================
@@ -164,7 +167,7 @@ export function getModeColor(mode: ChatMode): string {
 // ============================================================================
 
 export function createGradient(
-  angle: number = 135,
+  angle = 135,
   start: string = OG_COLORS.backgroundGradientStart,
   end: string = OG_COLORS.backgroundGradientEnd,
 ): string {

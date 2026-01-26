@@ -24,10 +24,10 @@ export const DEFAULT_BORDER_RADIUS_CLASS: BorderRadiusClass = 'rounded-xl';
 
 // 5. CONSTANT OBJECT
 export const BorderRadiusClasses = {
-  XL: 'rounded-xl' as const,
-  XXL: 'rounded-2xl' as const,
   LG: 'rounded-lg' as const,
   MD: 'rounded-md' as const,
+  XL: 'rounded-xl' as const,
+  XXL: 'rounded-2xl' as const,
 } as const;
 
 // 6. TYPE GUARD (uses Zod safeParse - no type cast)
@@ -43,16 +43,16 @@ export function parseBorderRadiusClass(value: unknown): BorderRadiusClass | unde
 
 // 8. DISPLAY LABELS
 export const BORDER_RADIUS_CLASS_LABELS: Record<BorderRadiusClass, string> = {
-  [BorderRadiusClasses.XL]: 'Extra Large (12px)',
-  [BorderRadiusClasses.XXL]: '2X Large (16px)',
   [BorderRadiusClasses.LG]: 'Large (8px)',
   [BorderRadiusClasses.MD]: 'Medium (6px)',
+  [BorderRadiusClasses.XL]: 'Extra Large (12px)',
+  [BorderRadiusClasses.XXL]: '2X Large (16px)',
 } as const;
 
 // 9. RADIUS PIXEL VALUES
 export const BORDER_RADIUS_PIXEL_MAP: Record<BorderRadiusClass, number> = {
-  [BorderRadiusClasses.XL]: 12,
-  [BorderRadiusClasses.XXL]: 16,
   [BorderRadiusClasses.LG]: 8,
   [BorderRadiusClasses.MD]: 6,
+  [BorderRadiusClasses.XL]: 12,
+  [BorderRadiusClasses.XXL]: 16,
 } as const;

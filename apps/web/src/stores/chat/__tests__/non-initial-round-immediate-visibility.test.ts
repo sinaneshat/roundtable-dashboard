@@ -49,18 +49,18 @@ function createTestStore(initialState?: Partial<ChatStore>) {
  */
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORM,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORM,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -71,25 +71,25 @@ function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'test-thread-123',
-      modelId: 'claude-3-5-sonnet',
-      role: 'Critic',
-      priority: 1,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'claude-3-5-sonnet',
+      priority: 1,
+      role: 'Critic',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -101,12 +101,12 @@ function createMockParticipants(): ChatParticipant[] {
 function createUserMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `user-msg-round-${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -120,21 +120,21 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `assistant-msg-round-${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex + 1}`,
-      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
-      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
       finishReason: 'stop',
       hasError: false,
-      isTransient: false,
       isPartialResponse: false,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      isTransient: false,
+      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
+      participantId: `participant-${participantIndex + 1}`,
+      participantIndex,
+      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -144,15 +144,15 @@ function createAssistantMessage(
 function createModeratorMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `moderator-msg-round-${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber,
-      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: 'stop',
+      isModerator: true,
+      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -188,13 +188,13 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Simulate adding optimistic message (what handleUpdateThreadAndSend does)
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second question' }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isOptimistic: true,
         },
+        parts: [{ text: 'Second question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
@@ -228,11 +228,11 @@ describe('non-Initial Round Immediate Visibility', () => {
     });
 
     it('should set waitingToStartStreaming immediately', () => {
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
       store.getState().setWaitingToStartStreaming(true);
 
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
 
     it('should have all required flags set in correct order for immediate visibility', () => {
@@ -241,13 +241,13 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Step 1: Add optimistic message
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-${nextRoundNumber}-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second question' }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: nextRoundNumber,
-          isOptimistic: true,
         },
+        parts: [{ text: 'Second question', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
@@ -274,7 +274,7 @@ describe('non-Initial Round Immediate Visibility', () => {
 
       // These flags indicate submission in progress
       expect(state.configChangeRoundNumber).toBe(nextRoundNumber);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
   });
 
@@ -283,13 +283,13 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Add optimistic message for round 1
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second question' }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isOptimistic: true,
         },
+        parts: [{ text: 'Second question', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
@@ -303,8 +303,9 @@ describe('non-Initial Round Immediate Visibility', () => {
           messagesByRound.set(roundNum, []);
         }
         const roundMessages = messagesByRound.get(roundNum);
-        if (!roundMessages)
+        if (!roundMessages) {
           throw new Error('expected round messages array');
+        }
         roundMessages.push(msg);
       });
 
@@ -319,12 +320,12 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Add optimistic message for round 1
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second question' }],
         metadata: {
           role: MessageRoles.USER,
           roundNumber: 1,
         },
+        parts: [{ text: 'Second question', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
@@ -340,7 +341,7 @@ describe('non-Initial Round Immediate Visibility', () => {
       });
 
       // Round 1 should be in the set
-      expect(roundNumbers.has(1)).toBe(true);
+      expect(roundNumbers.has(1)).toBeTruthy();
     });
   });
 
@@ -353,9 +354,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: `optimistic-user-${nextRound}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -368,10 +369,10 @@ describe('non-Initial Round Immediate Visibility', () => {
       // 3. The round has a user message
 
       const isStreamingRound = state.streamingRoundNumber === nextRound;
-      expect(isStreamingRound).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
 
       const hasParticipants = state.participants.length > 0;
-      expect(hasParticipants).toBe(true);
+      expect(hasParticipants).toBeTruthy();
 
       const round1UserMessages = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
@@ -396,14 +397,14 @@ describe('non-Initial Round Immediate Visibility', () => {
       store.getState().setWaitingToStartStreaming(true);
 
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // Even with waitingToStartStreaming=true, user message should be in store
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Question', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
@@ -424,15 +425,15 @@ describe('non-Initial Round Immediate Visibility', () => {
 
       // Add pre-search placeholder (what handleUpdateThreadAndSend does)
       store.getState().addPreSearch({
-        id: `placeholder-presearch-test-thread-123-${nextRound}`,
-        threadId: 'test-thread-123',
-        roundNumber: nextRound,
-        userQuery: 'Second question',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: `placeholder-presearch-test-thread-123-${nextRound}`,
+        roundNumber: nextRound,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'test-thread-123',
+        userQuery: 'Second question',
       });
 
       const state = store.getState();
@@ -452,9 +453,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: `optimistic-user-${nextRound}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -478,7 +479,7 @@ describe('non-Initial Round Immediate Visibility', () => {
       const state = store.getState();
       expect(state.streamingRoundNumber).toBe(nextRound);
       expect(state.configChangeRoundNumber).toBe(nextRound);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('should NOT reset streaming state when isWaitingForChangelog is true', () => {
@@ -489,9 +490,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: `optimistic-user-${nextRound}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -506,7 +507,7 @@ describe('non-Initial Round Immediate Visibility', () => {
       // State should be PRESERVED
       const state = store.getState();
       expect(state.streamingRoundNumber).toBe(nextRound);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should preserve optimistic user message during initializeThread', () => {
@@ -518,9 +519,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: optimisticMsgId,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Second question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Second question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -557,13 +558,13 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Step 1: Create optimistic message (line 278-282 in form-actions.ts)
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-${nextRound}-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: userText }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: nextRound,
-          isOptimistic: true,
         },
+        parts: [{ text: userText, type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Step 2: Add optimistic message to store (line 285)
@@ -592,7 +593,7 @@ describe('non-Initial Round Immediate Visibility', () => {
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
       expect(userMessages).toHaveLength(1);
-      expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: userText });
+      expect(userMessages[0].parts[0]).toEqual({ text: userText, type: 'text' });
 
       // 2. streamingRoundNumber is set (enables placeholder visibility)
       expect(state.streamingRoundNumber).toBe(nextRound);
@@ -602,7 +603,7 @@ describe('non-Initial Round Immediate Visibility', () => {
 
       // 4. Submission flags are set
       expect(state.configChangeRoundNumber).toBe(nextRound);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // 5. expectedParticipantIds is set
       expect(state.expectedParticipantIds).toEqual(participantIds);
@@ -617,9 +618,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: optimisticMsgId,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -629,9 +630,9 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Simulate PATCH response: Replace optimistic with persisted message
       const persistedMessage: UIMessage = {
         id: `thread_r${nextRound}_user`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Question' }],
         metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+        parts: [{ text: 'Question', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs =>
         msgs.map(m => m.id === optimisticMsgId ? persistedMessage : m),
@@ -654,7 +655,7 @@ describe('non-Initial Round Immediate Visibility', () => {
       expect(state.streamingRoundNumber).toBe(nextRound);
 
       // Flags should be set for guard conditions
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
   });
 
@@ -665,9 +666,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: `optimistic-user-1`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Round 1 question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Round 1 question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(1);
@@ -685,9 +686,9 @@ describe('non-Initial Round Immediate Visibility', () => {
         ...msgs,
         {
           id: `optimistic-user-${nextRound}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -702,7 +703,7 @@ describe('non-Initial Round Immediate Visibility', () => {
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === nextRound,
       );
       expect(userMessages).toHaveLength(1);
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(nextRound);
     });
   });
@@ -714,9 +715,9 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Step 1: Add optimistic user message
       const optimisticMsg: UIMessage = {
         id: `optimistic-user-${nextRound}-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'This should stay visible' }],
         metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+        parts: [{ text: 'This should stay visible', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs => [...msgs, optimisticMsg]);
 
@@ -728,9 +729,9 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Step 2: PATCH completes, replace with DB ID
       const dbMsg: UIMessage = {
         id: '01KE5WMBVDFY',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'This should stay visible' }],
         metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+        parts: [{ text: 'This should stay visible', type: 'text' }],
+        role: MessageRoles.USER,
       };
       store.getState().setMessages(msgs =>
         msgs.map(m => m.id === optimisticMsg.id ? dbMsg : m),
@@ -745,9 +746,9 @@ describe('non-Initial Round Immediate Visibility', () => {
       // Step 3: AI SDK adds participant trigger
       const triggerMsg: UIMessage = {
         id: 'trigger-123',
+        metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: nextRound },
+        parts: [{ text: 'This should stay visible', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'This should stay visible' }],
-        metadata: { role: MessageRoles.USER, roundNumber: nextRound, isParticipantTrigger: true },
       };
       store.getState().setMessages(msgs => [...msgs, triggerMsg]);
 
@@ -760,7 +761,7 @@ describe('non-Initial Round Immediate Visibility', () => {
 
       // Original message should still be present
       const originalPresent = afterTrigger.some(m => m.id === '01KE5WMBVDFY');
-      expect(originalPresent).toBe(true);
+      expect(originalPresent).toBeTruthy();
     });
 
     it('cRITICAL: comparing round 0 vs round 1 user message visibility', () => {
@@ -796,7 +797,7 @@ describe('non-Initial Round Immediate Visibility', () => {
 
         // Round number > 0 should ALWAYS skip animation
         const shouldSkip = roundNumber !== null && roundNumber > 0;
-        expect(shouldSkip).toBe(true);
+        expect(shouldSkip).toBeTruthy();
       }
     });
   });

@@ -37,14 +37,14 @@ import { createChatStore } from '../store';
  */
 function createUserMessage(roundNumber: number, text: string): UIMessage {
   return {
+    createdAt: new Date(),
     id: `thread-1_r${roundNumber}_user`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
-    createdAt: new Date(),
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -57,23 +57,23 @@ function createAssistantMessage(
   text: string,
 ): UIMessage {
   return {
+    createdAt: new Date(),
     id: `thread-1_r${roundNumber}_p${participantIndex}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata: {
+      finishReason: FinishReasons.STOP,
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      participantRole: null,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
-      participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.STOP,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
-    createdAt: new Date(),
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -82,22 +82,22 @@ function createAssistantMessage(
  */
 function createModeratorMessage(roundNumber: number, text: string): UIMessage {
   return {
+    createdAt: new Date(),
     id: `thread-1_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata: {
+      finishReason: FinishReasons.STOP,
+      hasError: false,
+      isModerator: true,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
+      participantRole: null,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      isModerator: true,
-      participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.STOP,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
-    createdAt: new Date(),
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -245,7 +245,7 @@ describe('round Regeneration - Message Removal', () => {
     const hasModerator = filteredMessages.some(
       msg => msg.metadata?.isModerator === true,
     );
-    expect(hasModerator).toBe(false);
+    expect(hasModerator).toBeFalsy();
   });
 
   it('should preserve user message from current round', () => {
@@ -265,8 +265,8 @@ describe('round Regeneration - Message Removal', () => {
     // User message should be preserved
     expect(filteredMessages).toHaveLength(1);
     expect(filteredMessages[0]?.parts?.[0]).toMatchObject({
-      type: MessagePartTypes.TEXT,
       text: 'Question',
+      type: MessagePartTypes.TEXT,
     });
   });
 
@@ -420,9 +420,9 @@ describe('round Regeneration - Multiple Retries', () => {
     store.getState().setCurrentParticipantIndex(null);
     store.getState().setStreamingRoundNumber(null);
 
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().currentParticipantIndex).toBe(null);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().currentParticipantIndex).toBeNull();
+    expect(store.getState().streamingRoundNumber).toBeNull();
 
     // Simulate retry starting
     store.getState().setStreamingRoundNumber(0);
@@ -433,9 +433,9 @@ describe('round Regeneration - Multiple Retries', () => {
     store.getState().setCurrentParticipantIndex(null);
     store.getState().setStreamingRoundNumber(null);
 
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().currentParticipantIndex).toBe(null);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().currentParticipantIndex).toBeNull();
+    expect(store.getState().streamingRoundNumber).toBeNull();
   });
 });
 
@@ -449,11 +449,11 @@ describe('round Regeneration - State Resets', () => {
 
     // Set streaming state
     store.getState().setIsStreaming(true);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     // Before retry, reset streaming
     store.getState().setIsStreaming(false);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should reset currentParticipantIndex to null before retry', () => {
@@ -465,7 +465,7 @@ describe('round Regeneration - State Resets', () => {
 
     // Before retry, reset participant index
     store.getState().setCurrentParticipantIndex(null);
-    expect(store.getState().currentParticipantIndex).toBe(null);
+    expect(store.getState().currentParticipantIndex).toBeNull();
   });
 
   it('should reset streamingRoundNumber before retry', () => {
@@ -477,7 +477,7 @@ describe('round Regeneration - State Resets', () => {
 
     // Before retry, reset streaming round number
     store.getState().setStreamingRoundNumber(null);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().streamingRoundNumber).toBeNull();
   });
 
   it('should reset isModeratorStreaming before retry', () => {
@@ -485,11 +485,11 @@ describe('round Regeneration - State Resets', () => {
 
     // Set moderator streaming
     store.getState().setIsModeratorStreaming(true);
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
 
     // Before retry, reset moderator streaming
     store.getState().setIsModeratorStreaming(false);
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 
   it('should clear all streaming state before retry', () => {
@@ -508,10 +508,10 @@ describe('round Regeneration - State Resets', () => {
     store.getState().setIsModeratorStreaming(false);
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.currentParticipantIndex).toBe(null);
-    expect(state.streamingRoundNumber).toBe(null);
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.currentParticipantIndex).toBeNull();
+    expect(state.streamingRoundNumber).toBeNull();
+    expect(state.isModeratorStreaming).toBeFalsy();
   });
 });
 
@@ -627,7 +627,7 @@ describe('round Regeneration - Edge Cases', () => {
 
     const mostRecentRound = getMostRecentRoundNumber([]);
 
-    expect(mostRecentRound).toBe(null);
+    expect(mostRecentRound).toBeNull();
   });
 
   it('should handle messages with missing metadata', () => {
@@ -636,8 +636,8 @@ describe('round Regeneration - Edge Cases', () => {
     const messages = [
       {
         id: 'msg-1',
+        parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
         role: UIMessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
         // No metadata
       } as UIMessage,
     ];
@@ -646,7 +646,7 @@ describe('round Regeneration - Edge Cases', () => {
 
     const mostRecentRound = getMostRecentRoundNumber(messages);
 
-    expect(mostRecentRound).toBe(null);
+    expect(mostRecentRound).toBeNull();
   });
 
   it('should handle retry on round with single participant', () => {
@@ -783,14 +783,16 @@ describe('round Regeneration - Multi-Round Scenarios', () => {
 
     // Should be [0, 0, 1, 1, 2] in order
     const isSorted = roundNumbers.every((val, i, arr) => {
-      if (i === 0)
+      if (i === 0) {
         return true;
+      }
       const prev = arr[i - 1];
-      if (prev === undefined)
+      if (prev === undefined) {
         throw new Error('Expected previous value');
+      }
       return val >= prev;
     });
 
-    expect(isSorted).toBe(true);
+    expect(isSorted).toBeTruthy();
   });
 });

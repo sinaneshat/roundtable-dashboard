@@ -41,10 +41,10 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
   // Forward the request to the backend
   // Note: duplex is required for streaming request bodies but not in TypeScript's RequestInit type yet
   const proxyRequestInit = new Request(targetUrl, {
-    method: request.method,
-    headers,
     body: request.body,
     duplex: request.body ? 'half' : undefined,
+    headers,
+    method: request.method,
     redirect: 'manual', // Don't follow redirects, let client handle them
   } as RequestInit & { duplex?: 'half' });
 
@@ -59,17 +59,17 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
     responseHeaders.delete('transfer-encoding');
 
     return new Response(response.body, {
+      headers: responseHeaders,
       status: response.status,
       statusText: response.statusText,
-      headers: responseHeaders,
     });
   } catch (error) {
     // Return 502 Bad Gateway if backend is unavailable
     return new Response(
       JSON.stringify({ error: 'Backend unavailable', message: String(error) }),
       {
-        status: 502,
         headers: { 'Content-Type': 'application/json' },
+        status: 502,
       },
     );
   }
@@ -81,25 +81,25 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
 export const Route = createFileRoute('/api/$')({
   server: {
     handlers: {
-      GET: async ({ request, params }) => {
+      DELETE: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      POST: async ({ request, params }) => {
+      GET: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      PUT: async ({ request, params }) => {
+      HEAD: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      PATCH: async ({ request, params }) => {
+      OPTIONS: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      DELETE: async ({ request, params }) => {
+      PATCH: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      OPTIONS: async ({ request, params }) => {
+      POST: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
-      HEAD: async ({ request, params }) => {
+      PUT: async ({ params, request }) => {
         return proxyRequest(request, params._splat || '');
       },
     },

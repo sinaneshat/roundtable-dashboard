@@ -53,8 +53,8 @@ export default function PricingScreen() {
     try {
       if (activeSubscription) {
         const result = await switchMutation.mutateAsync({
-          param: { id: activeSubscription.id },
           json: { newPriceId: priceId },
+          param: { id: activeSubscription.id },
         }) as ApiResponse<{
           changeDetails?: {
             isUpgrade: boolean;
@@ -76,16 +76,16 @@ export default function PricingScreen() {
 
             // ✅ Use TanStack Router search option for type-safe query params
             navigate({
-              to: '/chat/billing/subscription-changed',
+              replace: true,
               search: {
                 changeType,
-                oldProductId: changeDetails.oldPrice.productId,
                 newProductId: changeDetails.newPrice.productId,
+                oldProductId: changeDetails.oldPrice.productId,
               },
-              replace: true,
+              to: '/chat/billing/subscription-changed',
             });
           } else {
-            navigate({ to: '/chat/billing/subscription-changed', replace: true });
+            navigate({ replace: true, to: '/chat/billing/subscription-changed' });
           }
         }
       } else {
@@ -109,8 +109,8 @@ export default function PricingScreen() {
     setCancelingSubscriptionId(subscriptionId);
     try {
       await cancelMutation.mutateAsync({
-        param: { id: subscriptionId },
         json: { immediately: false },
+        param: { id: subscriptionId },
       });
     } catch (error) {
       toastManager.error(t('billing.errors.cancelFailed'), getApiErrorMessage(error));

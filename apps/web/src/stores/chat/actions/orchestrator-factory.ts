@@ -54,23 +54,23 @@ export function createOrchestrator<
   config: OrchestratorConfig<TRaw, TItem, TKey, TResponse, TQueryArgs, TDeduplicationOptions>,
 ) {
   const {
-    queryHook,
-    useStoreHook,
-    storeSelector,
-    storeSetter,
-    extractItems,
-    transformItems,
-    getItemKey,
-    getItemPriority,
     compareKeys,
     deduplicationHook,
     deduplicationOptions,
+    extractItems,
+    getItemKey,
+    getItemPriority,
+    queryHook,
+    storeSelector,
+    storeSetter,
+    transformItems,
+    useStoreHook,
   } = config;
 
   return function useOrchestrator(
     options: OrchestratorOptions<TQueryArgs, TDeduplicationOptions>,
   ): OrchestratorReturn {
-    const { threadId, enabled = true, deduplicationOptions: runtimeDeduplicationOptions } = options;
+    const { deduplicationOptions: runtimeDeduplicationOptions, enabled = true, threadId } = options;
     // TYPE INFERENCE: Empty array default is compatible with TQueryArgs constraint
     const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
 

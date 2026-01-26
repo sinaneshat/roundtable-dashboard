@@ -19,16 +19,18 @@ export function useFreeTrialState() {
   const validated = useMemo(() => validateUsageStatsCache(statsData), [statsData]);
 
   const isFreeUser = useMemo(() => {
-    if (!validated)
+    if (!validated) {
       return false;
+    }
     return validated.plan.type !== PlanTypes.PAID;
   }, [validated]);
 
   const freeRoundUsedFromApi = validated?.plan.freeRoundUsed ?? false;
 
   const hasExistingThread = useMemo(() => {
-    if (!threadsData?.pages?.[0]?.success)
+    if (!threadsData?.pages?.[0]?.success) {
       return false;
+    }
     const threads = threadsData.pages[0].data?.items ?? [];
     return threads.length > 0;
   }, [threadsData]);
@@ -38,19 +40,20 @@ export function useFreeTrialState() {
   const isWarningState = hasUsedTrial;
 
   const borderVariant = useMemo(() => {
-    if (!isFreeUser)
+    if (!isFreeUser) {
       return BorderVariants.DEFAULT;
+    }
     return hasUsedTrial ? BorderVariants.WARNING : BorderVariants.SUCCESS;
   }, [isFreeUser, hasUsedTrial]);
 
   const trialState = hasUsedTrial ? TrialStates.USED : TrialStates.AVAILABLE;
 
   return {
-    isFreeUser,
-    hasUsedTrial,
-    isWarningState,
-    isLoadingStats,
     borderVariant,
+    hasUsedTrial,
+    isFreeUser,
+    isLoadingStats,
+    isWarningState,
     trialState,
   };
 }

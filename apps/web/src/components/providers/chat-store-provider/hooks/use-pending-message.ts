@@ -24,39 +24,39 @@ type UsePendingMessageParams = {
 };
 
 export function usePendingMessage({
-  store,
   chat,
-  sendMessageRef,
-  queryClientRef,
   effectiveThreadId,
+  queryClientRef,
+  sendMessageRef,
+  store,
 }: UsePendingMessageParams) {
   const {
-    pendingMessage,
+    configChangeRoundNumber,
     expectedParticipantIds,
+    formEnableWebSearch,
     hasSentPendingMessage,
     isStreaming,
     isWaitingForChangelog,
-    configChangeRoundNumber,
-    screenMode,
-    participants,
-    preSearches,
     messages,
+    participants,
+    pendingMessage,
+    preSearches,
+    screenMode,
     thread,
-    formEnableWebSearch,
     waitingToStart,
   } = useStore(store, useShallow(s => ({
-    pendingMessage: s.pendingMessage,
+    configChangeRoundNumber: s.configChangeRoundNumber,
     expectedParticipantIds: s.expectedParticipantIds,
+    formEnableWebSearch: s.enableWebSearch,
     hasSentPendingMessage: s.hasSentPendingMessage,
     isStreaming: s.isStreaming,
     isWaitingForChangelog: s.isWaitingForChangelog,
-    configChangeRoundNumber: s.configChangeRoundNumber,
-    screenMode: s.screenMode,
-    participants: s.participants,
-    preSearches: s.preSearches,
     messages: s.messages,
+    participants: s.participants,
+    pendingMessage: s.pendingMessage,
+    preSearches: s.preSearches,
+    screenMode: s.screenMode,
     thread: s.thread,
-    formEnableWebSearch: s.enableWebSearch,
     waitingToStart: s.waitingToStartStreaming,
   })));
 
@@ -85,13 +85,16 @@ export function usePendingMessage({
     // startRound sends the message directly without going through usePendingMessage,
     // so hasSentPendingMessage is never set. Check if round already started instead.
     const assistantMsgsInRound = messages.filter((m) => {
-      if (m.role !== MessageRoles.ASSISTANT)
+      if (m.role !== MessageRoles.ASSISTANT) {
         return false;
+      }
       const md = m.metadata;
-      if (!md || typeof md !== 'object')
+      if (!md || typeof md !== 'object') {
         return false;
-      if ('isModerator' in md && md.isModerator === true)
+      }
+      if ('isModerator' in md && md.isModerator === true) {
         return false;
+      }
       const msgRound = 'roundNumber' in md ? md.roundNumber : null;
       return msgRound === newRoundNumber;
     });
@@ -144,15 +147,15 @@ export function usePendingMessage({
 
         const threadIdForPreSearch = thread?.id || currentState.createdThreadId || '';
         currentState.addPreSearch({
-          id: `placeholder-presearch-${threadIdForPreSearch}-${newRoundNumber}`,
-          threadId: threadIdForPreSearch,
-          roundNumber: newRoundNumber,
-          userQuery: pendingMessage,
-          status: MessageStatuses.PENDING,
-          searchData: null,
-          createdAt: new Date().toISOString(),
           completedAt: null,
+          createdAt: new Date().toISOString(),
           errorMessage: null,
+          id: `placeholder-presearch-${threadIdForPreSearch}-${newRoundNumber}`,
+          roundNumber: newRoundNumber,
+          searchData: null,
+          status: MessageStatuses.PENDING,
+          threadId: threadIdForPreSearch,
+          userQuery: pendingMessage,
         });
         return;
       }
@@ -183,8 +186,8 @@ export function usePendingMessage({
               store.getState().updatePreSearchStatus(newRoundNumber, MessageStatuses.STREAMING);
 
               const response = await executePreSearchStreamService({
-                param: { threadId: threadIdForSearch, roundNumber: String(newRoundNumber) },
-                json: { userQuery: pendingMessage, fileContext: fileContext || undefined, attachmentIds },
+                json: { attachmentIds, fileContext: fileContext || undefined, userQuery: pendingMessage },
+                param: { roundNumber: String(newRoundNumber), threadId: threadIdForSearch },
               });
 
               if (!response.ok && response.status !== 409) {
@@ -227,7 +230,7 @@ export function usePendingMessage({
       }
     }
 
-    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges, getRoundEpoch } = store.getState();
+    const { getRoundEpoch, setHasPendingConfigChanges, setHasSentPendingMessage, setStreamingRoundNumber } = store.getState();
 
     // ✅ RACE CONDITION FIX (Issue 2): Capture epoch BEFORE microtask
     // This epoch acts as a "version" for the current send operation.
@@ -379,8 +382,8 @@ export function usePendingMessage({
           store.getState().updatePreSearchStatus(currentRound, MessageStatuses.STREAMING);
 
           const response = await executePreSearchStreamService({
-            param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
-            json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
+            json: { attachmentIds, fileContext: fileContext || undefined, userQuery },
+            param: { roundNumber: String(currentRound), threadId: threadIdForSearch },
           });
 
           if (!response.ok && response.status !== 409) {

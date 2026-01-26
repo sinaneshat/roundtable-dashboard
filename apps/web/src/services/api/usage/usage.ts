@@ -44,3 +44,30 @@ export async function getUserUsageStatsService(options?: {
   });
   return parseResponse(client.usage.stats.$get());
 }
+
+// ============================================================================
+// Type Guards - Accept both service response and server function result types
+// ============================================================================
+
+type SuccessResponse = Extract<GetUsageStatsResponse, { success: true }>;
+
+/**
+ * Type guard to check if usage stats response is successful
+ * Accepts GetUsageStatsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function isUsageStatsSuccess(response: { success: boolean; data?: unknown } | null | undefined): response is SuccessResponse {
+  return response !== undefined && response !== null && response.success === true && 'data' in response;
+}
+
+/**
+ * Get plan type from usage stats response safely
+ * Accepts GetUsageStatsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function getPlanTypeFromUsageStats(response: { success: boolean; data?: unknown } | null | undefined): string | undefined {
+  if (!isUsageStatsSuccess(response)) {
+    return undefined;
+  }
+  return response.data.plan?.type;
+}

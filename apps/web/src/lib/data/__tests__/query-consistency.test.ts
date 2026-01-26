@@ -74,34 +74,34 @@ describe('query consistency - SSR/client alignment', () => {
 
   describe('refetch behavior consistency', () => {
     it('subscriptionsQueryOptions disables automatic refetch to prevent SSR/client flash', () => {
-      expect(subscriptionsQueryOptions.refetchOnWindowFocus).toBe(false);
-      expect(subscriptionsQueryOptions.refetchOnMount).toBe(false);
+      expect(subscriptionsQueryOptions.refetchOnWindowFocus).toBeFalsy();
+      expect(subscriptionsQueryOptions.refetchOnMount).toBeFalsy();
     });
 
     it('productsQueryOptions disables automatic refetch', () => {
-      expect(productsQueryOptions.refetchOnWindowFocus).toBe(false);
-      expect(productsQueryOptions.refetchOnMount).toBe(false);
+      expect(productsQueryOptions.refetchOnWindowFocus).toBeFalsy();
+      expect(productsQueryOptions.refetchOnMount).toBeFalsy();
     });
 
     it('modelsQueryOptions disables automatic refetch', () => {
-      expect(modelsQueryOptions.refetchOnWindowFocus).toBe(false);
-      expect(modelsQueryOptions.refetchOnMount).toBe(false);
+      expect(modelsQueryOptions.refetchOnWindowFocus).toBeFalsy();
+      expect(modelsQueryOptions.refetchOnMount).toBeFalsy();
     });
 
     it('sidebarThreadsQueryOptions disables automatic refetch', () => {
-      expect(sidebarThreadsQueryOptions.refetchOnWindowFocus).toBe(false);
-      expect(sidebarThreadsQueryOptions.refetchOnMount).toBe(false);
+      expect(sidebarThreadsQueryOptions.refetchOnWindowFocus).toBeFalsy();
+      expect(sidebarThreadsQueryOptions.refetchOnMount).toBeFalsy();
     });
 
     it('threadBySlugQueryOptions disables automatic refetch', () => {
       const options = threadBySlugQueryOptions('test');
-      expect(options.refetchOnWindowFocus).toBe(false);
-      expect(options.refetchOnMount).toBe(false);
+      expect(options.refetchOnWindowFocus).toBeFalsy();
+      expect(options.refetchOnMount).toBeFalsy();
     });
 
     it('usageQueryOptions disables automatic refetch', () => {
-      expect(usageQueryOptions.refetchOnWindowFocus).toBe(false);
-      expect(usageQueryOptions.refetchOnMount).toBe(false);
+      expect(usageQueryOptions.refetchOnWindowFocus).toBeFalsy();
+      expect(usageQueryOptions.refetchOnMount).toBeFalsy();
     });
   });
 });
@@ -167,15 +167,15 @@ describe('queryKeys structure', () => {
   });
 
   it('all query keys should be arrays', () => {
-    expect(Array.isArray(queryKeys.threads.all)).toBe(true);
-    expect(Array.isArray(queryKeys.threads.lists())).toBe(true);
-    expect(Array.isArray(queryKeys.threads.sidebar())).toBe(true);
-    expect(Array.isArray(queryKeys.threads.detail('id'))).toBe(true);
-    expect(Array.isArray(queryKeys.threads.bySlug('slug'))).toBe(true);
-    expect(Array.isArray(queryKeys.products.list())).toBe(true);
-    expect(Array.isArray(queryKeys.subscriptions.current())).toBe(true);
-    expect(Array.isArray(queryKeys.models.list())).toBe(true);
-    expect(Array.isArray(queryKeys.usage.stats())).toBe(true);
+    expect(Array.isArray(queryKeys.threads.all)).toBeTruthy();
+    expect(Array.isArray(queryKeys.threads.lists())).toBeTruthy();
+    expect(Array.isArray(queryKeys.threads.sidebar())).toBeTruthy();
+    expect(Array.isArray(queryKeys.threads.detail('id'))).toBeTruthy();
+    expect(Array.isArray(queryKeys.threads.bySlug('slug'))).toBeTruthy();
+    expect(Array.isArray(queryKeys.products.list())).toBeTruthy();
+    expect(Array.isArray(queryKeys.subscriptions.current())).toBeTruthy();
+    expect(Array.isArray(queryKeys.models.list())).toBeTruthy();
+    expect(Array.isArray(queryKeys.usage.stats())).toBeTruthy();
   });
 });
 

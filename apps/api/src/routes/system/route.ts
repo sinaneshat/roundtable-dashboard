@@ -12,41 +12,41 @@ import { createPublicRouteResponses } from '@/core';
 import { DetailedHealthResponseSchema, HealthResponseSchema } from './schema';
 
 export const healthRoute = createRoute({
+  description: 'Basic health check endpoint for monitoring',
   method: 'get',
   path: '/health',
-  tags: ['system'],
-  summary: 'Basic health check',
-  description: 'Basic health check endpoint for monitoring',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Basic health check',
       content: {
         'application/json': { schema: HealthResponseSchema },
       },
+      description: 'Basic health check',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'Basic health check',
+  tags: ['system'],
 });
 
 export const detailedHealthRoute = createRoute({
+  description: 'Detailed health check with environment and dependencies',
   method: 'get',
   path: '/health/detailed',
-  tags: ['system'],
-  summary: 'Detailed health check',
-  description: 'Detailed health check with environment and dependencies',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Detailed health check with environment and dependencies',
       content: {
         'application/json': { schema: DetailedHealthResponseSchema },
       },
+      description: 'Detailed health check with environment and dependencies',
     },
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: {
-      description: 'Service unavailable - health check failed',
       content: {
         'application/json': { schema: DetailedHealthResponseSchema },
       },
+      description: 'Service unavailable - health check failed',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'Detailed health check',
+  tags: ['system'],
 });

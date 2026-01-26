@@ -60,26 +60,26 @@ async function triggerParticipantStream(
   message: TriggerParticipantQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, participantIndex, sessionToken, attachmentIds } = message;
+  const { attachmentIds, participantIndex, roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
 
   // Build request body matching streaming handler expectations
   const requestBody = {
+    attachmentIds: attachmentIds || [],
     id: threadId,
     message: {
-      id: `trigger-${threadId}-r${roundNumber}-p${participantIndex}`,
-      role: UIMessageRoles.USER,
       content: '', // Trigger message - no new user input
-      parts: [{ type: MessagePartTypes.TEXT, text: '' }],
+      id: `trigger-${threadId}-r${roundNumber}-p${participantIndex}`,
+      parts: [{ text: '', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     },
     participantIndex,
-    attachmentIds: attachmentIds || [],
   };
 
   const response = await fetch(`${baseUrl}/api/v1/chat`, {
-    method: 'POST',
-    headers: buildSessionAuthHeaders(sessionToken),
     body: JSON.stringify(requestBody),
+    headers: buildSessionAuthHeaders(sessionToken),
+    method: 'POST',
   });
 
   if (!response.ok) {
@@ -100,15 +100,15 @@ async function triggerModeratorStream(
   message: TriggerModeratorQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, sessionToken } = message;
+  const { roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
     {
-      method: 'POST',
-      headers: buildSessionAuthHeaders(sessionToken),
       body: JSON.stringify({}),
+      headers: buildSessionAuthHeaders(sessionToken),
+      method: 'POST',
     },
   );
 
@@ -139,18 +139,18 @@ async function triggerPreSearch(
   message: TriggerPreSearchQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, sessionToken, userQuery, attachmentIds } = message;
+  const { attachmentIds, roundNumber, sessionToken, threadId, userQuery } = message;
   const baseUrl = getBaseUrl(env);
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
     {
-      method: 'POST',
-      headers: buildSessionAuthHeaders(sessionToken),
       body: JSON.stringify({
-        userQuery,
         attachmentIds: attachmentIds || [],
+        userQuery,
       }),
+      headers: buildSessionAuthHeaders(sessionToken),
+      method: 'POST',
     },
   );
 
@@ -190,7 +190,7 @@ async function handleContinueAutomatedJob(
   message: ContinueAutomatedJobQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { jobId, threadId, currentRound, sessionToken } = message;
+  const { currentRound, jobId, sessionToken, threadId } = message;
 
   // Lazy-load job orchestration service and DB
   const { continueAutomatedJob } = await import('@/services/jobs');
@@ -207,7 +207,7 @@ async function handleCompleteAutomatedJob(
   message: CompleteAutomatedJobQueueMessage,
   _env: CloudflareEnv,
 ): Promise<void> {
-  const { jobId, threadId, autoPublish } = message;
+  const { autoPublish, jobId, threadId } = message;
 
   // Lazy-load job orchestration service and DB
   const { completeAutomatedJob } = await import('@/services/jobs');
@@ -233,15 +233,15 @@ async function checkRoundCompletion(
   message: CheckRoundCompletionQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, roundNumber, sessionToken } = message;
+  const { roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
 
   // Get round state via internal API (this validates recovery attempts server-side)
   const stateResponse = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/status`,
     {
-      method: 'GET',
       headers: buildSessionAuthHeaders(sessionToken),
+      method: 'GET',
     },
   );
 
@@ -274,41 +274,41 @@ async function checkRoundCompletion(
     // Pre-search needed - queue pre-search trigger
     // LOG:(`[RoundOrchestration] 📤 Queuing pre-search for ${threadId} r${roundNumber}`);
     await env.ROUND_ORCHESTRATION_QUEUE.send({
-      type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
-      messageId: `trigger-${threadId}-r${roundNumber}-presearch-${Date.now()}`,
-      threadId,
-      roundNumber,
-      userId: message.userId,
-      sessionToken,
-      userQuery: roundState.userQuery,
       attachmentIds: roundState.attachmentIds,
+      messageId: `trigger-${threadId}-r${roundNumber}-presearch-${Date.now()}`,
       queuedAt: new Date().toISOString(),
+      roundNumber,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
+      userId: message.userId,
+      userQuery: roundState.userQuery,
     } satisfies TriggerPreSearchQueueMessage);
   } else if (roundState.nextParticipantIndex !== null) {
     // Participant needed - queue participant trigger
     // LOG:(`[RoundOrchestration] 📤 Queuing participant ${roundState.nextParticipantIndex} for ${threadId} r${roundNumber}`);
     await env.ROUND_ORCHESTRATION_QUEUE.send({
-      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
-      messageId: `trigger-${threadId}-r${roundNumber}-p${roundState.nextParticipantIndex}-${Date.now()}`,
-      threadId,
-      roundNumber,
-      participantIndex: roundState.nextParticipantIndex,
-      userId: message.userId,
-      sessionToken,
       attachmentIds: roundState.attachmentIds,
+      messageId: `trigger-${threadId}-r${roundNumber}-p${roundState.nextParticipantIndex}-${Date.now()}`,
+      participantIndex: roundState.nextParticipantIndex,
       queuedAt: new Date().toISOString(),
+      roundNumber,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
+      userId: message.userId,
     } satisfies TriggerParticipantQueueMessage);
   } else if (roundState.needsModerator) {
     // Moderator needed - queue moderator trigger
     // LOG:(`[RoundOrchestration] 📤 Queuing moderator for ${threadId} r${roundNumber}`);
     await env.ROUND_ORCHESTRATION_QUEUE.send({
-      type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
       messageId: `trigger-${threadId}-r${roundNumber}-moderator-${Date.now()}`,
-      threadId,
-      roundNumber,
-      userId: message.userId,
-      sessionToken,
       queuedAt: new Date().toISOString(),
+      roundNumber,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
+      userId: message.userId,
     } satisfies TriggerModeratorQueueMessage);
   } else {
     // Round is complete or in unknown state

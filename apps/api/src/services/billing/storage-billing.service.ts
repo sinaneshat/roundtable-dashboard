@@ -28,8 +28,8 @@ export async function getUserProjectStorageBytes(
 ): Promise<number> {
   // Get all projects for this user
   const userProjects = await db.query.chatProject.findMany({
-    where: eq(tables.chatProject.userId, userId),
     columns: { id: true },
+    where: eq(tables.chatProject.userId, userId),
   });
 
   if (userProjects.length === 0) {
@@ -59,8 +59,9 @@ export async function getUserProjectStorageBytes(
  * @returns Credits to charge (10 credits per 10MB, rounded up)
  */
 export function calculateStorageCredits(bytes: number): number {
-  if (bytes <= 0)
+  if (bytes <= 0) {
     return 0;
+  }
 
   const mb = bytes / BYTES_PER_MB;
   const billingUnits = Math.ceil(mb / MB_PER_BILLING_UNIT);
@@ -108,18 +109,18 @@ export async function calculateAndDeductStorageCredits(
     });
 
     console.error('[Storage Billing] Deducted storage credits', {
-      userId,
+      credits,
       totalBytes,
       totalMB,
-      credits,
+      userId,
     });
 
     return credits;
   } catch (error) {
     // Log but don't throw - storage billing is non-critical
     console.error('[Storage Billing] Failed to deduct storage credits', {
-      userId,
       error: error instanceof Error ? error.message : String(error),
+      userId,
     });
     return 0;
   }

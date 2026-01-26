@@ -31,42 +31,54 @@ import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isObject } from './type-guards';
 
 // ============================================================================
+// Safe Property Access Helper
+// ============================================================================
+
+/**
+ * Safely get a property from a Record using bracket notation
+ * This satisfies TS4111 noPropertyAccessFromIndexSignature
+ */
+function getRecordProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
+// ============================================================================
 // Schemas & Types
 // ============================================================================
 
 export const ErrorMetadataFieldsSchema = z.object({
-  hasError: z.boolean(),
-  openRouterError: z.string().optional(),
   errorCategory: z.string().optional(),
   errorMessage: z.string().optional(),
-  providerMessage: z.string().optional(),
-  isTransient: z.boolean(),
+  hasError: z.boolean(),
   isPartialResponse: z.boolean(),
+  isTransient: z.boolean(),
+  openRouterError: z.string().optional(),
+  providerMessage: z.string().optional(),
 });
 
 export type ErrorMetadataFields = z.infer<typeof ErrorMetadataFieldsSchema>;
 
 /**
  * Type guard for AI SDK LanguageModelUsage
- * Validates the object has the expected structure
+ * Validates the object has the expected structure using Zod
  */
+const LanguageModelUsageGuardSchema = z.object({
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
+}).passthrough();
+// ✅ JUSTIFIED .passthrough(): AI SDK LanguageModelUsage may contain additional
+// fields beyond inputTokens/outputTokens. We validate only the fields we need.
+
 function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  const usage = value as Record<string, unknown>;
-  return (
-    (typeof usage.inputTokens === 'number' || usage.inputTokens === undefined)
-    && (typeof usage.outputTokens === 'number' || usage.outputTokens === undefined)
-  );
+  return LanguageModelUsageGuardSchema.safeParse(value).success;
 }
 
 export const OpenRouterErrorContextSchema = z.object({
+  finishReason: z.string(),
   providerMetadata: z.unknown(),
   response: z.unknown(),
-  finishReason: z.string(),
-  usage: z.custom<LanguageModelUsage>(isLanguageModelUsage).optional(),
   text: z.string().optional(),
+  usage: z.custom<LanguageModelUsage>(isLanguageModelUsage).optional(),
 });
 
 export type OpenRouterErrorContext = z.infer<typeof OpenRouterErrorContextSchema>;
@@ -183,20 +195,20 @@ export function buildOpenRouterErrorMetadata(
 
   // Check providerMetadata for OpenRouter-specific errors
   if (isObject(context.providerMetadata)) {
-    if (context.providerMetadata.error) {
+    const metadata = context.providerMetadata;
+    const metadataError = getRecordProp(metadata, 'error');
+    if (metadataError) {
       openRouterError
-        = typeof context.providerMetadata.error === 'string'
-          ? context.providerMetadata.error
-          : JSON.stringify(context.providerMetadata.error);
+        = typeof metadataError === 'string'
+          ? metadataError
+          : JSON.stringify(metadataError);
     }
-    if (!openRouterError && context.providerMetadata.errorMessage) {
-      openRouterError = String(context.providerMetadata.errorMessage);
+    const errorMessage = getRecordProp(metadata, 'errorMessage');
+    if (!openRouterError && errorMessage) {
+      openRouterError = String(errorMessage);
     }
     // Check for moderation/content filter errors
-    if (
-      context.providerMetadata.moderation
-      || context.providerMetadata.contentFilter
-    ) {
+    if (getRecordProp(metadata, 'moderation') || getRecordProp(metadata, 'contentFilter')) {
       errorCategory = ErrorCategorySchema.enum.content_filter;
       openRouterError
         = openRouterError || 'Content was filtered by safety systems';
@@ -205,11 +217,13 @@ export function buildOpenRouterErrorMetadata(
 
   // Check response object for errors
   if (!openRouterError && isObject(context.response)) {
-    if (context.response.error) {
+    const responseRecord = context.response;
+    const responseError = getRecordProp(responseRecord, 'error');
+    if (responseError) {
       openRouterError
-        = typeof context.response.error === 'string'
-          ? context.response.error
-          : JSON.stringify(context.response.error);
+        = typeof responseError === 'string'
+          ? responseError
+          : JSON.stringify(responseError);
     }
   }
 
@@ -304,13 +318,13 @@ export function buildErrorMetadataFields(
     : false;
 
   return {
-    hasError,
-    openRouterError,
     errorCategory,
     errorMessage,
-    providerMessage,
-    isTransient,
+    hasError,
     isPartialResponse,
+    isTransient,
+    openRouterError,
+    providerMessage,
   };
 }
 
@@ -421,8 +435,11 @@ export function isTransientErrorFromObject(error: unknown): boolean {
 
   // ✅ TYPE-SAFE: Check HTTP status code if available using type guard
   let statusCode: number | undefined;
-  if (isObject(error) && 'statusCode' in error && typeof error.statusCode === 'number') {
-    statusCode = error.statusCode;
+  if (isObject(error)) {
+    const code = getRecordProp(error, 'statusCode');
+    if (typeof code === 'number') {
+      statusCode = code;
+    }
   }
 
   if (statusCode === 429 || statusCode === 503 || statusCode === 502) {

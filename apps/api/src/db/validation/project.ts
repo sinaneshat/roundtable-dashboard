@@ -23,9 +23,9 @@ import { chatProject, projectAttachment, projectMemory } from '@/db/tables/proje
  * Used by chatProject.settings column via $type<>
  */
 export const ProjectSettingsSchema = z.object({
+  allowedFileTypes: z.array(z.string()).optional(),
   autoIndexing: z.boolean().optional(),
   maxFileSize: z.number().int().positive().optional(),
-  allowedFileTypes: z.array(z.string()).optional(),
 }).strict();
 
 export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
@@ -37,8 +37,8 @@ export type ProjectSettings = z.infer<typeof ProjectSettingsSchema>;
  * Used by chatProject.metadata column via $type<>
  */
 export const ProjectMetadataSchema = z.object({
-  tags: z.array(z.string()).optional(),
   category: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 }).strict();
 
 export type ProjectMetadata = z.infer<typeof ProjectMetadataSchema>;
@@ -52,14 +52,14 @@ export type ProjectMetadata = z.infer<typeof ProjectMetadataSchema>;
 export const ProjectAttachmentRagMetadataSchema = z.object({
   context: z.string().optional(),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  indexedAt: z.string().optional(),
   errorMessage: z.string().optional(),
+  indexedAt: z.string().optional(),
   // R2 key in project folder for AI Search indexing
   // Format: projects/{projectId}/{filename}
   projectR2Key: z.string().optional(),
   // Thread ID if file was auto-linked from a chat upload (non-deletable)
   sourceThreadId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 }).strict();
 
 export type ProjectAttachmentRagMetadata = z.infer<typeof ProjectAttachmentRagMetadataSchema>;
@@ -71,9 +71,9 @@ export type ProjectAttachmentRagMetadata = z.infer<typeof ProjectAttachmentRagMe
  * Used by projectMemory.metadata column via $type<>
  */
 export const ProjectMemoryMetadataSchema = z.object({
-  keywords: z.array(z.string()).optional(),
   category: z.string().optional(),
   extractedAt: z.string().optional(),
+  keywords: z.array(z.string()).optional(),
   modelUsed: z.string().optional(),
 }).strict();
 

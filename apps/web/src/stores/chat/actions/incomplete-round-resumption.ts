@@ -18,7 +18,7 @@ import {
   getParticipantIndex,
   getParticipantModelIds,
   getRoundNumber,
-  hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
+  hasError as checkHasError,
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant } from '@/services/api';
@@ -67,92 +67,92 @@ export type UseIncompleteRoundResumptionReturn = {
 export function useIncompleteRoundResumption(
   options: UseIncompleteRoundResumptionOptions,
 ): UseIncompleteRoundResumptionReturn {
-  const { threadId, enabled = true } = options;
+  const { enabled = true, threadId } = options;
 
   // ✅ FIX: Get store reference for imperative access in effects
   // This allows reading CURRENT state inside effects, not stale closure values
   const store = use(ChatStoreContext);
 
   const {
-    messages,
-    participants,
-    preSearches,
-    isStreaming,
-    waitingToStartStreaming,
-    pendingMessage,
-    hasSentPendingMessage,
-    hasEarlyOptimisticMessage,
-    enableWebSearch,
-    thread,
-    // ✅ UNIFIED PHASES: Phase-based resumption state from server prefill
-    currentResumptionPhase,
-    preSearchResumption,
-    moderatorResumption,
-    resumptionRoundNumber,
-    streamResumptionPrefilled,
-    isCreatingModerator,
-    // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
-    isWaitingForChangelog,
     configChangeRoundNumber,
-    // ✅ SCOPE VERSIONING: Track version for stale effect detection
-    resumptionScopeVersion,
-    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
-    prefilledForThreadId,
-    // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
-    streamFinishAcknowledged,
     // ✅ FIX v7: Track thread creation to avoid clearing state during creation flow
     createdThreadId,
-  } = useChatStore(useShallow(s => ({
-    messages: s.messages,
-    participants: s.participants,
-    preSearches: s.preSearches,
-    isStreaming: s.isStreaming,
-    waitingToStartStreaming: s.waitingToStartStreaming,
-    pendingMessage: s.pendingMessage,
-    hasSentPendingMessage: s.hasSentPendingMessage,
-    hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
-    enableWebSearch: s.enableWebSearch,
-    thread: s.thread,
     // ✅ UNIFIED PHASES: Phase-based resumption state from server prefill
-    currentResumptionPhase: s.currentResumptionPhase,
-    preSearchResumption: s.preSearchResumption,
-    moderatorResumption: s.moderatorResumption,
-    resumptionRoundNumber: s.resumptionRoundNumber,
-    streamResumptionPrefilled: s.streamResumptionPrefilled,
-    isCreatingModerator: s.isModeratorStreaming,
+    currentResumptionPhase,
+    enableWebSearch,
+    hasEarlyOptimisticMessage,
+    hasSentPendingMessage,
+    isCreatingModerator,
+    isStreaming,
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
-    isWaitingForChangelog: s.isWaitingForChangelog,
-    configChangeRoundNumber: s.configChangeRoundNumber,
-    // ✅ SCOPE VERSIONING: Track version for stale effect detection
-    resumptionScopeVersion: s.resumptionScopeVersion,
+    isWaitingForChangelog,
+    messages,
+    moderatorResumption,
+    participants,
+    pendingMessage,
     // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
-    prefilledForThreadId: s.prefilledForThreadId,
+    prefilledForThreadId,
+    preSearches,
+    preSearchResumption,
+    resumptionRoundNumber,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion,
     // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
-    streamFinishAcknowledged: s.streamFinishAcknowledged,
+    streamFinishAcknowledged,
+    streamResumptionPrefilled,
+    thread,
+    waitingToStartStreaming,
+  } = useChatStore(useShallow(s => ({
+    configChangeRoundNumber: s.configChangeRoundNumber,
     // ✅ FIX v7: Track thread creation to avoid clearing state during creation flow
     createdThreadId: s.createdThreadId,
+    // ✅ UNIFIED PHASES: Phase-based resumption state from server prefill
+    currentResumptionPhase: s.currentResumptionPhase,
+    enableWebSearch: s.enableWebSearch,
+    hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
+    hasSentPendingMessage: s.hasSentPendingMessage,
+    isCreatingModerator: s.isModeratorStreaming,
+    isStreaming: s.isStreaming,
+    // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
+    isWaitingForChangelog: s.isWaitingForChangelog,
+    messages: s.messages,
+    moderatorResumption: s.moderatorResumption,
+    participants: s.participants,
+    pendingMessage: s.pendingMessage,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    prefilledForThreadId: s.prefilledForThreadId,
+    preSearches: s.preSearches,
+    preSearchResumption: s.preSearchResumption,
+    resumptionRoundNumber: s.resumptionRoundNumber,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion: s.resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
+    streamFinishAcknowledged: s.streamFinishAcknowledged,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    thread: s.thread,
+    waitingToStartStreaming: s.waitingToStartStreaming,
   })));
 
   // Actions - batched with useShallow for stable reference
   const actions = useChatStore(useShallow(s => ({
-    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
-    setStreamingRoundNumber: s.setStreamingRoundNumber,
-    setCurrentParticipantIndex: s.setCurrentParticipantIndex,
-    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
-    setIsStreaming: s.setIsStreaming,
-    prepareForNewMessage: s.prepareForNewMessage,
-    setExpectedParticipantIds: s.setExpectedParticipantIds,
-    setMessages: s.setMessages,
-    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
     // ✅ UNIFIED PHASES: Actions for phase-based resumption
     clearStreamResumption: s.clearStreamResumption,
-    setIsCreatingModerator: s.setIsModeratorStreaming,
-    // ✅ PHASE TRANSITION FIX: Clear pre-search state when transitioning
-    transitionToParticipantsPhase: s.transitionToParticipantsPhase,
-    // ✅ FIX: Add moderator phase transition for P2M resumption
-    transitionToModeratorPhase: s.transitionToModeratorPhase,
+    prepareForNewMessage: s.prepareForNewMessage,
+    setCurrentParticipantIndex: s.setCurrentParticipantIndex,
     // ✅ FIX: Set phase directly for SSR stale abort handling
     setCurrentResumptionPhase: s.setCurrentResumptionPhase,
+    setExpectedParticipantIds: s.setExpectedParticipantIds,
+    setIsCreatingModerator: s.setIsModeratorStreaming,
+    setIsStreaming: s.setIsStreaming,
+    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+    setMessages: s.setMessages,
+    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
+    setStreamingRoundNumber: s.setStreamingRoundNumber,
+    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    // ✅ FIX: Add moderator phase transition for P2M resumption
+    transitionToModeratorPhase: s.transitionToModeratorPhase,
+    // ✅ PHASE TRANSITION FIX: Clear pre-search state when transitioning
+    transitionToParticipantsPhase: s.transitionToParticipantsPhase,
   })));
 
   // ============================================================================
@@ -629,12 +629,14 @@ export function useIncompleteRoundResumption(
     // All participants before this index are implicitly complete due to sequential order
     let highestKnownIndex = -1;
     for (const idx of respondedParticipantIndices) {
-      if (idx > highestKnownIndex)
+      if (idx > highestKnownIndex) {
         highestKnownIndex = idx;
+      }
     }
     for (const idx of inProgressParticipantIndices) {
-      if (idx > highestKnownIndex)
+      if (idx > highestKnownIndex) {
         highestKnownIndex = idx;
+      }
     }
 
     // Start searching from after the highest known index
@@ -1014,8 +1016,7 @@ export function useIncompleteRoundResumption(
     // When config changes occur between rounds, configChangeRoundNumber is set BEFORE PATCH
     // and isWaitingForChangelog is set AFTER PATCH. Both must be null/false for resumption.
     // Without this check, resumption could trigger with stale config (before changelog fetched).
-    // ✅ FIX: Use != to check both null and undefined (for test compatibility)
-    if (configChangeRoundNumber != null || isWaitingForChangelog) {
+    if (configChangeRoundNumber !== null || isWaitingForChangelog) {
       return;
     }
 
@@ -1589,10 +1590,10 @@ export function useIncompleteRoundResumption(
   ]);
 
   return {
+    // ✅ UNIFIED PHASES: Expose current resumption phase for debugging/UI
+    currentResumptionPhase: streamResumptionPrefilled ? currentResumptionPhase : null,
     isIncomplete,
     nextParticipantIndex,
     resumingRoundNumber: isIncomplete ? currentRoundNumber : null,
-    // ✅ UNIFIED PHASES: Expose current resumption phase for debugging/UI
-    currentResumptionPhase: streamResumptionPrefilled ? currentResumptionPhase : null,
   };
 }

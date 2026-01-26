@@ -14,42 +14,38 @@ import { getUserUsageStatsService, listModelsService } from '@/services/api';
  * Factory functions for type-safe query key generation
  */
 const QueryKeyFactory = {
-  base: (resource: string) => [resource] as const,
-  list: (resource: string) => [resource, 'list'] as const,
-  detail: (resource: string, id: string) => [resource, 'detail', id] as const,
-  current: (resource: string) => [resource, 'current'] as const,
-  all: (resource: string) => [resource, 'all'] as const,
   action: (resource: string, action: string, ...params: string[]) =>
     [resource, action, ...params] as const,
+  all: (resource: string) => [resource, 'all'] as const,
+  base: (resource: string) => [resource] as const,
+  current: (resource: string) => [resource, 'current'] as const,
+  detail: (resource: string, id: string) => [resource, 'detail', id] as const,
+  list: (resource: string) => [resource, 'list'] as const,
 } as const;
 
 /**
  * Billing domain query keys
  */
 export const queryKeys = {
-  // Session (auth state)
-  session: {
-    all: QueryKeyFactory.base('session'),
-    current: () => QueryKeyFactory.current('session'),
+  // Admin: Automated Jobs
+  adminJobs: {
+    all: QueryKeyFactory.base('adminJobs'),
+    detail: (id: string) => QueryKeyFactory.detail('adminJobs', id),
+    details: () => [...queryKeys.adminJobs.all, 'detail'] as const,
+    list: (status?: string) =>
+      status
+        ? QueryKeyFactory.action('adminJobs', 'list', status)
+        : QueryKeyFactory.list('adminJobs'),
+    lists: () => [...queryKeys.adminJobs.all, 'list'] as const,
   },
 
-  // Products
-  products: {
-    all: QueryKeyFactory.base('products'),
-    lists: () => [...queryKeys.products.all, 'list'] as const,
-    list: () => QueryKeyFactory.list('products'),
-    details: () => [...queryKeys.products.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('products', id),
-  },
-
-  // Subscriptions
-  subscriptions: {
-    all: QueryKeyFactory.base('subscriptions'),
-    lists: () => [...queryKeys.subscriptions.all, 'list'] as const,
-    list: () => QueryKeyFactory.list('subscriptions'),
-    details: () => [...queryKeys.subscriptions.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('subscriptions', id),
-    current: () => QueryKeyFactory.current('subscriptions'),
+  // API Keys
+  apiKeys: {
+    all: QueryKeyFactory.base('apiKeys'),
+    detail: (id: string) => QueryKeyFactory.detail('apiKeys', id),
+    details: () => [...queryKeys.apiKeys.all, 'detail'] as const,
+    list: () => QueryKeyFactory.list('apiKeys'),
+    lists: () => [...queryKeys.apiKeys.all, 'list'] as const,
   },
 
   // Checkout
@@ -58,76 +54,16 @@ export const queryKeys = {
     session: (sessionId: string) => QueryKeyFactory.action('checkout', 'session', sessionId),
   },
 
-  // Usage Tracking
-  usage: {
-    all: QueryKeyFactory.base('usage'),
-    stats: () => QueryKeyFactory.action('usage', 'stats'),
-    quotas: () => [...queryKeys.usage.all, 'quotas'] as const,
-  },
-
-  // Chat Threads
-  threads: {
-    all: QueryKeyFactory.base('threads'),
-    lists: (search?: string) =>
-      search
-        ? [...queryKeys.threads.all, 'list', 'search', search] as const
-        : [...queryKeys.threads.all, 'list'] as const,
-    list: (cursor?: string) =>
-      cursor
-        ? QueryKeyFactory.action('threads', 'list', cursor)
-        : QueryKeyFactory.list('threads'),
-    sidebar: (search?: string) =>
-      search
-        ? [...queryKeys.threads.all, 'sidebar', 'search', search] as const
-        : [...queryKeys.threads.all, 'sidebar'] as const,
-    details: () => [...queryKeys.threads.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('threads', id),
-    public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
-    publicSlugs: () => QueryKeyFactory.action('threads', 'public', 'slugs'),
-    bySlug: (slug: string) => QueryKeyFactory.action('threads', 'slug', slug),
-    slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
-    messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
-    changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
-    roundChangelog: (id: string, roundNumber: number) =>
-      QueryKeyFactory.action('threads', 'changelog', id, 'round', String(roundNumber)),
-    preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
-    feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
-    streamResumption: (id: string) => QueryKeyFactory.action('threads', 'stream-resumption', id),
-    memoryEvents: (threadId: string, roundNumber: number) =>
-      QueryKeyFactory.action('threads', 'memory-events', threadId, String(roundNumber)),
-  },
-
   // Chat Custom Roles
   customRoles: {
     all: QueryKeyFactory.base('customRoles'),
-    lists: () => [...queryKeys.customRoles.all, 'list'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('customRoles', id),
+    details: () => [...queryKeys.customRoles.all, 'detail'] as const,
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('customRoles', 'list', cursor)
         : QueryKeyFactory.list('customRoles'),
-    details: () => [...queryKeys.customRoles.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('customRoles', id),
-  },
-
-  // User Presets (saved model+role configurations)
-  userPresets: {
-    all: QueryKeyFactory.base('userPresets'),
-    lists: () => [...queryKeys.userPresets.all, 'list'] as const,
-    list: (cursor?: string) =>
-      cursor
-        ? QueryKeyFactory.action('userPresets', 'list', cursor)
-        : QueryKeyFactory.list('userPresets'),
-    details: () => [...queryKeys.userPresets.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('userPresets', id),
-  },
-
-  // API Keys
-  apiKeys: {
-    all: QueryKeyFactory.base('apiKeys'),
-    lists: () => [...queryKeys.apiKeys.all, 'list'] as const,
-    list: () => QueryKeyFactory.list('apiKeys'),
-    details: () => [...queryKeys.apiKeys.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('apiKeys', id),
+    lists: () => [...queryKeys.customRoles.all, 'list'] as const,
   },
 
   // OpenRouter Models
@@ -136,56 +72,120 @@ export const queryKeys = {
     list: () => QueryKeyFactory.list('models'),
   },
 
+  // Products
+  products: {
+    all: QueryKeyFactory.base('products'),
+    detail: (id: string) => QueryKeyFactory.detail('products', id),
+    details: () => [...queryKeys.products.all, 'detail'] as const,
+    list: () => QueryKeyFactory.list('products'),
+    lists: () => [...queryKeys.products.all, 'list'] as const,
+  },
+
   // Projects
   projects: {
     all: QueryKeyFactory.base('projects'),
-    lists: (search?: string) =>
-      search
-        ? [...queryKeys.projects.all, 'list', 'search', search] as const
-        : [...queryKeys.projects.all, 'list'] as const,
+    attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
+    context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
+    detail: (id: string) => QueryKeyFactory.detail('projects', id),
+    details: () => [...queryKeys.projects.all, 'detail'] as const,
+    limits: () => QueryKeyFactory.action('projects', 'limits'),
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('projects', 'list', cursor)
         : QueryKeyFactory.list('projects'),
-    sidebar: () => [...queryKeys.projects.all, 'sidebar'] as const,
-    details: () => [...queryKeys.projects.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('projects', id),
-    attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.projects.all, 'list', 'search', search] as const
+        : [...queryKeys.projects.all, 'list'] as const,
     memories: (id: string) => QueryKeyFactory.action('projects', 'memories', id),
+    sidebar: () => [...queryKeys.projects.all, 'sidebar'] as const,
     /**
      * Project threads query key - matches projectThreadsQueryOptions pattern
      * Key format: ['threads', 'list', { search: undefined, projectId }]
      * This ensures invalidation hits the actual cached query
      */
-    threads: (id: string) => ['threads', 'list', { search: undefined, projectId: id }] as const,
-    context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
-    limits: () => QueryKeyFactory.action('projects', 'limits'),
+    threads: (id: string) => ['threads', 'list', { projectId: id, search: undefined }] as const,
+  },
+
+  // Session (auth state)
+  session: {
+    all: QueryKeyFactory.base('session'),
+    current: () => QueryKeyFactory.current('session'),
+  },
+
+  // Subscriptions
+  subscriptions: {
+    all: QueryKeyFactory.base('subscriptions'),
+    current: () => QueryKeyFactory.current('subscriptions'),
+    detail: (id: string) => QueryKeyFactory.detail('subscriptions', id),
+    details: () => [...queryKeys.subscriptions.all, 'detail'] as const,
+    list: () => QueryKeyFactory.list('subscriptions'),
+    lists: () => [...queryKeys.subscriptions.all, 'list'] as const,
+  },
+
+  // Chat Threads
+  threads: {
+    all: QueryKeyFactory.base('threads'),
+    bySlug: (slug: string) => QueryKeyFactory.action('threads', 'slug', slug),
+    changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
+    detail: (id: string) => QueryKeyFactory.detail('threads', id),
+    details: () => [...queryKeys.threads.all, 'detail'] as const,
+    feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('threads', 'list', cursor)
+        : QueryKeyFactory.list('threads'),
+    lists: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'list', 'search', search] as const
+        : [...queryKeys.threads.all, 'list'] as const,
+    memoryEvents: (threadId: string, roundNumber: number) =>
+      QueryKeyFactory.action('threads', 'memory-events', threadId, String(roundNumber)),
+    messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
+    preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
+    public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
+    publicSlugs: () => QueryKeyFactory.action('threads', 'public', 'slugs'),
+    roundChangelog: (id: string, roundNumber: number) =>
+      QueryKeyFactory.action('threads', 'changelog', id, 'round', String(roundNumber)),
+    sidebar: (search?: string) =>
+      search
+        ? [...queryKeys.threads.all, 'sidebar', 'search', search] as const
+        : [...queryKeys.threads.all, 'sidebar'] as const,
+    slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
+    streamResumption: (id: string) => QueryKeyFactory.action('threads', 'stream-resumption', id),
   },
 
   // Uploads (Centralized file storage)
   // Note: Thread/message associations are via junction tables, not direct queries
   uploads: {
     all: QueryKeyFactory.base('uploads'),
-    lists: () => [...queryKeys.uploads.all, 'list'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('uploads', id),
+    details: () => [...queryKeys.uploads.all, 'detail'] as const,
+    downloadUrl: (id: string) => QueryKeyFactory.action('uploads', 'downloadUrl', id),
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('uploads', 'list', cursor)
         : QueryKeyFactory.list('uploads'),
-    details: () => [...queryKeys.uploads.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('uploads', id),
-    downloadUrl: (id: string) => QueryKeyFactory.action('uploads', 'downloadUrl', id),
+    lists: () => [...queryKeys.uploads.all, 'list'] as const,
   },
 
-  // Admin: Automated Jobs
-  adminJobs: {
-    all: QueryKeyFactory.base('adminJobs'),
-    lists: () => [...queryKeys.adminJobs.all, 'list'] as const,
-    list: (status?: string) =>
-      status
-        ? QueryKeyFactory.action('adminJobs', 'list', status)
-        : QueryKeyFactory.list('adminJobs'),
-    details: () => [...queryKeys.adminJobs.all, 'detail'] as const,
-    detail: (id: string) => QueryKeyFactory.detail('adminJobs', id),
+  // Usage Tracking
+  usage: {
+    all: QueryKeyFactory.base('usage'),
+    quotas: () => [...queryKeys.usage.all, 'quotas'] as const,
+    stats: () => QueryKeyFactory.action('usage', 'stats'),
+  },
+
+  // User Presets (saved model+role configurations)
+  userPresets: {
+    all: QueryKeyFactory.base('userPresets'),
+    detail: (id: string) => QueryKeyFactory.detail('userPresets', id),
+    details: () => [...queryKeys.userPresets.all, 'detail'] as const,
+    list: (cursor?: string) =>
+      cursor
+        ? QueryKeyFactory.action('userPresets', 'list', cursor)
+        : QueryKeyFactory.list('userPresets'),
+    lists: () => [...queryKeys.userPresets.all, 'list'] as const,
   },
 } as const;
 
@@ -194,42 +194,14 @@ export const queryKeys = {
  * Use these to invalidate related queries after mutations
  */
 export const invalidationPatterns = {
-  // Product operations
-  products: [queryKeys.products.all],
-
-  productDetail: (productId: string) => [
-    queryKeys.products.detail(productId),
-    queryKeys.products.lists(),
+  adminJobDetail: (jobId: string) => [
+    queryKeys.adminJobs.detail(jobId),
+    queryKeys.adminJobs.lists(),
   ],
 
-  // Subscription operations
-  // IMPORTANT: Always invalidate usage queries with subscriptions since quotas are tied to subscription tier
-  subscriptions: [
-    queryKeys.subscriptions.lists(),
-    queryKeys.subscriptions.current(),
-    queryKeys.usage.all,
-    queryKeys.models.all,
-  ],
-
-  subscriptionDetail: (subscriptionId: string) => [
-    queryKeys.subscriptions.detail(subscriptionId),
-    queryKeys.subscriptions.lists(),
-    queryKeys.subscriptions.current(),
-    queryKeys.usage.all,
-    queryKeys.models.all,
-  ],
-
-  afterCheckout: [
-    queryKeys.subscriptions.all,
-    queryKeys.products.all,
-    queryKeys.usage.all,
-    queryKeys.models.all,
-  ],
-
-  // Usage operations - invalidate after chat operations
-  usage: [
-    queryKeys.usage.stats(),
-    queryKeys.usage.quotas(),
+  // Admin jobs operations
+  adminJobs: [
+    queryKeys.adminJobs.lists(),
   ],
 
   // After chat operations - invalidate usage stats
@@ -237,19 +209,11 @@ export const invalidationPatterns = {
     queryKeys.usage.stats(),
   ],
 
-  // Thread operations - only invalidate thread list and stats
-  // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
-  threads: [
-    queryKeys.threads.lists(),
-    queryKeys.threads.sidebar(),
-    queryKeys.usage.stats(), // Invalidate stats to refresh quota
-  ],
-
-  threadDetail: (threadId: string) => [
-    queryKeys.threads.detail(threadId),
-    queryKeys.threads.lists(),
-    queryKeys.threads.sidebar(),
-    queryKeys.threads.changelog(threadId),
+  afterCheckout: [
+    queryKeys.subscriptions.all,
+    queryKeys.products.all,
+    queryKeys.usage.all,
+    queryKeys.models.all,
   ],
 
   // After thread message - invalidate thread detail and usage stats
@@ -260,30 +224,9 @@ export const invalidationPatterns = {
     queryKeys.usage.stats(),
   ],
 
-  // Custom role operations
-  customRoles: [
-    queryKeys.customRoles.lists(),
-    queryKeys.usage.stats(),
-  ],
-
-  customRoleDetail: (roleId: string) => [
-    queryKeys.customRoles.detail(roleId),
-    queryKeys.customRoles.lists(),
-  ],
-
-  // User preset operations
-  userPresets: [
-    queryKeys.userPresets.lists(),
-  ],
-
-  userPresetDetail: (presetId: string) => [
-    queryKeys.userPresets.detail(presetId),
-    queryKeys.userPresets.lists(),
-  ],
-
-  // API Key operations
-  apiKeys: [
-    queryKeys.apiKeys.lists(),
+  // After upload - invalidate upload list
+  afterUpload: () => [
+    queryKeys.uploads.lists(),
   ],
 
   apiKeyDetail: (keyId: string) => [
@@ -291,11 +234,41 @@ export const invalidationPatterns = {
     queryKeys.apiKeys.lists(),
   ],
 
-  // Project operations
-  projects: [
-    queryKeys.projects.lists(),
-    queryKeys.projects.sidebar(),
-    queryKeys.projects.limits(),
+  // API Key operations
+  apiKeys: [
+    queryKeys.apiKeys.lists(),
+  ],
+
+  customRoleDetail: (roleId: string) => [
+    queryKeys.customRoles.detail(roleId),
+    queryKeys.customRoles.lists(),
+  ],
+
+  // Custom role operations
+  customRoles: [
+    queryKeys.customRoles.lists(),
+    queryKeys.usage.stats(),
+  ],
+
+  // Leave thread - invalidate auxiliary thread-specific caches when navigating away
+  // NOTE: We do NOT invalidate bySlug() or detail() - those should stay cached for snappy navigation
+  // Only invalidate ephemeral data that shouldn't persist across sessions
+  leaveThread: (threadId: string) => [
+    queryKeys.threads.streamResumption(threadId), // Ephemeral streaming state
+  ],
+
+  productDetail: (productId: string) => [
+    queryKeys.products.detail(productId),
+    queryKeys.products.lists(),
+  ],
+
+  // Product operations
+  products: [queryKeys.products.all],
+
+  // Project attachment operations
+  projectAttachments: (projectId: string) => [
+    queryKeys.projects.attachments(projectId),
+    queryKeys.projects.detail(projectId), // Update attachment counts
   ],
 
   projectDetail: (projectId: string) => [
@@ -306,10 +279,17 @@ export const invalidationPatterns = {
     queryKeys.projects.memories(projectId),
   ],
 
-  // Project attachment operations
-  projectAttachments: (projectId: string) => [
-    queryKeys.projects.attachments(projectId),
-    queryKeys.projects.detail(projectId), // Update attachment counts
+  // Project memory operations
+  projectMemories: (projectId: string) => [
+    queryKeys.projects.memories(projectId),
+    queryKeys.projects.detail(projectId),
+  ],
+
+  // Project operations
+  projects: [
+    queryKeys.projects.lists(),
+    queryKeys.projects.sidebar(),
+    queryKeys.projects.limits(),
   ],
 
   // Project thread operations - invalidate threads list and project detail
@@ -317,34 +297,6 @@ export const invalidationPatterns = {
     queryKeys.projects.threads(projectId),
     queryKeys.projects.detail(projectId), // Update thread counts
     queryKeys.projects.sidebar(), // Update sidebar thread counts
-  ],
-
-  // Project memory operations
-  projectMemories: (projectId: string) => [
-    queryKeys.projects.memories(projectId),
-    queryKeys.projects.detail(projectId),
-  ],
-
-  // Upload (attachment) operations
-  uploads: [
-    queryKeys.uploads.lists(),
-  ],
-
-  uploadDetail: (uploadId: string) => [
-    queryKeys.uploads.detail(uploadId),
-    queryKeys.uploads.lists(),
-  ],
-
-  // After upload - invalidate upload list
-  afterUpload: () => [
-    queryKeys.uploads.lists(),
-  ],
-
-  // Leave thread - invalidate auxiliary thread-specific caches when navigating away
-  // NOTE: We do NOT invalidate bySlug() or detail() - those should stay cached for snappy navigation
-  // Only invalidate ephemeral data that shouldn't persist across sessions
-  leaveThread: (threadId: string) => [
-    queryKeys.threads.streamResumption(threadId), // Ephemeral streaming state
   ],
 
   // Auth state change - invalidate ALL user-specific data
@@ -362,14 +314,62 @@ export const invalidationPatterns = {
     queryKeys.adminJobs.all,
   ],
 
-  // Admin jobs operations
-  adminJobs: [
-    queryKeys.adminJobs.lists(),
+  subscriptionDetail: (subscriptionId: string) => [
+    queryKeys.subscriptions.detail(subscriptionId),
+    queryKeys.subscriptions.lists(),
+    queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
+    queryKeys.models.all,
   ],
 
-  adminJobDetail: (jobId: string) => [
-    queryKeys.adminJobs.detail(jobId),
-    queryKeys.adminJobs.lists(),
+  // Subscription operations
+  // IMPORTANT: Always invalidate usage queries with subscriptions since quotas are tied to subscription tier
+  subscriptions: [
+    queryKeys.subscriptions.lists(),
+    queryKeys.subscriptions.current(),
+    queryKeys.usage.all,
+    queryKeys.models.all,
+  ],
+
+  threadDetail: (threadId: string) => [
+    queryKeys.threads.detail(threadId),
+    queryKeys.threads.lists(),
+    queryKeys.threads.sidebar(),
+    queryKeys.threads.changelog(threadId),
+  ],
+
+  // Thread operations - only invalidate thread list and stats
+  // Stats are only updated when messages are sent (actual usage), not when threads are created/deleted
+  threads: [
+    queryKeys.threads.lists(),
+    queryKeys.threads.sidebar(),
+    queryKeys.usage.stats(), // Invalidate stats to refresh quota
+  ],
+
+  uploadDetail: (uploadId: string) => [
+    queryKeys.uploads.detail(uploadId),
+    queryKeys.uploads.lists(),
+  ],
+
+  // Upload (attachment) operations
+  uploads: [
+    queryKeys.uploads.lists(),
+  ],
+
+  // Usage operations - invalidate after chat operations
+  usage: [
+    queryKeys.usage.stats(),
+    queryKeys.usage.quotas(),
+  ],
+
+  userPresetDetail: (presetId: string) => [
+    queryKeys.userPresets.detail(presetId),
+    queryKeys.userPresets.lists(),
+  ],
+
+  // User preset operations
+  userPresets: [
+    queryKeys.userPresets.lists(),
   ],
 } as const;
 
@@ -393,44 +393,6 @@ export const invalidationPatterns = {
  */
 export const billingInvalidationHelpers = {
   /**
-   * Invalidate subscription queries after billing changes
-   */
-  invalidateSubscriptions: (queryClient: QueryClient) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.subscriptions.all,
-      refetchType: 'all',
-    });
-  },
-
-  /**
-   * Refresh usage stats with HTTP cache bypass
-   * Falls back to invalidation if direct fetch fails
-   */
-  refreshUsageStats: async (queryClient: QueryClient) => {
-    try {
-      const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
-      queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
-    } catch (error) {
-      console.error('[Billing] Failed to refresh usage stats:', error);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-    }
-  },
-
-  /**
-   * Refresh models with HTTP cache bypass
-   * Falls back to invalidation if direct fetch fails
-   */
-  refreshModels: async (queryClient: QueryClient) => {
-    try {
-      const freshModelsData = await listModelsService({ bypassCache: true });
-      queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
-    } catch (error) {
-      console.error('[Billing] Failed to refresh models:', error);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
-    }
-  },
-
-  /**
    * Full billing state refresh after subscription changes
    *
    * Use this after:
@@ -450,6 +412,44 @@ export const billingInvalidationHelpers = {
       billingInvalidationHelpers.refreshModels(queryClient),
     ]);
   },
+
+  /**
+   * Invalidate subscription queries after billing changes
+   */
+  invalidateSubscriptions: (queryClient: QueryClient) => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.subscriptions.all,
+      refetchType: 'all',
+    });
+  },
+
+  /**
+   * Refresh models with HTTP cache bypass
+   * Falls back to invalidation if direct fetch fails
+   */
+  refreshModels: async (queryClient: QueryClient) => {
+    try {
+      const freshModelsData = await listModelsService({ bypassCache: true });
+      queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+    } catch (error) {
+      console.error('[Billing] Failed to refresh models:', error);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+    }
+  },
+
+  /**
+   * Refresh usage stats with HTTP cache bypass
+   * Falls back to invalidation if direct fetch fails
+   */
+  refreshUsageStats: async (queryClient: QueryClient) => {
+    try {
+      const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+      queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+    } catch (error) {
+      console.error('[Billing] Failed to refresh usage stats:', error);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+    }
+  },
 } as const;
 
 // ============================================================================
@@ -461,9 +461,9 @@ export const billingInvalidationHelpers = {
  * Use these instead of hardcoded string literals
  */
 export const QueryKeySegments = {
+  DETAIL: 'detail',
   LIST: 'list',
   SIDEBAR: 'sidebar',
-  DETAIL: 'detail',
 } as const;
 
 export type QueryKeySegment = typeof QueryKeySegments[keyof typeof QueryKeySegments];
@@ -473,8 +473,9 @@ export type QueryKeySegment = typeof QueryKeySegments[keyof typeof QueryKeySegme
  * Used for cache updates in flow-controller and form-actions
  */
 export function isListOrSidebarQuery(query: { queryKey: readonly unknown[] }): boolean {
-  if (query.queryKey.length < 2)
+  if (query.queryKey.length < 2) {
     return false;
+  }
   const key = query.queryKey[1];
   return key === QueryKeySegments.LIST || key === QueryKeySegments.SIDEBAR;
 }
@@ -484,8 +485,9 @@ export function isListOrSidebarQuery(query: { queryKey: readonly unknown[] }): b
  * Prevents new standalone threads from being added to project-specific caches
  */
 export function isNonProjectListOrSidebarQuery(query: { queryKey: readonly unknown[] }): boolean {
-  if (!isListOrSidebarQuery(query))
+  if (!isListOrSidebarQuery(query)) {
     return false;
+  }
   // Check if query has a projectId in its params (3rd element)
   const params = query.queryKey[2] as { projectId?: string } | undefined;
   return !params?.projectId;

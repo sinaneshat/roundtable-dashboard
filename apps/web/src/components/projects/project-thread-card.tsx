@@ -12,7 +12,7 @@ type ProjectThreadCardProps = {
   onDelete?: () => void;
 };
 
-export function ProjectThreadCard({ thread, onDelete }: ProjectThreadCardProps) {
+export function ProjectThreadCard({ onDelete, thread }: ProjectThreadCardProps) {
   const t = useTranslations();
 
   return (

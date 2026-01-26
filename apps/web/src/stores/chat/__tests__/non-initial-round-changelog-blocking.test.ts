@@ -33,35 +33,35 @@ describe('non-Initial Round Changelog Blocking', () => {
       // Set up incomplete round state
       state.setMessages([
         {
-          id: 'thread_r1_user',
-          role: MessageRoles.USER,
           content: 'First message',
-          parts: [{ type: 'text', text: 'First message' }],
+          createdAt: new Date(),
+          id: 'thread_r1_user',
           metadata: { roundNumber: 1 },
-          createdAt: new Date(),
-        },
-        {
-          id: 'thread_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          content: 'Response 1',
-          parts: [{ type: 'text', text: 'Response 1' }],
-          metadata: { roundNumber: 1, participantIndex: 0, finishReason: 'stop' },
-          createdAt: new Date(),
-        },
-        {
-          id: 'thread_r2_user',
+          parts: [{ text: 'First message', type: 'text' }],
           role: MessageRoles.USER,
-          content: 'Second message',
-          parts: [{ type: 'text', text: 'Second message' }],
-          metadata: { roundNumber: 2 },
+        },
+        {
+          content: 'Response 1',
           createdAt: new Date(),
+          id: 'thread_r1_p0',
+          metadata: { finishReason: 'stop', participantIndex: 0, roundNumber: 1 },
+          parts: [{ text: 'Response 1', type: 'text' }],
+          role: MessageRoles.ASSISTANT,
+        },
+        {
+          content: 'Second message',
+          createdAt: new Date(),
+          id: 'thread_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Second message', type: 'text' }],
+          role: MessageRoles.USER,
         },
         // Round 2 participant 0 incomplete - no response yet
       ]);
 
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
-        { id: 'p2', modelId: 'claude-3', isEnabled: true, order: 1, displayName: 'Claude 3' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
+        { displayName: 'Claude 3', id: 'p2', isEnabled: true, modelId: 'claude-3', order: 1 },
       ]);
 
       // Config change in progress - PATCH sent but changelog not fetched
@@ -87,17 +87,17 @@ describe('non-Initial Round Changelog Blocking', () => {
       // Set up incomplete round state
       state.setMessages([
         {
-          id: 'thread_r2_user',
-          role: MessageRoles.USER,
           content: 'Second message',
-          parts: [{ type: 'text', text: 'Second message' }],
-          metadata: { roundNumber: 2 },
           createdAt: new Date(),
+          id: 'thread_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Second message', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       // Changelog fetch in progress
@@ -108,7 +108,7 @@ describe('non-Initial Round Changelog Blocking', () => {
 
       // Verify both flags are set (changelog fetch in progress)
       expect(currentState.configChangeRoundNumber).toBe(2);
-      expect(currentState.isWaitingForChangelog).toBe(true);
+      expect(currentState.isWaitingForChangelog).toBeTruthy();
 
       // Bug: Current implementation does NOT check isWaitingForChangelog
       // before triggering resumption. This test documents expected behavior.
@@ -120,17 +120,17 @@ describe('non-Initial Round Changelog Blocking', () => {
       // Set up incomplete round state
       state.setMessages([
         {
-          id: 'thread_r2_user',
-          role: MessageRoles.USER,
           content: 'Second message',
-          parts: [{ type: 'text', text: 'Second message' }],
-          metadata: { roundNumber: 2 },
           createdAt: new Date(),
+          id: 'thread_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Second message', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       // Both flags cleared (changelog fetched and merged)
@@ -141,7 +141,7 @@ describe('non-Initial Round Changelog Blocking', () => {
 
       // Verify both flags are cleared
       expect(currentState.configChangeRoundNumber).toBeNull();
-      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
 
       // Now resumption should be allowed
     });
@@ -166,15 +166,15 @@ describe('non-Initial Round Changelog Blocking', () => {
 
       // Pre-search placeholder created AFTER blocking flag
       state.addPreSearch({
+        createdAt: new Date(),
         id: 'ps-2',
-        threadId: 'thread-1',
-        roundNumber: nextRoundNumber,
-        status: MessageStatuses.PENDING,
         queries: [],
         results: [],
-        userQuery: 'test query',
-        createdAt: new Date(),
+        roundNumber: nextRoundNumber,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-1',
         updatedAt: new Date(),
+        userQuery: 'test query',
       });
 
       const currentState = store.getState();
@@ -203,8 +203,8 @@ describe('non-Initial Round Changelog Blocking', () => {
       }
 
       const currentState = store.getState();
-      expect(currentState.hasPendingConfigChanges).toBe(false);
-      expect(currentState.isWaitingForChangelog).toBe(true);
+      expect(currentState.hasPendingConfigChanges).toBeFalsy();
+      expect(currentState.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should clear both changelog flags atomically', () => {
@@ -219,7 +219,7 @@ describe('non-Initial Round Changelog Blocking', () => {
       state.setConfigChangeRoundNumber(null);
 
       const currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
       expect(currentState.configChangeRoundNumber).toBeNull();
     });
   });
@@ -243,24 +243,24 @@ describe('non-Initial Round Changelog Blocking', () => {
       // Set up incomplete round
       state.setMessages([
         {
-          id: 'thread_r2_user',
-          role: MessageRoles.USER,
           content: 'Message',
-          parts: [{ type: 'text', text: 'Message' }],
-          metadata: { roundNumber: 2 },
           createdAt: new Date(),
+          id: 'thread_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Message', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       const currentState = store.getState();
 
       // configChangeRoundNumber alone should block resumption
       expect(currentState.configChangeRoundNumber).toBe(2);
-      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
 
       // Bug: incomplete-round-resumption doesn't check this
     });
@@ -277,7 +277,7 @@ describe('non-Initial Round Changelog Blocking', () => {
       state.setConfigChangeRoundNumber(null);
 
       const currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
       expect(currentState.configChangeRoundNumber).toBeNull();
     });
   });
@@ -316,7 +316,7 @@ describe('non-Initial Round Changelog Blocking', () => {
       const currentState = store.getState();
 
       expect(currentState.configChangeRoundNumber).toBe(2);
-      expect(currentState.isWaitingForChangelog).toBe(true);
+      expect(currentState.isWaitingForChangelog).toBeTruthy();
 
       // Streaming should be blocked until both flags cleared
     });
@@ -339,9 +339,9 @@ describe('expected Participant IDs Tracking', () => {
 
       // Set up participants with one disabled
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
-        { id: 'p2', modelId: 'claude-3', isEnabled: false, order: 1, displayName: 'Claude 3' }, // DISABLED
-        { id: 'p3', modelId: 'gemini', isEnabled: true, order: 2, displayName: 'Gemini' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
+        { displayName: 'Claude 3', id: 'p2', isEnabled: false, modelId: 'claude-3', order: 1 }, // DISABLED
+        { displayName: 'Gemini', id: 'p3', isEnabled: true, modelId: 'gemini', order: 2 },
       ]);
 
       // Bug: Current implementation sets ALL participant IDs
@@ -361,18 +361,18 @@ describe('expected Participant IDs Tracking', () => {
 
       // Initial: 3 enabled participants
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
-        { id: 'p2', modelId: 'claude-3', isEnabled: true, order: 1, displayName: 'Claude 3' },
-        { id: 'p3', modelId: 'gemini', isEnabled: true, order: 2, displayName: 'Gemini' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
+        { displayName: 'Claude 3', id: 'p2', isEnabled: true, modelId: 'claude-3', order: 1 },
+        { displayName: 'Gemini', id: 'p3', isEnabled: true, modelId: 'gemini', order: 2 },
       ]);
 
       state.setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini']);
 
       // User disables claude-3
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
-        { id: 'p2', modelId: 'claude-3', isEnabled: false, order: 1, displayName: 'Claude 3' },
-        { id: 'p3', modelId: 'gemini', isEnabled: true, order: 2, displayName: 'Gemini' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
+        { displayName: 'Claude 3', id: 'p2', isEnabled: false, modelId: 'claude-3', order: 1 },
+        { displayName: 'Gemini', id: 'p3', isEnabled: true, modelId: 'gemini', order: 2 },
       ]);
 
       // Bug: expectedParticipantIds is NOT updated when participants disabled
@@ -396,7 +396,7 @@ describe('expected Participant IDs Tracking', () => {
 
       // Initial participants
       state.setParticipants([
-        { id: 'old-p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'old-p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       // Set nextParticipantToTrigger with current participant ID
@@ -404,7 +404,7 @@ describe('expected Participant IDs Tracking', () => {
 
       // Simulate PATCH response with NEW participant ID
       state.setParticipants([
-        { id: 'new-p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'new-p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       const currentState = store.getState();
@@ -427,7 +427,7 @@ describe('expected Participant IDs Tracking', () => {
 
       // Participants don't include the ID
       state.setParticipants([
-        { id: 'different-p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'different-p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       const currentState = store.getState();
@@ -456,12 +456,12 @@ describe('message Deduplication Edge Cases', () => {
       // Add optimistic user message
       state.setMessages([
         {
-          id: 'optimistic-user-1',
-          role: MessageRoles.USER,
           content: 'Test message',
-          parts: [{ type: 'text', text: 'Test message' }],
-          metadata: { roundNumber: 1, isOptimistic: true },
           createdAt: new Date(),
+          id: 'optimistic-user-1',
+          metadata: { isOptimistic: true, roundNumber: 1 },
+          parts: [{ text: 'Test message', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -470,12 +470,12 @@ describe('message Deduplication Edge Cases', () => {
       state.setMessages([
         ...currentMessages,
         {
-          id: 'thread_r1_user',
-          role: MessageRoles.USER,
           content: 'Test message',
-          parts: [{ type: 'text', text: 'Test message' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Test message', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -500,22 +500,22 @@ describe('message Deduplication Edge Cases', () => {
 
       // Add temp ID message during streaming
       state.upsertStreamingMessage({
-        id: 'temp-msg-123',
-        role: MessageRoles.ASSISTANT,
         content: '',
-        parts: [{ type: 'text', text: 'Streaming...', state: TextPartStates.STREAMING }],
-        metadata: { roundNumber: 1, participantIndex: 0 },
         createdAt: new Date(),
+        id: 'temp-msg-123',
+        metadata: { participantIndex: 0, roundNumber: 1 },
+        parts: [{ state: TextPartStates.STREAMING, text: 'Streaming...', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       });
 
       // Add deterministic ID message (same round, participant)
       state.upsertStreamingMessage({
-        id: 'thread_r1_p0',
-        role: MessageRoles.ASSISTANT,
         content: '',
-        parts: [{ type: 'text', text: 'Complete', state: TextPartStates.DONE }],
-        metadata: { roundNumber: 1, participantIndex: 0, finishReason: 'stop' },
         createdAt: new Date(),
+        id: 'thread_r1_p0',
+        metadata: { finishReason: 'stop', participantIndex: 0, roundNumber: 1 },
+        parts: [{ state: TextPartStates.DONE, text: 'Complete', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       });
 
       const midStreamState = store.getState();
@@ -547,28 +547,28 @@ describe('message Deduplication Edge Cases', () => {
       // Add messages for rounds 1 and 2
       state.setMessages([
         {
-          id: 'optimistic-user-1',
-          role: MessageRoles.USER,
           content: 'Round 1',
-          parts: [{ type: 'text', text: 'Round 1' }],
-          metadata: { roundNumber: 1, isOptimistic: true },
           createdAt: new Date('2024-01-01T00:00:00Z'),
-        },
-        {
-          id: 'thread_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          content: 'Response 1',
-          parts: [{ type: 'text', text: 'Response 1' }],
-          metadata: { roundNumber: 1, participantIndex: 0, finishReason: 'stop' },
-          createdAt: new Date('2024-01-01T00:00:01Z'),
-        },
-        {
-          id: 'optimistic-user-2',
+          id: 'optimistic-user-1',
+          metadata: { isOptimistic: true, roundNumber: 1 },
+          parts: [{ text: 'Round 1', type: 'text' }],
           role: MessageRoles.USER,
+        },
+        {
+          content: 'Response 1',
+          createdAt: new Date('2024-01-01T00:00:01Z'),
+          id: 'thread_r1_p0',
+          metadata: { finishReason: 'stop', participantIndex: 0, roundNumber: 1 },
+          parts: [{ text: 'Response 1', type: 'text' }],
+          role: MessageRoles.ASSISTANT,
+        },
+        {
           content: 'Round 2',
-          parts: [{ type: 'text', text: 'Round 2' }],
-          metadata: { roundNumber: 2, isOptimistic: true },
           createdAt: new Date('2024-01-01T00:00:02Z'),
+          id: 'optimistic-user-2',
+          metadata: { isOptimistic: true, roundNumber: 2 },
+          parts: [{ text: 'Round 2', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -613,29 +613,29 @@ describe('round Resumption Edge Cases', () => {
       // Round started with 2 participants
       state.setMessages([
         {
-          id: 'thread_r1_user',
-          role: MessageRoles.USER,
           content: 'Test',
-          parts: [{ type: 'text', text: 'Test' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Test', type: 'text' }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread_r1_p0',
-          role: MessageRoles.ASSISTANT,
           content: 'Response 0',
-          parts: [{ type: 'text', text: 'Response 0' }],
-          metadata: { roundNumber: 1, participantIndex: 0, model: 'gpt-4', finishReason: 'stop' },
           createdAt: new Date(),
+          id: 'thread_r1_p0',
+          metadata: { finishReason: 'stop', model: 'gpt-4', participantIndex: 0, roundNumber: 1 },
+          parts: [{ text: 'Response 0', type: 'text' }],
+          role: MessageRoles.ASSISTANT,
         },
         // participant 1 hasn't responded yet
       ]);
 
       // User ADDED participant 3 (now 3 total)
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
-        { id: 'p2', modelId: 'claude-3', isEnabled: true, order: 1, displayName: 'Claude 3' },
-        { id: 'p3', modelId: 'gemini', isEnabled: true, order: 2, displayName: 'Gemini' }, // NEW
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
+        { displayName: 'Claude 3', id: 'p2', isEnabled: true, modelId: 'claude-3', order: 1 },
+        { displayName: 'Gemini', id: 'p3', isEnabled: true, modelId: 'gemini', order: 2 }, // NEW
       ]);
 
       // Current detection only checks: responded models in current enabled
@@ -648,7 +648,7 @@ describe('round Resumption Edge Cases', () => {
 
       // Bug: This check passes even though participant was added
       const allRespondedInCurrent = [...respondedModels].every(m => currentModels.has(m));
-      expect(allRespondedInCurrent).toBe(true);
+      expect(allRespondedInCurrent).toBeTruthy();
 
       // Missing check: participant count changed
       // Original: 2 participants, Current: 3 participants
@@ -690,26 +690,26 @@ describe('round Resumption Edge Cases', () => {
       state.setMessages([
         // Round 1: user message, no participants responded
         {
-          id: 'thread_r1_user',
-          role: MessageRoles.USER,
           content: 'Round 1',
-          parts: [{ type: 'text', text: 'Round 1' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date('2024-01-01T00:00:00Z'),
+          id: 'thread_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Round 1', type: 'text' }],
+          role: MessageRoles.USER,
         },
         // Round 2: user message, no participants responded
         {
-          id: 'thread_r2_user',
-          role: MessageRoles.USER,
           content: 'Round 2',
-          parts: [{ type: 'text', text: 'Round 2' }],
-          metadata: { roundNumber: 2 },
           createdAt: new Date('2024-01-01T00:00:01Z'),
+          id: 'thread_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Round 2', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
       state.setParticipants([
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, order: 0, displayName: 'GPT-4' },
+        { displayName: 'GPT-4', id: 'p1', isEnabled: true, modelId: 'gpt-4', order: 0 },
       ]);
 
       // getCurrentRoundNumber returns highest round (2)

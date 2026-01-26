@@ -43,12 +43,12 @@ type AppProvidersProps = {
  */
 export function AppProviders({
   children,
-  locale,
-  messages,
-  timeZone,
-  now,
   env,
   initialPreferences,
+  locale,
+  messages,
+  now,
+  timeZone,
 }: AppProvidersProps) {
   return (
     <NuqsAdapter>
@@ -66,13 +66,13 @@ export function AppProviders({
           >
             <IdleLazyProvider<{ children: ReactNode; apiKey?: string }>
               loader={() => import('./posthog-provider').then(m => ({ default: m.default }))}
-              providerProps={{ children: null, apiKey: env.VITE_POSTHOG_API_KEY }}
+              providerProps={{ apiKey: env.VITE_POSTHOG_API_KEY, children: null }}
             >
               <IdleLazyProvider<{ initialState?: ModelPreferencesState | null; children: ReactNode }>
                 loader={() => import('./preferences-store-provider').then(m => ({ default: m.PreferencesStoreProvider }))}
                 providerProps={{
-                  initialState: initialPreferences,
                   children: null,
+                  initialState: initialPreferences,
                 }}
               >
                 {env.VITE_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}

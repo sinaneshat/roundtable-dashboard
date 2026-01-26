@@ -19,10 +19,10 @@
 // ============================================================================
 
 const VALUES = {
+  LARGE: 50,
+  MEDIUM: 20,
   // Counts
   SMALL: 10,
-  MEDIUM: 20,
-  LARGE: 50,
 } as const;
 
 // ============================================================================
@@ -32,13 +32,13 @@ const VALUES = {
 export const LIMITS = {
   // Pagination (used in: chat-threads.ts, chat-layout.tsx)
   INITIAL_PAGE: VALUES.LARGE, // 50 - First page load
-  STANDARD_PAGE: VALUES.MEDIUM, // 20 - Subsequent pages
-  SEARCH_RESULTS: VALUES.SMALL, // 10 - Search results
+  LARGE_SET: VALUES.LARGE, // 50 - Large multi-select
+  OPTIONS_SET: VALUES.MEDIUM, // 20 - Standard dropdowns
 
+  SEARCH_RESULTS: VALUES.SMALL, // 10 - Search results
   // Selection (used in: component dropdowns, autocomplete)
   SMALL_SET: VALUES.SMALL, // 10 - Small option sets
-  OPTIONS_SET: VALUES.MEDIUM, // 20 - Standard dropdowns
-  LARGE_SET: VALUES.LARGE, // 50 - Large multi-select
+  STANDARD_PAGE: VALUES.MEDIUM, // 20 - Subsequent pages
 } as const;
 
 // ============================================================================

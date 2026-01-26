@@ -28,44 +28,44 @@ import { createChatStore } from '../store';
 
 function createThread(id: string): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: true,
     id,
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: 'debate',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: 'debate',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
   };
 }
 
 function createParticipants(threadId: string): ChatParticipant[] {
   return [
     {
-      id: 'p-1',
-      threadId,
-      modelId: 'gpt-4',
-      role: 'analyst',
-      customRoleId: null,
-      priority: 0,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'p-1',
+      isEnabled: true,
+      modelId: 'gpt-4',
+      priority: 0,
+      role: 'analyst',
+      threadId,
       updatedAt: new Date(),
     },
     {
-      id: 'p-2',
-      threadId,
-      modelId: 'claude-3',
-      role: 'critic',
-      customRoleId: null,
-      priority: 1,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'p-2',
+      isEnabled: true,
+      modelId: 'claude-3',
+      priority: 1,
+      role: 'critic',
+      threadId,
       updatedAt: new Date(),
     },
   ];
@@ -75,44 +75,44 @@ function createRound0Messages(threadId: string): UIMessage[] {
   return [
     {
       id: `${threadId}_r0_user`,
-      role: MessageRoles.USER,
-      parts: [{ type: 'text', text: 'Initial question' }],
       metadata: { role: MessageRoles.USER, roundNumber: 0 },
+      parts: [{ text: 'Initial question', type: 'text' }],
+      role: MessageRoles.USER,
     },
     {
       id: `${threadId}_r0_p0`,
-      role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: 'GPT-4 response' }],
       metadata: {
-        role: MessageRoles.ASSISTANT,
+        finishReason: 'stop',
         model: 'gpt-4',
         participantIndex: 0,
+        role: MessageRoles.ASSISTANT,
         roundNumber: 0,
-        finishReason: 'stop',
       },
+      parts: [{ text: 'GPT-4 response', type: 'text' }],
+      role: MessageRoles.ASSISTANT,
     },
     {
       id: `${threadId}_r0_p1`,
-      role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: 'Claude response' }],
       metadata: {
-        role: MessageRoles.ASSISTANT,
+        finishReason: 'stop',
         model: 'claude-3',
         participantIndex: 1,
+        role: MessageRoles.ASSISTANT,
         roundNumber: 0,
-        finishReason: 'stop',
       },
+      parts: [{ text: 'Claude response', type: 'text' }],
+      role: MessageRoles.ASSISTANT,
     },
     {
       id: `${threadId}_r0_moderator`,
-      role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: 'Summary' }],
       metadata: {
-        role: 'moderator',
-        isModerator: true,
-        roundNumber: 0,
         finishReason: 'stop',
+        isModerator: true,
+        role: 'moderator',
+        roundNumber: 0,
       },
+      parts: [{ text: 'Summary', type: 'text' }],
+      role: MessageRoles.ASSISTANT,
     },
   ];
 }
@@ -120,13 +120,13 @@ function createRound0Messages(threadId: string): UIMessage[] {
 function createOptimisticUserMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `optimistic-user-${roundNumber}-${Date.now()}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
+      isOptimistic: true,
       role: MessageRoles.USER,
       roundNumber,
-      isOptimistic: true,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -137,7 +137,7 @@ function createOptimisticUserMessage(roundNumber: number, text: string): UIMessa
 function simulateUseThreadTimeline(
   messages: UIMessage[],
   preSearches: StoredPreSearch[] = [],
-): Array<{ type: 'messages' | 'pre-search'; roundNumber: number; data: UIMessage[] | StoredPreSearch }> {
+): { type: 'messages' | 'pre-search'; roundNumber: number; data: UIMessage[] | StoredPreSearch }[] {
   const messagesByRound = new Map<number, UIMessage[]>();
 
   messages.forEach((message) => {
@@ -161,7 +161,7 @@ function simulateUseThreadTimeline(
     ...preSearchByRound.keys(),
   ]);
 
-  const timeline: Array<{ type: 'messages' | 'pre-search'; roundNumber: number; data: UIMessage[] | StoredPreSearch }> = [];
+  const timeline: { type: 'messages' | 'pre-search'; roundNumber: number; data: UIMessage[] | StoredPreSearch }[] = [];
   const sortedRounds = Array.from(allRounds).sort((a, b) => a - b);
 
   sortedRounds.forEach((roundNumber) => {
@@ -171,17 +171,17 @@ function simulateUseThreadTimeline(
     // Pre-search renders at timeline level ONLY for orphaned rounds
     if (roundPreSearch && (!roundMessages || roundMessages.length === 0)) {
       timeline.push({
-        type: 'pre-search',
-        roundNumber,
         data: roundPreSearch,
+        roundNumber,
+        type: 'pre-search',
       });
     }
 
     if (roundMessages && roundMessages.length > 0) {
       timeline.push({
-        type: 'messages',
-        roundNumber,
         data: roundMessages,
+        roundNumber,
+        type: 'messages',
       });
     }
   });
@@ -222,7 +222,7 @@ describe('user Message Render Pipeline', () => {
         m => m.role === MessageRoles.USER && getRoundNumberFromMetadata(m) === 1,
       );
       expect(round1UserMsg).toBeDefined();
-      expect(round1UserMsg?.parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(round1UserMsg?.parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
 
     it('should create timeline item for round 1 with user message', () => {
@@ -257,7 +257,7 @@ describe('user Message Render Pipeline', () => {
 
       const round1Messages = round1Item?.data as UIMessage[];
       expect(round1Messages[0]?.role).toBe(MessageRoles.USER);
-      expect(round1Messages[0]?.parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(round1Messages[0]?.parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
 
     it('should preserve user message when initializeThread called with server messages', () => {
@@ -306,15 +306,15 @@ describe('user Message Render Pipeline', () => {
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
       store.getState().setStreamingRoundNumber(1);
       store.getState().addPreSearch({
-        id: `presearch-${threadId}-1`,
-        threadId,
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `presearch-${threadId}-1`,
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId,
+        userQuery: 'Search query',
       } as StoredPreSearch);
 
       // Verify pre-search is in store
@@ -345,15 +345,15 @@ describe('user Message Render Pipeline', () => {
       // Add pre-search WITHOUT user message (orphaned round scenario)
       store.getState().setStreamingRoundNumber(1);
       store.getState().addPreSearch({
-        id: `presearch-${threadId}-1`,
-        threadId,
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `presearch-${threadId}-1`,
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId,
+        userQuery: 'Search query',
       } as StoredPreSearch);
 
       const timelineItems = simulateUseThreadTimeline(
@@ -391,11 +391,11 @@ describe('user Message Render Pipeline', () => {
       // Verify streaming state
       expect(store.getState().streamingRoundNumber).toBe(1);
       expect(store.getState().expectedParticipantIds).toEqual(['p-1', 'p-2']);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // Rendering conditions
       const isStreamingRound = store.getState().streamingRoundNumber === 1;
-      expect(isStreamingRound).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
 
       // Placeholder should show because:
       // - streamingRoundNumber matches round 1
@@ -432,7 +432,7 @@ describe('user Message Render Pipeline', () => {
 
       // This enables placeholder rendering
       const isStreamingRound = store.getState().streamingRoundNumber === 1;
-      expect(isStreamingRound).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
     });
   });
 
@@ -466,15 +466,15 @@ describe('user Message Render Pipeline', () => {
 
       // 2d. Add pre-search placeholder
       store.getState().addPreSearch({
-        id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
-        threadId,
-        roundNumber: nextRoundNumber,
-        userQuery: 'My follow-up',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `placeholder-presearch-${threadId}-${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId,
+        userQuery: 'My follow-up',
       } as StoredPreSearch);
 
       // === STEP 3: Verify UI state BEFORE PATCH ===
@@ -497,8 +497,8 @@ describe('user Message Render Pipeline', () => {
       expect(round1BeforePatch).toBeDefined();
       expect(round1BeforePatch?.type).toBe('messages');
       expect((round1BeforePatch?.data as UIMessage[])[0]?.parts[0]).toEqual({
-        type: 'text',
         text: 'My follow-up',
+        type: 'text',
       });
 
       // 3c. Verify streaming state for placeholders
@@ -573,7 +573,7 @@ describe('user Message Render Pipeline', () => {
 
       // This assertion verifies the fix is working
       expect(messagesAfter).toHaveLength(5);
-      expect(messagesAfter.some(m => getRoundNumberFromMetadata(m) === 1)).toBe(true);
+      expect(messagesAfter.some(m => getRoundNumberFromMetadata(m) === 1)).toBeTruthy();
     });
   });
 });

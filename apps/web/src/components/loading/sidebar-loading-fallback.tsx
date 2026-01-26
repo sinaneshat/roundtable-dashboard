@@ -27,8 +27,8 @@ type SidebarLoadingFallbackProps = {
  * - SidebarThreadSkeletons for thread list
  */
 export function SidebarLoadingFallback({
-  count = 10,
   className,
+  count = 10,
 }: SidebarLoadingFallbackProps) {
   return (
     <Sidebar collapsible="icon" variant="floating" className={className}>

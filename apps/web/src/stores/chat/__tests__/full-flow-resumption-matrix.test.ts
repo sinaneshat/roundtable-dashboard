@@ -53,9 +53,9 @@ const PARTICIPANT_COUNT = 4;
  */
 function createTestThread(overrides?: Partial<ChatThread>): ChatThread {
   return createMockThread({
+    enableWebSearch: true,
     id: THREAD_ID,
     mode: 'undebating',
-    enableWebSearch: true,
     ...overrides,
   });
 }
@@ -77,24 +77,24 @@ function createStreamingMessage(
 ): UIMessage {
   return {
     id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: hasPartialContent
-      ? [{ type: 'text' as const, text: 'Partial response...', state: TextPartStates.STREAMING }]
-      : [],
     metadata: {
-      role: UIMessageRoles.ASSISTANT,
-      roundNumber,
+      // null finishReason = stream not finished (UNKNOWN is truthy and would mark complete)
+      finishReason: null,
+      hasError: false,
+      isPartialResponse: true,
+      isTransient: false,
+      model: 'gpt-4o',
       participantId: `participant-${participantIndex}`,
       participantIndex,
       participantRole: null,
-      model: 'gpt-4o',
-      // null finishReason = stream not finished (UNKNOWN is truthy and would mark complete)
-      finishReason: null,
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: true,
+      role: UIMessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: hasPartialContent
+      ? [{ state: TextPartStates.STREAMING, text: 'Partial response...', type: 'text' as const }]
+      : [],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -106,12 +106,12 @@ function createCompleteMessage(
   participantIndex: number,
 ): UIMessage {
   return createTestAssistantMessage({
-    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content: `Complete response from participant ${participantIndex}`,
-    roundNumber,
+    finishReason: FinishReasons.STOP,
+    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason: FinishReasons.STOP,
+    roundNumber,
   });
 }
 
@@ -120,8 +120,8 @@ function createCompleteMessage(
  */
 function createUserMessage(roundNumber: number): UIMessage {
   return createTestUserMessage({
-    id: `${THREAD_ID}_r${roundNumber}_user`,
     content: `User message for round ${roundNumber}`,
+    id: `${THREAD_ID}_r${roundNumber}_user`,
     roundNumber,
   });
 }
@@ -131,10 +131,10 @@ function createUserMessage(roundNumber: number): UIMessage {
  */
 function createModeratorMessage(roundNumber: number, isComplete = true): UIMessage {
   return createTestModeratorMessage({
-    id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content: `Moderator summary for round ${roundNumber}`,
-    roundNumber,
     finishReason: isComplete ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+    id: `${THREAD_ID}_r${roundNumber}_moderator`,
+    roundNumber,
   });
 }
 
@@ -269,11 +269,11 @@ describe('pre-Search Phase Resumption', () => {
       const messages = [createUserMessage(0)];
 
       const phase = determinePhase({
-        preSearchStatus: preSearch.status,
         completedParticipants: 0,
-        totalParticipants: PARTICIPANT_COUNT,
         hasModerator: false,
         moderatorComplete: false,
+        preSearchStatus: preSearch.status,
+        totalParticipants: PARTICIPANT_COUNT,
       });
 
       expect(phase).toBe(RoundPhases.PRE_SEARCH);
@@ -290,11 +290,11 @@ describe('pre-Search Phase Resumption', () => {
       const _messages = [createUserMessage(0)];
 
       const phase = determinePhase({
-        preSearchStatus: preSearch.status,
         completedParticipants: 0,
-        totalParticipants: PARTICIPANT_COUNT,
         hasModerator: false,
         moderatorComplete: false,
+        preSearchStatus: preSearch.status,
+        totalParticipants: PARTICIPANT_COUNT,
       });
 
       expect(phase).toBe(RoundPhases.PRE_SEARCH);
@@ -307,7 +307,7 @@ describe('pre-Search Phase Resumption', () => {
       const shouldWaitForPreSearch = preSearch.status === MessageStatuses.PENDING
         || preSearch.status === MessageStatuses.STREAMING;
 
-      expect(shouldWaitForPreSearch).toBe(true);
+      expect(shouldWaitForPreSearch).toBeTruthy();
     });
   });
 
@@ -317,11 +317,11 @@ describe('pre-Search Phase Resumption', () => {
       const messages = [createUserMessage(0)];
 
       const phase = determinePhase({
-        preSearchStatus: preSearch.status,
         completedParticipants: 0,
-        totalParticipants: PARTICIPANT_COUNT,
         hasModerator: false,
         moderatorComplete: false,
+        preSearchStatus: preSearch.status,
+        totalParticipants: PARTICIPANT_COUNT,
       });
 
       expect(phase).toBe(RoundPhases.PARTICIPANTS);
@@ -337,7 +337,7 @@ describe('pre-Search Phase Resumption', () => {
       const shouldWaitForPreSearch = preSearch.status === MessageStatuses.PENDING
         || preSearch.status === MessageStatuses.STREAMING;
 
-      expect(shouldWaitForPreSearch).toBe(false);
+      expect(shouldWaitForPreSearch).toBeFalsy();
       // Should proceed to participants even if pre-search failed
     });
   });
@@ -354,23 +354,23 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh Before First Participant (P0)', () => {
     it('detects no responses and triggers P0', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 0,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
       expect(nextParticipant).toBe(0);
 
       const phase = determinePhase({
-        preSearchStatus: MessageStatuses.COMPLETE,
         completedParticipants: 0,
-        totalParticipants: PARTICIPANT_COUNT,
         hasModerator: false,
         moderatorComplete: false,
+        preSearchStatus: MessageStatuses.COMPLETE,
+        totalParticipants: PARTICIPANT_COUNT,
       });
       expect(phase).toBe(RoundPhases.PARTICIPANTS);
     });
@@ -379,12 +379,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh Mid P0 Streaming', () => {
     it('detects incomplete P0 with partial content', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 0,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: true,
       });
 
       // P0 exists but is incomplete - all 4 participants are "streaming" (not complete)
@@ -392,7 +392,7 @@ describe('participant Phase Resumption - 4 Participants', () => {
       expect(completionStatus.completedCount).toBe(0);
       // streamingCount includes all non-complete participants
       expect(completionStatus.streamingCount).toBe(4);
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
 
       // Should re-trigger P0
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
@@ -401,18 +401,18 @@ describe('participant Phase Resumption - 4 Participants', () => {
 
     it('detects incomplete P0 with no content (early interrupt)', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 0,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       // Empty message with no finishReason - BUT if it has empty parts,
       // isMessageComplete may return true. The key assertion is next participant
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
 
       // Should re-trigger P0 (first incomplete)
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
@@ -423,12 +423,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh After P0 Complete, Before P1', () => {
     it('detects P0 complete and triggers P1', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 1,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -442,12 +442,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
 
     it('does not re-trigger P0 when already complete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 1,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -463,12 +463,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh Mid P1 Streaming', () => {
     it('detects P0 complete, P1 incomplete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 1,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: true,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -476,7 +476,7 @@ describe('participant Phase Resumption - 4 Participants', () => {
       expect(completionStatus.completedParticipantIds).toContain('participant-0');
       // streamingCount = 3 (P1, P2, P3 not complete)
       expect(completionStatus.streamingCount).toBe(3);
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
 
       // Should re-trigger P1
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
@@ -487,12 +487,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh After P1, Before P2', () => {
     it('detects P0,P1 complete and triggers P2', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 2,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -508,12 +508,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh Mid P2 Streaming', () => {
     it('detects P0,P1 complete, P2 incomplete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 2,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: true,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -529,12 +529,12 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh After P2, Before P3 (Last Participant)', () => {
     it('detects P0,P1,P2 complete and triggers P3', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 3,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -548,18 +548,18 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh Mid P3 (Last Participant) Streaming', () => {
     it('detects P0,P1,P2 complete, P3 incomplete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 3,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: true,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
       expect(completionStatus.completedCount).toBe(3);
       expect(completionStatus.streamingCount).toBe(1);
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
 
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
       expect(nextParticipant).toBe(3);
@@ -569,17 +569,17 @@ describe('participant Phase Resumption - 4 Participants', () => {
   describe('refresh After All Participants Complete, Before Moderator', () => {
     it('detects all participants complete and triggers moderator', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
       expect(completionStatus.completedCount).toBe(4);
-      expect(completionStatus.allComplete).toBe(true);
+      expect(completionStatus.allComplete).toBeTruthy();
 
       // No more participants to trigger
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
@@ -587,11 +587,11 @@ describe('participant Phase Resumption - 4 Participants', () => {
 
       // Should transition to moderator phase
       const phase = determinePhase({
-        preSearchStatus: MessageStatuses.COMPLETE,
         completedParticipants: 4,
-        totalParticipants: PARTICIPANT_COUNT,
         hasModerator: false,
         moderatorComplete: false,
+        preSearchStatus: MessageStatuses.COMPLETE,
+        totalParticipants: PARTICIPANT_COUNT,
       });
       expect(phase).toBe(RoundPhases.MODERATOR);
     });
@@ -609,12 +609,12 @@ describe('moderator Phase Resumption', () => {
   describe('refresh Mid Moderator Streaming', () => {
     it('detects incomplete moderator message', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: true,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const moderatorMessage = getModeratorMessageForRound(messages, 0);
@@ -628,16 +628,16 @@ describe('moderator Phase Resumption', () => {
 
     it('all participants still marked complete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: true,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
-      expect(completionStatus.allComplete).toBe(true);
+      expect(completionStatus.allComplete).toBeTruthy();
       expect(completionStatus.completedCount).toBe(4);
     });
   });
@@ -645,12 +645,12 @@ describe('moderator Phase Resumption', () => {
   describe('refresh After Moderator Complete', () => {
     it('detects complete round', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: true,
+        hasStreamingParticipant: false,
         moderatorComplete: true,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const moderatorMessage = getModeratorMessageForRound(messages, 0);
@@ -661,17 +661,17 @@ describe('moderator Phase Resumption', () => {
 
       // Round is complete
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
-      expect(completionStatus.allComplete).toBe(true);
+      expect(completionStatus.allComplete).toBeTruthy();
     });
 
     it('does not re-trigger any participants', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: true,
+        hasStreamingParticipant: false,
         moderatorComplete: true,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 0);
@@ -691,13 +691,13 @@ describe('multi-Round Resumption', () => {
   describe('round 2 - Refresh at Various Points', () => {
     it('correctly identifies round 1 with previous round complete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 1,
         completedParticipants: 0,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
         previousRounds: 1,
+        roundNumber: 1,
+        streamingParticipantHasContent: false,
       });
 
       // Should have round 0 complete messages + round 1 user message
@@ -721,13 +721,13 @@ describe('multi-Round Resumption', () => {
 
     it('triggers P0 of round 1 after pre-search', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 1,
         completedParticipants: 0,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
         previousRounds: 1,
+        roundNumber: 1,
+        streamingParticipantHasContent: false,
       });
 
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 1);
@@ -736,13 +736,13 @@ describe('multi-Round Resumption', () => {
 
     it('triggers P2 of round 1 when P0,P1 complete', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 1,
         completedParticipants: 2,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
         previousRounds: 1,
+        roundNumber: 1,
+        streamingParticipantHasContent: false,
       });
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 1);
@@ -754,36 +754,36 @@ describe('multi-Round Resumption', () => {
 
     it('does not confuse round 0 messages with round 1', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 1,
         completedParticipants: 2,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
         previousRounds: 1,
+        roundNumber: 1,
+        streamingParticipantHasContent: true,
       });
 
       // Round 0 should still show all complete
       const round0Status = getParticipantCompletionStatus(messages, participants, 0);
-      expect(round0Status.allComplete).toBe(true);
+      expect(round0Status.allComplete).toBeTruthy();
 
       // Round 1 should show partial
       const round1Status = getParticipantCompletionStatus(messages, participants, 1);
       expect(round1Status.completedCount).toBe(2);
-      expect(round1Status.allComplete).toBe(false);
+      expect(round1Status.allComplete).toBeFalsy();
     });
   });
 
   describe('round 3 - Deep Multi-Round', () => {
     it('handles resumption correctly with 2 previous rounds', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 2,
         completedParticipants: 1,
-        hasStreamingParticipant: true,
-        streamingParticipantHasContent: true,
         hasModerator: false,
+        hasStreamingParticipant: true,
         moderatorComplete: false,
         previousRounds: 2,
+        roundNumber: 2,
+        streamingParticipantHasContent: true,
       });
 
       // Should have messages from rounds 0, 1, and partial 2
@@ -791,10 +791,10 @@ describe('multi-Round Resumption', () => {
       const round1Status = getParticipantCompletionStatus(messages, participants, 1);
       const round2Status = getParticipantCompletionStatus(messages, participants, 2);
 
-      expect(round0Status.allComplete).toBe(true);
-      expect(round1Status.allComplete).toBe(true);
+      expect(round0Status.allComplete).toBeTruthy();
+      expect(round1Status.allComplete).toBeTruthy();
       expect(round2Status.completedCount).toBe(1);
-      expect(round2Status.allComplete).toBe(false);
+      expect(round2Status.allComplete).toBeFalsy();
 
       // Should trigger P1 of round 2
       const nextParticipant = determineNextParticipantToTrigger(messages, participants, 2);
@@ -812,12 +812,12 @@ describe('message Isolation - No Leakage Between Participants', () => {
 
   it('each participant message has correct metadata', () => {
     const messages = buildMessagesForResumptionPoint({
-      roundNumber: 0,
       completedParticipants: 4,
-      hasStreamingParticipant: false,
-      streamingParticipantHasContent: false,
       hasModerator: false,
+      hasStreamingParticipant: false,
       moderatorComplete: false,
+      roundNumber: 0,
+      streamingParticipantHasContent: false,
     });
 
     const assistantMessages = messages.filter(m => m.role === UIMessageRoles.ASSISTANT);
@@ -832,12 +832,12 @@ describe('message Isolation - No Leakage Between Participants', () => {
 
   it('message IDs are unique per participant', () => {
     const messages = buildMessagesForResumptionPoint({
-      roundNumber: 0,
       completedParticipants: 4,
-      hasStreamingParticipant: false,
-      streamingParticipantHasContent: false,
       hasModerator: false,
+      hasStreamingParticipant: false,
       moderatorComplete: false,
+      roundNumber: 0,
+      streamingParticipantHasContent: false,
     });
 
     const messageIds = messages.map(m => m.id);
@@ -847,12 +847,12 @@ describe('message Isolation - No Leakage Between Participants', () => {
 
   it('participants cannot overwrite each other\'s messages', () => {
     const messages = buildMessagesForResumptionPoint({
-      roundNumber: 0,
       completedParticipants: 2,
-      hasStreamingParticipant: true,
-      streamingParticipantHasContent: true,
       hasModerator: false,
+      hasStreamingParticipant: true,
       moderatorComplete: false,
+      roundNumber: 0,
+      streamingParticipantHasContent: true,
     });
 
     // P0 and P1 complete, P2 streaming
@@ -891,7 +891,7 @@ describe('edge Cases', () => {
       expect(completionStatus.completedCount).toBe(0);
       // streamingCount is 4 (all participants are effectively "streaming" since they haven't responded)
       expect(completionStatus.streamingCount).toBe(4);
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
     });
   });
 
@@ -903,7 +903,7 @@ describe('edge Cases', () => {
       const completionStatus = getParticipantCompletionStatus(messages, noParticipants, 0);
       expect(completionStatus.expectedCount).toBe(0);
       // When there are no participants, allComplete is false (the gate doesn't open)
-      expect(completionStatus.allComplete).toBe(false);
+      expect(completionStatus.allComplete).toBeFalsy();
     });
   });
 
@@ -919,7 +919,7 @@ describe('edge Cases', () => {
       ];
 
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
-      expect(completionStatus.allComplete).toBe(true);
+      expect(completionStatus.allComplete).toBeTruthy();
       expect(completionStatus.completedCount).toBe(4);
     });
   });
@@ -952,12 +952,12 @@ describe('race Condition Prevention', () => {
   describe('double Trigger Prevention', () => {
     it('same participant cannot be triggered twice', () => {
       const messages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 1,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       // First determination
@@ -990,29 +990,29 @@ describe('race Condition Prevention', () => {
     it('moderator trigger only after ALL participants complete', () => {
       // 3 of 4 complete
       const partialMessages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 3,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const partialStatus = getParticipantCompletionStatus(partialMessages, participants, 0);
-      expect(partialStatus.allComplete).toBe(false);
+      expect(partialStatus.allComplete).toBeFalsy();
 
       // All 4 complete
       const completeMessages = buildMessagesForResumptionPoint({
-        roundNumber: 0,
         completedParticipants: 4,
-        hasStreamingParticipant: false,
-        streamingParticipantHasContent: false,
         hasModerator: false,
+        hasStreamingParticipant: false,
         moderatorComplete: false,
+        roundNumber: 0,
+        streamingParticipantHasContent: false,
       });
 
       const completeStatus = getParticipantCompletionStatus(completeMessages, participants, 0);
-      expect(completeStatus.allComplete).toBe(true);
+      expect(completeStatus.allComplete).toBeTruthy();
     });
   });
 });

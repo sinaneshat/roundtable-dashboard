@@ -6,7 +6,7 @@ type PageLoadingFallbackProps = {
   className?: string;
 };
 
-export function PageLoadingFallback({ text, className }: PageLoadingFallbackProps) {
+export function PageLoadingFallback({ className, text }: PageLoadingFallbackProps) {
   return (
     <div className={cn('flex items-center justify-center min-h-screen bg-background', className)}>
       <LoadingSpinner size="md" text={text} />

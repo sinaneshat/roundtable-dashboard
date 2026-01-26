@@ -33,15 +33,15 @@ function createParticipant(
   enabled = true,
 ): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: enabled,
-    settings: null,
     createdAt: new Date('2024-01-01'),
+    customRoleId: null,
+    id,
+    isEnabled: enabled,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date('2024-01-01'),
   };
 }
@@ -49,12 +49,12 @@ function createParticipant(
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'User question' }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text: 'User question', type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -71,39 +71,39 @@ function createAssistantMessage(
   } = {},
 ): UIMessage {
   const {
-    partState = 'done',
-    hasText = true,
     finishReason = 'stop',
-    participantIndex = 0,
     hasReasoning = false,
+    hasText = true,
+    participantIndex = 0,
+    partState = 'done',
     reasoningState = 'done',
   } = options;
 
   const parts: UIMessage['parts'] = [];
 
   if (hasReasoning) {
-    parts.push({ type: 'reasoning', text: 'Thinking...', state: reasoningState } as UIMessage['parts'][0]);
+    parts.push({ state: reasoningState, text: 'Thinking...', type: 'reasoning' } as UIMessage['parts'][0]);
   }
 
   if (hasText) {
-    parts.push({ type: 'text', text: 'Response content', state: partState } as UIMessage['parts'][0]);
+    parts.push({ state: partState, text: 'Response content', type: 'text' } as UIMessage['parts'][0]);
   }
 
   return {
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts,
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: finishReason ?? undefined,
+      model: `model-${participantIndex}`,
       participantId,
       participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: finishReason ?? undefined,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
       usage: finishReason
-        ? { promptTokens: 100, completionTokens: 50, totalTokens: 150 }
+        ? { completionTokens: 50, promptTokens: 100, totalTokens: 150 }
         : undefined,
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -137,46 +137,46 @@ describe('part State Transition: streaming → done', () => {
   describe('onFinish must set all parts to state=done', () => {
     it('converts single streaming text part to done', () => {
       const message = createAssistantMessage('p1', 0, {
-        partState: 'streaming',
         finishReason: 'stop',
+        partState: 'streaming',
       });
 
       // Before fix: message has streaming parts
       expect(message.parts?.[0]).toHaveProperty('state', 'streaming');
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
 
       // After fix: onFinish converts to done
       const fixed = simulateOnFinishPartStateUpdate(message);
       expect(fixed.parts?.[0]).toHaveProperty('state', 'done');
-      expect(isMessageComplete(fixed)).toBe(true);
+      expect(isMessageComplete(fixed)).toBeTruthy();
     });
 
     it('converts multiple streaming parts (reasoning + text) to done', () => {
       const message = createAssistantMessage('p1', 0, {
-        partState: 'streaming',
-        hasReasoning: true,
-        reasoningState: 'streaming',
         finishReason: 'stop',
+        hasReasoning: true,
+        partState: 'streaming',
+        reasoningState: 'streaming',
       });
 
       // Both parts are streaming
       expect(message.parts?.[0]).toHaveProperty('state', 'streaming');
       expect(message.parts?.[1]).toHaveProperty('state', 'streaming');
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
 
       // After fix: both parts are done
       const fixed = simulateOnFinishPartStateUpdate(message);
       expect(fixed.parts?.[0]).toHaveProperty('state', 'done');
       expect(fixed.parts?.[1]).toHaveProperty('state', 'done');
-      expect(isMessageComplete(fixed)).toBe(true);
+      expect(isMessageComplete(fixed)).toBeTruthy();
     });
 
     it('preserves parts already in done state', () => {
       const message = createAssistantMessage('p1', 0, {
-        partState: 'done',
-        hasReasoning: true,
-        reasoningState: 'done',
         finishReason: 'stop',
+        hasReasoning: true,
+        partState: 'done',
+        reasoningState: 'done',
       });
 
       const fixed = simulateOnFinishPartStateUpdate(message);
@@ -184,35 +184,35 @@ describe('part State Transition: streaming → done', () => {
       // Parts remain done (not changed)
       expect(fixed.parts?.[0]).toHaveProperty('state', 'done');
       expect(fixed.parts?.[1]).toHaveProperty('state', 'done');
-      expect(isMessageComplete(fixed)).toBe(true);
+      expect(isMessageComplete(fixed)).toBeTruthy();
     });
 
     it('converts mixed state parts (reasoning done, text streaming) correctly', () => {
       const message: UIMessage = {
         id: 'msg-1',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          { type: 'reasoning', text: 'Thinking...', state: 'done' } as UIMessage['parts'][0],
-          { type: 'text', text: 'Response', state: 'streaming' } as UIMessage['parts'][0],
-        ],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          finishReason: 'stop',
+          model: 'model-0',
           participantId: 'p1',
           participantIndex: 0,
-          model: 'model-0',
-          finishReason: 'stop',
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [
+          { state: 'done', text: 'Thinking...', type: 'reasoning' } as UIMessage['parts'][0],
+          { state: 'streaming', text: 'Response', type: 'text' } as UIMessage['parts'][0],
+        ],
+        role: MessageRoles.ASSISTANT,
       };
 
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
 
       const fixed = simulateOnFinishPartStateUpdate(message);
 
       // Reasoning stays done, text becomes done
       expect(fixed.parts?.[0]).toHaveProperty('state', 'done');
       expect(fixed.parts?.[1]).toHaveProperty('state', 'done');
-      expect(isMessageComplete(fixed)).toBe(true);
+      expect(isMessageComplete(fixed)).toBeTruthy();
     });
   });
 });
@@ -232,31 +232,31 @@ describe('uI Sync Before Moderator Trigger', () => {
 
       const messages: UIMessage[] = [
         createUserMessage(0),
-        createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-        createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+        createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+        createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
         // Last participant: reasoning streaming, no text yet (like the bug scenario)
         {
           id: 'msg-p3-r0',
-          role: MessageRoles.ASSISTANT,
-          parts: [
-            { type: 'step-start' } as UIMessage['parts'][0],
-            { type: 'reasoning', text: 'I shoul', state: 'streaming' } as UIMessage['parts'][0],
-          ],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: 'unknown', // Stream didn't complete normally
+            model: 'model-2',
             participantId: 'p3',
             participantIndex: 2,
-            model: 'model-2',
-            finishReason: 'unknown', // Stream didn't complete normally
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           },
+          parts: [
+            { type: 'step-start' } as UIMessage['parts'][0],
+            { state: 'streaming', text: 'I shoul', type: 'reasoning' } as UIMessage['parts'][0],
+          ],
+          role: MessageRoles.ASSISTANT,
         },
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
       // Moderator must NOT be allowed to trigger
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.streamingParticipantIds).toContain('p3');
     });
 
@@ -270,26 +270,26 @@ describe('uI Sync Before Moderator Trigger', () => {
       // Before: streaming parts
       const beforeMessages: UIMessage[] = [
         createUserMessage(0),
-        createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-        createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
-        createAssistantMessage('p3', 0, { partState: 'streaming', finishReason: 'stop', participantIndex: 2 }),
+        createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+        createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
+        createAssistantMessage('p3', 0, { finishReason: 'stop', participantIndex: 2, partState: 'streaming' }),
       ];
 
       const beforeStatus = getParticipantCompletionStatus(beforeMessages, participants, 0);
-      expect(beforeStatus.allComplete).toBe(false);
+      expect(beforeStatus.allComplete).toBeFalsy();
 
       // After: fix applied - all parts done
       const afterMessages: UIMessage[] = [
         createUserMessage(0),
-        createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-        createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+        createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+        createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
         simulateOnFinishPartStateUpdate(
-          createAssistantMessage('p3', 0, { partState: 'streaming', finishReason: 'stop', participantIndex: 2 }),
+          createAssistantMessage('p3', 0, { finishReason: 'stop', participantIndex: 2, partState: 'streaming' }),
         ),
       ];
 
       const afterStatus = getParticipantCompletionStatus(afterMessages, participants, 0);
-      expect(afterStatus.allComplete).toBe(true);
+      expect(afterStatus.allComplete).toBeTruthy();
     });
   });
 });
@@ -311,11 +311,13 @@ describe('store Sync Before State Transitions', () => {
   ): { allComplete: boolean; needsSync: boolean } {
     // Check if store has messages that still have streaming parts
     const participantMessages = storeMessages.filter((m) => {
-      if (m.role !== MessageRoles.ASSISTANT)
+      if (m.role !== MessageRoles.ASSISTANT) {
         return false;
+      }
       const meta = m.metadata;
-      if (!meta || typeof meta !== 'object')
+      if (!meta || typeof meta !== 'object') {
         return false;
+      }
       const msgRound = 'roundNumber' in meta ? meta.roundNumber : null;
       const isModerator = 'isModerator' in meta && meta.isModerator === true;
       return msgRound === roundNumber && !isModerator;
@@ -327,8 +329,9 @@ describe('store Sync Before State Transitions', () => {
 
     // Check if SDK has updated versions
     const sdkHasDoneParts = sdkMessages.every((msg) => {
-      if (msg.role !== MessageRoles.ASSISTANT)
+      if (msg.role !== MessageRoles.ASSISTANT) {
         return true;
+      }
       return !msg.parts?.some(p => 'state' in p && p.state === 'streaming');
     });
 
@@ -347,21 +350,21 @@ describe('store Sync Before State Transitions', () => {
     // SDK has updated parts (after onFinish fix)
     const sdkMessages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
     ];
 
     // Store still has streaming parts (throttled sync)
     const storeMessages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'streaming', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'streaming' }),
     ];
 
     const result = simulateWaitForStoreSync(sdkMessages, storeMessages, 0, participants);
 
-    expect(result.allComplete).toBe(false);
-    expect(result.needsSync).toBe(true);
+    expect(result.allComplete).toBeFalsy();
+    expect(result.needsSync).toBeTruthy();
   });
 
   it('passes when store is already synced', () => {
@@ -372,14 +375,14 @@ describe('store Sync Before State Transitions', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
     ];
 
     const result = simulateWaitForStoreSync(messages, messages, 0, participants);
 
-    expect(result.allComplete).toBe(true);
-    expect(result.needsSync).toBe(false);
+    expect(result.allComplete).toBeTruthy();
+    expect(result.needsSync).toBeFalsy();
   });
 });
 
@@ -397,37 +400,37 @@ describe('streaming End Transition Detection', () => {
   ): { streamingJustEnded: boolean; shouldBypassThrottle: boolean } {
     const streamingJustEnded = prevStreaming && !currentStreaming;
     return {
-      streamingJustEnded,
       shouldBypassThrottle: streamingJustEnded,
+      streamingJustEnded,
     };
   }
 
   it('detects streaming end transition (true → false)', () => {
     const result = detectStreamingEndTransition(true, false);
 
-    expect(result.streamingJustEnded).toBe(true);
-    expect(result.shouldBypassThrottle).toBe(true);
+    expect(result.streamingJustEnded).toBeTruthy();
+    expect(result.shouldBypassThrottle).toBeTruthy();
   });
 
   it('does not trigger on streaming start (false → true)', () => {
     const result = detectStreamingEndTransition(false, true);
 
-    expect(result.streamingJustEnded).toBe(false);
-    expect(result.shouldBypassThrottle).toBe(false);
+    expect(result.streamingJustEnded).toBeFalsy();
+    expect(result.shouldBypassThrottle).toBeFalsy();
   });
 
   it('does not trigger when streaming continues (true → true)', () => {
     const result = detectStreamingEndTransition(true, true);
 
-    expect(result.streamingJustEnded).toBe(false);
-    expect(result.shouldBypassThrottle).toBe(false);
+    expect(result.streamingJustEnded).toBeFalsy();
+    expect(result.shouldBypassThrottle).toBeFalsy();
   });
 
   it('does not trigger when not streaming (false → false)', () => {
     const result = detectStreamingEndTransition(false, false);
 
-    expect(result.streamingJustEnded).toBe(false);
-    expect(result.shouldBypassThrottle).toBe(false);
+    expect(result.streamingJustEnded).toBeFalsy();
+    expect(result.shouldBypassThrottle).toBeFalsy();
   });
 });
 
@@ -518,24 +521,24 @@ describe('end-to-End Race Condition Prevention', () => {
     const step1Messages: UIMessage[] = [
       createUserMessage(0),
       createAssistantMessage('p1', 0, { partState: 'streaming' }),
-      createAssistantMessage('p2', 0, { partState: 'streaming', participantIndex: 1 }),
-      createAssistantMessage('p3', 0, { partState: 'streaming', participantIndex: 2 }),
+      createAssistantMessage('p2', 0, { participantIndex: 1, partState: 'streaming' }),
+      createAssistantMessage('p3', 0, { participantIndex: 2, partState: 'streaming' }),
     ];
 
     const step1Status = getParticipantCompletionStatus(step1Messages, participants, 0);
-    expect(step1Status.allComplete).toBe(false);
+    expect(step1Status.allComplete).toBeFalsy();
     expect(step1Status.streamingCount).toBe(3);
 
     // Step 2: P1 and P2 complete, P3 still streaming
     const step2Messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
-      createAssistantMessage('p3', 0, { partState: 'streaming', participantIndex: 2 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
+      createAssistantMessage('p3', 0, { participantIndex: 2, partState: 'streaming' }),
     ];
 
     const step2Status = getParticipantCompletionStatus(step2Messages, participants, 0);
-    expect(step2Status.allComplete).toBe(false);
+    expect(step2Status.allComplete).toBeFalsy();
     expect(step2Status.completedCount).toBe(2);
     expect(step2Status.streamingCount).toBe(1);
 
@@ -543,37 +546,37 @@ describe('end-to-End Race Condition Prevention', () => {
     // This is the bug: moderator would trigger here before fix
     const step3Messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
       {
         id: 'msg-p3-r0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Final response', state: 'streaming' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          finishReason: 'stop', // Backend says done, but parts still streaming
+          model: 'model-2',
           participantId: 'p3',
           participantIndex: 2,
-          model: 'model-2',
-          finishReason: 'stop', // Backend says done, but parts still streaming
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [{ state: 'streaming', text: 'Final response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const step3Status = getParticipantCompletionStatus(step3Messages, participants, 0);
     // Parts state takes precedence - still not complete
-    expect(step3Status.allComplete).toBe(false);
+    expect(step3Status.allComplete).toBeFalsy();
 
     // Step 4: After fix - parts updated to done
     const step4Messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
-      createAssistantMessage('p3', 0, { partState: 'done', finishReason: 'stop', participantIndex: 2 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
+      createAssistantMessage('p3', 0, { finishReason: 'stop', participantIndex: 2, partState: 'done' }),
     ];
 
     const step4Status = getParticipantCompletionStatus(step4Messages, participants, 0);
-    expect(step4Status.allComplete).toBe(true);
+    expect(step4Status.allComplete).toBeTruthy();
     // NOW moderator can trigger
   });
 
@@ -588,44 +591,44 @@ describe('end-to-End Race Condition Prevention', () => {
     // This matches the exact bug scenario from the user's report
     const afterRefreshMessages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('gpt-4', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('claude', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('gpt-4', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('claude', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
       {
         id: 'msg-gemini-r0',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          { type: 'step-start' } as UIMessage['parts'][0],
-          {
-            type: 'reasoning',
-            text: 'The user is asking me to say "hi" in 1 word only... I shoul',
-            state: 'streaming',
-          } as UIMessage['parts'][0],
-          // No text part - stream was interrupted
-        ],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
-          participantId: 'gemini',
-          participantIndex: 2,
-          model: 'gemini',
           finishReason: 'unknown', // Stream didn't complete
           hasError: false,
           isPartialResponse: false,
+          model: 'gemini',
+          participantId: 'gemini',
+          participantIndex: 2,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [
+          { type: 'step-start' } as UIMessage['parts'][0],
+          {
+            state: 'streaming',
+            text: 'The user is asking me to say "hi" in 1 word only... I shoul',
+            type: 'reasoning',
+          } as UIMessage['parts'][0],
+          // No text part - stream was interrupted
+        ],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(afterRefreshMessages, participants, 0);
 
     // Gemini is NOT complete - must resume streaming
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.completedCount).toBe(2);
     expect(status.streamingParticipantIds).toEqual(['gemini']);
 
     // Verify the streaming participant details
     const geminiDebug = status.debugInfo.find(d => d.participantId === 'gemini');
-    expect(geminiDebug?.hasStreamingParts).toBe(true);
-    expect(geminiDebug?.isComplete).toBe(false);
+    expect(geminiDebug?.hasStreamingParts).toBeTruthy();
+    expect(geminiDebug?.isComplete).toBeFalsy();
   });
 
   it('scenario: Fast model finishes but UI lags behind', () => {
@@ -640,24 +643,24 @@ describe('end-to-End Race Condition Prevention', () => {
       createUserMessage(0),
       {
         id: 'msg-fast-r0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Hi', state: 'streaming' }], // UI still shows streaming
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          finishReason: 'stop', // Backend says done
+          model: 'fast-model',
           participantId: 'fast-model',
           participantIndex: 0,
-          model: 'fast-model',
-          finishReason: 'stop', // Backend says done
-          usage: { promptTokens: 10, completionTokens: 1, totalTokens: 11 },
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          usage: { completionTokens: 1, promptTokens: 10, totalTokens: 11 },
         },
+        parts: [{ state: 'streaming', text: 'Hi', type: 'text' }], // UI still shows streaming
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 0);
 
     // Parts state takes precedence - not complete until UI shows done
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
 
     // After sync applies the fix
     const fixedMessages: UIMessage[] = [
@@ -667,7 +670,7 @@ describe('end-to-End Race Condition Prevention', () => {
 
     const fixedStatus = getParticipantCompletionStatus(fixedMessages, participants, 0);
     // Still not complete - slow-model hasn't started
-    expect(fixedStatus.allComplete).toBe(false);
+    expect(fixedStatus.allComplete).toBeFalsy();
     expect(fixedStatus.completedCount).toBe(1);
   });
 });
@@ -686,18 +689,18 @@ describe('moderator Placeholder Timing', () => {
     // Scenario: P1 done, P2 streaming
     const messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'streaming', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { participantIndex: 1, partState: 'streaming' }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 0);
 
     // Moderator gate must block
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
 
     // This simulates what the UI would check
     const shouldShowModeratorPlaceholder = status.allComplete;
-    expect(shouldShowModeratorPlaceholder).toBe(false);
+    expect(shouldShowModeratorPlaceholder).toBeFalsy();
   });
 
   it('moderator placeholder can appear after all participants show done state', () => {
@@ -708,15 +711,15 @@ describe('moderator Placeholder Timing', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(0),
-      createAssistantMessage('p1', 0, { partState: 'done', finishReason: 'stop' }),
-      createAssistantMessage('p2', 0, { partState: 'done', finishReason: 'stop', participantIndex: 1 }),
+      createAssistantMessage('p1', 0, { finishReason: 'stop', partState: 'done' }),
+      createAssistantMessage('p2', 0, { finishReason: 'stop', participantIndex: 1, partState: 'done' }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 0);
 
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
 
     const shouldShowModeratorPlaceholder = status.allComplete;
-    expect(shouldShowModeratorPlaceholder).toBe(true);
+    expect(shouldShowModeratorPlaceholder).toBeTruthy();
   });
 });

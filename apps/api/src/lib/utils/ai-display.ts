@@ -7,6 +7,18 @@
 import { MessageRoles } from '@roundtable/shared/enums';
 
 // ============================================================================
+// Safe Property Access Helper
+// ============================================================================
+
+/**
+ * Safely get a property from a string-keyed Record
+ * This satisfies TS4111 noPropertyAccessFromIndexSignature
+ */
+function getMapValue(map: Record<string, string>, key: string): string | undefined {
+  return map[key];
+}
+
+// ============================================================================
 // MODEL DISPLAY HELPERS
 // ============================================================================
 
@@ -52,23 +64,23 @@ export type DefaultRole = typeof DEFAULT_ROLES[number];
 
 const PROVIDER_ICON_MAP: Record<string, string> = {
   'anthropic': 'claude.png',
-  'openai': 'openai.png',
+  'claude': 'claude.png',
+  'deepseek': 'deepseek.png',
+  'gemini': 'google.png',
   'google': 'google.png',
+  'gpt': 'openai.png',
+  'grok': 'grok.png',
   'meta': 'meta.png',
   'meta-llama': 'meta.png',
+  'microsoft': 'microsoft.png',
+  'mistral': 'mistral.png',
+  'mistralai': 'mistral.png',
+  'moonshotai': 'kimi.png',
+  'openai': 'openai.png',
+  'openrouter': 'openrouter.png',
+  'qwen': 'qwen.png',
   'x-ai': 'grok.png',
   'xai': 'grok.png',
-  'deepseek': 'deepseek.png',
-  'qwen': 'qwen.png',
-  'moonshotai': 'kimi.png',
-  'mistralai': 'mistral.png',
-  'mistral': 'mistral.png',
-  'microsoft': 'microsoft.png',
-  'claude': 'claude.png',
-  'grok': 'grok.png',
-  'gemini': 'google.png',
-  'gpt': 'openai.png',
-  'openrouter': 'openrouter.png',
 };
 
 // ============================================================================
@@ -76,14 +88,14 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
 // ============================================================================
 
 const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
-  'openai': 'OpenAI',
-  'xai': 'xAI',
-  'x-ai': 'xAI',
-  'openrouter': 'OpenRouter',
   'deepseek': 'DeepSeek',
-  'mistralai': 'Mistral AI',
-  'mistral': 'Mistral',
   'microsoft': 'Microsoft',
+  'mistral': 'Mistral',
+  'mistralai': 'Mistral AI',
+  'openai': 'OpenAI',
+  'openrouter': 'OpenRouter',
+  'x-ai': 'xAI',
+  'xai': 'xAI',
 };
 
 // ============================================================================
@@ -92,7 +104,7 @@ const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
 
 export function getProviderIcon(provider: string): string {
   const normalizedProvider = provider.toLowerCase().trim();
-  const iconFileName = PROVIDER_ICON_MAP[normalizedProvider] || PROVIDER_ICON_MAP.openrouter;
+  const iconFileName = getMapValue(PROVIDER_ICON_MAP, normalizedProvider) || getMapValue(PROVIDER_ICON_MAP, 'openrouter');
   return `/static/icons/ai-models/${iconFileName}`;
 }
 
@@ -119,8 +131,8 @@ export function getModelIconInfo(modelId: string): {
 
   return {
     icon: getProviderIcon(provider),
-    providerName: getProviderName(provider),
     provider,
+    providerName: getProviderName(provider),
   };
 }
 
@@ -128,32 +140,43 @@ export function getModelIconInfo(modelId: string): {
 // MODEL COLOR THEMING (Tailwind Color Classes)
 // ============================================================================
 
-export function getModelColorClass(avatarSrc: string, isUser: boolean = false): string {
-  if (isUser)
+export function getModelColorClass(avatarSrc: string, isUser = false): string {
+  if (isUser) {
     return 'blue-500';
+  }
 
   const lowerSrc = avatarSrc.toLowerCase();
 
-  if (lowerSrc.includes('claude') || lowerSrc.includes('anthropic'))
+  if (lowerSrc.includes('claude') || lowerSrc.includes('anthropic')) {
     return 'orange-500';
-  if (lowerSrc.includes('gpt') || lowerSrc.includes('openai'))
+  }
+  if (lowerSrc.includes('gpt') || lowerSrc.includes('openai')) {
     return 'emerald-500';
-  if (lowerSrc.includes('gemini') || lowerSrc.includes('google'))
+  }
+  if (lowerSrc.includes('gemini') || lowerSrc.includes('google')) {
     return 'purple-500';
-  if (lowerSrc.includes('llama') || lowerSrc.includes('meta'))
+  }
+  if (lowerSrc.includes('llama') || lowerSrc.includes('meta')) {
     return 'blue-600';
-  if (lowerSrc.includes('mistral'))
+  }
+  if (lowerSrc.includes('mistral')) {
     return 'orange-600';
-  if (lowerSrc.includes('cohere'))
+  }
+  if (lowerSrc.includes('cohere')) {
     return 'violet-500';
-  if (lowerSrc.includes('deepseek'))
+  }
+  if (lowerSrc.includes('deepseek')) {
     return 'cyan-500';
-  if (lowerSrc.includes('qwen'))
+  }
+  if (lowerSrc.includes('qwen')) {
     return 'red-500';
-  if (lowerSrc.includes('xai'))
+  }
+  if (lowerSrc.includes('xai')) {
     return 'slate-400';
-  if (lowerSrc.includes('kimi') || lowerSrc.includes('moonshotai'))
+  }
+  if (lowerSrc.includes('kimi') || lowerSrc.includes('moonshotai')) {
     return 'teal-500';
+  }
 
   return 'muted-foreground';
 }
@@ -175,8 +198,8 @@ export function getAvatarPropsFromModelId(
 ): AvatarProps {
   if (role === MessageRoles.USER) {
     return {
-      src: userImage || '/static/icons/user-avatar.png',
       name: userName || 'User',
+      src: userImage || '/static/icons/user-avatar.png',
     };
   }
 
@@ -185,13 +208,13 @@ export function getAvatarPropsFromModelId(
     const displayName = getDisplayNameFromModelId(modelId);
 
     return {
-      src: getProviderIcon(provider),
       name: displayName,
+      src: getProviderIcon(provider),
     };
   }
 
   return {
-    src: '/static/icons/ai-models/openrouter.png',
     name: 'AI',
+    src: '/static/icons/ai-models/openrouter.png',
   };
 }

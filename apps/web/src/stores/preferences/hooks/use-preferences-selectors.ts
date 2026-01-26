@@ -53,10 +53,10 @@ export function useHasHydrated() {
 export function useAllPreferences() {
   return useModelPreferencesStore(
     useShallow(s => ({
-      selectedModelIds: s.selectedModelIds,
+      enableWebSearch: s.enableWebSearch,
       modelOrder: s.modelOrder,
       selectedMode: s.selectedMode,
-      enableWebSearch: s.enableWebSearch,
+      selectedModelIds: s.selectedModelIds,
     })),
   );
 }
@@ -65,12 +65,12 @@ export function useAllPreferences() {
 export function usePreferenceActions() {
   return useModelPreferencesStore(
     useShallow(s => ({
-      setSelectedModelIds: s.setSelectedModelIds,
-      toggleModel: s.toggleModel,
+      setEnableWebSearch: s.setEnableWebSearch,
       setModelOrder: s.setModelOrder,
       setSelectedMode: s.setSelectedMode,
-      setEnableWebSearch: s.setEnableWebSearch,
+      setSelectedModelIds: s.setSelectedModelIds,
       syncWithAccessibleModels: s.syncWithAccessibleModels,
+      toggleModel: s.toggleModel,
     })),
   );
 }
@@ -79,11 +79,11 @@ export function usePreferenceActions() {
 export function useModelSelection() {
   return useModelPreferencesStore(
     useShallow(s => ({
-      selectedModelIds: s.selectedModelIds,
       modelOrder: s.modelOrder,
+      selectedModelIds: s.selectedModelIds,
+      setModelOrder: s.setModelOrder,
       setSelectedModelIds: s.setSelectedModelIds,
       toggleModel: s.toggleModel,
-      setModelOrder: s.setModelOrder,
     })),
   );
 }
@@ -92,10 +92,10 @@ export function useModelSelection() {
 export function useModePreferences() {
   return useModelPreferencesStore(
     useShallow(s => ({
-      selectedMode: s.selectedMode,
       enableWebSearch: s.enableWebSearch,
-      setSelectedMode: s.setSelectedMode,
+      selectedMode: s.selectedMode,
       setEnableWebSearch: s.setEnableWebSearch,
+      setSelectedMode: s.setSelectedMode,
     })),
   );
 }

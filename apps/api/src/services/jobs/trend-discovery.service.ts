@@ -21,9 +21,9 @@ const PLATFORMS = ['reddit', 'twitter', 'instagram'] as const;
 const PlatformSchema = z.enum(PLATFORMS);
 type Platform = z.infer<typeof PlatformSchema>;
 const Platforms = {
+  INSTAGRAM: 'instagram',
   REDDIT: 'reddit',
   TWITTER: 'twitter',
-  INSTAGRAM: 'instagram',
 } as const;
 
 type TrendDiscoveryResult = {
@@ -36,28 +36,28 @@ type TrendDiscoveryResult = {
 };
 
 const PLATFORM_SEARCH_CONFIGS: Record<Platform, { query: (keyword: string) => string; domain: string }> = {
+  [Platforms.INSTAGRAM]: {
+    domain: 'instagram.com',
+    query: (keyword: string) => `site:instagram.com ${keyword} viral`,
+  },
   [Platforms.REDDIT]: {
-    query: (keyword: string) => `site:reddit.com ${keyword} discussion`,
     domain: 'reddit.com',
+    query: (keyword: string) => `site:reddit.com ${keyword} discussion`,
   },
   [Platforms.TWITTER]: {
-    query: (keyword: string) => `(site:twitter.com OR site:x.com) ${keyword} trending`,
     domain: 'twitter.com',
-  },
-  [Platforms.INSTAGRAM]: {
-    query: (keyword: string) => `site:instagram.com ${keyword} viral`,
-    domain: 'instagram.com',
+    query: (keyword: string) => `(site:twitter.com OR site:x.com) ${keyword} trending`,
   },
 };
 
 const TrendExtractionSchema = z.object({
   suggestions: z.array(z.object({
-    topic: z.string().describe('Brief topic name (3-8 words)'),
-    prompt: z.string().describe('Engaging discussion prompt (50-200 characters)'),
     platform: PlatformSchema.describe('Source platform'),
+    prompt: z.string().describe('Engaging discussion prompt (50-200 characters)'),
+    reasoning: z.string().describe('Why trending and rounds rationale'),
     relevanceScore: z.number().min(0).max(100).describe('Relevance/trending score'),
     suggestedRounds: z.number().min(1).max(5).describe('Suggested discussion rounds'),
-    reasoning: z.string().describe('Why trending and rounds rationale'),
+    topic: z.string().describe('Brief topic name (3-8 words)'),
   }).strict()),
 }).strict();
 
@@ -81,7 +81,7 @@ Output ${Math.min(5, Math.ceil(formattedResults.length / 1000))} suggestions max
 }
 
 function formatSearchResults(
-  results: Array<{ platform: Platform; title: string; snippet: string; url: string }>,
+  results: { platform: Platform; title: string; snippet: string; url: string }[],
 ): string {
   return results
     .map((r, i) => `[${i + 1}] [${r.platform}] ${r.title}\n${r.snippet}\nURL: ${r.url}`)
@@ -102,16 +102,16 @@ export async function discoverTrends(
     const config = PLATFORM_SEARCH_CONFIGS[platform];
     try {
       const searchParams: WebSearchParameters = {
-        query: config.query(keyword),
-        maxResults: 3,
-        searchDepth: 'basic',
+        autoParameters: false,
         chunksPerSource: 1,
-        includeImages: false,
-        includeImageDescriptions: false,
-        includeRawContent: false,
         includeAnswer: false,
         includeFavicon: false,
-        autoParameters: false,
+        includeImageDescriptions: false,
+        includeImages: false,
+        includeRawContent: false,
+        maxResults: 3,
+        query: config.query(keyword),
+        searchDepth: 'basic',
       };
 
       const result = await performWebSearch(
@@ -121,8 +121,8 @@ export async function discoverTrends(
 
       return result.results.map(r => ({
         platform,
-        title: r.title,
         snippet: r.content || r.excerpt || '',
+        title: r.title,
         url: r.url,
       }));
     } catch {
@@ -135,12 +135,12 @@ export async function discoverTrends(
 
   if (allResults.length === 0) {
     return {
-      suggestions: [],
       searchSummary: {
-        totalResultsAnalyzed: 0,
-        platformsSearched: platforms,
         keyword,
+        platformsSearched: platforms,
+        totalResultsAnalyzed: 0,
       },
+      suggestions: [],
     };
   }
 
@@ -154,9 +154,9 @@ export async function discoverTrends(
 
     const { object } = await generateObject({
       model: client.chat(ModelIds.GOOGLE_GEMINI_2_5_FLASH),
+      prompt: buildExtractionPrompt(keyword, formattedResults),
       schema: TrendExtractionSchema,
       system: `You are a trend analyst. Extract trending topics from social media search results and generate discussion prompts for AI roundtable debates. Be concise and focus on genuinely trending topics.`,
-      prompt: buildExtractionPrompt(keyword, formattedResults),
       temperature: 0.7,
     });
 
@@ -164,31 +164,31 @@ export async function discoverTrends(
     const suggestions: TrendSuggestion[] = object.suggestions
       .slice(0, maxSuggestions)
       .map(s => ({
-        topic: s.topic,
-        prompt: s.prompt,
         platform: s.platform,
+        prompt: s.prompt,
+        reasoning: s.reasoning,
         relevanceScore: Math.round(s.relevanceScore),
         suggestedRounds: Math.min(5, Math.max(1, Math.round(s.suggestedRounds))),
-        reasoning: s.reasoning,
+        topic: s.topic,
       }));
 
     return {
-      suggestions,
       searchSummary: {
-        totalResultsAnalyzed: allResults.length,
-        platformsSearched: platforms,
         keyword,
+        platformsSearched: platforms,
+        totalResultsAnalyzed: allResults.length,
       },
+      suggestions,
     };
   } catch {
     // Return empty suggestions on AI failure
     return {
-      suggestions: [],
       searchSummary: {
-        totalResultsAnalyzed: allResults.length,
-        platformsSearched: platforms,
         keyword,
+        platformsSearched: platforms,
+        totalResultsAnalyzed: allResults.length,
       },
+      suggestions: [],
     };
   }
 }

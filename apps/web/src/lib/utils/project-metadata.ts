@@ -3,9 +3,9 @@ import { z } from 'zod';
 const ProjectAttachmentRagMetadataSchema = z.object({
   context: z.string().optional(),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
   projectR2Key: z.string().optional(),
   sourceThreadId: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 }).strict();
 
 export function getSourceThreadId(ragMetadata: unknown): string | null {

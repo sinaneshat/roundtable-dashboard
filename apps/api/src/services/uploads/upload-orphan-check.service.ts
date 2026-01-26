@@ -30,8 +30,8 @@ type DrizzleD1Database = ReturnType<typeof drizzle<typeof schema>>;
 export const OrphanCheckResultSchema = z.object({
   isOrphaned: z.boolean(),
   messageCount: z.number().int().nonnegative(),
-  threadCount: z.number().int().nonnegative(),
   projectCount: z.number().int().nonnegative(),
+  threadCount: z.number().int().nonnegative(),
 }).strict();
 
 export type OrphanCheckResult = z.infer<typeof OrphanCheckResultSchema>;
@@ -54,16 +54,16 @@ export async function checkUploadOrphaned(
 ): Promise<OrphanCheckResult> {
   const [messageUploads, threadUploads, projectAttachments] = await Promise.all([
     db.query.messageUpload.findMany({
-      where: eq(schema.messageUpload.uploadId, uploadId),
       columns: { id: true },
+      where: eq(schema.messageUpload.uploadId, uploadId),
     }),
     db.query.threadUpload.findMany({
-      where: eq(schema.threadUpload.uploadId, uploadId),
       columns: { id: true },
+      where: eq(schema.threadUpload.uploadId, uploadId),
     }),
     db.query.projectAttachment.findMany({
-      where: eq(schema.projectAttachment.uploadId, uploadId),
       columns: { id: true },
+      where: eq(schema.projectAttachment.uploadId, uploadId),
     }),
   ]);
 
@@ -75,8 +75,8 @@ export async function checkUploadOrphaned(
   return {
     isOrphaned: totalReferences === 0,
     messageCount,
-    threadCount,
     projectCount,
+    threadCount,
   };
 }
 
@@ -113,8 +113,8 @@ export async function deleteOrphanedUpload(
 
   try {
     await deleteUploadRecord(uploadId, db);
-    return { r2Deleted, dbDeleted: true };
+    return { dbDeleted: true, r2Deleted };
   } catch {
-    return { r2Deleted, dbDeleted: false };
+    return { dbDeleted: false, r2Deleted };
   }
 }

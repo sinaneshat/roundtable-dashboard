@@ -71,11 +71,11 @@ export async function chatMessagesToUIMessages(
 
     const result: UIMessage & { createdAt?: Date } = {
       id: msg.id,
-      role: uiRole,
       // TYPE BRIDGE: DbMessageParts and UIMessage['parts'] are structurally compatible but
       // TypeScript cannot verify this due to external AI SDK type definitions.
       // Validation occurs via validateUIMessages() below to ensure runtime safety.
       parts: parts as UIMessage['parts'],
+      role: uiRole,
     };
 
     // Only include metadata and createdAt if they exist in the database

@@ -92,8 +92,9 @@ class MockKVStore {
 
   async get<T>(key: string): Promise<T | null> {
     const entry = this.store.get(key);
-    if (!entry)
+    if (!entry) {
       return null;
+    }
 
     // Check TTL expiration
     if (entry.expiresAt && Date.now() > entry.expiresAt) {
@@ -108,7 +109,7 @@ class MockKVStore {
     const expiresAt = options?.expirationTtl
       ? Date.now() + options.expirationTtl * 1000
       : undefined;
-    this.store.set(key, { value, expiresAt });
+    this.store.set(key, { expiresAt, value });
   }
 
   async delete(key: string): Promise<void> {
@@ -160,12 +161,13 @@ function parseStreamId(streamId: string): {
   if (presearchMatch) {
     const threadId = presearchMatch[1];
     const roundStr = presearchMatch[2];
-    if (!threadId || !roundStr)
+    if (!threadId || !roundStr) {
       return null;
+    }
     return {
-      threadId,
-      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'presearch',
+      roundNumber: Number.parseInt(roundStr, 10),
+      threadId,
     };
   }
 
@@ -175,13 +177,14 @@ function parseStreamId(streamId: string): {
     const threadId = participantMatch[1];
     const roundStr = participantMatch[2];
     const indexStr = participantMatch[3];
-    if (!threadId || !roundStr || !indexStr)
+    if (!threadId || !roundStr || !indexStr) {
       return null;
+    }
     return {
-      threadId,
-      roundNumber: Number.parseInt(roundStr, 10),
-      phase: 'participant',
       participantIndex: Number.parseInt(indexStr, 10),
+      phase: 'participant',
+      roundNumber: Number.parseInt(roundStr, 10),
+      threadId,
     };
   }
 
@@ -191,13 +194,14 @@ function parseStreamId(streamId: string): {
     const threadId = compactMatch[1];
     const roundStr = compactMatch[2];
     const indexStr = compactMatch[3];
-    if (!threadId || !roundStr || !indexStr)
+    if (!threadId || !roundStr || !indexStr) {
       return null;
+    }
     return {
-      threadId,
-      roundNumber: Number.parseInt(roundStr, 10),
-      phase: 'participant',
       participantIndex: Number.parseInt(indexStr, 10),
+      phase: 'participant',
+      roundNumber: Number.parseInt(roundStr, 10),
+      threadId,
     };
   }
 
@@ -206,12 +210,13 @@ function parseStreamId(streamId: string): {
   if (summarizerMatch) {
     const threadId = summarizerMatch[1];
     const roundStr = summarizerMatch[2];
-    if (!threadId || !roundStr)
+    if (!threadId || !roundStr) {
       return null;
+    }
     return {
-      threadId,
-      roundNumber: Number.parseInt(roundStr, 10),
       phase: 'summarizer',
+      roundNumber: Number.parseInt(roundStr, 10),
+      threadId,
     };
   }
 
@@ -262,9 +267,9 @@ async function simulateResumeEndpoint(
     if (!isStreamStale(lastChunkTime, preSearchMetadata.createdAt, (preSearchChunks?.length ?? 0) > 0)) {
       // Return 204 with phase metadata for pre-search (AI SDK ignores, custom handler takes over)
       return {
-        status: 204,
         phase: 'presearch',
         roundNumber: currentRound,
+        status: 204,
         streamId: preSearchStreamId,
       };
     }
@@ -289,26 +294,26 @@ async function simulateResumeEndpoint(
     if (isStreamStale(lastChunkTime, streamCreatedTime, hasChunks)) {
       // Stream is stale - return 204 with next participant info
       return {
-        status: 204,
+        nextParticipantIndex: findNextParticipant(activeStream),
+        participantStatuses: activeStream.participantStatuses,
         phase: 'participant',
         roundNumber: activeStream.roundNumber,
+        status: 204,
         totalParticipants: activeStream.totalParticipants,
-        participantStatuses: activeStream.participantStatuses,
-        nextParticipantIndex: findNextParticipant(activeStream),
       };
     }
 
     // Return SSE stream for active participant (AI SDK handles)
     return {
-      status: 200,
-      phase: 'participant',
-      streamId: participantStreamId,
-      roundNumber: activeStream.roundNumber,
-      participantIndex: activeStream.participantIndex,
-      totalParticipants: activeStream.totalParticipants,
-      participantStatuses: activeStream.participantStatuses,
       nextParticipantIndex: findNextParticipant(activeStream),
+      participantIndex: activeStream.participantIndex,
+      participantStatuses: activeStream.participantStatuses,
+      phase: 'participant',
+      roundNumber: activeStream.roundNumber,
+      status: 200,
       stream: createMockSSEStream(chunks ?? []),
+      streamId: participantStreamId,
+      totalParticipants: activeStream.totalParticipants,
     };
   }
 
@@ -325,11 +330,11 @@ async function simulateResumeEndpoint(
     if (!isStreamStale(lastChunkTime, moderatorMetadata.createdAt, (moderatorChunks?.length ?? 0) > 0)) {
       // Return 204 with phase metadata for moderator (AI SDK ignores, custom handler takes over)
       return {
-        status: 204,
+        moderatorId: moderatorMetadata.moderatorId,
         phase: 'moderator',
         roundNumber: currentRound,
+        status: 204,
         streamId: moderatorStreamId,
-        moderatorId: moderatorMetadata.moderatorId,
       };
     }
   }
@@ -356,8 +361,9 @@ function createMockSSEStream(chunks: StreamChunk[]): ReadableStream<Uint8Array> 
     pull(controller) {
       if (index < chunks.length) {
         const chunk = chunks[index];
-        if (!chunk)
+        if (!chunk) {
           throw new Error('expected chunk');
+        }
         controller.enqueue(encoder.encode(chunk.data));
         index++;
       } else {
@@ -388,24 +394,24 @@ async function setupActiveParticipantStream(
   participantStatuses[String(participantIndex)] = 'active';
 
   await kv.put(`thread:${threadId}:active`, {
-    streamId,
-    roundNumber,
-    participantIndex,
     createdAt: new Date().toISOString(),
-    totalParticipants,
+    participantIndex,
     participantStatuses,
+    roundNumber,
+    streamId,
+    totalParticipants,
   } as ThreadActiveStream);
 
   await kv.put(`stream:meta:${streamId}`, {
+    chunkCount: chunks.length,
+    completedAt: null,
+    createdAt: Date.now(),
+    errorMessage: null,
+    participantIndex,
+    roundNumber,
+    status: 'active' as StreamStatus,
     streamId,
     threadId,
-    roundNumber,
-    participantIndex,
-    status: 'active' as StreamStatus,
-    chunkCount: chunks.length,
-    createdAt: Date.now(),
-    completedAt: null,
-    errorMessage: null,
   } as StreamBufferMetadata);
 
   if (chunks.length > 0) {
@@ -423,13 +429,13 @@ async function setupActivePreSearchStream(
   const streamId = generatePreSearchStreamId(threadId, roundNumber);
 
   await kv.put(`presearch:meta:${streamId}`, {
-    streamId,
-    threadId,
-    roundNumber,
-    preSearchId,
-    status: 'streaming' as StreamStatus,
     chunkCount: chunks.length,
     createdAt: Date.now(),
+    preSearchId,
+    roundNumber,
+    status: 'streaming' as StreamStatus,
+    streamId,
+    threadId,
   } as PreSearchStreamMetadata);
 
   if (chunks.length > 0) {
@@ -447,14 +453,14 @@ async function setupActiveModeratorStream(
   const streamId = generateModeratorStreamId(threadId, roundNumber);
 
   await kv.put(`moderator:meta:${streamId}`, {
+    chunkCount: chunks.length,
+    completedAt: null,
+    createdAt: Date.now(),
+    moderatorId,
+    roundNumber,
+    status: 'streaming' as StreamStatus,
     streamId,
     threadId,
-    roundNumber,
-    moderatorId,
-    status: 'streaming' as StreamStatus,
-    chunkCount: chunks.length,
-    createdAt: Date.now(),
-    completedAt: null,
   } as ModeratorStreamMetadata);
 
   if (chunks.length > 0) {
@@ -478,20 +484,21 @@ describe('aI SDK Resume Integration', () => {
     it('should enable resume only when threadId is valid', () => {
       // Simulating: resume: !!useChatId
       const cases = [
-        { threadId: 'thread-123', expected: true },
-        { threadId: 'abc', expected: true },
-        { threadId: '', expected: false },
-        { threadId: undefined, expected: false },
-        { threadId: null, expected: false },
-        { threadId: '   ', expected: false }, // trimmed becomes empty
+        { expected: true, threadId: 'thread-123' },
+        { expected: true, threadId: 'abc' },
+        { expected: false, threadId: '' },
+        { expected: false, threadId: undefined },
+        { expected: false, threadId: null },
+        { expected: false, threadId: '   ' }, // trimmed becomes empty
       ];
 
-      for (const { threadId, expected } of cases) {
+      for (const { expected, threadId } of cases) {
         const useChatId = threadId && typeof threadId === 'string' && threadId.trim() !== ''
           ? threadId
           : undefined;
         const resume = !!useChatId;
-        expect(resume, `threadId: "${threadId}"`).toBe(expected);
+        // Context: threadId = expected value
+        expect(resume).toBe(expected);
       }
     });
 
@@ -501,7 +508,7 @@ describe('aI SDK Resume Integration', () => {
       const useChatId = newThreadId && String(newThreadId).trim() !== '' ? newThreadId : undefined;
       const resume = !!useChatId;
 
-      expect(resume).toBe(false);
+      expect(resume).toBeFalsy();
     });
 
     it('should enable resume on existing threads', () => {
@@ -510,7 +517,7 @@ describe('aI SDK Resume Integration', () => {
       const useChatId = existingThreadId && existingThreadId.trim() !== '' ? existingThreadId : undefined;
       const resume = !!useChatId;
 
-      expect(resume).toBe(true);
+      expect(resume).toBeTruthy();
     });
   });
 
@@ -519,14 +526,14 @@ describe('aI SDK Resume Integration', () => {
       const now = Date.now();
       const oldTime = now - 35 * 1000; // 35 seconds ago
 
-      expect(isStreamStale(oldTime, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBe(true);
+      expect(isStreamStale(oldTime, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBeTruthy();
     });
 
     it('should not flag fresh stream as stale within 30 seconds', () => {
       const now = Date.now();
       const recentTime = now - 25 * 1000; // 25 seconds ago
 
-      expect(isStreamStale(recentTime, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBe(false);
+      expect(isStreamStale(recentTime, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBeFalsy();
     });
 
     it('should handle reasoning models with longer pauses (up to 30s)', () => {
@@ -534,21 +541,21 @@ describe('aI SDK Resume Integration', () => {
       // Reasoning models may pause for thinking - 25s pause is acceptable
       const reasoningPause = now - 25 * 1000;
 
-      expect(isStreamStale(reasoningPause, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBe(false);
+      expect(isStreamStale(reasoningPause, 0, true, STALE_CHUNK_TIMEOUT_MS)).toBeFalsy();
     });
 
     it('should detect stale stream with no chunks based on creation time', () => {
       const now = Date.now();
       const oldCreationTime = now - 35 * 1000;
 
-      expect(isStreamStale(0, oldCreationTime, false, STALE_CHUNK_TIMEOUT_MS)).toBe(true);
+      expect(isStreamStale(0, oldCreationTime, false, STALE_CHUNK_TIMEOUT_MS)).toBeTruthy();
     });
 
     it('should not flag new stream with no chunks as stale', () => {
       const now = Date.now();
       const recentCreationTime = now - 5 * 1000;
 
-      expect(isStreamStale(0, recentCreationTime, false, STALE_CHUNK_TIMEOUT_MS)).toBe(false);
+      expect(isStreamStale(0, recentCreationTime, false, STALE_CHUNK_TIMEOUT_MS)).toBeFalsy();
     });
   });
 
@@ -665,24 +672,24 @@ describe('aI SDK Resume Integration', () => {
       ];
 
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateCompactParticipantStreamId(threadId, 0, 0),
-        roundNumber: 0,
-        participantIndex: 0,
         createdAt: new Date(oldTime).toISOString(),
-        totalParticipants: 2,
+        participantIndex: 0,
         participantStatuses: { 0: 'active' },
+        roundNumber: 0,
+        streamId: generateCompactParticipantStreamId(threadId, 0, 0),
+        totalParticipants: 2,
       } as ThreadActiveStream);
 
       await kv.put(`stream:meta:${generateCompactParticipantStreamId(threadId, 0, 0)}`, {
+        chunkCount: 1,
+        completedAt: null,
+        createdAt: oldTime,
+        errorMessage: null,
+        participantIndex: 0,
+        roundNumber: 0,
+        status: 'active' as StreamStatus,
         streamId: generateCompactParticipantStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
-        status: 'active' as StreamStatus,
-        chunkCount: 1,
-        createdAt: oldTime,
-        completedAt: null,
-        errorMessage: null,
       } as StreamBufferMetadata);
 
       await kv.put(`stream:chunks:${generateCompactParticipantStreamId(threadId, 0, 0)}`, chunks);
@@ -736,24 +743,24 @@ describe('aI SDK Resume Integration', () => {
 
       // P0 completed, P1 active, P2 not started
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateCompactParticipantStreamId(threadId, 0, 1),
-        roundNumber: 0,
-        participantIndex: 1,
         createdAt: new Date().toISOString(),
-        totalParticipants: 3,
+        participantIndex: 1,
         participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
+        streamId: generateCompactParticipantStreamId(threadId, 0, 1),
+        totalParticipants: 3,
       } as ThreadActiveStream);
 
       await kv.put(`stream:meta:${generateCompactParticipantStreamId(threadId, 0, 1)}`, {
+        chunkCount: 0,
+        completedAt: null,
+        createdAt: Date.now(),
+        errorMessage: null,
+        participantIndex: 1,
+        roundNumber: 0,
+        status: 'active' as StreamStatus,
         streamId: generateCompactParticipantStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
-        status: 'active' as StreamStatus,
-        chunkCount: 0,
-        createdAt: Date.now(),
-        completedAt: null,
-        errorMessage: null,
       } as StreamBufferMetadata);
 
       const response = await simulateResumeEndpoint(threadId, 0, kv);
@@ -768,17 +775,18 @@ describe('aI SDK Resume Integration', () => {
       vi.setSystemTime(new Date());
 
       await kv.put(`thread:${threadId}:active`, {
-        streamId: generateCompactParticipantStreamId(threadId, 0, 2),
-        roundNumber: 0,
-        participantIndex: 2,
         createdAt: new Date().toISOString(),
-        totalParticipants: 3,
+        participantIndex: 2,
         participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        roundNumber: 0,
+        streamId: generateCompactParticipantStreamId(threadId, 0, 2),
+        totalParticipants: 3,
       } as ThreadActiveStream);
 
       const activeStream = await kv.get<ThreadActiveStream>(`thread:${threadId}:active`);
-      if (!activeStream)
+      if (!activeStream) {
         throw new Error('expected activeStream');
+      }
       const nextParticipant = findNextParticipant(activeStream);
 
       expect(nextParticipant).toBeUndefined();
@@ -899,8 +907,9 @@ describe('aI SDK Resume Integration', () => {
       expect(response.participantStatuses?.['1']).toBe('active');
 
       // === Phase 3: Read buffered chunks from resumed stream ===
-      if (!response.stream)
+      if (!response.stream) {
         throw new Error('expected stream');
+      }
       const reader = response.stream.getReader();
       const chunks: string[] = [];
 

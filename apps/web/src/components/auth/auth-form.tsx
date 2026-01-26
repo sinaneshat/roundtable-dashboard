@@ -56,19 +56,19 @@ function AuthFormContent() {
       }
 
       router.navigate({
-        to: '.',
+        replace: true,
         search: (prev) => {
-          const { toast: _toast, message: _message, action: _action, from: _from, ...rest } = prev;
+          const { action: _action, from: _from, message: _message, toast: _toast, ...rest } = prev;
           return rest;
         },
-        replace: true,
+        to: '.',
       });
     }
   }, [search, t, router]);
 
   const form = useForm<MagicLinkFormData>({
-    resolver: zodResolver(magicLinkSchema),
     defaultValues: { email: '' },
+    resolver: zodResolver(magicLinkSchema),
   });
 
   const handleMagicLink = async (data: MagicLinkFormData) => {
@@ -77,18 +77,18 @@ function AuthFormContent() {
       // Make callback URLs absolute to redirect to web app, not API server
       const appBaseUrl = getAppBaseUrl();
       await authClient.signIn.magicLink({
-        email: data.email,
         callbackURL: `${appBaseUrl}/chat`,
-        newUserCallbackURL: `${appBaseUrl}/chat`,
+        email: data.email,
         errorCallbackURL: `${appBaseUrl}/auth/error`,
+        newUserCallbackURL: `${appBaseUrl}/chat`,
       });
       setSentEmail(data.email);
       setStep(AuthSteps.SENT);
     } catch (error) {
       const errorDetails = getApiErrorDetails(error);
       form.setError('email', {
-        type: 'manual',
         message: errorDetails.message || t('auth.magicLink.error'),
+        type: 'manual',
       });
     } finally {
       isLoading.onFalse();
@@ -186,9 +186,9 @@ function AuthFormContent() {
           >
             <div className="flex items-center gap-3">
               <motion.div
-                initial={isServer ? false : { scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
+                initial={isServer ? false : { opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ damping: 25, delay: 0.05, stiffness: 300, type: 'spring' }}
                 className="flex size-10 items-center justify-center rounded-full bg-chart-3/20"
               >
                 <Icons.mail className="size-5 text-chart-3" />

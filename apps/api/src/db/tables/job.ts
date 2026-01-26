@@ -12,35 +12,35 @@ import { chatThread } from './chat';
  * Admin-created jobs that run multi-round AI conversations automatically
  */
 export const automatedJob = sqliteTable('automated_job', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  threadId: text('thread_id')
-    .references(() => chatThread.id, { onDelete: 'set null' }),
-
-  initialPrompt: text('initial_prompt').notNull(),
-  totalRounds: integer('total_rounds').notNull().default(3),
-  currentRound: integer('current_round').notNull().default(0),
   autoPublish: integer('auto_publish', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .default(sql`(unixepoch() * 1000)`)
+    .notNull(),
+  currentRound: integer('current_round').notNull().default(0),
+
+  id: text('id').primaryKey(),
+  initialPrompt: text('initial_prompt').notNull(),
+  // Metadata for job execution details
+  metadata: text('metadata', { mode: 'json' }).$type<DbAutomatedJobMetadata>(),
+  // Array of model IDs selected for the job
+  selectedModels: text('selected_models', { mode: 'json' }).$type<string[]>(),
 
   status: text('status', { enum: AUTOMATED_JOB_STATUSES })
     .notNull()
     .default('pending'),
 
-  // Array of model IDs selected for the job
-  selectedModels: text('selected_models', { mode: 'json' }).$type<string[]>(),
+  threadId: text('thread_id')
+    .references(() => chatThread.id, { onDelete: 'set null' }),
 
-  // Metadata for job execution details
-  metadata: text('metadata', { mode: 'json' }).$type<DbAutomatedJobMetadata>(),
+  totalRounds: integer('total_rounds').notNull().default(3),
 
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .default(sql`(unixepoch() * 1000)`)
-    .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .default(sql`(unixepoch() * 1000)`)
     .$onUpdate(() => new Date())
     .notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 }, table => [
   index('automated_job_user_idx').on(table.userId),
   index('automated_job_status_idx').on(table.status),
@@ -52,12 +52,12 @@ export const automatedJob = sqliteTable('automated_job', {
  * Automated Job Relations
  */
 export const automatedJobRelations = relations(automatedJob, ({ one }) => ({
-  user: one(user, {
-    fields: [automatedJob.userId],
-    references: [user.id],
-  }),
   thread: one(chatThread, {
     fields: [automatedJob.threadId],
     references: [chatThread.id],
+  }),
+  user: one(user, {
+    fields: [automatedJob.userId],
+    references: [user.id],
   }),
 }));

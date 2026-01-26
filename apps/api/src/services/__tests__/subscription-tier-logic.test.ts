@@ -59,12 +59,12 @@ type MockSubscriptionData = {
 function createMockModel(inputPricePerMillion: number, outputPricePerMillion: number, contextLength = 128000): MockModel {
   // Convert price per million to price per token (what the API expects)
   return {
+    context_length: contextLength,
     id: `test-model-${inputPricePerMillion}`,
     pricing: {
-      prompt: (inputPricePerMillion / 1_000_000).toString(),
       completion: (outputPricePerMillion / 1_000_000).toString(),
+      prompt: (inputPricePerMillion / 1_000_000).toString(),
     },
-    context_length: contextLength,
   };
 }
 
@@ -77,11 +77,11 @@ function createActiveSubscription(productId: string): MockSubscriptionData {
   periodEnd.setMonth(periodEnd.getMonth() + 1);
 
   return {
-    productId,
-    tier,
-    planType,
-    status: 'active',
     currentPeriodEnd: periodEnd,
+    planType,
+    productId,
+    status: 'active',
+    tier,
   };
 }
 
@@ -94,11 +94,11 @@ function createTrialSubscription(productId: string): MockSubscriptionData {
   periodEnd.setDate(periodEnd.getDate() + 14); // 14-day trial
 
   return {
-    productId,
-    tier,
-    planType,
-    status: 'trialing',
     currentPeriodEnd: periodEnd,
+    planType,
+    productId,
+    status: 'trialing',
+    tier,
   };
 }
 
@@ -111,11 +111,11 @@ function createCanceledSubscription(productId: string, daysUntilEnd: number): Mo
   periodEnd.setDate(periodEnd.getDate() + daysUntilEnd);
 
   return {
-    productId,
-    tier,
-    planType,
-    status: 'canceled',
     currentPeriodEnd: periodEnd,
+    planType,
+    productId,
+    status: 'canceled',
+    tier,
   };
 }
 

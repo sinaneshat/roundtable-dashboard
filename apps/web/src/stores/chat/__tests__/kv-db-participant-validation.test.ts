@@ -75,11 +75,13 @@ function getDbValidatedNextParticipant(
   const participantIndicesWithMessages = new Set<number>();
 
   for (const msg of dbMessages) {
-    if (msg.role !== MessageRoles.ASSISTANT)
+    if (msg.role !== MessageRoles.ASSISTANT) {
       continue;
+    }
     const metadata = msg.metadata as DbMessageMetadata | null;
-    if (!metadata)
+    if (!metadata) {
       continue;
+    }
 
     // Skip moderator messages
     if (isModeratorMessageMetadata(metadata)) {
@@ -116,21 +118,21 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('reproduces bug when KV marks P0 FAILED but no DB message exists', () => {
       // Setup: 3 participants, P0 was streaming but page refreshed
       const activeStream: ThreadActiveStream = {
-        threadId: 'thread-123',
-        streamId: 'stream-abc_r0_p0',
-        roundNumber: 0,
+        createdAt: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
         participantIndex: 0,
-        totalParticipants: 3,
         // BUG STATE: P0 marked as FAILED (stale detection), but message was never saved
         participantStatuses: {
           0: ParticipantStreamStatuses.FAILED,
         },
-        createdAt: new Date(Date.now() - 60000).toISOString(), // 1 minute ago
+        roundNumber: 0,
+        streamId: 'stream-abc_r0_p0',
+        threadId: 'thread-123',
+        totalParticipants: 3,
       };
 
       // DB has NO messages for round 0 (P0's message was never saved)
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
       ];
 
       // OLD BEHAVIOR (BUG): KV-only returns P1, skipping P0
@@ -145,21 +147,21 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('reproduces bug when KV marks P0 COMPLETED but no DB message exists', () => {
       // Setup: Race condition where KV was updated but DB save failed
       const activeStream: ThreadActiveStream = {
-        threadId: 'thread-123',
-        streamId: 'stream-abc_r0_p0',
-        roundNumber: 0,
+        createdAt: new Date(Date.now() - 30000).toISOString(),
         participantIndex: 0,
-        totalParticipants: 3,
         // BUG STATE: KV thinks P0 completed, but message save failed
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
         },
-        createdAt: new Date(Date.now() - 30000).toISOString(),
+        roundNumber: 0,
+        streamId: 'stream-abc_r0_p0',
+        threadId: 'thread-123',
+        totalParticipants: 3,
       };
 
       // DB has NO assistant messages (save failed/interrupted)
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
       ];
 
       // OLD BEHAVIOR (BUG): KV-only returns P1
@@ -174,28 +176,28 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('reproduces bug when P0 message exists but P1 marked FAILED incorrectly', () => {
       // Setup: P0 completed, P1 was streaming but marked FAILED incorrectly
       const activeStream: ThreadActiveStream = {
-        threadId: 'thread-123',
-        streamId: 'stream-abc_r0_p1',
-        roundNumber: 0,
+        createdAt: new Date(Date.now() - 30000).toISOString(),
         participantIndex: 1,
-        totalParticipants: 3,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.FAILED, // BUG: Marked failed but no message
         },
-        createdAt: new Date(Date.now() - 30000).toISOString(),
+        roundNumber: 0,
+        streamId: 'stream-abc_r0_p1',
+        threadId: 'thread-123',
+        totalParticipants: 3,
       };
 
       // DB only has P0's message, not P1's
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -213,28 +215,28 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('returns correct next participant when KV and DB match', () => {
       // Setup: Normal case, P0 completed successfully
       const activeStream: ThreadActiveStream = {
-        threadId: 'thread-123',
-        streamId: 'stream-abc_r0_p1',
-        roundNumber: 0,
+        createdAt: new Date().toISOString(),
         participantIndex: 1,
-        totalParticipants: 3,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.ACTIVE,
         },
-        createdAt: new Date().toISOString(),
+        roundNumber: 0,
+        streamId: 'stream-abc_r0_p1',
+        threadId: 'thread-123',
+        totalParticipants: 3,
       };
 
       // DB has P0's message
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -248,30 +250,30 @@ describe('kV/DB Participant Mismatch Bug', () => {
 
     it('returns null when all participants have messages', () => {
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-msg',
           content: 'P1 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-msg',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p2-msg',
           content: 'P2 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p2-msg',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -281,29 +283,29 @@ describe('kV/DB Participant Mismatch Bug', () => {
 
     it('excludes moderator messages from participant count', () => {
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Moderator message (should be excluded)
         {
           id: 'moderator-msg',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Summary' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
-            model: 'gpt-4',
             finishReason: FinishReasons.STOP,
-            usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
             hasError: false,
             isModerator: true,
+            model: 'gpt-4',
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
           } satisfies DbMessageMetadata,
+          parts: [{ text: 'Summary', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -316,7 +318,7 @@ describe('kV/DB Participant Mismatch Bug', () => {
   describe('edge Cases', () => {
     it('handles empty DB messages (fresh round)', () => {
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
       ];
 
       const dbValidatedResult = getDbValidatedNextParticipant(dbMessages, 3, 0);
@@ -325,7 +327,7 @@ describe('kV/DB Participant Mismatch Bug', () => {
 
     it('handles single participant thread', () => {
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
       ];
 
       const dbValidatedResult = getDbValidatedNextParticipant(dbMessages, 1, 0);
@@ -335,22 +337,22 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('handles participant with out-of-order indices in DB', () => {
       // P0 and P2 have messages, but P1 doesn't (should return P1)
       const dbMessages: DbMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p2-msg',
           content: 'P2 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p2-msg',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -361,17 +363,17 @@ describe('kV/DB Participant Mismatch Bug', () => {
     it('handles messages from different rounds correctly', () => {
       const dbMessages: DbMessage[] = [
         // Round 0 (complete)
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'P0 R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 (in progress)
-        createTestUserMessage({ id: 'user-1', content: 'Round 1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Round 1', id: 'user-1', roundNumber: 1 }),
       ];
 
       // Query for round 1 should return P0 (no messages for round 1)
@@ -407,18 +409,18 @@ describe('mid-Stream Refresh Integration Scenarios', () => {
 
     // State after stale detection
     const _kvState: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
-      totalParticipants: 3,
-      participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
       createdAt: new Date(Date.now() - 60000).toISOString(),
+      participantIndex: 0,
+      participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p0',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     // DB state (only user message, P0 never saved)
     const dbMessages: DbMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Analyze market trends', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Analyze market trends', id: 'user-0', roundNumber: 0 }),
     ];
 
     // Verify fix: DB validation returns P0
@@ -438,24 +440,24 @@ describe('mid-Stream Refresh Integration Scenarios', () => {
      */
 
     const kvState1: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
-      totalParticipants: 3,
-      participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
       createdAt: new Date().toISOString(),
+      participantIndex: 0,
+      participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p0',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     const dbMessages: DbMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Analyze market trends', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Analyze market trends', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0-msg',
         content: 'Strategic analysis...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-msg',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 
@@ -480,18 +482,18 @@ describe('mid-Stream Refresh Integration Scenarios', () => {
 
     // After multiple stale detections, KV might show P0 as FAILED
     const _kvState2: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-new_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
-      totalParticipants: 3,
-      participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
       createdAt: new Date(Date.now() - 30000).toISOString(),
+      participantIndex: 0,
+      participantStatuses: { 0: ParticipantStreamStatuses.FAILED },
+      roundNumber: 0,
+      streamId: 'stream-new_r0_p0',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     // Still no P0 message in DB
     const dbMessages: DbMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
     ];
 
     // Fix ensures P0 is always returned until message exists
@@ -507,28 +509,28 @@ describe('mid-Stream Refresh Integration Scenarios', () => {
      */
 
     const kvState3: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p2',
-      roundNumber: 0,
+      createdAt: new Date().toISOString(),
       participantIndex: 2,
-      totalParticipants: 3,
       participantStatuses: {
         0: ParticipantStreamStatuses.FAILED,
         1: ParticipantStreamStatuses.FAILED,
         2: ParticipantStreamStatuses.FAILED,
       },
-      createdAt: new Date().toISOString(),
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p2',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     const dbMessages: DbMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0-msg',
         content: 'P0 response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-msg',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 

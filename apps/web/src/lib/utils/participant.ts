@@ -315,12 +315,12 @@ export function participantConfigToUpdatePayload(
   // - Backend uses empty string to trigger "find by modelId" logic for new participants
   const isNewParticipant = participant.id === participant.modelId;
   return {
-    id: isNewParticipant ? '' : participant.id,
-    modelId: participant.modelId,
-    role: participant.role || null,
     customRoleId: participant.customRoleId || null,
-    priority: participant.priority,
+    id: isNewParticipant ? '' : participant.id,
     isEnabled: true,
+    modelId: participant.modelId,
+    priority: participant.priority,
+    role: participant.role || null,
   };
 }
 
@@ -340,15 +340,15 @@ export function participantConfigToOptimistic(
   const now = new Date();
 
   return {
-    id: participant.id,
-    threadId,
-    modelId: participant.modelId,
-    role: participant.role || null,
-    customRoleId: participant.customRoleId || null,
-    priority: index,
-    isEnabled: true,
-    settings: participant.settings || null,
     createdAt: now.toISOString(),
+    customRoleId: participant.customRoleId || null,
+    id: participant.id,
+    isEnabled: true,
+    modelId: participant.modelId,
+    priority: index,
+    role: participant.role || null,
+    settings: participant.settings || null,
+    threadId,
     updatedAt: now.toISOString(),
   };
 }
@@ -373,11 +373,11 @@ export function chatParticipantsToConfig(
 ): ParticipantConfig[] {
   return getEnabledSortedParticipants(participants)
     .map((p, index) => ({
+      customRoleId: p.customRoleId || undefined,
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
-      customRoleId: p.customRoleId || undefined,
       priority: index,
+      role: p.role,
     }));
 }
 
@@ -393,7 +393,7 @@ export function chatParticipantsToConfig(
  * @returns True if duplicate
  */
 export function isParticipantDuplicate(
-  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'modelId'>>,
+  participants: Pick<ChatParticipant | ParticipantConfig, 'modelId'>[],
   modelId: string,
 ): boolean {
   return participants.some(p => p.modelId === modelId);
@@ -406,7 +406,7 @@ export function isParticipantDuplicate(
  * @returns Next priority number
  */
 export function getNextParticipantPriority(
-  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'priority'>>,
+  participants: Pick<ChatParticipant | ParticipantConfig, 'priority'>[],
 ): number {
   if (participants.length === 0) {
     return 0;
@@ -579,8 +579,8 @@ export function prepareParticipantUpdate(
   );
 
   return {
-    updateResult,
-    updatePayloads,
     optimisticParticipants,
+    updatePayloads,
+    updateResult,
   };
 }

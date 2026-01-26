@@ -89,10 +89,12 @@ export type ResetFlowAction = {
 
 /**
  * Store update actions
+ * NOTE: Currently unused placeholder. Uses Record<string, never> to indicate
+ * no updates are currently supported. Add specific update types if needed.
  */
 export type UpdateStoreAction = {
   type: 'UPDATE_STORE';
-  updates: Record<string, unknown>;
+  updates: Record<string, never>;
 };
 
 export type ClearTrackingAction = {
@@ -133,76 +135,76 @@ export type RoundFlowAction
 // ============================================================================
 
 export const actions = {
-  createPreSearch: (roundNumber: number): CreatePreSearchAction => ({
-    type: 'CREATE_PRE_SEARCH',
-    roundNumber,
-  }),
-
-  resumePreSearch: (streamId: string, roundNumber: number): ResumePreSearchAction => ({
-    type: 'RESUME_PRE_SEARCH',
-    streamId,
-    roundNumber,
-  }),
-
-  skipPreSearch: (): SkipPreSearchAction => ({
-    type: 'SKIP_PRE_SEARCH',
-  }),
-
-  startParticipant: (index: number, isResumption = false): StartParticipantAction => ({
-    type: 'START_PARTICIPANT',
-    index,
-    isResumption,
-  }),
-
-  setParticipantIndex: (index: number): SetParticipantIndexAction => ({
-    type: 'SET_PARTICIPANT_INDEX',
-    index,
-  }),
-
   advanceToNextParticipant: (currentIndex: number): AdvanceToNextParticipantAction => ({
-    type: 'ADVANCE_TO_NEXT_PARTICIPANT',
     currentIndex,
+    type: 'ADVANCE_TO_NEXT_PARTICIPANT',
   }),
 
-  startModerator: (roundNumber: number): StartModeratorAction => ({
-    type: 'START_MODERATOR',
-    roundNumber,
-  }),
-
-  resumeModerator: (streamId: string, roundNumber: number): ResumeModeratorAction => ({
-    type: 'RESUME_MODERATOR',
-    streamId,
-    roundNumber,
+  clearTracking: (trackingType: 'pre_search' | 'moderator' | 'all'): ClearTrackingAction => ({
+    trackingType,
+    type: 'CLEAR_TRACKING',
   }),
 
   completeRound: (roundNumber: number): CompleteRoundAction => ({
-    type: 'COMPLETE_ROUND',
     roundNumber,
+    type: 'COMPLETE_ROUND',
   }),
 
-  setError: (error: Error, phase: 'pre_search' | 'participant' | 'moderator'): SetErrorAction => ({
-    type: 'SET_ERROR',
-    error,
-    phase,
+  createPreSearch: (roundNumber: number): CreatePreSearchAction => ({
+    roundNumber,
+    type: 'CREATE_PRE_SEARCH',
+  }),
+
+  notifyCompletion: (roundNumber: number): NotifyCompletionAction => ({
+    roundNumber,
+    type: 'NOTIFY_COMPLETION',
   }),
 
   resetFlow: (): ResetFlowAction => ({
     type: 'RESET_FLOW',
   }),
 
-  updateStore: (updates: Record<string, unknown>): UpdateStoreAction => ({
+  resumeModerator: (streamId: string, roundNumber: number): ResumeModeratorAction => ({
+    roundNumber,
+    streamId,
+    type: 'RESUME_MODERATOR',
+  }),
+
+  resumePreSearch: (streamId: string, roundNumber: number): ResumePreSearchAction => ({
+    roundNumber,
+    streamId,
+    type: 'RESUME_PRE_SEARCH',
+  }),
+
+  setError: (error: Error, phase: 'pre_search' | 'participant' | 'moderator'): SetErrorAction => ({
+    error,
+    phase,
+    type: 'SET_ERROR',
+  }),
+
+  setParticipantIndex: (index: number): SetParticipantIndexAction => ({
+    index,
+    type: 'SET_PARTICIPANT_INDEX',
+  }),
+
+  skipPreSearch: (): SkipPreSearchAction => ({
+    type: 'SKIP_PRE_SEARCH',
+  }),
+
+  startModerator: (roundNumber: number): StartModeratorAction => ({
+    roundNumber,
+    type: 'START_MODERATOR',
+  }),
+
+  startParticipant: (index: number, isResumption = false): StartParticipantAction => ({
+    index,
+    isResumption,
+    type: 'START_PARTICIPANT',
+  }),
+
+  updateStore: (updates: Record<string, never>): UpdateStoreAction => ({
     type: 'UPDATE_STORE',
     updates,
-  }),
-
-  clearTracking: (trackingType: 'pre_search' | 'moderator' | 'all'): ClearTrackingAction => ({
-    type: 'CLEAR_TRACKING',
-    trackingType,
-  }),
-
-  notifyCompletion: (roundNumber: number): NotifyCompletionAction => ({
-    type: 'NOTIFY_COMPLETION',
-    roundNumber,
   }),
 } as const;
 
@@ -218,5 +220,5 @@ export type TransitionResult = {
  * No-op transition result - state unchanged, no actions
  */
 export function noTransition(currentState: RoundFlowState): TransitionResult {
-  return { nextState: currentState, actions: [] };
+  return { actions: [], nextState: currentState };
 }

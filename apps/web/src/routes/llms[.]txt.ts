@@ -117,8 +117,8 @@ export const Route = createFileRoute('/llms.txt')({
 
         return new Response(llmsTxt, {
           headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
             'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
+            'Content-Type': 'text/plain; charset=utf-8',
           },
         });
       },

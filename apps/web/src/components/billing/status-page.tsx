@@ -22,6 +22,11 @@ type StatusConfig = {
 };
 
 const STATUS_CONFIG: Record<StatusVariant, StatusConfig> = {
+  [StatusVariants.ERROR]: {
+    icon: Icons.alertCircle,
+    iconClass: 'text-destructive',
+    ringClass: 'bg-destructive/10 ring-destructive/20',
+  },
   [StatusVariants.LOADING]: {
     icon: Icons.loader,
     iconClass: 'text-blue-500 animate-spin',
@@ -32,14 +37,9 @@ const STATUS_CONFIG: Record<StatusVariant, StatusConfig> = {
     iconClass: 'text-green-500',
     ringClass: 'bg-green-500/10 ring-green-500/20',
   },
-  [StatusVariants.ERROR]: {
-    icon: Icons.alertCircle,
-    iconClass: 'text-destructive',
-    ringClass: 'bg-destructive/10 ring-destructive/20',
-  },
 } as const;
 
-export function StatusPage({ variant, title, description, children, actions }: StatusPageProps) {
+export function StatusPage({ actions, children, description, title, variant }: StatusPageProps) {
   const config = STATUS_CONFIG[variant];
   const Icon = config.icon;
 
@@ -82,11 +82,11 @@ export const BILLING_BUTTON_STYLES = {
 } as const;
 
 export function StatusPageActions({
-  primaryLabel,
   primaryHref,
+  primaryLabel,
   primaryOnClick,
-  secondaryLabel,
   secondaryHref,
+  secondaryLabel,
   secondaryOnClick,
 }: StatusPageActionsProps) {
   return (

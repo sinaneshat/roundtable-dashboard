@@ -73,9 +73,9 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: '01KE5WMBVDFY',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -83,9 +83,9 @@ describe('non-Initial Round User Message Sync', () => {
       const chatMessages: UIMessage[] = [
         {
           id: 'ofXQC806xRbA',
+          metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up question', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
         },
       ];
 
@@ -101,9 +101,9 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'trigger-msg-1',
+          metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Test', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Test' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
         },
       ];
 
@@ -120,15 +120,15 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'user-r0',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Initial question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Initial question', type: 'text' }],
+          role: MessageRoles.USER,
         },
         {
           id: 'user-r1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -136,9 +136,9 @@ describe('non-Initial Round User Message Sync', () => {
       const chatMessages: UIMessage[] = [
         {
           id: 'trigger-r1',
+          metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
         },
       ];
 
@@ -153,9 +153,9 @@ describe('non-Initial Round User Message Sync', () => {
       // Same message ID in both store and AI SDK
       const commonMessage: UIMessage = {
         id: 'shared-id',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Test' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Test', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const storeMessages: UIMessage[] = [commonMessage];
@@ -177,16 +177,16 @@ describe('non-Initial Round User Message Sync', () => {
 
       const originalUserMessage: UIMessage = {
         id: '01KE5WMBVDFY',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'retry. 1 word' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'retry. 1 word', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const participantTrigger: UIMessage = {
         id: 'ofXQC806xRbA',
+        metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'retry. 1 word', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'retry. 1 word' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
       };
 
       const chatMessages: UIMessage[] = [participantTrigger];
@@ -212,21 +212,21 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'user-r0',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Hello' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: 'text' }],
+          role: MessageRoles.USER,
         },
         {
           id: 'assistant-r0-p0',
+          metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'Hi!', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Hi!' }],
-          metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
         },
         {
           id: 'user-r1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -234,15 +234,15 @@ describe('non-Initial Round User Message Sync', () => {
       const chatMessages: UIMessage[] = [
         {
           id: 'trigger-r1',
+          metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Follow-up', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
         },
         {
           id: 'assistant-r1-p0',
+          metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 1 },
+          parts: [{ text: 'Streaming...', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Streaming...' }],
-          metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantIndex: 0 },
         },
       ];
 
@@ -267,9 +267,9 @@ describe('non-Initial Round User Message Sync', () => {
       const chatMessages: UIMessage[] = [
         {
           id: 'msg-1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Test' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Test', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -281,9 +281,9 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'msg-1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Test' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Test', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
       const chatMessages: UIMessage[] = [];
@@ -296,9 +296,9 @@ describe('non-Initial Round User Message Sync', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'msg-null-meta',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'No metadata' }],
           metadata: createInvalidMetadata('null'),
+          parts: [{ text: 'No metadata', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
       const chatMessages: UIMessage[] = [];
@@ -314,9 +314,9 @@ describe('non-Initial Round User Message Sync', () => {
     it('cRITICAL: round 0 user messages should be preserved during sync', () => {
       const round0UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R0',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 0 question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Round 0 question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const storeMessages: UIMessage[] = [round0UserMsg];
@@ -331,9 +331,9 @@ describe('non-Initial Round User Message Sync', () => {
     it('cRITICAL: round 1+ user messages should be preserved during sync', () => {
       const round1UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R1',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const storeMessages: UIMessage[] = [round1UserMsg];
@@ -348,23 +348,23 @@ describe('non-Initial Round User Message Sync', () => {
     it('cRITICAL: both round 0 and round 1 user messages preserved in multi-round conversation', () => {
       const round0UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R0',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 0 question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Round 0 question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const round1UserMsg: UIMessage = {
         id: '01KE5WMBVDFY_R1',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const round1Trigger: UIMessage = {
         id: 'trigger-r1',
+        metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 1, isParticipantTrigger: true },
       };
 
       const storeMessages: UIMessage[] = [round0UserMsg, round1UserMsg];
@@ -377,8 +377,8 @@ describe('non-Initial Round User Message Sync', () => {
       expect(userMessages).toHaveLength(3);
 
       // Both original user messages should be present
-      expect(merged.some(m => m.id === '01KE5WMBVDFY_R0')).toBe(true);
-      expect(merged.some(m => m.id === '01KE5WMBVDFY_R1')).toBe(true);
+      expect(merged.some(m => m.id === '01KE5WMBVDFY_R0')).toBeTruthy();
+      expect(merged.some(m => m.id === '01KE5WMBVDFY_R1')).toBeTruthy();
     });
 
     it('cRITICAL: participant trigger should NOT replace original user message in ANY round', () => {
@@ -387,16 +387,16 @@ describe('non-Initial Round User Message Sync', () => {
       for (const roundNum of testRounds) {
         const originalUserMsg: UIMessage = {
           id: `user-r${roundNum}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: `Round ${roundNum}` }],
           metadata: { role: MessageRoles.USER, roundNumber: roundNum },
+          parts: [{ text: `Round ${roundNum}`, type: 'text' }],
+          role: MessageRoles.USER,
         };
 
         const triggerMsg: UIMessage = {
           id: `trigger-r${roundNum}`,
+          metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: roundNum },
+          parts: [{ text: `Round ${roundNum}`, type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: `Round ${roundNum}` }],
-          metadata: { role: MessageRoles.USER, roundNumber: roundNum, isParticipantTrigger: true },
         };
 
         const storeMessages: UIMessage[] = [originalUserMsg];
@@ -406,7 +406,7 @@ describe('non-Initial Round User Message Sync', () => {
 
         // Should have BOTH messages
         expect(merged).toHaveLength(2);
-        expect(merged.some(m => m.id === `user-r${roundNum}`)).toBe(true);
+        expect(merged.some(m => m.id === `user-r${roundNum}`)).toBeTruthy();
       }
     });
   });

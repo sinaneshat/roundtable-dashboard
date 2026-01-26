@@ -50,9 +50,9 @@ let callOrder: NetworkCall[] = [];
 
 function recordCall(type: NetworkCall['type'], roundNumber: number): void {
   callOrder.push({
-    type,
-    timestamp: Date.now(),
     roundNumber,
+    timestamp: Date.now(),
+    type,
   });
 }
 
@@ -100,7 +100,9 @@ async function simulatePatchRequest(
   recordCall('PATCH', roundNumber);
 
   // Simulate PATCH delay
-  await new Promise(resolve => setTimeout(resolve, 50));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 50);
+  });
 
   // Update thread state with changes
   const currentThread = store.getState().thread;
@@ -128,7 +130,9 @@ async function simulateChangelogFetch(
   recordCall('changelog', roundNumber);
 
   // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 30));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 30);
+  });
 
   // Clear waiting flags after changelog completes
   store.getState().setIsWaitingForChangelog(false);
@@ -147,7 +151,9 @@ async function simulatePreSearchExecution(
   recordCall('pre-search', roundNumber);
 
   // Simulate execution delay
-  await new Promise(resolve => setTimeout(resolve, 40));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 40);
+  });
 
   // Update pre-search status
   store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.COMPLETE);
@@ -165,7 +171,9 @@ async function simulateStreaming(
   recordCall('stream', roundNumber);
 
   // Simulate streaming start delay
-  await new Promise(resolve => setTimeout(resolve, 20));
+  await new Promise((resolve) => {
+    setTimeout(resolve, 20);
+  });
 }
 
 // ============================================================================
@@ -245,15 +253,15 @@ describe('network Request Order Verification', () => {
 
     store.getState().setConfigChangeRoundNumber(roundNumber);
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // Execute sequence
@@ -290,10 +298,12 @@ describe('network Request Order Verification', () => {
     for (let i = 1; i < callOrder.length; i++) {
       const current = callOrder[i];
       const previous = callOrder[i - 1];
-      if (!current)
+      if (!current) {
         throw new Error(`expected callOrder[${i}] to exist`);
-      if (!previous)
+      }
+      if (!previous) {
         throw new Error(`expected callOrder[${i - 1}] to exist`);
+      }
       expect(current.timestamp).toBeGreaterThan(previous.timestamp);
     }
 
@@ -318,7 +328,7 @@ describe('web Search Enable Flow (Most Common Case)', () => {
     const store = setupStore();
 
     // Round 0: No web search
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     // User enables web search for Round 1
     store.getState().setEnableWebSearch(true);
@@ -329,15 +339,15 @@ describe('web Search Enable Flow (Most Common Case)', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Question with web search',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Question with web search',
     });
 
     // Execute flow
@@ -350,8 +360,8 @@ describe('web Search Enable Flow (Most Common Case)', () => {
     expect(getCallSequence()).toEqual(['PATCH', 'changelog', 'pre-search', 'stream']);
 
     // Verify final state
-    expect(store.getState().enableWebSearch).toBe(true);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().enableWebSearch).toBeTruthy();
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
     expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
   });
@@ -365,15 +375,15 @@ describe('web Search Enable Flow (Most Common Case)', () => {
 
     // Add pre-search placeholder IMMEDIATELY (before PATCH)
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Question',
     });
 
     // Verify placeholder exists before PATCH
@@ -400,15 +410,15 @@ describe('web Search Enable Flow (Most Common Case)', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Question',
     });
 
     // Execute PATCH
@@ -416,13 +426,13 @@ describe('web Search Enable Flow (Most Common Case)', () => {
 
     // configChangeRoundNumber still blocks pre-search (not cleared until changelog fetch)
     expect(store.getState().configChangeRoundNumber).toBe(roundNumber); // Still blocking
-    expect(store.getState().isWaitingForChangelog).toBe(true); // Set after PATCH
+    expect(store.getState().isWaitingForChangelog).toBeTruthy(); // Set after PATCH
 
     // Execute changelog fetch
     await simulateChangelogFetch(store, roundNumber);
 
     // Now unblocked
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
 
     // Can execute pre-search
@@ -446,7 +456,7 @@ describe('full Conversation Flow', () => {
     const store = setupStore();
 
     // Round 0 completes (no web search)
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     // User enables web search for Round 1
     const roundNumber = 1;
@@ -456,15 +466,15 @@ describe('full Conversation Flow', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Follow-up question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Follow-up question',
     });
 
     // Execute complete flow
@@ -486,25 +496,25 @@ describe('full Conversation Flow', () => {
 
     // After PATCH
     await simulatePatchRequest(store, roundNumber, { enableWebSearch: true });
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(roundNumber); // Still blocking
 
     // After changelog
     await simulateChangelogFetch(store, roundNumber);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
 
     // After pre-search (if added)
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test',
     });
     await simulatePreSearchExecution(store, roundNumber);
     expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
@@ -522,7 +532,7 @@ describe('full Conversation Flow', () => {
     store.getState().setHasPendingConfigChanges(true);
     store.getState().setConfigChangeRoundNumber(roundNumber);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
     // Execute PATCH (would clear flag in real code)
     await simulatePatchRequest(store, roundNumber, { enableWebSearch: true });
@@ -530,7 +540,7 @@ describe('full Conversation Flow', () => {
     // Manually clear flag (in real code, form-actions does this)
     store.getState().setHasPendingConfigChanges(false);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
   });
 });
 
@@ -584,15 +594,15 @@ describe('participant Change Flow', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Question',
     });
 
     // Execute complete flow
@@ -649,21 +659,21 @@ describe('mode Change Flow', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Question',
     });
 
     // Execute flow
     await simulatePatchRequest(store, roundNumber, {
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: true,
+      mode: ChatModes.BRAINSTORMING,
     });
     await simulateChangelogFetch(store, roundNumber);
     await simulatePreSearchExecution(store, roundNumber);
@@ -689,21 +699,21 @@ describe('mode Change Flow', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Complex question',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Complex question',
     });
 
     // Execute flow
     await simulatePatchRequest(store, roundNumber, {
-      mode: ChatModes.SOLVING,
       enableWebSearch: true,
+      mode: ChatModes.SOLVING,
     });
     await simulateChangelogFetch(store, roundNumber);
     await simulatePreSearchExecution(store, roundNumber);
@@ -714,7 +724,7 @@ describe('mode Change Flow', () => {
 
     // Verify all changes applied
     expect(store.getState().thread?.mode).toBe(ChatModes.SOLVING);
-    expect(store.getState().thread?.enableWebSearch).toBe(true);
+    expect(store.getState().thread?.enableWebSearch).toBeTruthy();
     expect(store.getState().participants).toHaveLength(3);
   });
 });

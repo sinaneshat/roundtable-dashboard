@@ -21,13 +21,13 @@ type EmailBrandFooterProps = {
 // Simple minimal footer
 
 export function EmailBrandFooter({
-  companyName = BRAND.displayName,
-  unsubscribeUrl,
-  privacyUrl,
-  termsUrl,
-  contactEmail = BRAND.support,
-  style,
   children,
+  companyName = BRAND.displayName,
+  contactEmail = BRAND.support,
+  privacyUrl,
+  style,
+  termsUrl,
+  unsubscribeUrl,
 }: EmailBrandFooterProps) {
   const footerStyle: CSSProperties = {
     padding: `${spacing[6]} ${spacing[4]}`,

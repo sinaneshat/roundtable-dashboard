@@ -24,61 +24,61 @@ describe('pre-Search Orchestrator Guards', () => {
       threadId: string | null;
       enableOrchestrator: boolean;
     }): boolean {
-      const { mode, threadId, enableOrchestrator } = params;
+      const { enableOrchestrator, mode, threadId } = params;
       return mode === ScreenModes.THREAD && Boolean(threadId) && enableOrchestrator;
     }
 
     it('should NOT enable on OVERVIEW mode - prevents calls during initial creation', () => {
       // This is the critical guard - overview screen should NEVER enable orchestrator
       const enabled = isOrchestratorEnabled({
+        enableOrchestrator: true,
         mode: ScreenModes.OVERVIEW,
         threadId: '01KDZ623JC67G64N0V13RGPNBE',
-        enableOrchestrator: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should NOT enable on PUBLIC mode', () => {
       const enabled = isOrchestratorEnabled({
+        enableOrchestrator: true,
         mode: ScreenModes.PUBLIC,
         threadId: '01KDZ623JC67G64N0V13RGPNBE',
-        enableOrchestrator: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should NOT enable when thread ID is missing', () => {
       const enabled = isOrchestratorEnabled({
+        enableOrchestrator: true,
         mode: ScreenModes.THREAD,
         threadId: null,
-        enableOrchestrator: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should NOT enable when enableOrchestrator is false (streaming active)', () => {
       // During streaming, enableOrchestrator should be false
       const enabled = isOrchestratorEnabled({
+        enableOrchestrator: false,
         mode: ScreenModes.THREAD,
         threadId: '01KDZ623JC67G64N0V13RGPNBE',
-        enableOrchestrator: false,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should enable on THREAD mode with valid thread ID and orchestrator enabled', () => {
       // Only valid scenario: actual thread screen with completed round
       const enabled = isOrchestratorEnabled({
+        enableOrchestrator: true,
         mode: ScreenModes.THREAD,
         threadId: '01KDZ623JC67G64N0V13RGPNBE',
-        enableOrchestrator: true,
       });
 
-      expect(enabled).toBe(true);
+      expect(enabled).toBeTruthy();
     });
   });
 
@@ -99,7 +99,7 @@ describe('pre-Search Orchestrator Guards', () => {
           && Boolean('some-thread-id')
           && true; // enableOrchestrator
 
-      expect(orchestratorEnabled).toBe(false);
+      expect(orchestratorEnabled).toBeFalsy();
     });
 
     it('should document why thread screen transition breaks orchestrator guard', () => {
@@ -115,7 +115,7 @@ describe('pre-Search Orchestrator Guards', () => {
           && true; // enableOrchestrator
 
       // This would incorrectly enable the orchestrator!
-      expect(orchestratorEnabled).toBe(true);
+      expect(orchestratorEnabled).toBeTruthy();
 
       // The fix: NEVER transition to THREAD mode on overview screen
       const correctMode = ScreenModes.OVERVIEW;
@@ -125,7 +125,7 @@ describe('pre-Search Orchestrator Guards', () => {
           && Boolean('some-thread-id')
           && true;
 
-      expect(orchestratorEnabledCorrect).toBe(false);
+      expect(orchestratorEnabledCorrect).toBeFalsy();
     });
   });
 
@@ -140,63 +140,63 @@ describe('pre-Search Orchestrator Guards', () => {
       hasActivePreSearch: boolean;
       shouldInitializeThread: boolean;
     }): boolean {
-      const { isStreaming, isModeratorStreaming, hasActivePreSearch, shouldInitializeThread } = params;
+      const { hasActivePreSearch, isModeratorStreaming, isStreaming, shouldInitializeThread } = params;
       return !isStreaming && !isModeratorStreaming && !hasActivePreSearch && shouldInitializeThread;
     }
 
     it('should disable during participant streaming', () => {
       const enabled = computeEnableOrchestrator({
-        isStreaming: true,
-        isModeratorStreaming: false,
         hasActivePreSearch: false,
+        isModeratorStreaming: false,
+        isStreaming: true,
         shouldInitializeThread: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should disable during moderator streaming', () => {
       const enabled = computeEnableOrchestrator({
-        isStreaming: false,
-        isModeratorStreaming: true,
         hasActivePreSearch: false,
+        isModeratorStreaming: true,
+        isStreaming: false,
         shouldInitializeThread: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should disable when pre-search is active', () => {
       const enabled = computeEnableOrchestrator({
-        isStreaming: false,
-        isModeratorStreaming: false,
         hasActivePreSearch: true,
+        isModeratorStreaming: false,
+        isStreaming: false,
         shouldInitializeThread: true,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should disable when thread should not initialize', () => {
       const enabled = computeEnableOrchestrator({
-        isStreaming: false,
-        isModeratorStreaming: false,
         hasActivePreSearch: false,
+        isModeratorStreaming: false,
+        isStreaming: false,
         shouldInitializeThread: false,
       });
 
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should enable only when all conditions are met', () => {
       const enabled = computeEnableOrchestrator({
-        isStreaming: false,
-        isModeratorStreaming: false,
         hasActivePreSearch: false,
+        isModeratorStreaming: false,
+        isStreaming: false,
         shouldInitializeThread: true,
       });
 
-      expect(enabled).toBe(true);
+      expect(enabled).toBeTruthy();
     });
 
     it('should document the gap between participant and moderator completion', () => {
@@ -209,14 +209,14 @@ describe('pre-Search Orchestrator Guards', () => {
       // regardless of the enableOrchestrator flag.
 
       const enableOrchestrator = computeEnableOrchestrator({
-        isStreaming: false, // Participants done
-        isModeratorStreaming: false, // Moderator not started
         hasActivePreSearch: false,
+        isModeratorStreaming: false, // Moderator not started
+        isStreaming: false, // Participants done
         shouldInitializeThread: true,
       });
 
       // Flag would be true in this gap...
-      expect(enableOrchestrator).toBe(true);
+      expect(enableOrchestrator).toBeTruthy();
 
       // ...but mode check prevents orchestrator from running on overview
       const finalOrchestratorEnabled
@@ -224,7 +224,7 @@ describe('pre-Search Orchestrator Guards', () => {
           && Boolean('thread-id')
           && enableOrchestrator;
 
-      expect(finalOrchestratorEnabled).toBe(false);
+      expect(finalOrchestratorEnabled).toBeFalsy();
     });
   });
 });

@@ -41,13 +41,13 @@ function simulateHandleUpdateThreadAndSend(
   },
 ) {
   const state = store.getState();
-  const { threadId, message, roundNumber, enableWebSearch } = options;
+  const { enableWebSearch, message, roundNumber, threadId } = options;
 
   // 1. Create and add optimistic user message
   const optimisticMessage = createOptimisticUserMessage({
+    fileParts: [],
     roundNumber,
     text: message,
-    fileParts: [],
   });
   state.setMessages(currentMessages => [...currentMessages, optimisticMessage]);
 
@@ -60,8 +60,8 @@ function simulateHandleUpdateThreadAndSend(
   // 4. Create pre-search placeholder if web search enabled
   if (enableWebSearch) {
     state.addPreSearch(createPlaceholderPreSearch({
-      threadId,
       roundNumber,
+      threadId,
       userQuery: message,
     }));
   }
@@ -89,7 +89,7 @@ function simulatePatchComplete(
   },
 ) {
   const state = store.getState();
-  const { thread, participants, hasConfigChanges } = options;
+  const { hasConfigChanges, participants, thread } = options;
 
   // Update thread and participants (this is what triggers the bug)
   state.setThread(thread);
@@ -111,41 +111,41 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
   const slug = 'test-thread';
 
   const mockThread: ChatThread = {
+    createdAt: new Date(),
+    enableWebSearch: true,
     id: threadId,
-    title: 'Test Thread',
-    slug,
-    mode: ChatModes.DEBATING,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.DEBATING,
+    slug,
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
   };
 
   const mockParticipants: ChatParticipant[] = [
     {
-      id: 'p1',
-      threadId,
-      modelId: 'gpt-4',
-      role: 'specialist',
-      customRoleId: null,
-      priority: 0,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'p1',
+      isEnabled: true,
+      modelId: 'gpt-4',
+      priority: 0,
+      role: 'specialist',
+      threadId,
       updatedAt: new Date(),
     },
     {
-      id: 'p2',
-      threadId,
-      modelId: 'claude-3',
-      role: 'analyst',
-      customRoleId: null,
-      priority: 1,
-      isEnabled: true,
       createdAt: new Date(),
+      customRoleId: null,
+      id: 'p2',
+      isEnabled: true,
+      modelId: 'claude-3',
+      priority: 1,
+      role: 'analyst',
+      threadId,
       updatedAt: new Date(),
     },
   ];
@@ -153,21 +153,21 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
   const round0Messages: UIMessage[] = [
     {
       id: 'msg-user-0',
+      metadata: { role: MessageRoles.USER, roundNumber: 0 },
+      parts: [{ text: 'First message', type: 'text' }],
       role: MessageRoles.USER,
-      parts: [{ type: 'text', text: 'First message' }],
-      metadata: { roundNumber: 0, role: MessageRoles.USER },
     },
     {
       id: 'msg-asst-0-p1',
+      metadata: { modelId: 'gpt-4', participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+      parts: [{ text: 'Response from GPT-4', type: 'text' }],
       role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: 'Response from GPT-4' }],
-      metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantIndex: 0, modelId: 'gpt-4' },
     },
     {
       id: 'msg-asst-0-p2',
+      metadata: { modelId: 'claude-3', participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+      parts: [{ text: 'Response from Claude', type: 'text' }],
       role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: 'Response from Claude' }],
-      metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantIndex: 1, modelId: 'claude-3' },
     },
   ];
 
@@ -186,15 +186,15 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
     it('sHOULD preserve streaming state when thread/participants update after PATCH', () => {
       // Simulate user submitting round 1 with config changes
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: true,
+        hasConfigChanges: true,
         message: 'Second message with config changes',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: true,
+        threadId,
       });
 
       // Verify streaming state is set up correctly
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(1);
       expect(store.getState().streamingRoundNumber).toBe(1);
       expect(store.getState().nextParticipantToTrigger).toBe(0);
@@ -212,21 +212,21 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       // The bug: updating thread/participants can trigger initializeThread
       // which resets all the streaming state we just set up
       simulatePatchComplete(store, {
-        thread: { ...mockThread, updatedAt: new Date() }, // New reference
-        participants: mockParticipants,
         hasConfigChanges: true,
+        participants: mockParticipants,
+        thread: { ...mockThread, updatedAt: new Date() }, // New reference
       });
 
       // ❌ BUG: These values get reset when initializeThread is incorrectly called
       // The fix should preserve these values
 
       // Streaming state should still be set up
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(1);
       expect(store.getState().nextParticipantToTrigger).toBe(0);
 
       // isWaitingForChangelog should be set (for changelog fetch)
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Pre-search placeholder should still exist
       const preSearchAfterPatch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
@@ -252,11 +252,11 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
       // Simulate form submission
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: true,
+        hasConfigChanges: true,
         message: 'Message with changes',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: true,
+        threadId,
       });
 
       // Clear spy count from setup
@@ -278,18 +278,18 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
     it('sHOULD detect active form submission via streaming state flags', () => {
       // Before submission - no active submission
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().configChangeRoundNumber).toBe(null);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
-      expect(store.getState().streamingRoundNumber).toBe(null);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().configChangeRoundNumber).toBeNull();
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
+      expect(store.getState().streamingRoundNumber).toBeNull();
 
       // Start form submission
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: true,
         message: 'Test message',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: false,
+        threadId,
       });
 
       // Active submission should be detectable via multiple flags
@@ -300,7 +300,7 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
           || state.isWaitingForChangelog
           || state.streamingRoundNumber !== null;
 
-      expect(isActiveSubmission).toBe(true);
+      expect(isActiveSubmission).toBeTruthy();
 
       // The screen initialization guard should use these flags
       // to prevent calling initializeThread during active submission
@@ -311,11 +311,11 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
     it('sHOULD preserve pre-search placeholders when changelog is fetched', () => {
       // Start submission with web search enabled
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: true,
+        hasConfigChanges: true,
         message: 'Search query',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: true,
+        threadId,
       });
 
       // Verify pre-search placeholder exists
@@ -325,9 +325,9 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
       // Simulate PATCH completing
       simulatePatchComplete(store, {
-        thread: mockThread,
-        participants: mockParticipants,
         hasConfigChanges: true,
+        participants: mockParticipants,
+        thread: mockThread,
       });
 
       // Simulate changelog fetch completing
@@ -345,18 +345,18 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
     it('sHOULD allow pre-search to transition from PENDING to STREAMING', () => {
       // Start submission
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: true,
+        hasConfigChanges: true,
         message: 'Search query',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: true,
+        threadId,
       });
 
       // Simulate PATCH and changelog completing
       simulatePatchComplete(store, {
-        thread: mockThread,
-        participants: mockParticipants,
         hasConfigChanges: true,
+        participants: mockParticipants,
+        thread: mockThread,
       });
 
       store.getState().setIsWaitingForChangelog(false);
@@ -367,7 +367,7 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
       // Mark pre-search as triggered and start streaming
       const didMark = store.getState().tryMarkPreSearchTriggered(1);
-      expect(didMark).toBe(true);
+      expect(didMark).toBeTruthy();
 
       store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
@@ -381,11 +381,11 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
   describe('streaming Trigger Blocking', () => {
     it('sHOULD block streaming trigger while configChangeRoundNumber is set', () => {
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: true,
         message: 'Test',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: false,
+        threadId,
       });
 
       // configChangeRoundNumber should block streaming
@@ -395,44 +395,44 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       const shouldBlockStreaming = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
     });
 
     it('sHOULD block streaming trigger while isWaitingForChangelog is true', () => {
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: true,
         message: 'Test',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: false,
+        threadId,
       });
 
       // Simulate PATCH completing with config changes
       store.getState().setIsWaitingForChangelog(true);
 
       // isWaitingForChangelog should block streaming
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       const shouldBlockStreaming = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
     });
 
     it('sHOULD unblock streaming trigger when both flags are cleared', () => {
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: true,
         message: 'Test',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: false,
+        threadId,
       });
 
       // Simulate full flow completion
       simulatePatchComplete(store, {
-        thread: mockThread,
-        participants: mockParticipants,
         hasConfigChanges: true,
+        participants: mockParticipants,
+        thread: mockThread,
       });
 
       // Simulate changelog fetch completing
@@ -443,21 +443,21 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       const shouldBlockStreaming = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(false);
+      expect(shouldBlockStreaming).toBeFalsy();
 
       // waitingToStartStreaming should still be true for trigger
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
   });
 
   describe('message Preservation During State Updates', () => {
     it('sHOULD preserve optimistic user message when thread updates', () => {
       simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: true,
         message: 'New message',
         roundNumber: 1,
-        hasConfigChanges: true,
-        enableWebSearch: false,
+        threadId,
       });
 
       const messagesBefore = store.getState().messages;
@@ -470,9 +470,9 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
       // Update thread (simulating PATCH response)
       simulatePatchComplete(store, {
-        thread: { ...mockThread, updatedAt: new Date() },
-        participants: mockParticipants,
         hasConfigChanges: true,
+        participants: mockParticipants,
+        thread: { ...mockThread, updatedAt: new Date() },
       });
 
       // ❌ BUG: Optimistic message might be removed
@@ -490,19 +490,19 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
 
     it('sHOULD allow replacing optimistic message with persisted message', () => {
       const { optimisticMessage } = simulateHandleUpdateThreadAndSend(store, {
-        threadId,
+        enableWebSearch: false,
+        hasConfigChanges: false,
         message: 'Test message',
         roundNumber: 1,
-        hasConfigChanges: false,
-        enableWebSearch: false,
+        threadId,
       });
 
       // Simulate receiving persisted message from PATCH response
       const persistedMessage: UIMessage = {
         id: 'msg-persisted-123',
+        metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Test message', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Test message' }],
-        metadata: { roundNumber: 1, role: MessageRoles.USER },
       };
 
       // Replace optimistic with persisted
@@ -542,15 +542,15 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       const waitingToStart = store.getState().waitingToStartStreaming;
 
       expect(configChangeRound).toBe(1);
-      expect(waitingForChangelog).toBe(true);
-      expect(waitingToStart).toBe(true);
+      expect(waitingForChangelog).toBeTruthy();
+      expect(waitingToStart).toBeTruthy();
     });
 
     it('sHOULD preserve pre-searches when called during active submission', () => {
       // Add pre-search for round 1
       store.getState().addPreSearch(createPlaceholderPreSearch({
-        threadId,
         roundNumber: 1,
+        threadId,
         userQuery: 'Test query',
       }));
 
@@ -579,7 +579,7 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       store.getState().setNextParticipantToTrigger(0);
 
       // pendingMessage is NOT set (this is the bug cause)
-      expect(store.getState().pendingMessage).toBe(null);
+      expect(store.getState().pendingMessage).toBeNull();
 
       // But we CAN detect active submission via other flags
       const state = store.getState();
@@ -589,7 +589,7 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
           || state.isWaitingForChangelog
           || (state.streamingRoundNumber !== null && !state.streamResumptionPrefilled);
 
-      expect(isActiveFormSubmission).toBe(true);
+      expect(isActiveFormSubmission).toBeTruthy();
 
       // The fix should update useScreenInitialization to use this broader check
     });
@@ -597,24 +597,24 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
     it('sHOULD differentiate between resumption and active submission', () => {
       // Case 1: Resumption (prefilled from server)
       store.getState().prefillStreamResumptionState(threadId, {
-        roundComplete: false,
         currentPhase: 'participants',
-        roundNumber: 1,
-        preSearch: null,
-        participants: {
-          nextParticipantToTrigger: 0,
-          completedParticipants: [],
-          activeParticipant: null,
-        },
         moderator: null,
+        participants: {
+          activeParticipant: null,
+          completedParticipants: [],
+          nextParticipantToTrigger: 0,
+        },
+        preSearch: null,
+        roundComplete: false,
+        roundNumber: 1,
       });
 
-      expect(store.getState().streamResumptionPrefilled).toBe(true);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().streamResumptionPrefilled).toBeTruthy();
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       // This IS resumption, not active form submission
       const isResumption = store.getState().streamResumptionPrefilled;
-      expect(isResumption).toBe(true);
+      expect(isResumption).toBeTruthy();
 
       // Reset for case 2
       store.getState().clearStreamResumption();
@@ -625,14 +625,14 @@ describe('changelog + Placeholder Cleanup Race Condition', () => {
       store.getState().setStreamingRoundNumber(1);
 
       // This is NOT resumption
-      expect(store.getState().streamResumptionPrefilled).toBe(false);
+      expect(store.getState().streamResumptionPrefilled).toBeFalsy();
 
       // But it IS active submission (via streaming flags)
       const isActiveSubmission
         = store.getState().configChangeRoundNumber !== null
           || store.getState().waitingToStartStreaming;
 
-      expect(isActiveSubmission).toBe(true);
+      expect(isActiveSubmission).toBeTruthy();
     });
   });
 });

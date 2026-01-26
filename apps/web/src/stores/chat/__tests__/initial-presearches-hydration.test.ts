@@ -38,12 +38,12 @@ describe('initialPreSearches Hydration', () => {
   describe('setPreSearches during initialization', () => {
     it('sets initialPreSearches into store', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        participants: createMockParticipants(2),
-        messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
         enableWebSearch: true,
+        messages: [createMockUserMessage(0)],
+        participants: createMockParticipants(2),
         preSearches: [],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       // Simulate setPreSearches being called during hydration
@@ -59,12 +59,12 @@ describe('initialPreSearches Hydration', () => {
     it('skips empty initialPreSearches array', () => {
       const existingPreSearch = createMockResumptionPreSearch(0, MessageStatuses.STREAMING);
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        participants: createMockParticipants(2),
-        messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
         enableWebSearch: true,
+        messages: [createMockUserMessage(0)],
+        participants: createMockParticipants(2),
         preSearches: [existingPreSearch],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       // Empty array should not overwrite existing
@@ -84,16 +84,16 @@ describe('initialPreSearches Hydration', () => {
 
     it('handles multiple pre-searches for multi-round threads', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        participants: createMockParticipants(2),
+        enableWebSearch: true,
         messages: [
           createMockUserMessage(0),
           createMockUserMessage(1),
           createMockUserMessage(2),
         ],
-        thread: { id: 'thread-123', enableWebSearch: true },
-        enableWebSearch: true,
+        participants: createMockParticipants(2),
         preSearches: [],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       const initialPreSearches = [
@@ -113,12 +113,12 @@ describe('initialPreSearches Hydration', () => {
     it('overwrites existing preSearches during re-init', () => {
       const stalePreSearch = createMockResumptionPreSearch(0, MessageStatuses.PENDING);
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        participants: createMockParticipants(2),
-        messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
         enableWebSearch: true,
+        messages: [createMockUserMessage(0)],
+        participants: createMockParticipants(2),
         preSearches: [stalePreSearch],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.PENDING);
@@ -144,11 +144,11 @@ describe('initialPreSearches Hydration', () => {
 
       // The bug: this was undefined, causing early exit
       expect(preSearchForRound).toBeDefined();
-      expect(webSearchEnabled).toBe(true);
+      expect(webSearchEnabled).toBeTruthy();
 
       // Should NOT return early
       const wouldExitEarly = webSearchEnabled && !preSearchForRound;
-      expect(wouldExitEarly).toBe(false);
+      expect(wouldExitEarly).toBeFalsy();
     });
 
     it('proceeds to participant streaming when preSearch COMPLETE', () => {
@@ -163,7 +163,7 @@ describe('initialPreSearches Hydration', () => {
       const shouldWaitForPreSearch
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(shouldWaitForPreSearch).toBe(false);
+      expect(shouldWaitForPreSearch).toBeFalsy();
     });
 
     it('waits for STREAMING preSearch before participants', () => {
@@ -178,7 +178,7 @@ describe('initialPreSearches Hydration', () => {
       const shouldWaitForPreSearch
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(shouldWaitForPreSearch).toBe(true);
+      expect(shouldWaitForPreSearch).toBeTruthy();
     });
 
     it('handles FAILED preSearch gracefully', () => {
@@ -193,7 +193,7 @@ describe('initialPreSearches Hydration', () => {
       const shouldWaitForPreSearch
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(shouldWaitForPreSearch).toBe(false);
+      expect(shouldWaitForPreSearch).toBeFalsy();
     });
 
     it('handles PENDING preSearch by waiting', () => {
@@ -208,7 +208,7 @@ describe('initialPreSearches Hydration', () => {
       const shouldWaitForPreSearch
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(shouldWaitForPreSearch).toBe(true);
+      expect(shouldWaitForPreSearch).toBeTruthy();
     });
   });
 
@@ -247,8 +247,8 @@ describe('initialPreSearches Hydration', () => {
         threadId: 'thread-456',
       };
       store.setState({
-        thread: { id: 'thread-456', enableWebSearch: true },
         preSearches: [threadBPreSearch],
+        thread: { enableWebSearch: true, id: 'thread-456' },
       });
 
       const state = store.getState();
@@ -260,22 +260,22 @@ describe('initialPreSearches Hydration', () => {
 
     it('preserves preSearches during overview->thread transition', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.OVERVIEW,
-        participants: createMockParticipants(2),
-        messages: [],
-        thread: null,
         enableWebSearch: true,
+        messages: [],
+        participants: createMockParticipants(2),
         preSearches: [],
+        screenMode: ScreenModes.OVERVIEW,
+        thread: null,
         waitingToStartStreaming: false,
       });
 
       // Transition to thread screen with SSR data
       const initialPreSearches = [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)];
       store.setState({
-        screenMode: ScreenModes.THREAD,
-        thread: { id: 'thread-123', enableWebSearch: true },
         messages: [createMockUserMessage(0)],
         preSearches: initialPreSearches,
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       const state = store.getState();
@@ -290,9 +290,9 @@ describe('initialPreSearches Hydration', () => {
 
       // User navigates to another thread (simulates popstate)
       store.setState({
-        thread: { id: 'thread-new', enableWebSearch: false },
-        preSearches: [],
         messages: [createMockUserMessage(0)],
+        preSearches: [],
+        thread: { enableWebSearch: false, id: 'thread-new' },
       });
 
       expect(store.getState().preSearches).toHaveLength(0);
@@ -300,8 +300,8 @@ describe('initialPreSearches Hydration', () => {
       // Back button returns to original thread
       const originalPreSearches = [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)];
       store.setState({
-        thread: { id: 'thread-123', enableWebSearch: true },
         preSearches: originalPreSearches,
+        thread: { enableWebSearch: true, id: 'thread-123' },
       });
 
       const state = store.getState();
@@ -317,13 +317,13 @@ describe('initialPreSearches Hydration', () => {
       stalePreSearch.createdAt = new Date(Date.now() - 3 * 60 * 1000);
 
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        waitingToStartStreaming: true,
         enableWebSearch: true,
-        participants: createMockParticipants(2),
         messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
+        participants: createMockParticipants(2),
         preSearches: [stalePreSearch],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
+        waitingToStartStreaming: true,
       });
 
       const state = store.getState();
@@ -336,21 +336,21 @@ describe('initialPreSearches Hydration', () => {
       const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
       const createdAtTime = new Date(preSearch?.createdAt ?? 0).getTime();
       const isStale = Date.now() - createdAtTime > STALE_THRESHOLD_MS;
-      expect(isStale).toBe(true);
+      expect(isStale).toBeTruthy();
     });
 
     it('handles participant mismatch after config change', () => {
       // Pre-search was started with 3 participants, but config changed to 2
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        waitingToStartStreaming: true,
         enableWebSearch: true,
+        messages: [createMockUserMessage(0)],
         // Only 2 participants now
         participants: createMockParticipants(2),
-        messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
         // Pre-search still exists from before config change
         preSearches: [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
+        waitingToStartStreaming: true,
       });
 
       const state = store.getState();
@@ -363,21 +363,21 @@ describe('initialPreSearches Hydration', () => {
 
     it('handles webSearch toggled off after pre-search started', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        waitingToStartStreaming: true,
         // Web search is now OFF
         enableWebSearch: false,
-        participants: createMockParticipants(2),
         messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockParticipants(2),
         // Pre-search exists from when web search was on
         preSearches: [createMockResumptionPreSearch(0, MessageStatuses.STREAMING)],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: true,
       });
 
       const state = store.getState();
 
       // When web search is disabled, we shouldn't wait for pre-search
-      expect(state.enableWebSearch).toBe(false);
+      expect(state.enableWebSearch).toBeFalsy();
 
       // The pre-search exists but should be ignored
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
@@ -385,25 +385,25 @@ describe('initialPreSearches Hydration', () => {
 
       // Logic: if (!enableWebSearch) skip pre-search check entirely
       const shouldCheckPreSearch = state.enableWebSearch;
-      expect(shouldCheckPreSearch).toBe(false);
+      expect(shouldCheckPreSearch).toBeFalsy();
     });
 
     it('handles race between pre-search completion and navigation', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        waitingToStartStreaming: true,
         enableWebSearch: true,
-        participants: createMockParticipants(2),
         messages: [createMockUserMessage(0)],
-        thread: { id: 'thread-123', enableWebSearch: true },
+        participants: createMockParticipants(2),
         preSearches: [createMockResumptionPreSearch(0, MessageStatuses.STREAMING)],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
+        waitingToStartStreaming: true,
       });
 
       // Simulate pre-search completing
       const state = store.getState();
       const updatedPreSearches = state.preSearches.map((ps) => {
         if (ps.roundNumber === 0) {
-          return { ...ps, status: MessageStatuses.COMPLETE, completedAt: new Date() };
+          return { ...ps, completedAt: new Date(), status: MessageStatuses.COMPLETE };
         }
         return ps;
       });
@@ -419,21 +419,21 @@ describe('initialPreSearches Hydration', () => {
 
     it('finds correct pre-search for current round in multi-round scenario', () => {
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        waitingToStartStreaming: true,
         enableWebSearch: true,
-        participants: createMockParticipants(2),
         messages: [
           createMockUserMessage(0),
           createMockUserMessage(1),
           createMockUserMessage(2),
         ],
-        thread: { id: 'thread-123', enableWebSearch: true },
+        participants: createMockParticipants(2),
         preSearches: [
           createMockResumptionPreSearch(0, MessageStatuses.COMPLETE),
           createMockResumptionPreSearch(1, MessageStatuses.COMPLETE),
           createMockResumptionPreSearch(2, MessageStatuses.STREAMING),
         ],
+        screenMode: ScreenModes.THREAD,
+        thread: { enableWebSearch: true, id: 'thread-123' },
+        waitingToStartStreaming: true,
       });
 
       const state = store.getState();
@@ -459,8 +459,8 @@ describe('initialPreSearches Hydration', () => {
       const store = buildAfterPreSearchScenario(MessageStatuses.COMPLETE);
 
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.enableWebSearch).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.enableWebSearch).toBeTruthy();
       expect(state.preSearches).toHaveLength(1);
       expect(state.participants).toHaveLength(2);
     });
@@ -472,8 +472,8 @@ describe('initialPreSearches Hydration', () => {
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
 
       // Verify all conditions for blocking
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.enableWebSearch).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.enableWebSearch).toBeTruthy();
       expect(preSearch).toBeDefined();
       expect(preSearch?.status).toBe(MessageStatuses.STREAMING);
 
@@ -481,7 +481,7 @@ describe('initialPreSearches Hydration', () => {
       const isBlocked
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('sSR hydrated scenario proceeds on COMPLETE', () => {
@@ -491,8 +491,8 @@ describe('initialPreSearches Hydration', () => {
       const preSearch = state.preSearches.find(ps => ps.roundNumber === 0);
 
       // Verify all conditions for proceeding
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.enableWebSearch).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.enableWebSearch).toBeTruthy();
       expect(preSearch).toBeDefined();
       expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
 
@@ -500,7 +500,7 @@ describe('initialPreSearches Hydration', () => {
       const isBlocked
         = preSearch?.status === MessageStatuses.STREAMING
           || preSearch?.status === MessageStatuses.PENDING;
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
 
     it('verifies pre-search lookup pattern used in streaming trigger', () => {

@@ -71,6 +71,7 @@ import type {
   RemoveParticipantInput,
   RoundFeedbackInput,
   SendMessageInput,
+  ToolArgs,
   ToolCallResult,
   UpdateParticipantInput,
   UpdateProjectInput,
@@ -135,18 +136,19 @@ async function getAiSdk() {
  */
 function getModelForPricing(modelId: string): import('@/common/schemas/model-pricing').ModelForPricing | undefined {
   const model = getModelById(modelId);
-  if (!model)
+  if (!model) {
     return undefined;
+  }
 
   return {
+    capabilities: model.capabilities,
+    context_length: model.context_length,
+    created: model.created,
     id: model.id,
     name: model.name,
     pricing: model.pricing,
-    context_length: model.context_length,
     pricing_display: model.pricing_display,
-    created: model.created,
     provider: model.provider,
-    capabilities: model.capabilities,
   };
 }
 
@@ -158,14 +160,14 @@ function mcpResult(data: unknown): ToolCallResult {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   const structuredContent = isObject(data) ? data : undefined;
   return {
-    content: [{ type: MessagePartTypes.TEXT, text }],
+    content: [{ text, type: MessagePartTypes.TEXT }],
     structuredContent,
   };
 }
 
 function mcpError(message: string): ToolCallResult {
   return {
-    content: [{ type: MessagePartTypes.TEXT, text: message }],
+    content: [{ text: message, type: MessagePartTypes.TEXT }],
     isError: true,
   };
 }
@@ -177,8 +179,8 @@ function mcpError(message: string): ToolCallResult {
 export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: JsonRpcRequestSchema,
     operationName: 'mcpJsonRpc',
+    validateBody: JsonRpcRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -198,8 +200,8 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
         // ====================================================================
         case MCPProtocolMethods.INITIALIZE: {
           return jsonRpcResponse({
-            protocolVersion: MCP_PROTOCOL_VERSION,
             capabilities: MCP_SERVER_INFO.capabilities,
+            protocolVersion: MCP_PROTOCOL_VERSION,
             serverInfo: { name: MCP_SERVER_INFO.name, version: MCP_SERVER_INFO.version },
           });
         }
@@ -211,17 +213,17 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
         case MCPProtocolMethods.RESOURCES_LIST: {
           const db = await getDbAsync();
           const threads = await db.query.chatThread.findMany({
-            where: eq(tables.chatThread.userId, user.id),
-            orderBy: [desc(tables.chatThread.updatedAt)],
             limit: 50,
+            orderBy: [desc(tables.chatThread.updatedAt)],
+            where: eq(tables.chatThread.userId, user.id),
             with: { participants: true },
           });
 
           const resources: MCPResource[] = threads.map(t => ({
-            uri: `roundtable://thread/${t.id}`,
-            name: t.title,
             description: `${t.mode} thread with ${t.participants.length} participants`,
             mimeType: 'application/json',
+            name: t.title,
+            uri: `roundtable://thread/${t.id}`,
           }));
 
           return jsonRpcResponse({ resources });
@@ -265,9 +267,9 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
 
           return jsonRpcResponse({
             contents: [{
-              uri,
               mimeType: 'application/json',
               text: JSON.stringify(thread),
+              uri,
             }],
           });
         }
@@ -281,9 +283,11 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
             });
           }
 
+          // Use empty object fallback with explicit Record type
+          const toolArgs: Record<string, unknown> = params.data.arguments ?? {};
           const result = await executeToolInternal(
             params.data.name,
-            params.data.arguments || {},
+            toolArgs,
             user,
             c.env,
           );
@@ -314,7 +318,7 @@ export const listToolsHandler: RouteHandler<typeof listToolsRoute, ApiEnv> = cre
   { auth: 'session', operationName: 'listMCPTools' },
   async (c) => {
     c.auth();
-    return Responses.ok(c, { tools: MCP_TOOLS, serverInfo: MCP_SERVER_INFO });
+    return Responses.ok(c, { serverInfo: MCP_SERVER_INFO, tools: MCP_TOOLS });
   },
 );
 
@@ -325,39 +329,41 @@ export const listResourcesHandler: RouteHandler<typeof listResourcesRoute, ApiEn
     const db = await getDbAsync();
 
     const threads = await db.query.chatThread.findMany({
-      where: eq(tables.chatThread.userId, user.id),
-      orderBy: [desc(tables.chatThread.updatedAt)],
       limit: 50,
+      orderBy: [desc(tables.chatThread.updatedAt)],
+      where: eq(tables.chatThread.userId, user.id),
       with: { participants: true },
     });
 
     const resources: MCPResource[] = threads.map(t => ({
-      uri: `roundtable://thread/${t.id}`,
-      name: t.title,
       description: `${t.mode} thread with ${t.participants.length} participants`,
       mimeType: 'application/json',
+      name: t.title,
+      uri: `roundtable://thread/${t.id}`,
     }));
 
-    return Responses.ok(c, { resources, count: resources.length });
+    return Responses.ok(c, { count: resources.length, resources });
   },
 );
 
 export const callToolHandler: RouteHandler<typeof callToolRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: ToolCallParamsSchema,
     operationName: 'callMCPTool',
+    validateBody: ToolCallParamsSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { name, arguments: args } = c.validated.body;
+    const { arguments: args, name } = c.validated.body;
     const startTime = Date.now();
 
-    const result = await executeToolInternal(name, args || {}, user, c.env);
+    // Use empty object fallback with explicit Record type
+    const toolArgs: Record<string, unknown> = args ?? {};
+    const result = await executeToolInternal(name, toolArgs, user, c.env);
 
     return Responses.ok(c, {
       ...result,
-      _meta: { toolName: name, executionTimeMs: Date.now() - startTime },
+      _meta: { executionTimeMs: Date.now() - startTime, toolName: name },
     });
   },
 );
@@ -374,12 +380,24 @@ export const openAIFunctionsHandler: RouteHandler<typeof openAIFunctionsRoute, A
 // Tool Execution Engine
 // ============================================================================
 
+/**
+ * Execute MCP tool with type-safe argument validation
+ *
+ * DESIGN PATTERN: MCP/JSON-RPC requires accepting unknown args from clients.
+ * Each tool validates its own args via Zod safeParse in the switch statement.
+ * The ToolArgs type documents all valid input shapes for documentation.
+ *
+ * @param toolName - Tool name from MCP_TOOLS registry
+ * @param rawArgs - Raw arguments from JSON-RPC request (validated per-tool)
+ */
 async function executeToolInternal(
   toolName: string,
-  args: Record<string, unknown>,
+  rawArgs: ToolArgs | Record<string, unknown>,
   user: { id: string },
   env: ApiEnv['Bindings'],
 ): Promise<ToolCallResult> {
+  // Safe to use rawArgs - each tool validates via safeParse
+  const args = rawArgs;
   const tool = getToolByName(toolName);
   if (!tool) {
     return mcpError(`Unknown tool: ${toolName}`);
@@ -394,29 +412,33 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.CREATE_THREAD: {
         const parsed = CreateThreadInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolCreateThread(parsed.data, user, db);
       }
 
       case MCPToolMethods.GET_THREAD: {
         const parsed = GetThreadInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolGetThread(parsed.data, user, db);
       }
 
       case MCPToolMethods.LIST_THREADS: {
         const parsed = ListThreadsInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListThreads(parsed.data, user, db);
       }
 
       case MCPToolMethods.DELETE_THREAD: {
         const parsed = DeleteThreadInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolDeleteThread(parsed.data, user, db);
       }
 
@@ -425,43 +447,49 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.CREATE_PROJECT: {
         const parsed = CreateProjectInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolCreateProject(parsed.data, user, db, env);
       }
 
       case MCPToolMethods.GET_PROJECT: {
         const parsed = GetProjectInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolGetProject(parsed.data, user, db);
       }
 
       case MCPToolMethods.LIST_PROJECTS: {
         const parsed = ListProjectsInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListProjects(parsed.data, user, db);
       }
 
       case MCPToolMethods.UPDATE_PROJECT: {
         const parsed = UpdateProjectInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolUpdateProject(parsed.data, user, db);
       }
 
       case MCPToolMethods.DELETE_PROJECT: {
         const parsed = DeleteProjectInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolDeleteProject(parsed.data, user, db);
       }
 
       case MCPToolMethods.LIST_PROJECT_THREADS: {
         const parsed = ListProjectThreadsInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListProjectThreads(parsed.data, user, db);
       }
 
@@ -470,15 +498,17 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.LIST_KNOWLEDGE_FILES: {
         const parsed = ListKnowledgeFilesInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListKnowledgeFiles(parsed.data, user, db);
       }
 
       case MCPToolMethods.DELETE_KNOWLEDGE_FILE: {
         const parsed = DeleteKnowledgeFileInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolDeleteKnowledgeFile(parsed.data, user, db, env);
       }
 
@@ -487,15 +517,17 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.SEND_MESSAGE: {
         const parsed = SendMessageInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolSendMessage(parsed.data, user, db);
       }
 
       case MCPToolMethods.GENERATE_RESPONSES: {
         const parsed = GenerateResponsesInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolGenerateResponses(parsed.data, user, db, env);
       }
 
@@ -504,22 +536,25 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.LIST_ROUNDS: {
         const parsed = ListRoundsInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListRounds(parsed.data, user, db);
       }
 
       case MCPToolMethods.REGENERATE_ROUND: {
         const parsed = RegenerateRoundInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolRegenerateRound(parsed.data, user, db);
       }
 
       case MCPToolMethods.ROUND_FEEDBACK: {
         const parsed = RoundFeedbackInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolRoundFeedback(parsed.data, user, db);
       }
 
@@ -528,15 +563,17 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.GENERATE_ANALYSIS: {
         const parsed = GenerateAnalysisInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolGenerateSummary(parsed.data, user, db);
       }
 
       case MCPToolMethods.GET_ROUND_ANALYSIS: {
         const parsed = GetRoundAnalysisInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolGetRoundSummary(parsed.data, user, db);
       }
 
@@ -545,22 +582,25 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.ADD_PARTICIPANT: {
         const parsed = AddParticipantInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolAddParticipant(parsed.data, user, db);
       }
 
       case MCPToolMethods.UPDATE_PARTICIPANT: {
         const parsed = UpdateParticipantInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolUpdateParticipant(parsed.data, user, db);
       }
 
       case MCPToolMethods.REMOVE_PARTICIPANT: {
         const parsed = RemoveParticipantInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolRemoveParticipant(parsed.data, user, db);
       }
 
@@ -569,8 +609,9 @@ async function executeToolInternal(
       // ----------------------------------------------------------------------
       case MCPToolMethods.LIST_MODELS: {
         const parsed = ListModelsInputSchema.safeParse(args);
-        if (!parsed.success)
+        if (!parsed.success) {
           return mcpError(`Invalid input: ${parsed.error.message}`);
+        }
         return await toolListModels(parsed.data, user);
       }
 
@@ -605,11 +646,13 @@ async function toolCreateThread(
   // Validate model access (skip for free round users)
   for (const p of input.participants) {
     const model = modelById.get(p.modelId);
-    if (!model)
+    if (!model) {
       throw createError.badRequest(`Model not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
+    }
     const modelForPricing = getModelForPricing(p.modelId);
-    if (!modelForPricing)
+    if (!modelForPricing) {
       throw createError.badRequest(`Model pricing not found: ${p.modelId}`, ErrorContextBuilders.resourceNotFound('model', p.modelId));
+    }
     if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, modelForPricing)) {
       throw createError.unauthorized(`Model requires higher tier: ${p.modelId}`, ErrorContextBuilders.authorization('model', p.modelId, user.id));
     }
@@ -623,25 +666,26 @@ async function toolCreateThread(
         eq(tables.chatProject.userId, user.id),
       ),
     });
-    if (!project)
+    if (!project) {
       throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+    }
   }
 
   const threadId = ulid();
   const slug = `${input.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)}-${ulid().slice(0, 8).toLowerCase()}`;
 
   await db.insert(tables.chatThread).values({
-    id: threadId,
-    userId: user.id,
-    projectId: input.projectId || null,
-    title: input.title,
-    slug,
-    mode: input.mode || DEFAULT_CHAT_MODE,
-    status: ThreadStatuses.ACTIVE,
-    isPublic: input.isPublic || false,
-    version: 1,
     createdAt: new Date(),
+    id: threadId,
+    isPublic: input.isPublic || false,
+    mode: input.mode || DEFAULT_CHAT_MODE,
+    projectId: input.projectId || null,
+    slug,
+    status: ThreadStatuses.ACTIVE,
+    title: input.title,
     updatedAt: new Date(),
+    userId: user.id,
+    version: 1,
   });
 
   // ✅ PERF: Batch insert all participants in single query instead of sequential inserts
@@ -649,14 +693,14 @@ async function toolCreateThread(
   const participantValues = input.participants
     .filter((p): p is NonNullable<typeof p> => p !== null && p !== undefined)
     .map((p, i) => ({
-      id: ulid(),
-      threadId,
-      modelId: p.modelId,
-      role: p.role || null,
-      priority: p.priority ?? i,
-      isEnabled: true,
-      settings: p.systemPrompt ? { systemPrompt: p.systemPrompt } : null,
       createdAt: now,
+      id: ulid(),
+      isEnabled: true,
+      modelId: p.modelId,
+      priority: p.priority ?? i,
+      role: p.role || null,
+      settings: p.systemPrompt ? { systemPrompt: p.systemPrompt } : null,
+      threadId,
       updatedAt: now,
     }));
 
@@ -670,12 +714,12 @@ async function toolCreateThread(
   const participantIds = participantValues.map(p => p.id);
 
   return mcpResult({
-    threadId,
-    slug,
-    title: input.title,
     mode: input.mode || DEFAULT_CHAT_MODE,
-    projectId: input.projectId || null,
     participantIds,
+    projectId: input.projectId || null,
+    slug,
+    threadId,
+    title: input.title,
   });
 }
 
@@ -689,46 +733,47 @@ async function toolGetThread(
     with: { participants: true },
   });
 
-  if (!thread)
+  if (!thread) {
     throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', input.threadId, user.id));
+  }
   if (thread.userId !== user.id && !thread.isPublic) {
     throw createError.unauthorized('Access denied', ErrorContextBuilders.authorization('thread', input.threadId, user.id));
   }
 
   const messages = input.includeMessages !== false
     ? await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, input.threadId),
-        orderBy: [asc(tables.chatMessage.createdAt)],
         limit: input.maxMessages || 50,
+        orderBy: [asc(tables.chatMessage.createdAt)],
+        where: eq(tables.chatMessage.threadId, input.threadId),
       }).then(dbMessages =>
         dbMessages.map(m => ({
-          id: m.id,
-          role: m.role,
           content: m.parts
             .filter((p): p is { type: 'text'; text: string } => p.type === MessagePartTypes.TEXT)
             .map(p => p.text)
             .join(''),
-          roundNumber: m.roundNumber,
+          id: m.id,
           participantId: m.participantId,
+          role: m.role,
+          roundNumber: m.roundNumber,
         })),
       )
     : [];
 
   return mcpResult({
-    thread: {
-      id: thread.id,
-      title: thread.title,
-      mode: thread.mode,
-      status: thread.status,
-      isPublic: thread.isPublic,
-    },
+    messages,
     participants: thread.participants.map(p => ({
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
       priority: p.priority,
+      role: p.role,
     })),
-    messages,
+    thread: {
+      id: thread.id,
+      isPublic: thread.isPublic,
+      mode: thread.mode,
+      status: thread.status,
+      title: thread.title,
+    },
   });
 }
 
@@ -744,22 +789,22 @@ async function toolListThreads(
   }
 
   const threads = await db.query.chatThread.findMany({
-    where: and(...filters),
-    orderBy: [desc(tables.chatThread.updatedAt)],
     limit: input.limit || 20,
+    orderBy: [desc(tables.chatThread.updatedAt)],
+    where: and(...filters),
     with: { participants: true },
   });
 
   return mcpResult({
+    count: threads.length,
     threads: threads.map(t => ({
       id: t.id,
-      title: t.title,
       mode: t.mode,
-      projectId: t.projectId,
       participantCount: t.participants.length,
+      projectId: t.projectId,
+      title: t.title,
       updatedAt: t.updatedAt.toISOString(),
     })),
-    count: threads.length,
     ...(input.projectId && { projectId: input.projectId }),
   });
 }
@@ -782,31 +827,31 @@ async function toolSendMessage(
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const userMessages = await db.query.chatMessage.findMany({
+    columns: { id: true },
     where: and(
       eq(tables.chatMessage.threadId, input.threadId),
       eq(tables.chatMessage.role, MessageRoles.USER),
     ),
-    columns: { id: true },
   });
 
   const roundNumber = userMessages.length + 1;
   const messageId = ulid();
 
   await db.insert(tables.chatMessage).values({
-    id: messageId,
-    threadId: input.threadId,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: input.content }],
-    participantId: null,
-    roundNumber,
-    metadata: { role: MessageRoles.USER, roundNumber },
     createdAt: new Date(),
+    id: messageId,
+    metadata: { role: MessageRoles.USER, roundNumber },
+    participantId: null,
+    parts: [{ text: input.content, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
+    roundNumber,
+    threadId: input.threadId,
   });
 
   return mcpResult({
     messageId,
-    roundNumber,
     note: 'Message saved. Call generate_responses to get AI responses.',
+    roundNumber,
   });
 }
 
@@ -822,42 +867,42 @@ async function toolGenerateResponses(
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const participants = await db.query.chatParticipant.findMany({
+    orderBy: [asc(tables.chatParticipant.priority)],
     where: and(
       eq(tables.chatParticipant.threadId, input.threadId),
       eq(tables.chatParticipant.isEnabled, true),
     ),
-    orderBy: [asc(tables.chatParticipant.priority)],
   });
 
   if (participants.length === 0) {
     throw createError.badRequest('No enabled participants', ErrorContextBuilders.validation('participants'));
   }
 
+  // Omit regenerateRound instead of passing undefined to satisfy exactOptionalPropertyTypes
   const roundResult = await calculateRoundNumber({
-    threadId: input.threadId,
-    participantIndex: DEFAULT_PARTICIPANT_INDEX,
-    message: { role: MessageRoles.USER, parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }] },
-    regenerateRound: undefined,
     db,
+    message: { parts: [{ text: input.messageContent, type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+    participantIndex: DEFAULT_PARTICIPANT_INDEX,
+    threadId: input.threadId,
   });
 
   // Save user message
   const userMessageId = ulid();
   await db.insert(tables.chatMessage).values({
-    id: userMessageId,
-    threadId: input.threadId,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }],
-    participantId: null,
-    roundNumber: roundResult.roundNumber,
-    metadata: { role: MessageRoles.USER, roundNumber: roundResult.roundNumber },
     createdAt: new Date(),
+    id: userMessageId,
+    metadata: { role: MessageRoles.USER, roundNumber: roundResult.roundNumber },
+    participantId: null,
+    parts: [{ text: input.messageContent, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
+    roundNumber: roundResult.roundNumber,
+    threadId: input.threadId,
   });
 
   // Load context
   const dbMessages = await db.query.chatMessage.findMany({
-    where: eq(tables.chatMessage.threadId, input.threadId),
     orderBy: [asc(tables.chatMessage.roundNumber), asc(tables.chatMessage.createdAt)],
+    where: eq(tables.chatMessage.threadId, input.threadId),
   });
   const previousMessages = await chatMessagesToUIMessages(dbMessages);
 
@@ -869,17 +914,18 @@ async function toolGenerateResponses(
   // Estimate ~2 credits per participant for enforcement check
   await enforceCredits(user.id, participants.length * 2, { skipRoundCheck: true });
 
-  const responses: Array<{ participantId: string; content: string }> = [];
+  const responses: { participantId: string; content: string }[] = [];
 
   for (let i = 0; i < participants.length; i++) {
     const participant = participants[i];
-    if (!participant)
+    if (!participant) {
       continue;
+    }
 
     const allMessages = [...previousMessages, {
       id: userMessageId,
+      parts: [{ text: input.messageContent, type: MessagePartTypes.TEXT }],
       role: MessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: input.messageContent }],
     }];
 
     const typedMessages = await validateUIMessages({ messages: allMessages });
@@ -896,14 +942,14 @@ async function toolGenerateResponses(
 
     const streamMessageId = ulid();
     const finishResult = await streamText({
+      maxOutputTokens,
+      messages: modelMessages,
       model: client.chat(participant.modelId),
       system: systemPrompt,
-      messages: modelMessages,
-      maxOutputTokens,
       ...(supportsTemperature && { temperature: participant.settings?.temperature ?? 0.7 }),
-      maxRetries: AI_RETRY_CONFIG.maxAttempts,
       // ✅ STREAMING TIMEOUT: 30 min for MCP operations
       abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.totalMs),
+      maxRetries: AI_RETRY_CONFIG.maxAttempts,
     });
 
     let fullText = '';
@@ -915,23 +961,23 @@ async function toolGenerateResponses(
     const finishReason = await finishResult.finishReason;
 
     await saveStreamedMessage({
+      db,
+      finishResult: {
+        finishReason,
+        reasoning: await finishResult.reasoning,
+        response: finishResult.response,
+        text: fullText,
+        usage: { inputTokens: usage?.inputTokens || 0, outputTokens: usage?.outputTokens || 0 },
+      },
       messageId: streamMessageId,
-      threadId: input.threadId,
+      modelId: participant.modelId,
       participantId: participant.id,
       participantIndex: i,
       participantRole: participant.role,
-      modelId: participant.modelId,
+      reasoningDeltas: [],
       roundNumber: roundResult.roundNumber,
       text: fullText,
-      reasoningDeltas: [],
-      finishResult: {
-        text: fullText,
-        usage: { inputTokens: usage?.inputTokens || 0, outputTokens: usage?.outputTokens || 0 },
-        finishReason,
-        response: finishResult.response,
-        reasoning: await finishResult.reasoning,
-      },
-      db,
+      threadId: input.threadId,
     });
 
     // ✅ BILLING: Deduct credits for MCP AI call
@@ -942,25 +988,25 @@ async function toolGenerateResponses(
     if (safeInputTokens > 0 || safeOutputTokens > 0) {
       try {
         await finalizeCredits(user.id, `mcp-response-${streamMessageId}`, {
-          inputTokens: safeInputTokens,
-          outputTokens: safeOutputTokens,
           action: CreditActions.AI_RESPONSE,
-          threadId: input.threadId,
+          inputTokens: safeInputTokens,
           messageId: streamMessageId,
           modelId: participant.modelId,
+          outputTokens: safeOutputTokens,
+          threadId: input.threadId,
         });
       } catch (billingError) {
         console.error('[MCP] Billing failed for participant response:', billingError);
       }
     }
 
-    responses.push({ participantId: participant.id, content: fullText });
+    responses.push({ content: fullText, participantId: participant.id });
   }
 
   return mcpResult({
+    responses,
     roundNumber: roundResult.roundNumber,
     userMessageId,
-    responses,
   });
 }
 
@@ -972,8 +1018,8 @@ async function toolListRounds(
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const messages = await db.query.chatMessage.findMany({
-    where: eq(tables.chatMessage.threadId, input.threadId),
     orderBy: [asc(tables.chatMessage.roundNumber)],
+    where: eq(tables.chatMessage.threadId, input.threadId),
   });
 
   const roundMap = new Map<number, number>();
@@ -982,8 +1028,8 @@ async function toolListRounds(
   }
 
   const rounds = Array.from(roundMap.entries()).map(([roundNumber, count]) => ({
-    roundNumber,
     messageCount: count,
+    roundNumber,
   }));
 
   return mcpResult({ rounds, totalRounds: rounds.length });
@@ -997,16 +1043,16 @@ async function toolRegenerateRound(
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const cleanup = await handleRoundRegeneration({
-    threadId: input.threadId,
-    regenerateRound: input.roundNumber,
-    participantIndex: DEFAULT_PARTICIPANT_INDEX,
     db,
+    participantIndex: DEFAULT_PARTICIPANT_INDEX,
+    regenerateRound: input.roundNumber,
+    threadId: input.threadId,
   });
 
   return mcpResult({
-    roundNumber: input.roundNumber,
     deletedMessages: cleanup.deletedMessagesCount,
     note: 'Round cleaned up. Call generate_responses to regenerate.',
+    roundNumber: input.roundNumber,
   });
 }
 
@@ -1034,13 +1080,13 @@ async function toolRoundFeedback(
         .where(eq(tables.chatRoundFeedback.id, existing.id));
     } else {
       await db.insert(tables.chatRoundFeedback).values({
-        id: ulid(),
-        threadId: input.threadId,
-        userId: user.id,
-        roundNumber: input.roundNumber,
-        feedbackType: input.feedback,
         createdAt: new Date(),
+        feedbackType: input.feedback,
+        id: ulid(),
+        roundNumber: input.roundNumber,
+        threadId: input.threadId,
         updatedAt: new Date(),
+        userId: user.id,
       });
     }
   }
@@ -1058,8 +1104,8 @@ async function toolGenerateSummary(
   // Note: Full summary generation requires streaming - return guidance
   return mcpResult({
     note: 'Summary generation requires streaming. Use POST /api/v1/chat/threads/:id/rounds/:roundNumber/analyze instead.',
-    threadId: input.threadId,
     roundNumber: input.roundNumber,
+    threadId: input.threadId,
   });
 }
 
@@ -1071,12 +1117,12 @@ async function toolGetRoundSummary(
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const messages = await db.query.chatMessage.findMany({
+    orderBy: [desc(tables.chatMessage.createdAt)],
     where: and(
       eq(tables.chatMessage.threadId, input.threadId),
       eq(tables.chatMessage.roundNumber, input.roundNumber),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    orderBy: [desc(tables.chatMessage.createdAt)],
   });
 
   const moderatorMessage = messages.find((msg) => {
@@ -1094,10 +1140,10 @@ async function toolGetRoundSummary(
   const summaryText = textParts.map(p => p.text).join('\n');
 
   return mcpResult({
-    summaryId: moderatorMessage.id,
+    data: { summary: summaryText },
     roundNumber: moderatorMessage.roundNumber,
     status: MessageStatuses.COMPLETE,
-    data: { summary: summaryText },
+    summaryId: moderatorMessage.id,
   });
 }
 
@@ -1123,29 +1169,31 @@ async function toolAddParticipant(
     && !(await checkFreeUserHasCompletedRound(user.id));
 
   const model = getAllModels().find(m => m.id === input.modelId);
-  if (!model)
+  if (!model) {
     throw createError.badRequest(`Model not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
+  }
   const modelForPricing = getModelForPricing(input.modelId);
-  if (!modelForPricing)
+  if (!modelForPricing) {
     throw createError.badRequest(`Model pricing not found: ${input.modelId}`, ErrorContextBuilders.resourceNotFound('model', input.modelId));
+  }
   if (!isFreeUserWithFreeRound && !canAccessModelByPricing(userTier, modelForPricing)) {
     throw createError.unauthorized(`Model requires higher tier: ${input.modelId}`, ErrorContextBuilders.authorization('model', input.modelId, user.id));
   }
 
   const participantId = ulid();
   await db.insert(tables.chatParticipant).values({
-    id: participantId,
-    threadId: input.threadId,
-    modelId: input.modelId,
-    role: input.role || null,
-    priority: input.priority ?? participants.length,
-    isEnabled: true,
-    settings: input.systemPrompt ? { systemPrompt: input.systemPrompt } : null,
     createdAt: new Date(),
+    id: participantId,
+    isEnabled: true,
+    modelId: input.modelId,
+    priority: input.priority ?? participants.length,
+    role: input.role || null,
+    settings: input.systemPrompt ? { systemPrompt: input.systemPrompt } : null,
+    threadId: input.threadId,
     updatedAt: new Date(),
   });
 
-  return mcpResult({ participantId, modelId: input.modelId, added: true });
+  return mcpResult({ added: true, modelId: input.modelId, participantId });
 }
 
 async function toolUpdateParticipant(
@@ -1162,8 +1210,9 @@ async function toolUpdateParticipant(
     ),
   });
 
-  if (!participant)
+  if (!participant) {
     throw createError.notFound('Participant not found', ErrorContextBuilders.resourceNotFound('participant', input.participantId));
+  }
 
   const updates = {
     updatedAt: new Date(),
@@ -1209,17 +1258,17 @@ async function toolListModels(
   }
 
   return mcpResult({
+    count: models.length,
     models: models.map((m) => {
       const modelForPricing = getModelForPricing(m.id);
       return {
+        accessible: modelForPricing ? canAccessModelByPricing(userTier, modelForPricing) : false,
+        contextLength: m.context_length,
         id: m.id,
         name: m.name,
         provider: m.provider,
-        contextLength: m.context_length,
-        accessible: modelForPricing ? canAccessModelByPricing(userTier, modelForPricing) : false,
       };
     }),
-    count: models.length,
     userTier,
   });
 }
@@ -1248,24 +1297,24 @@ async function toolCreateProject(
   const [project] = await db
     .insert(tables.chatProject)
     .values({
-      id: projectId,
-      userId: user.id,
-      name: input.name,
-      description: input.description || null,
-      customInstructions: input.customInstructions || null,
       autoragInstanceId,
+      createdAt: new Date(),
+      customInstructions: input.customInstructions || null,
+      description: input.description || null,
+      id: projectId,
+      name: input.name,
       r2FolderPrefix,
       settings: input.settings || null,
-      createdAt: new Date(),
       updatedAt: new Date(),
+      userId: user.id,
     })
     .returning();
 
   return mcpResult({
-    projectId: project?.id,
-    name: project?.name,
-    autoragInstanceId,
     attachmentCount: 0,
+    autoragInstanceId,
+    name: project?.name,
+    projectId: project?.id,
     threadCount: 0,
   });
 }
@@ -1282,32 +1331,33 @@ async function toolGetProject(
     ),
   });
 
-  if (!project)
+  if (!project) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   // Get counts
   const attachments = await db.query.projectAttachment.findMany({
-    where: eq(tables.projectAttachment.projectId, project.id),
     columns: { id: true },
+    where: eq(tables.projectAttachment.projectId, project.id),
   });
 
   const threads = await db.query.chatThread.findMany({
-    where: eq(tables.chatThread.projectId, project.id),
     columns: { id: true },
+    where: eq(tables.chatThread.projectId, project.id),
   });
 
   return mcpResult({
+    attachmentCount: attachments.length,
     project: {
+      autoragInstanceId: project.autoragInstanceId,
+      createdAt: project.createdAt.toISOString(),
+      customInstructions: project.customInstructions,
+      description: project.description,
       id: project.id,
       name: project.name,
-      description: project.description,
-      customInstructions: project.customInstructions,
-      autoragInstanceId: project.autoragInstanceId,
       settings: project.settings,
-      createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
     },
-    attachmentCount: attachments.length,
     threadCount: threads.length,
   });
 }
@@ -1325,9 +1375,9 @@ async function toolListProjects(
 
   // ✅ PERF: Fetch projects with relations in single query using Drizzle relational
   const projects = await db.query.chatProject.findMany({
-    where: and(...filters),
-    orderBy: [desc(tables.chatProject.updatedAt)],
     limit: input.limit || 20,
+    orderBy: [desc(tables.chatProject.updatedAt)],
+    where: and(...filters),
     with: {
       attachments: {
         columns: { id: true },
@@ -1340,17 +1390,17 @@ async function toolListProjects(
 
   // Transform to include counts
   const projectsWithCounts = projects.map(project => ({
+    attachmentCount: project.attachments?.length ?? 0,
+    description: project.description,
     id: project.id,
     name: project.name,
-    description: project.description,
-    attachmentCount: project.attachments?.length ?? 0,
     threadCount: project.threads?.length ?? 0,
     updatedAt: project.updatedAt.toISOString(),
   }));
 
   return mcpResult({
-    projects: projectsWithCounts,
     count: projectsWithCounts.length,
+    projects: projectsWithCounts,
   });
 }
 
@@ -1367,8 +1417,9 @@ async function toolUpdateProject(
     ),
   });
 
-  if (!existing)
+  if (!existing) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   const updates = {
     updatedAt: new Date(),
@@ -1385,8 +1436,8 @@ async function toolUpdateProject(
     .returning();
 
   return mcpResult({
-    projectId: updated?.id,
     name: updated?.name,
+    projectId: updated?.id,
     updated: true,
   });
 }
@@ -1404,20 +1455,21 @@ async function toolDeleteProject(
     ),
   });
 
-  if (!project)
+  if (!project) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   const attachments = await db.query.projectAttachment.findMany({
-    where: eq(tables.projectAttachment.projectId, input.projectId),
     columns: { id: true },
+    where: eq(tables.projectAttachment.projectId, input.projectId),
   });
 
   await db.delete(tables.chatProject).where(eq(tables.chatProject.id, input.projectId));
 
   return mcpResult({
-    projectId: input.projectId,
-    deleted: true,
     attachmentsRemoved: attachments.length,
+    deleted: true,
+    projectId: input.projectId,
   });
 }
 
@@ -1434,26 +1486,27 @@ async function toolListProjectThreads(
     ),
   });
 
-  if (!project)
+  if (!project) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   const threads = await db.query.chatThread.findMany({
-    where: eq(tables.chatThread.projectId, input.projectId),
-    orderBy: [desc(tables.chatThread.updatedAt)],
     limit: input.limit || 20,
+    orderBy: [desc(tables.chatThread.updatedAt)],
+    where: eq(tables.chatThread.projectId, input.projectId),
     with: { participants: true },
   });
 
   return mcpResult({
+    count: threads.length,
     projectId: input.projectId,
     threads: threads.map(t => ({
       id: t.id,
-      title: t.title,
       mode: t.mode,
       participantCount: t.participants.length,
+      title: t.title,
       updatedAt: t.updatedAt.toISOString(),
     })),
-    count: threads.length,
   });
 }
 
@@ -1474,8 +1527,9 @@ async function toolListKnowledgeFiles(
     ),
   });
 
-  if (!project)
+  if (!project) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   const filters = [eq(tables.projectAttachment.projectId, input.projectId)];
   if (input.status) {
@@ -1484,26 +1538,26 @@ async function toolListKnowledgeFiles(
   }
 
   const attachments = await db.query.projectAttachment.findMany({
-    where: and(...filters),
-    orderBy: [desc(tables.projectAttachment.createdAt)],
     limit: input.limit || 20,
+    orderBy: [desc(tables.projectAttachment.createdAt)],
+    where: and(...filters),
     with: {
       upload: true,
     },
   });
 
   return mcpResult({
-    projectId: input.projectId,
     attachments: attachments.map(a => ({
-      id: a.id,
+      createdAt: a.createdAt.toISOString(),
       filename: a.upload.filename,
       fileSize: a.upload.fileSize,
       fileType: a.upload.mimeType,
+      id: a.id,
       indexStatus: a.indexStatus,
       ragMetadata: a.ragMetadata,
-      createdAt: a.createdAt.toISOString(),
     })),
     count: attachments.length,
+    projectId: input.projectId,
   });
 }
 
@@ -1521,8 +1575,9 @@ async function toolDeleteKnowledgeFile(
     ),
   });
 
-  if (!project)
+  if (!project) {
     throw createError.notFound(`Project not found: ${input.projectId}`, ErrorContextBuilders.resourceNotFound('project', input.projectId, user.id));
+  }
 
   // Get attachment reference
   const attachment = await db.query.projectAttachment.findFirst({
@@ -1532,8 +1587,9 @@ async function toolDeleteKnowledgeFile(
     ),
   });
 
-  if (!attachment)
+  if (!attachment) {
     throw createError.notFound(`Attachment not found: ${input.fileId}`, ErrorContextBuilders.resourceNotFound('attachment', input.fileId));
+  }
 
   await db.delete(tables.projectAttachment).where(eq(tables.projectAttachment.id, input.fileId));
 

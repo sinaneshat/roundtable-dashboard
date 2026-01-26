@@ -29,8 +29,9 @@ vi.mock('@/db', async (importOriginal) => {
 });
 
 function withCache<T>(value: T) {
-  const promise = Promise.resolve(value) as Promise<T> & { $withCache: ReturnType<typeof vi.fn> };
-  promise.$withCache = vi.fn(() => promise);
+  const promise = Promise.resolve(value) as Promise<T> & { $withCache: () => Promise<T> };
+  // Assign the $withCache method directly - it returns the same promise to simulate caching
+  promise.$withCache = () => promise;
   return promise;
 }
 
@@ -64,13 +65,13 @@ describe('checkFreeUserHasCompletedRound', () => {
   function setupSelectMock(
     transactionResult: unknown[],
     messageResult: unknown[],
-    participantCount: number = 2,
+    participantCount = 2,
   ) {
     // Create participant array based on count
     const participantArray = Array.from({ length: participantCount }, (_, i) => ({
       id: `p${i + 1}`,
-      threadId: 'thread-1',
       isEnabled: true,
+      threadId: 'thread-1',
     }));
 
     // Mock db.select() - handles 4 sequential calls:
@@ -121,21 +122,21 @@ describe('checkFreeUserHasCompletedRound', () => {
   beforeEach(() => {
     // Create mock database object with chainable query methods
     mockDb = {
-      select: vi.fn(),
       query: {
-        chatThread: {
+        chatMessage: {
           findFirst: vi.fn(),
         },
         chatParticipant: {
           findMany: vi.fn(),
         },
-        chatMessage: {
+        chatThread: {
           findFirst: vi.fn(),
         },
         creditTransaction: {
           findFirst: vi.fn(),
         },
       },
+      select: vi.fn(),
     };
 
     // Setup the default mock implementation with complete chain
@@ -173,9 +174,9 @@ describe('checkFreeUserHasCompletedRound', () => {
       setupSelectMock([], []);
       mockDb.query.chatThread.findFirst.mockResolvedValue({
         id: 'thread-123',
-        userId: 'user-123',
-        title: 'Test Thread',
         mode: 'brainstorming',
+        title: 'Test Thread',
+        userId: 'user-123',
       });
 
       mockDb.query.chatParticipant.findMany.mockResolvedValue([]);
@@ -205,9 +206,9 @@ describe('checkFreeUserHasCompletedRound', () => {
       });
 
       mockDb.query.chatParticipant.findMany.mockResolvedValue([
-        { id: 'p1', modelId: 'model-1', isEnabled: true },
-        { id: 'p2', modelId: 'model-2', isEnabled: true },
-        { id: 'p3', modelId: 'model-3', isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'model-1' },
+        { id: 'p2', isEnabled: true, modelId: 'model-2' },
+        { id: 'p3', isEnabled: true, modelId: 'model-3' },
       ]);
     });
 
@@ -257,17 +258,17 @@ describe('checkFreeUserHasCompletedRound', () => {
         });
 
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: true },
-          { id: 'p2', modelId: 'model-2', isEnabled: true },
+          { id: 'p1', isEnabled: true, modelId: 'model-1' },
+          { id: 'p2', isEnabled: true, modelId: 'model-2' },
         ]);
 
         // For 2+ participants, moderator must also complete for round to be done
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
-          threadId: 'thread-123',
+          parts: [{ text: 'Moderator summary...', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
+          threadId: 'thread-123',
         });
       });
 
@@ -296,19 +297,19 @@ describe('checkFreeUserHasCompletedRound', () => {
         });
 
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: true },
-          { id: 'p2', modelId: 'model-2', isEnabled: true },
-          { id: 'p3', modelId: 'model-3', isEnabled: true },
-          { id: 'p4', modelId: 'model-4', isEnabled: true },
+          { id: 'p1', isEnabled: true, modelId: 'model-1' },
+          { id: 'p2', isEnabled: true, modelId: 'model-2' },
+          { id: 'p3', isEnabled: true, modelId: 'model-3' },
+          { id: 'p4', isEnabled: true, modelId: 'model-4' },
         ]);
 
         // For 2+ participants, moderator must also complete for round to be done
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
-          threadId: 'thread-123',
+          parts: [{ text: 'Moderator summary...', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
+          threadId: 'thread-123',
         });
       });
 
@@ -339,17 +340,17 @@ describe('checkFreeUserHasCompletedRound', () => {
 
         // findMany filters by isEnabled: true, so only return enabled participants
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: true },
-          { id: 'p2', modelId: 'model-2', isEnabled: true },
+          { id: 'p1', isEnabled: true, modelId: 'model-1' },
+          { id: 'p2', isEnabled: true, modelId: 'model-2' },
         ]);
 
         // For 2+ participants, moderator must also complete for round to be done
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
-          threadId: 'thread-123',
+          parts: [{ text: 'Moderator summary...', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
+          threadId: 'thread-123',
         });
       });
 
@@ -377,9 +378,9 @@ describe('checkFreeUserHasCompletedRound', () => {
 
         // 2 enabled + 1 disabled participant
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: true },
-          { id: 'p2', modelId: 'model-2', isEnabled: true },
-          { id: 'p3', modelId: 'model-3', isEnabled: false },
+          { id: 'p1', isEnabled: true, modelId: 'model-1' },
+          { id: 'p2', isEnabled: true, modelId: 'model-2' },
+          { id: 'p3', isEnabled: false, modelId: 'model-3' },
         ]);
       });
 
@@ -394,9 +395,9 @@ describe('checkFreeUserHasCompletedRound', () => {
   describe('when free round complete transaction exists', () => {
     beforeEach(() => {
       const freeRoundTransaction = {
+        action: 'free_round_complete',
         id: 'tx-1',
         userId: 'user-123',
-        action: 'free_round_complete',
       };
 
       // Mock db.select() for transaction check - returns existing transaction
@@ -442,17 +443,17 @@ describe('checkFreeUserHasCompletedRound', () => {
       });
 
       mockDb.query.chatParticipant.findMany.mockResolvedValue([
-        { id: 'p1', modelId: 'model-1', isEnabled: true },
-        { id: 'p2', modelId: 'model-2', isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'model-1' },
+        { id: 'p2', isEnabled: true, modelId: 'model-2' },
       ]);
 
       // For 2+ participants, moderator must also complete for round to be done
       mockDb.query.chatMessage.findFirst.mockResolvedValue({
         id: 'thread-123_r0_moderator',
-        threadId: 'thread-123',
+        parts: [{ text: 'Moderator summary...', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Moderator summary...' }],
         roundNumber: 0,
+        threadId: 'thread-123',
       });
     });
 
@@ -476,8 +477,8 @@ describe('checkFreeUserHasCompletedRound', () => {
       });
 
       mockDb.query.chatParticipant.findMany.mockResolvedValue([
-        { id: 'p1', modelId: 'model-1', isEnabled: true },
-        { id: 'p2', modelId: 'model-2', isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'model-1' },
+        { id: 'p2', isEnabled: true, modelId: 'model-2' },
       ]);
     });
 
@@ -505,8 +506,8 @@ describe('checkFreeUserHasCompletedRound', () => {
       });
 
       mockDb.query.chatParticipant.findMany.mockResolvedValue([
-        { id: 'p1', modelId: 'model-1', isEnabled: true },
-        { id: 'p2', modelId: 'model-2', isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'model-1' },
+        { id: 'p2', isEnabled: true, modelId: 'model-2' },
       ]);
     });
 
@@ -537,17 +538,17 @@ describe('checkFreeUserHasCompletedRound', () => {
         });
 
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: true },
-          { id: 'p2', modelId: 'model-2', isEnabled: true },
+          { id: 'p1', isEnabled: true, modelId: 'model-1' },
+          { id: 'p2', isEnabled: true, modelId: 'model-2' },
         ]);
 
         // For 2+ participants, moderator must also complete for round to be done
         mockDb.query.chatMessage.findFirst.mockResolvedValue({
           id: 'thread-123_r0_moderator',
-          threadId: 'thread-123',
+          parts: [{ text: 'Moderator summary...', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Moderator summary...' }],
           roundNumber: 0,
+          threadId: 'thread-123',
         });
       });
 
@@ -568,8 +569,8 @@ describe('checkFreeUserHasCompletedRound', () => {
         });
 
         mockDb.query.chatParticipant.findMany.mockResolvedValue([
-          { id: 'p1', modelId: 'model-1', isEnabled: false },
-          { id: 'p2', modelId: 'model-2', isEnabled: false },
+          { id: 'p1', isEnabled: false, modelId: 'model-1' },
+          { id: 'p2', isEnabled: false, modelId: 'model-2' },
         ]);
       });
 

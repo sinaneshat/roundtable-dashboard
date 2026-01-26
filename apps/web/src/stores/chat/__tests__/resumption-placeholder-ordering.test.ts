@@ -29,37 +29,48 @@ import type { ChatParticipant, ChatThread, DbAssistantMessageMetadata } from '@/
 import { createChatStore } from '../store';
 
 // ============================================================================
+// Test Type Schemas
+// ============================================================================
+
+/**
+ * Test assistant metadata type with optional moderator flag (for test assertions)
+ */
+type TestAssistantMetadata = DbAssistantMessageMetadata & {
+  isModerator?: boolean;
+};
+
+// ============================================================================
 // Test Utilities
 // ============================================================================
 
 function createMockThread(overrides: Partial<ChatThread> = {}): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: 'brainstorm',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: 'brainstorm',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   } as ChatThread;
 }
 
 function createMockParticipant(overrides: Partial<ChatParticipant> = {}): ChatParticipant {
   return {
+    createdAt: new Date(),
     id: `participant-${Math.random().toString(36).slice(2)}`,
-    threadId: 'thread-123',
+    isEnabled: true,
     modelId: ModelIds.OPENAI_GPT_4_1,
     priority: 0,
-    isEnabled: true,
     systemPrompt: null,
     temperature: null,
-    createdAt: new Date(),
+    threadId: 'thread-123',
     updatedAt: new Date(),
     ...overrides,
   } as ChatParticipant;
@@ -68,12 +79,12 @@ function createMockParticipant(overrides: Partial<ChatParticipant> = {}): ChatPa
 function createUserMessage(roundNumber: number, text = 'Test message'): UIMessage {
   return {
     id: `msg-user-r${roundNumber}`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT as const, text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: MessagePartTypes.TEXT as const }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -88,28 +99,28 @@ function createParticipantMessage(
     modelId?: string;
   } = {},
 ): UIMessage {
-  const { hasContent = true, isStreaming = false, isComplete = true, participantId, modelId = ModelIds.OPENAI_GPT_4_1 } = options;
+  const { hasContent = true, isComplete = true, isStreaming = false, modelId = ModelIds.OPENAI_GPT_4_1, participantId } = options;
 
   const parts = hasContent
     ? [{
-        type: MessagePartTypes.TEXT as const,
-        text: `Response from participant ${participantIndex}`,
         state: isStreaming ? TextPartStates.STREAMING : TextPartStates.DONE,
+        text: `Response from participant ${participantIndex}`,
+        type: MessagePartTypes.TEXT as const,
       }]
     : [];
 
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts,
     metadata: {
+      finishReason: isComplete && !isStreaming ? 'stop' : undefined,
+      model: modelId,
+      participantId: participantId || `participant-${participantIndex}`,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      participantId: participantId || `participant-${participantIndex}`,
-      model: modelId,
-      finishReason: isComplete && !isStreaming ? 'stop' : undefined,
     },
+    parts,
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -118,24 +129,24 @@ function createModeratorMessage(roundNumber: number, options: { hasContent?: boo
 
   const parts = hasContent
     ? [{
-        type: MessagePartTypes.TEXT as const,
-        text: 'Moderator summary',
         state: isStreaming ? TextPartStates.STREAMING : TextPartStates.DONE,
+        text: 'Moderator summary',
+        type: MessagePartTypes.TEXT as const,
       }]
     : [];
 
   return {
     id: `thread-123_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts,
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      finishReason: hasContent && !isStreaming ? 'stop' : undefined,
       isModerator: true,
       model: MODERATOR_NAME,
-      finishReason: hasContent && !isStreaming ? 'stop' : undefined,
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts,
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -155,7 +166,7 @@ describe('resumption Placeholder Ordering', () => {
     it('should show participant placeholders when streamingRoundNumber is set', () => {
       const participants = [
         createMockParticipant({ id: 'p1', priority: 0 }),
-        createMockParticipant({ id: 'p2', priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
+        createMockParticipant({ id: 'p2', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, priority: 1 }),
       ];
 
       const messages: UIMessage[] = [
@@ -199,23 +210,23 @@ describe('resumption Placeholder Ordering', () => {
       // Moderator conditions - should be false because:
       // 1. No moderator message exists
       // 2. isModeratorStreaming is false
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
       const moderatorExists = state.messages.some(m =>
         m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata,
       );
-      expect(moderatorExists).toBe(false);
+      expect(moderatorExists).toBeFalsy();
     });
 
     it('should only show moderator after all participants complete', () => {
       const participants = [
         createMockParticipant({ id: 'p1', priority: 0 }),
-        createMockParticipant({ id: 'p2', priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
+        createMockParticipant({ id: 'p2', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, priority: 1 }),
       ];
 
       const messages: UIMessage[] = [
         createUserMessage(0, 'Hello'),
         createParticipantMessage(0, 0, { isComplete: true, participantId: 'p1' }),
-        createParticipantMessage(0, 1, { isComplete: true, participantId: 'p2', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4 }),
+        createParticipantMessage(0, 1, { isComplete: true, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4, participantId: 'p2' }),
         createModeratorMessage(0, { hasContent: true }),
       ];
 
@@ -226,11 +237,13 @@ describe('resumption Placeholder Ordering', () => {
 
       // Verify moderator exists AFTER participants
       const messageOrder = state.messages.map((m) => {
-        if (m.role === UIMessageRoles.USER)
+        if (m.role === UIMessageRoles.USER) {
           return 'user';
-        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
-        if (meta?.isModerator)
+        }
+        const meta = m.metadata as TestAssistantMetadata;
+        if (meta?.isModerator) {
           return 'moderator';
+        }
         return `participant-${meta?.participantIndex}`;
       });
 
@@ -287,26 +300,26 @@ describe('resumption Placeholder Ordering', () => {
       const state = store.getState();
 
       // Default state
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
 
       // No moderator message
       const hasModerator = state.messages.some(m =>
         m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata,
       );
-      expect(hasModerator).toBe(false);
+      expect(hasModerator).toBeFalsy();
     });
 
     it('should mark isModeratorStreaming when moderator starts', () => {
       store.getState().setIsModeratorStreaming(true);
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
     });
 
     it('should clear isModeratorStreaming when moderator completes', () => {
       store.getState().setIsModeratorStreaming(true);
       store.getState().setIsModeratorStreaming(false);
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
   });
 
@@ -392,13 +405,13 @@ describe('resumption Placeholder Ordering', () => {
 
       store.getState().initializeThread(thread, participants, [createUserMessage(0)]);
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'ps-1',
-        threadId: 'thread-123',
         roundNumber: 0,
         status: MessageStatuses.PENDING,
-        userQuery: 'Hello',
-        createdAt: new Date(),
+        threadId: 'thread-123',
         updatedAt: new Date(),
+        userQuery: 'Hello',
       });
 
       const state = store.getState();
@@ -416,12 +429,12 @@ describe('resumption Placeholder Ordering', () => {
 
     it('should set currentResumptionPhase to PRE_SEARCH via prefillStreamResumptionState', () => {
       store.getState().prefillStreamResumptionState('thread-123', {
-        roundComplete: false,
         currentPhase: RoundPhases.PRE_SEARCH,
-        roundNumber: 0,
-        preSearch: { enabled: true, status: MessageStatuses.STREAMING, streamId: 'stream-1', preSearchId: 'ps-1' },
-        participants: { expectedCount: 2, streamingCount: 0, completedCount: 0, nextParticipantToTrigger: null },
         moderator: null,
+        participants: { completedCount: 0, expectedCount: 2, nextParticipantToTrigger: null, streamingCount: 0 },
+        preSearch: { enabled: true, preSearchId: 'ps-1', status: MessageStatuses.STREAMING, streamId: 'stream-1' },
+        roundComplete: false,
+        roundNumber: 0,
       });
 
       expect(store.getState().currentResumptionPhase).toBe(RoundPhases.PRE_SEARCH);
@@ -436,19 +449,19 @@ describe('resumption Placeholder Ordering', () => {
     it('should clear resumption state with clearStreamResumption', () => {
       // Set up state via prefill
       store.getState().prefillStreamResumptionState('thread-123', {
-        roundComplete: false,
         currentPhase: RoundPhases.PARTICIPANTS,
-        roundNumber: 1,
-        preSearch: null,
-        participants: { expectedCount: 2, streamingCount: 0, completedCount: 0, nextParticipantToTrigger: 0 },
         moderator: null,
+        participants: { completedCount: 0, expectedCount: 2, nextParticipantToTrigger: 0, streamingCount: 0 },
+        preSearch: null,
+        roundComplete: false,
+        roundNumber: 1,
       });
 
       store.getState().clearStreamResumption();
 
       const state = store.getState();
       expect(state.currentResumptionPhase).toBeNull();
-      expect(state.streamResumptionPrefilled).toBe(false);
+      expect(state.streamResumptionPrefilled).toBeFalsy();
       expect(state.resumptionRoundNumber).toBeNull();
     });
   });
@@ -472,11 +485,13 @@ describe('resumption Placeholder Ordering', () => {
 
       const state = store.getState();
       const order = state.messages.map((m) => {
-        if (m.role === UIMessageRoles.USER)
+        if (m.role === UIMessageRoles.USER) {
           return 'USER';
-        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
-        if (meta?.isModerator)
+        }
+        const meta = m.metadata as TestAssistantMetadata;
+        if (meta?.isModerator) {
           return 'MODERATOR';
+        }
         return `P${meta?.participantIndex}`;
       });
 
@@ -503,11 +518,13 @@ describe('resumption Placeholder Ordering', () => {
 
       const state = store.getState();
       const order = state.messages.map((m) => {
-        if (m.role === UIMessageRoles.USER)
+        if (m.role === UIMessageRoles.USER) {
           return 'USER';
-        const meta = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
-        if (meta?.isModerator)
+        }
+        const meta = m.metadata as TestAssistantMetadata;
+        if (meta?.isModerator) {
           return 'MODERATOR';
+        }
         return `P${meta?.participantIndex}`;
       });
 
@@ -524,7 +541,7 @@ describe('resumption Placeholder Ordering', () => {
       // At this point, placeholders should be visible even without isStreaming=true
 
       expect(store.getState().streamingRoundNumber).toBe(0);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should show placeholders when streamingRoundNumber is set but isStreaming is false', () => {
@@ -534,8 +551,8 @@ describe('resumption Placeholder Ordering', () => {
 
       const state = store.getState();
       expect(state.streamingRoundNumber).toBe(1);
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.isStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.isStreaming).toBeFalsy();
 
       // Condition for showing placeholders:
       // isStreamingRound = roundNumber === streamingRoundNumber
@@ -550,7 +567,7 @@ describe('resumption Placeholder Ordering', () => {
 
       // Note: This is typically done by the streaming trigger effect
       // The store doesn't auto-clear, but the effect should
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
 
     it('should allow resumption to set waitingToStartStreaming', () => {
@@ -562,7 +579,7 @@ describe('resumption Placeholder Ordering', () => {
       const state = store.getState();
       expect(state.streamingRoundNumber).toBe(1);
       expect(state.nextParticipantToTrigger).toBe(0);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
   });
 });
@@ -598,7 +615,7 @@ describe('placeholder Visibility Logic (chat-message-list conditions)', () => {
       // shouldShowModerator = moderatorMessage || isModeratorStreaming
       const shouldShowModerator = !!moderatorMessage || isModeratorStreaming;
 
-      expect(shouldShowModerator).toBe(false);
+      expect(shouldShowModerator).toBeFalsy();
     });
 
     it('should show moderator when moderator message exists', () => {
@@ -630,7 +647,7 @@ describe('placeholder Visibility Logic (chat-message-list conditions)', () => {
       // shouldShowModerator = moderatorMessage || isModeratorStreaming
       const shouldShowModerator = state.isModeratorStreaming;
 
-      expect(shouldShowModerator).toBe(true);
+      expect(shouldShowModerator).toBeTruthy();
     });
   });
 
@@ -650,7 +667,7 @@ describe('placeholder Visibility Logic (chat-message-list conditions)', () => {
       // isAnyStreamingActive includes isStreamingRound for participants
       const isAnyStreamingActive = state.isStreaming || state.isModeratorStreaming || isStreamingRound;
 
-      expect(isAnyStreamingActive).toBe(true);
+      expect(isAnyStreamingActive).toBeTruthy();
     });
   });
 });
@@ -665,18 +682,18 @@ describe('initializeThread Resumption State Preservation', () => {
   it('should PRESERVE resumption state when streamResumptionPrefilled is true', () => {
     // Simulate server prefilling resumption state BEFORE initializeThread
     store.getState().prefillStreamResumptionState('thread-123', {
-      roundComplete: false,
       currentPhase: RoundPhases.PARTICIPANTS,
-      roundNumber: 1,
-      preSearch: null,
-      participants: { expectedCount: 1, streamingCount: 0, completedCount: 0, nextParticipantToTrigger: 0 },
       moderator: null,
+      participants: { completedCount: 0, expectedCount: 1, nextParticipantToTrigger: 0, streamingCount: 0 },
+      preSearch: null,
+      roundComplete: false,
+      roundNumber: 1,
     });
 
     const participants = [createMockParticipant({ id: 'p1', priority: 0 })];
     const messages: UIMessage[] = [
       createUserMessage(0),
-      createParticipantMessage(0, 0, { participantId: 'p1', isComplete: true }),
+      createParticipantMessage(0, 0, { isComplete: true, participantId: 'p1' }),
       createModeratorMessage(0),
       createUserMessage(1), // Round 1 started
     ];
@@ -687,10 +704,10 @@ describe('initializeThread Resumption State Preservation', () => {
     const state = store.getState();
 
     // ✅ CRITICAL: Resumption state should be PRESERVED, not reset!
-    expect(state.waitingToStartStreaming).toBe(true);
+    expect(state.waitingToStartStreaming).toBeTruthy();
     expect(state.streamingRoundNumber).toBe(1);
     expect(state.nextParticipantToTrigger).toBe(0);
-    expect(state.streamResumptionPrefilled).toBe(true);
+    expect(state.streamResumptionPrefilled).toBeTruthy();
   });
 
   it('should RESET streaming state when streamResumptionPrefilled is false', () => {
@@ -707,7 +724,7 @@ describe('initializeThread Resumption State Preservation', () => {
     const state = store.getState();
 
     // Streaming state should be reset
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.waitingToStartStreaming).toBeFalsy();
     expect(state.streamingRoundNumber).toBeNull();
     expect(state.nextParticipantToTrigger).toBeNull();
   });
@@ -715,18 +732,18 @@ describe('initializeThread Resumption State Preservation', () => {
   it('should preserve isModeratorStreaming when resuming moderator phase', () => {
     // Simulate server prefilling moderator phase resumption
     store.getState().prefillStreamResumptionState('thread-123', {
-      roundComplete: false,
       currentPhase: RoundPhases.MODERATOR,
-      roundNumber: 0,
+      moderator: { moderatorMessageId: null, status: MessageStatuses.STREAMING, streamId: 'mod-stream-1' },
+      participants: { completedCount: 1, expectedCount: 1, nextParticipantToTrigger: null, streamingCount: 0 },
       preSearch: null,
-      participants: { expectedCount: 1, streamingCount: 0, completedCount: 1, nextParticipantToTrigger: null },
-      moderator: { status: MessageStatuses.STREAMING, streamId: 'mod-stream-1', moderatorMessageId: null },
+      roundComplete: false,
+      roundNumber: 0,
     });
 
     const participants = [createMockParticipant({ id: 'p1', priority: 0 })];
     const messages: UIMessage[] = [
       createUserMessage(0),
-      createParticipantMessage(0, 0, { participantId: 'p1', isComplete: true }),
+      createParticipantMessage(0, 0, { isComplete: true, participantId: 'p1' }),
     ];
 
     // Call initializeThread
@@ -735,8 +752,8 @@ describe('initializeThread Resumption State Preservation', () => {
     const state = store.getState();
 
     // Moderator streaming state should be preserved
-    expect(state.isModeratorStreaming).toBe(true);
-    expect(state.waitingToStartStreaming).toBe(true);
+    expect(state.isModeratorStreaming).toBeTruthy();
+    expect(state.waitingToStartStreaming).toBeTruthy();
     expect(state.streamingRoundNumber).toBe(0);
   });
 });
@@ -781,7 +798,7 @@ describe('end-to-End Resumption Flows', () => {
       // Verify round 1 state is ready for resumption
       expect(state.streamingRoundNumber).toBe(1);
       expect(state.nextParticipantToTrigger).toBe(0);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // Verify no moderator for round 1 yet
       const round1Moderator = state.messages.find(m =>
@@ -844,12 +861,12 @@ describe('end-to-End Resumption Flows', () => {
 
       // Prefill BEFORE initializeThread to simulate server detection
       store.getState().prefillStreamResumptionState('thread-123', {
-        roundComplete: false,
         currentPhase: RoundPhases.MODERATOR,
-        roundNumber: 0,
+        moderator: { moderatorMessageId: null, status: MessageStatuses.STREAMING, streamId: 'mod-stream-1' },
+        participants: { completedCount: 1, expectedCount: 1, nextParticipantToTrigger: null, streamingCount: 0 },
         preSearch: null,
-        participants: { expectedCount: 1, streamingCount: 0, completedCount: 1, nextParticipantToTrigger: null },
-        moderator: { status: MessageStatuses.STREAMING, streamId: 'mod-stream-1', moderatorMessageId: null },
+        roundComplete: false,
+        roundNumber: 0,
       });
 
       store.getState().initializeThread(createMockThread(), participants, messages);

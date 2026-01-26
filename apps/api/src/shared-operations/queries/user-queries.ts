@@ -58,13 +58,14 @@ export async function getUserSubscriptionStatus(
     .limit(1);
 
   const row = result[0];
-  if (!row)
+  if (!row) {
     return null;
+  }
 
   return {
-    subscriptionId: row.stripe_subscription.id,
-    status: row.stripe_subscription.status,
     currentPeriodEnd: row.stripe_subscription.currentPeriodEnd,
+    status: row.stripe_subscription.status,
+    subscriptionId: row.stripe_subscription.id,
   };
 }
 

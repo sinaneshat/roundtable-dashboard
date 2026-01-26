@@ -31,10 +31,10 @@ export type AiSdkStatus = z.infer<typeof AiSdkStatusSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const AiSdkStatuses = {
-  READY: 'ready' as const,
-  SUBMITTED: 'submitted' as const,
-  STREAMING: 'streaming' as const,
   ERROR: 'error' as const,
+  READY: 'ready' as const,
+  STREAMING: 'streaming' as const,
+  SUBMITTED: 'submitted' as const,
 } as const;
 
 // ============================================================================
@@ -78,13 +78,13 @@ export type FinishReason = z.infer<typeof FinishReasonSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const FinishReasons = {
-  STOP: 'stop' as const,
-  LENGTH: 'length' as const,
-  TOOL_CALLS: 'tool-calls' as const,
   CONTENT_FILTER: 'content-filter' as const,
   ERROR: 'error' as const,
   FAILED: 'failed' as const,
+  LENGTH: 'length' as const,
   OTHER: 'other' as const,
+  STOP: 'stop' as const,
+  TOOL_CALLS: 'tool-calls' as const,
   UNKNOWN: 'unknown' as const, // ⚠️ Application-level: interrupted stream (not AI SDK return value)
 } as const;
 
@@ -120,9 +120,9 @@ export type UIMessageRole = z.infer<typeof UIMessageRoleSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code
 export const UIMessageRoles = {
-  USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
   SYSTEM: 'system' as const,
+  USER: 'user' as const,
 } as const;
 
 // ============================================================================
@@ -150,14 +150,14 @@ export type MessagePartType = z.infer<typeof MessagePartTypeSchema>;
 export const DEFAULT_MESSAGE_PART_TYPE: MessagePartType = 'text';
 
 export const MessagePartTypes = {
-  TEXT: 'text' as const,
+  FILE: 'file' as const,
   REASONING: 'reasoning' as const,
+  SOURCE_DOCUMENT: 'source-document' as const,
+  SOURCE_URL: 'source-url' as const,
+  STEP_START: 'step-start' as const,
+  TEXT: 'text' as const,
   TOOL_CALL: 'tool-call' as const,
   TOOL_RESULT: 'tool-result' as const,
-  FILE: 'file' as const,
-  STEP_START: 'step-start' as const,
-  SOURCE_URL: 'source-url' as const,
-  SOURCE_DOCUMENT: 'source-document' as const,
 } as const;
 
 // ============================================================================
@@ -177,9 +177,9 @@ export const DEFAULT_REASONING_PART_TYPE: ReasoningPartType = 'reasoning';
 
 export const ReasoningPartTypes = {
   REASONING: 'reasoning' as const,
-  THINKING: 'thinking' as const,
   REDACTED: 'redacted' as const,
   TEXT: 'text' as const,
+  THINKING: 'thinking' as const,
 } as const;
 
 // ============================================================================
@@ -198,8 +198,8 @@ export type TextPartState = z.infer<typeof TextPartStateSchema>;
 export const DEFAULT_TEXT_PART_STATE: TextPartState = 'done';
 
 export const TextPartStates = {
-  STREAMING: 'streaming' as const,
   DONE: 'done' as const,
+  STREAMING: 'streaming' as const,
 } as const;
 
 export function isTextPartStreaming(state: TextPartState | undefined): boolean {
@@ -230,11 +230,11 @@ export type StreamPartType = z.infer<typeof StreamPartTypeSchema>;
 export const DEFAULT_STREAM_PART_TYPE: StreamPartType = 'start';
 
 export const StreamPartTypes = {
-  START: 'start' as const,
-  TEXT_DELTA: 'text-delta' as const,
-  REASONING_DELTA: 'reasoning-delta' as const,
-  FINISH: 'finish' as const,
   ERROR: 'error' as const,
-  START_STEP: 'start-step' as const,
+  FINISH: 'finish' as const,
   FINISH_STEP: 'finish-step' as const,
+  REASONING_DELTA: 'reasoning-delta' as const,
+  START: 'start' as const,
+  START_STEP: 'start-step' as const,
+  TEXT_DELTA: 'text-delta' as const,
 } as const;

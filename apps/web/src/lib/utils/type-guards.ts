@@ -69,8 +69,8 @@ export function hasProperty<K extends string, T>(
  * Schema for text part of a message
  */
 export const TextPartSchema = z.object({
-  type: z.literal(MessagePartTypes.TEXT),
   text: NonEmptyStringSchema,
+  type: z.literal(MessagePartTypes.TEXT),
 }).strict();
 
 export type TextPart = z.infer<typeof TextPartSchema>;

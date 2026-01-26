@@ -52,12 +52,10 @@ type UseThreadsQueryOptions = {
  */
 export function useThreadsQuery(options?: UseThreadsQueryOptions) {
   const { isAuthenticated } = useAuthCheck();
-  const { search, projectId, enabled: explicitEnabled, initialData } = options ?? {};
+  const { enabled: explicitEnabled, initialData, projectId, search } = options ?? {};
 
   return useInfiniteQuery({
-    // ✅ QUERY KEY: Include all dependencies for proper cache separation
-    // Format: ['threads', 'list', search?, { projectId }?]
-    queryKey: ['threads', 'list', { search, projectId }] as const,
+    enabled: explicitEnabled !== undefined ? explicitEnabled : isAuthenticated,
     queryFn: async ({ pageParam }) => {
       // ✅ Use centralized limits - clean semantic names
       const limit = search
@@ -75,16 +73,19 @@ export function useThreadsQuery(options?: UseThreadsQueryOptions) {
         },
       });
     },
+    initialData,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: explicitEnabled !== undefined ? explicitEnabled : isAuthenticated,
-    staleTime: initialData ? 10_000 : STALE_TIMES.threads, // 30 seconds - match server-side prefetch
-    initialData,
+    // ✅ QUERY KEY: Include all dependencies for proper cache separation
+    // Format: ['threads', 'list', search?, { projectId }?]
+    queryKey: ['threads', 'list', { projectId, search }] as const,
     retry: false,
+    staleTime: initialData ? 10_000 : STALE_TIMES.threads, // 30 seconds - match server-side prefetch
     throwOnError: false,
   });
 }
@@ -101,11 +102,11 @@ export function useThreadQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.threads.detail(threadId),
-    queryFn: () => getThreadService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds - match server-side prefetch
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
+    queryFn: () => getThreadService({ param: { id: threadId } }),
+    queryKey: queryKeys.threads.detail(threadId),
     retry: false,
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds - match server-side prefetch
     throwOnError: false,
   });
 }
@@ -130,12 +131,12 @@ export function usePublicThreadQuery(
   },
 ) {
   return useQuery({
-    queryKey: queryKeys.threads.public(slug),
-    queryFn: () => getPublicThreadService({ param: { slug } }),
-    staleTime: options?.staleTime ?? STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
     enabled: options?.enabled !== undefined ? options.enabled : !!slug,
     initialData: options?.initialData,
+    queryFn: () => getPublicThreadService({ param: { slug } }),
+    queryKey: queryKeys.threads.public(slug),
     retry: false,
+    staleTime: options?.staleTime ?? STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
     throwOnError: false,
   });
 }
@@ -151,11 +152,11 @@ export function usePublicThreadQuery(
  */
 export function usePublicThreadSlugsQuery(enabled?: boolean) {
   return useQuery({
-    queryKey: queryKeys.threads.publicSlugs(),
-    queryFn: () => listPublicThreadSlugsService(),
-    staleTime: STALE_TIMES.publicThreadSlugs, // 24 hours - matches ISR cache
     enabled: enabled !== undefined ? enabled : true,
+    queryFn: () => listPublicThreadSlugsService(),
+    queryKey: queryKeys.threads.publicSlugs(),
     retry: false,
+    staleTime: STALE_TIMES.publicThreadSlugs, // 24 hours - matches ISR cache
     throwOnError: false,
   });
 }
@@ -193,23 +194,21 @@ export function useThreadBySlugQuery(slug: string, enabled?: boolean) {
  */
 export function useThreadSlugStatusQuery(
   threadId: string | null,
-  shouldPoll: boolean = true,
+  shouldPoll = true,
 ) {
   const { isAuthenticated } = useAuthCheck();
   // Keep query enabled as long as we have a valid threadId - polling controlled by refetchInterval
   const queryEnabled = isAuthenticated && !!threadId;
 
   return useQuery({
-    queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
+    enabled: queryEnabled,
     queryFn: async () => {
       if (!threadId) {
         throw new Error('Thread ID is required');
       }
       return getThreadSlugStatusService({ param: { id: threadId } });
     },
-    // ✅ FIX: Add staleTime to prevent immediate duplicate requests during polling
-    // When polling is active, use polling interval as staleTime to dedupe requests
-    staleTime: shouldPoll ? POLLING_INTERVALS.slugStatus : 0,
+    queryKey: queryKeys.threads.slugStatus(threadId || 'null'),
     // Polling control via refetchInterval (not enabled) to prevent interruption
     // The shouldPoll param checked here instead of enabled prop ensures continuous polling
     refetchInterval: (query) => {
@@ -226,8 +225,10 @@ export function useThreadSlugStatusQuery(
     },
     // Let TanStack Query handle background tab pausing natively
     refetchIntervalInBackground: false,
-    enabled: queryEnabled,
     retry: false,
+    // ✅ FIX: Add staleTime to prevent immediate duplicate requests during polling
+    // When polling is active, use polling interval as staleTime to dedupe requests
+    staleTime: shouldPoll ? POLLING_INTERVALS.slugStatus : 0,
     throwOnError: false,
   });
 }

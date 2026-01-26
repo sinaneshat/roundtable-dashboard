@@ -53,9 +53,11 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260122.0",
+    "@roundtable/eslint-config": "workspace:*",
     "@roundtable/typescript-config": "workspace:*",
     "@roundtable/vitest-config": "workspace:*",
     "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
     "typescript": "5.9.3",
     "vitest": "^4.0.16",
     "wrangler": "^4.60.0"

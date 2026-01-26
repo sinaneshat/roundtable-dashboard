@@ -40,22 +40,22 @@ describe('streaming State Transitions', () => {
       const state = createInitialStoreState();
 
       // Before sending
-      expect(state.isStreaming).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
 
       // Simulate prepareForNewMessage action
       state.waitingToStartStreaming = true;
       state.hasSentPendingMessage = false;
 
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // Simulate streaming starts
       state.isStreaming = true;
       state.waitingToStartStreaming = false;
       state.streamingRoundNumber = 0;
 
-      expect(state.isStreaming).toBe(true);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.isStreaming).toBeTruthy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBe(0);
     });
 
@@ -108,7 +108,7 @@ describe('streaming State Transitions', () => {
       state.streamingRoundNumber = null;
       state.currentParticipantIndex = 0;
 
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
     });
 
@@ -169,8 +169,9 @@ describe('pre-Search API Responses', () => {
 
       // Simulate streaming start SSE event
       const preSearch = state.preSearches[0];
-      if (!preSearch)
+      if (!preSearch) {
         throw new Error('expected preSearch');
+      }
       preSearch.status = MessageStatuses.STREAMING;
 
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
@@ -182,18 +183,19 @@ describe('pre-Search API Responses', () => {
 
       // Simulate done SSE event
       const searchData = {
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-        results: [],
-        moderatorSummary: 'Test moderator',
-        successCount: 1,
         failureCount: 0,
+        moderatorSummary: 'Test moderator',
+        queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+        results: [],
+        successCount: 1,
         totalResults: 3,
         totalTime: 5000,
       };
 
       const preSearch = state.preSearches[0];
-      if (!preSearch)
+      if (!preSearch) {
         throw new Error('expected preSearch');
+      }
       preSearch.status = MessageStatuses.COMPLETE;
       preSearch.searchData = searchData;
       preSearch.completedAt = new Date();
@@ -209,8 +211,9 @@ describe('pre-Search API Responses', () => {
 
       // Simulate error SSE event
       const preSearch = state.preSearches[0];
-      if (!preSearch)
+      if (!preSearch) {
         throw new Error('expected preSearch');
+      }
       preSearch.status = MessageStatuses.FAILED;
       preSearch.errorMessage = 'Search failed: timeout';
 
@@ -228,7 +231,7 @@ describe('pre-Search API Responses', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
 
     it('unblocks participant streaming when pre-search complete', () => {
@@ -239,7 +242,7 @@ describe('pre-Search API Responses', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
   });
 });
@@ -260,11 +263,11 @@ describe('moderator Tracking', () => {
         state.createdModeratorRounds.add(roundNumber);
       }
 
-      expect(state.createdModeratorRounds.has(roundNumber)).toBe(true);
+      expect(state.createdModeratorRounds.has(roundNumber)).toBeTruthy();
 
       // Duplicate attempt blocked
       const canCreateAgain = !state.createdModeratorRounds.has(roundNumber);
-      expect(canCreateAgain).toBe(false);
+      expect(canCreateAgain).toBeFalsy();
     });
   });
 
@@ -279,11 +282,11 @@ describe('moderator Tracking', () => {
         // Trigger stream...
       }
 
-      expect(state.triggeredModeratorRounds.has(roundNumber)).toBe(true);
+      expect(state.triggeredModeratorRounds.has(roundNumber)).toBeTruthy();
 
       // Second trigger should be blocked
       const shouldTrigger = !state.triggeredModeratorRounds.has(roundNumber);
-      expect(shouldTrigger).toBe(false);
+      expect(shouldTrigger).toBeFalsy();
     });
 
     it('prevents duplicate stream triggers via triggeredModeratorIds', () => {
@@ -298,7 +301,7 @@ describe('moderator Tracking', () => {
 
       // Second trigger blocked
       const shouldTrigger = !state.triggeredModeratorIds.has(moderatorMessageId);
-      expect(shouldTrigger).toBe(false);
+      expect(shouldTrigger).toBeFalsy();
     });
   });
 });
@@ -311,12 +314,12 @@ describe('message Streaming API', () => {
   describe('sSE Event Types', () => {
     it('handles start event', () => {
       const event = {
-        type: 'start',
         messageMetadata: {
+          participantIndex: 0,
           role: UIMessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 0,
         },
+        type: 'start',
       };
 
       expect(event.type).toBe('start');
@@ -325,9 +328,9 @@ describe('message Streaming API', () => {
 
     it('handles text-delta event', () => {
       const event = {
-        type: 'text-delta',
-        id: 'gen-123',
         delta: 'Hello',
+        id: 'gen-123',
+        type: 'text-delta',
       };
 
       expect(event.type).toBe('text-delta');
@@ -336,11 +339,11 @@ describe('message Streaming API', () => {
 
     it('handles finish event', () => {
       const event = {
-        type: 'finish',
         finishReason: 'stop' as const,
+        type: 'finish',
         usage: {
-          promptTokens: 100,
           completionTokens: 50,
+          promptTokens: 100,
           totalTokens: 150,
         },
       };
@@ -352,7 +355,7 @@ describe('message Streaming API', () => {
 
   describe('message Parts Building', () => {
     it('accumulates text-delta events into parts', () => {
-      const parts: Array<{ type: string; text: string }> = [];
+      const parts: { type: string; text: string }[] = [];
 
       // Simulate text-delta events
       const deltas = ['Hello', ' ', 'world', '!'];
@@ -362,7 +365,7 @@ describe('message Streaming API', () => {
         currentText += delta;
       });
 
-      parts.push({ type: 'text', text: currentText });
+      parts.push({ text: currentText, type: 'text' });
 
       expect(parts[0]?.text).toBe('Hello world!');
     });
@@ -395,7 +398,7 @@ describe('error Handling', () => {
       state.isStreaming = false;
       state.streamingRoundNumber = null;
 
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
     });
   });
@@ -409,7 +412,7 @@ describe('error Handling', () => {
 
       // Second send should be blocked
       const canSend = !state.hasSentPendingMessage;
-      expect(canSend).toBe(false);
+      expect(canSend).toBeFalsy();
     });
 
     it('resets hasSentPendingMessage after round completes', () => {
@@ -419,7 +422,7 @@ describe('error Handling', () => {
       // Round completes
       state.hasSentPendingMessage = false;
 
-      expect(state.hasSentPendingMessage).toBe(false);
+      expect(state.hasSentPendingMessage).toBeFalsy();
     });
   });
 });
@@ -434,26 +437,26 @@ describe('stream Resumption API', () => {
       const response = { status: 204 };
 
       const hasActiveStream = response.status !== 204;
-      expect(hasActiveStream).toBe(false);
+      expect(hasActiveStream).toBeFalsy();
     });
 
     it('handles 200 OK with SSE stream', () => {
       const response = { status: 200 };
 
       const hasActiveStream = response.status === 200;
-      expect(hasActiveStream).toBe(true);
+      expect(hasActiveStream).toBeTruthy();
     });
   });
 
   describe('stream Resumption State', () => {
     it('tracks streamResumptionState when resuming', () => {
       const streamResumptionState = {
+        createdAt: new Date(),
+        participantIndex: 1,
+        roundNumber: 0,
+        state: StreamStatuses.STREAMING,
         streamId: 'stream-123',
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 1,
-        state: StreamStatuses.STREAMING,
-        createdAt: new Date(),
       };
 
       expect(streamResumptionState.roundNumber).toBe(0);
@@ -470,7 +473,7 @@ describe('stream Resumption API', () => {
 
       // Second attempt should be skipped
       const shouldAttempt = !resumptionAttempts.has(streamId);
-      expect(shouldAttempt).toBe(false);
+      expect(shouldAttempt).toBeFalsy();
     });
   });
 });
@@ -487,17 +490,17 @@ describe('state Consistency', () => {
       // Valid: waiting but not streaming
       state.waitingToStartStreaming = true;
       state.isStreaming = false;
-      expect(state.waitingToStartStreaming && state.isStreaming).toBe(false);
+      expect(state.waitingToStartStreaming && state.isStreaming).toBeFalsy();
 
       // Valid: streaming but not waiting
       state.waitingToStartStreaming = false;
       state.isStreaming = true;
-      expect(state.waitingToStartStreaming && state.isStreaming).toBe(false);
+      expect(state.waitingToStartStreaming && state.isStreaming).toBeFalsy();
 
       // Invalid: both true
       state.waitingToStartStreaming = true;
       state.isStreaming = true;
-      expect(state.waitingToStartStreaming && state.isStreaming).toBe(true); // This is invalid state
+      expect(state.waitingToStartStreaming && state.isStreaming).toBeTruthy(); // This is invalid state
 
       // The store should prevent this state
     });
@@ -551,7 +554,7 @@ describe('idempotency', () => {
 
       // Second send should be blocked
       const canSend = !sentMessages.has(messageId);
-      expect(canSend).toBe(false);
+      expect(canSend).toBeFalsy();
     });
   });
 
@@ -563,7 +566,7 @@ describe('idempotency', () => {
       state.triggeredPreSearchRounds.add(roundNumber);
 
       const canTrigger = !state.triggeredPreSearchRounds.has(roundNumber);
-      expect(canTrigger).toBe(false);
+      expect(canTrigger).toBeFalsy();
     });
   });
 
@@ -575,7 +578,7 @@ describe('idempotency', () => {
       state.triggeredModeratorIds.add(moderatorMessageId);
 
       const canTrigger = !state.triggeredModeratorIds.has(moderatorMessageId);
-      expect(canTrigger).toBe(false);
+      expect(canTrigger).toBeFalsy();
     });
 
     it('same round cannot trigger moderator twice (by round)', () => {
@@ -585,7 +588,7 @@ describe('idempotency', () => {
       state.triggeredModeratorRounds.add(roundNumber);
 
       const canTrigger = !state.triggeredModeratorRounds.has(roundNumber);
-      expect(canTrigger).toBe(false);
+      expect(canTrigger).toBeFalsy();
     });
   });
 });

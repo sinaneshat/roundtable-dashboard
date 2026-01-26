@@ -18,10 +18,10 @@ type ChatDeleteDialogProps = {
 export function ChatDeleteDialog({
   isOpen,
   onOpenChange,
-  threadId,
-  threadSlug,
   projectId,
   redirectIfCurrent = false,
+  threadId,
+  threadSlug,
 }: ChatDeleteDialogProps) {
   const t = useTranslations();
   const { pathname } = useLocation();
@@ -37,7 +37,13 @@ export function ChatDeleteDialog({
   const effectiveProjectId = projectId ?? projectIdFromUrl;
 
   const handleDelete = () => {
-    deleteThreadMutation.mutate({ param: { id: threadId }, slug: threadSlug, projectId }, {
+    deleteThreadMutation.mutate({ param: { id: threadId }, projectId, slug: threadSlug }, {
+      onError: () => {
+        toastManager.error(
+          t('chat.threadDeleteFailed'),
+          t('chat.threadDeleteFailedDescription'),
+        );
+      },
       onSuccess: () => {
         toastManager.success(
           t('chat.threadDeleted'),
@@ -45,18 +51,12 @@ export function ChatDeleteDialog({
         );
         if (redirectIfCurrent && threadSlug && pathname.endsWith(`/${threadSlug}`)) {
           if (effectiveProjectId) {
-            navigate({ to: '/chat/projects/$projectId/new', params: { projectId: effectiveProjectId } });
+            navigate({ params: { projectId: effectiveProjectId }, to: '/chat/projects/$projectId/new' });
           } else {
             navigate({ to: '/chat' });
           }
         }
         onOpenChange(false);
-      },
-      onError: () => {
-        toastManager.error(
-          t('chat.threadDeleteFailed'),
-          t('chat.threadDeleteFailedDescription'),
-        );
       },
     });
   };

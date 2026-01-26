@@ -57,9 +57,9 @@ export type ApiEnv = {
 export function createMockLogger(): TypedLogger {
   return {
     debug: vi.fn(),
+    error: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
-    error: vi.fn(),
   };
 }
 
@@ -78,10 +78,10 @@ export type MockKVNamespace = {
 
 export function createMockKV(): MockKVNamespace {
   return {
-    get: vi.fn(),
-    put: vi.fn(),
     delete: vi.fn(),
+    get: vi.fn(),
     list: vi.fn(),
+    put: vi.fn(),
   };
 }
 
@@ -100,10 +100,10 @@ export type MockD1Database = {
 
 export function createMockD1(): MockD1Database {
   return {
-    prepare: vi.fn(),
-    dump: vi.fn(),
     batch: vi.fn(),
+    dump: vi.fn(),
     exec: vi.fn(),
+    prepare: vi.fn(),
   };
 }
 
@@ -123,11 +123,11 @@ export type MockR2Bucket = {
 
 export function createMockR2Bucket(): MockR2Bucket {
   return {
-    get: vi.fn(),
-    put: vi.fn(),
     delete: vi.fn(),
+    get: vi.fn(),
     head: vi.fn(),
     list: vi.fn(),
+    put: vi.fn(),
   };
 }
 
@@ -152,10 +152,10 @@ export type MockApiEnvOptions = {
 
 export function createMockApiEnv(options: MockApiEnvOptions = {}): ApiEnv['Bindings'] {
   return {
-    KV: options.KV,
     DB: options.DB,
-    UPLOADS_R2_BUCKET: options.UPLOADS_R2_BUCKET,
+    KV: options.KV,
     NEXT_INC_CACHE_R2_BUCKET: options.NEXT_INC_CACHE_R2_BUCKET,
+    UPLOADS_R2_BUCKET: options.UPLOADS_R2_BUCKET,
   } as ApiEnv['Bindings'];
 }
 
@@ -198,28 +198,28 @@ export function createMockDrizzleDb(
   queries?: Partial<MockDrizzleDb['query']>,
 ): MockDrizzleDb {
   return {
+    delete: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
     query: {
-      chatParticipant: {
-        findMany: vi.fn(),
-        findFirst: vi.fn(),
-      },
       chatMessage: {
-        findMany: vi.fn(),
         findFirst: vi.fn(),
+        findMany: vi.fn(),
+      },
+      chatParticipant: {
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       chatThread: {
-        findMany: vi.fn(),
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       user: {
-        findMany: vi.fn(),
         findFirst: vi.fn(),
+        findMany: vi.fn(),
       },
       ...queries,
     },
     select: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
   };
 }

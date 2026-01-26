@@ -28,12 +28,12 @@ export type BadgeVariant = z.infer<typeof BadgeVariantSchema>;
 // 5️⃣ CONSTANT OBJECT
 export const BadgeVariants = {
   DEFAULT: 'default' as const,
-  SECONDARY: 'secondary' as const,
   DESTRUCTIVE: 'destructive' as const,
+  GLASS: 'glass' as const,
   OUTLINE: 'outline' as const,
+  SECONDARY: 'secondary' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
-  GLASS: 'glass' as const,
 } as const;
 
 export function isValidBadgeVariant(value: unknown): value is BadgeVariant {
@@ -63,8 +63,8 @@ export type CardVariant = z.infer<typeof CardVariantSchema>;
 export const CardVariants = {
   DEFAULT: 'default' as const,
   GLASS: 'glass' as const,
-  GLASS_SUBTLE: 'glass-subtle' as const,
   GLASS_STRONG: 'glass-strong' as const,
+  GLASS_SUBTLE: 'glass-subtle' as const,
 } as const;
 
 // ============================================================================
@@ -90,14 +90,14 @@ export type ComponentVariant = z.infer<typeof ComponentVariantSchema>;
 export const ComponentVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
+  GHOST: 'ghost' as const,
+  GLASS: 'glass' as const,
+  LINK: 'link' as const,
   OUTLINE: 'outline' as const,
   SECONDARY: 'secondary' as const,
-  GHOST: 'ghost' as const,
-  LINK: 'link' as const,
-  WHITE: 'white' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
-  GLASS: 'glass' as const,
+  WHITE: 'white' as const,
 } as const;
 
 // ============================================================================
@@ -121,12 +121,12 @@ export type ComponentSize = z.infer<typeof ComponentSizeSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const ComponentSizes = {
-  SM: 'sm' as const,
-  MD: 'md' as const,
-  LG: 'lg' as const,
-  XL: 'xl' as const,
-  ICON: 'icon' as const,
   DEFAULT: 'default' as const,
+  ICON: 'icon' as const,
+  LG: 'lg' as const,
+  MD: 'md' as const,
+  SM: 'sm' as const,
+  XL: 'xl' as const,
 } as const;
 
 // ============================================================================
@@ -150,10 +150,10 @@ export type TextAlignment = z.infer<typeof TextAlignmentSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const TextAlignments = {
-  LEFT: 'left' as const,
   CENTER: 'center' as const,
-  RIGHT: 'right' as const,
   JUSTIFY: 'justify' as const,
+  LEFT: 'left' as const,
+  RIGHT: 'right' as const,
 } as const;
 
 // ============================================================================
@@ -179,10 +179,10 @@ export type ToastVariant = z.infer<typeof ToastVariantSchema>;
 export const ToastVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
-  SUCCESS: 'success' as const,
-  WARNING: 'warning' as const,
   INFO: 'info' as const,
   LOADING: 'loading' as const,
+  SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
 } as const;
 
 // ============================================================================
@@ -206,9 +206,9 @@ export type ReasoningState = z.infer<typeof ReasoningStateSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const ReasoningStates = {
+  COMPLETE: 'complete' as const,
   IDLE: 'idle' as const,
   THINKING: 'thinking' as const,
-  COMPLETE: 'complete' as const,
 } as const;
 
 // ============================================================================
@@ -232,9 +232,9 @@ export type StatusVariant = z.infer<typeof StatusVariantSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const StatusVariants = {
+  ERROR: 'error' as const,
   LOADING: 'loading' as const,
   SUCCESS: 'success' as const,
-  ERROR: 'error' as const,
 } as const;
 
 // ============================================================================
@@ -259,9 +259,9 @@ export type BorderVariant = z.infer<typeof BorderVariantSchema>;
 // 5️⃣ CONSTANT OBJECT
 export const BorderVariants = {
   DEFAULT: 'default' as const,
+  ERROR: 'error' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
-  ERROR: 'error' as const,
 } as const;
 
 export function isValidBorderVariant(value: unknown): value is BorderVariant {
@@ -289,9 +289,9 @@ export type NetworkErrorType = z.infer<typeof NetworkErrorTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const NetworkErrorTypes = {
+  CONNECTION: 'connection' as const,
   OFFLINE: 'offline' as const,
   TIMEOUT: 'timeout' as const,
-  CONNECTION: 'connection' as const,
 } as const;
 
 // ============================================================================
@@ -316,8 +316,8 @@ export type ErrorSeverity = z.infer<typeof ErrorSeveritySchema>;
 // 5️⃣ CONSTANT OBJECT
 export const ErrorSeverities = {
   FAILED: 'failed' as const,
-  WARNING: 'warning' as const,
   INFO: 'info' as const,
+  WARNING: 'warning' as const,
 } as const;
 
 // ============================================================================
@@ -341,9 +341,9 @@ export type ImageState = z.infer<typeof ImageStateSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const ImageStates = {
-  LOADING: 'loading' as const,
-  LOADED: 'loaded' as const,
   ERROR: 'error' as const,
+  LOADED: 'loaded' as const,
+  LOADING: 'loading' as const,
 } as const;
 
 // ============================================================================
@@ -367,8 +367,8 @@ export type MarkdownPreset = z.infer<typeof MarkdownPresetSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const MarkdownPresets = {
-  DEFAULT: 'default' as const,
   COMPACT: 'compact' as const,
+  DEFAULT: 'default' as const,
   WEB_CONTENT: 'web-content' as const,
 } as const;
 
@@ -420,10 +420,10 @@ export type ErrorBoundaryContext = z.infer<typeof ErrorBoundaryContextSchema>;
 // 5️⃣ CONSTANT OBJECT
 export const ErrorBoundaryContexts = {
   CHAT: 'chat' as const,
-  MESSAGE_LIST: 'message-list' as const,
   CONFIGURATION: 'configuration' as const,
-  PRE_SEARCH: 'pre-search' as const,
   GENERAL: 'general' as const,
+  MESSAGE_LIST: 'message-list' as const,
+  PRE_SEARCH: 'pre-search' as const,
 } as const;
 
 // ============================================================================
@@ -447,10 +447,10 @@ export type IconType = z.infer<typeof IconTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const IconTypes = {
-  IMAGE: 'image' as const,
   CODE: 'code' as const,
-  TEXT: 'text' as const,
   FILE: 'file' as const,
+  IMAGE: 'image' as const,
+  TEXT: 'text' as const,
 } as const;
 
 // ============================================================================
@@ -474,10 +474,10 @@ export type BorderGradientDirection = z.infer<typeof BorderGradientDirectionSche
 
 // 5️⃣ CONSTANT OBJECT
 export const BorderGradientDirections = {
-  TOP: 'TOP' as const,
-  LEFT: 'LEFT' as const,
   BOTTOM: 'BOTTOM' as const,
+  LEFT: 'LEFT' as const,
   RIGHT: 'RIGHT' as const,
+  TOP: 'TOP' as const,
 } as const;
 
 // ============================================================================
@@ -501,29 +501,29 @@ export type LogoSize = z.infer<typeof LogoSizeSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const LogoSizes = {
-  SM: 'sm' as const,
-  MD: 'md' as const,
   LG: 'lg' as const,
+  MD: 'md' as const,
+  SM: 'sm' as const,
 } as const;
 
 export const LogoSizeMetadata: Record<LogoSize, { width: number; height: number; widthFull: number; heightFull: number }> = {
-  [LogoSizes.SM]: {
-    width: 40,
-    height: 40,
-    widthFull: 100,
-    heightFull: 100,
+  [LogoSizes.LG]: {
+    height: 80,
+    heightFull: 240,
+    width: 80,
+    widthFull: 240,
   },
   [LogoSizes.MD]: {
-    width: 60,
     height: 60,
-    widthFull: 160,
     heightFull: 160,
+    width: 60,
+    widthFull: 160,
   },
-  [LogoSizes.LG]: {
-    width: 80,
-    height: 80,
-    widthFull: 240,
-    heightFull: 240,
+  [LogoSizes.SM]: {
+    height: 40,
+    heightFull: 100,
+    width: 40,
+    widthFull: 100,
   },
 } as const;
 
@@ -548,8 +548,8 @@ export type LogoVariant = z.infer<typeof LogoVariantSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const LogoVariants = {
-  ICON: 'icon' as const,
   FULL: 'full' as const,
+  ICON: 'icon' as const,
 } as const;
 
 // ============================================================================
@@ -573,9 +573,9 @@ export type LoadingStateVariant = z.infer<typeof LoadingStateVariantSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const LoadingStateVariants = {
-  INLINE: 'inline' as const,
-  CENTERED: 'centered' as const,
   CARD: 'card' as const,
+  CENTERED: 'centered' as const,
+  INLINE: 'inline' as const,
 } as const;
 
 // ============================================================================
@@ -600,9 +600,9 @@ export type ErrorStateVariant = z.infer<typeof ErrorStateVariantSchema>;
 // 5️⃣ CONSTANT OBJECT
 export const ErrorStateVariants = {
   ALERT: 'alert' as const,
+  BOUNDARY: 'boundary' as const,
   CARD: 'card' as const,
   NETWORK: 'network' as const,
-  BOUNDARY: 'boundary' as const,
 } as const;
 
 // ============================================================================
@@ -626,8 +626,8 @@ export type EmptyStateVariant = z.infer<typeof EmptyStateVariantSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const EmptyStateVariants = {
-  GENERAL: 'general' as const,
   CUSTOM: 'custom' as const,
+  GENERAL: 'general' as const,
 } as const;
 
 // ============================================================================
@@ -701,8 +701,8 @@ export type CitationSegmentType = z.infer<typeof CitationSegmentTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const CitationSegmentTypes = {
-  TEXT: 'text' as const,
   CITATION: 'citation' as const,
+  TEXT: 'text' as const,
 } as const;
 
 // ============================================================================
@@ -726,9 +726,9 @@ export type SpacingVariant = z.infer<typeof SpacingVariantSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const SpacingVariants = {
-  TIGHT: 'tight' as const,
   DEFAULT: 'default' as const,
   LOOSE: 'loose' as const,
+  TIGHT: 'tight' as const,
 } as const;
 
 // ============================================================================
@@ -752,8 +752,8 @@ export type EmptyStateStyle = z.infer<typeof EmptyStateStyleSchema>;
 
 // 5️⃣ CONSTANT OBJECT
 export const EmptyStateStyles = {
-  DEFAULT: 'default' as const,
   DASHED: 'dashed' as const,
+  DEFAULT: 'default' as const,
   GRADIENT: 'gradient' as const,
 } as const;
 
@@ -804,29 +804,29 @@ export type AvatarSize = z.infer<typeof AvatarSizeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const AvatarSizes = {
-  SM: 'sm' as const,
   BASE: 'base' as const,
   MD: 'md' as const,
+  SM: 'sm' as const,
 } as const;
 
 export const AvatarSizeMetadata: Record<AvatarSize, { container: string; text: string; overlapOffset: number; gapSize: number }> = {
-  [AvatarSizes.SM]: {
-    container: 'size-6',
-    text: 'text-[10px]',
-    overlapOffset: -8,
-    gapSize: 8,
-  },
   [AvatarSizes.BASE]: {
     container: 'size-8',
-    text: 'text-[11px]',
-    overlapOffset: -10,
     gapSize: 10,
+    overlapOffset: -10,
+    text: 'text-[11px]',
   },
   [AvatarSizes.MD]: {
     container: 'size-10',
-    text: 'text-xs',
-    overlapOffset: -12,
     gapSize: 12,
+    overlapOffset: -12,
+    text: 'text-xs',
+  },
+  [AvatarSizes.SM]: {
+    container: 'size-6',
+    gapSize: 8,
+    overlapOffset: -8,
+    text: 'text-[10px]',
   },
 } as const;
 
@@ -846,8 +846,8 @@ export const ModelSelectionTabSchema = z.enum(MODEL_SELECTION_TABS).openapi({
 export type ModelSelectionTab = z.infer<typeof ModelSelectionTabSchema>;
 
 export const ModelSelectionTabs = {
-  PRESETS: 'presets' as const,
   CUSTOM: 'custom' as const,
+  PRESETS: 'presets' as const,
 } as const;
 
 // ============================================================================
@@ -855,35 +855,35 @@ export const ModelSelectionTabs = {
 // ============================================================================
 
 export const COMPONENT_SIZE_LABELS: Record<ComponentSize, string> = {
-  [ComponentSizes.SM]: 'Small',
-  [ComponentSizes.MD]: 'Medium',
-  [ComponentSizes.LG]: 'Large',
-  [ComponentSizes.XL]: 'Extra Large',
-  [ComponentSizes.ICON]: 'Icon',
   [ComponentSizes.DEFAULT]: 'Default',
+  [ComponentSizes.ICON]: 'Icon',
+  [ComponentSizes.LG]: 'Large',
+  [ComponentSizes.MD]: 'Medium',
+  [ComponentSizes.SM]: 'Small',
+  [ComponentSizes.XL]: 'Extra Large',
 } as const;
 
 export const IMAGE_STATE_LABELS: Record<ImageState, string> = {
-  [ImageStates.LOADING]: 'Loading',
-  [ImageStates.LOADED]: 'Loaded',
   [ImageStates.ERROR]: 'Error',
+  [ImageStates.LOADED]: 'Loaded',
+  [ImageStates.LOADING]: 'Loading',
 } as const;
 
 export const MARKDOWN_PRESET_LABELS: Record<MarkdownPreset, string> = {
-  [MarkdownPresets.DEFAULT]: 'Default',
   [MarkdownPresets.COMPACT]: 'Compact',
+  [MarkdownPresets.DEFAULT]: 'Default',
   [MarkdownPresets.WEB_CONTENT]: 'Web Content',
 } as const;
 
 export const AVATAR_SIZE_LABELS: Record<AvatarSize, string> = {
-  [AvatarSizes.SM]: 'Small',
   [AvatarSizes.BASE]: 'Base',
   [AvatarSizes.MD]: 'Medium',
+  [AvatarSizes.SM]: 'Small',
 } as const;
 
 export const MODEL_SELECTION_TAB_LABELS: Record<ModelSelectionTab, string> = {
-  [ModelSelectionTabs.PRESETS]: 'Presets',
   [ModelSelectionTabs.CUSTOM]: 'Build Custom',
+  [ModelSelectionTabs.PRESETS]: 'Presets',
 } as const;
 
 // ============================================================================
@@ -1018,10 +1018,10 @@ export const ToastPositionSchema = z.enum(TOAST_POSITIONS).openapi({
 export type ToastPosition = z.infer<typeof ToastPositionSchema>;
 
 export const ToastPositions = {
-  TOP_CENTER: 'top-center' as const,
-  TOP_RIGHT: 'top-right' as const,
   BOTTOM_CENTER: 'bottom-center' as const,
   BOTTOM_RIGHT: 'bottom-right' as const,
+  TOP_CENTER: 'top-center' as const,
+  TOP_RIGHT: 'top-right' as const,
 } as const;
 
 export function isValidToastPosition(value: unknown): value is ToastPosition {
@@ -1046,9 +1046,9 @@ export type BaseToastVariant = z.infer<typeof BaseToastVariantSchema>;
 export const BaseToastVariants = {
   DEFAULT: 'default' as const,
   DESTRUCTIVE: 'destructive' as const,
+  INFO: 'info' as const,
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
-  INFO: 'info' as const,
 } as const;
 
 export function isValidBaseToastVariant(value: unknown): value is BaseToastVariant {
@@ -1071,8 +1071,8 @@ export const SidebarStateSchema = z.enum(SIDEBAR_STATES).openapi({
 export type SidebarState = z.infer<typeof SidebarStateSchema>;
 
 export const SidebarStates = {
-  EXPANDED: 'expanded' as const,
   COLLAPSED: 'collapsed' as const,
+  EXPANDED: 'expanded' as const,
 } as const;
 
 export function isValidSidebarState(value: unknown): value is SidebarState {
@@ -1095,10 +1095,10 @@ export const ServiceWorkerStateSchema = z.enum(SERVICE_WORKER_STATES).openapi({
 export type ServiceWorkerState = z.infer<typeof ServiceWorkerStateSchema>;
 
 export const ServiceWorkerStates = {
-  INSTALLING: 'installing' as const,
-  INSTALLED: 'installed' as const,
-  ACTIVATING: 'activating' as const,
   ACTIVATED: 'activated' as const,
+  ACTIVATING: 'activating' as const,
+  INSTALLED: 'installed' as const,
+  INSTALLING: 'installing' as const,
   REDUNDANT: 'redundant' as const,
 } as const;
 
@@ -1146,15 +1146,15 @@ export type KeyboardKey = z.infer<typeof KeyboardKeySchema>;
 
 export const KeyboardKeys = {
   ARROW_DOWN: 'ArrowDown' as const,
-  ARROW_UP: 'ArrowUp' as const,
   ARROW_LEFT: 'ArrowLeft' as const,
   ARROW_RIGHT: 'ArrowRight' as const,
-  ENTER: 'Enter' as const,
-  ESCAPE: 'Escape' as const,
-  TAB: 'Tab' as const,
-  SPACE: 'Space' as const,
+  ARROW_UP: 'ArrowUp' as const,
   BACKSPACE: 'Backspace' as const,
   DELETE: 'Delete' as const,
+  ENTER: 'Enter' as const,
+  ESCAPE: 'Escape' as const,
+  SPACE: 'Space' as const,
+  TAB: 'Tab' as const,
 } as const;
 
 export function isValidKeyboardKey(value: unknown): value is KeyboardKey {
@@ -1177,11 +1177,11 @@ export const SeoContentTypeSchema = z.enum(SEO_CONTENT_TYPES).openapi({
 export type SeoContentType = z.infer<typeof SeoContentTypeSchema>;
 
 export const SeoContentTypes = {
-  HOW_TO: 'how-to' as const,
   COMPARISON: 'comparison' as const,
-  REVIEW: 'review' as const,
-  GUIDE: 'guide' as const,
   FAQ: 'faq' as const,
+  GUIDE: 'guide' as const,
+  HOW_TO: 'how-to' as const,
+  REVIEW: 'review' as const,
   TUTORIAL: 'tutorial' as const,
 } as const;
 
@@ -1205,9 +1205,9 @@ export const SeoContentLevelSchema = z.enum(SEO_CONTENT_LEVELS).openapi({
 export type SeoContentLevel = z.infer<typeof SeoContentLevelSchema>;
 
 export const SeoContentLevels = {
+  ADVANCED: 'advanced' as const,
   BEGINNER: 'beginner' as const,
   INTERMEDIATE: 'intermediate' as const,
-  ADVANCED: 'advanced' as const,
 } as const;
 
 export function isValidSeoContentLevel(value: unknown): value is SeoContentLevel {
@@ -1230,8 +1230,8 @@ export const SidebarSideSchema = z.enum(SIDEBAR_SIDES).openapi({
 export type SidebarSide = z.infer<typeof SidebarSideSchema>;
 
 export const SidebarSides = {
-  START: 'start' as const,
   END: 'end' as const,
+  START: 'start' as const,
 } as const;
 
 export function isValidSidebarSide(value: unknown): value is SidebarSide {
@@ -1254,9 +1254,9 @@ export const SidebarVariantSchema = z.enum(SIDEBAR_VARIANTS).openapi({
 export type SidebarVariant = z.infer<typeof SidebarVariantSchema>;
 
 export const SidebarVariants = {
-  SIDEBAR: 'sidebar' as const,
   FLOATING: 'floating' as const,
   INSET: 'inset' as const,
+  SIDEBAR: 'sidebar' as const,
 } as const;
 
 export function isValidSidebarVariant(value: unknown): value is SidebarVariant {
@@ -1279,9 +1279,9 @@ export const SidebarCollapsibleSchema = z.enum(SIDEBAR_COLLAPSIBLES).openapi({
 export type SidebarCollapsible = z.infer<typeof SidebarCollapsibleSchema>;
 
 export const SidebarCollapsibles = {
-  OFFCANVAS: 'offcanvas' as const,
   ICON: 'icon' as const,
   NONE: 'none' as const,
+  OFFCANVAS: 'offcanvas' as const,
 } as const;
 
 export function isValidSidebarCollapsible(value: unknown): value is SidebarCollapsible {
@@ -1304,8 +1304,8 @@ export const SidebarMenuButtonSizeSchema = z.enum(SIDEBAR_MENU_BUTTON_SIZES).ope
 export type SidebarMenuButtonSize = z.infer<typeof SidebarMenuButtonSizeSchema>;
 
 export const SidebarMenuButtonSizes = {
-  SM: 'sm' as const,
   MD: 'md' as const,
+  SM: 'sm' as const,
 } as const;
 
 export function isValidSidebarMenuButtonSize(value: unknown): value is SidebarMenuButtonSize {
@@ -1352,8 +1352,8 @@ export const ImageLoadingSchema = z.enum(IMAGE_LOADINGS).openapi({
 export type ImageLoading = z.infer<typeof ImageLoadingSchema>;
 
 export const ImageLoadings = {
-  LAZY: 'lazy' as const,
   EAGER: 'eager' as const,
+  LAZY: 'lazy' as const,
 } as const;
 
 export function isValidImageLoading(value: unknown): value is ImageLoading {
@@ -1376,10 +1376,10 @@ export const FieldTypeSchema = z.enum(FIELD_TYPES).openapi({
 export type FieldType = z.infer<typeof FieldTypeSchema>;
 
 export const FieldTypes = {
-  TEXT: 'text' as const,
-  NUMBER: 'number' as const,
   EMAIL: 'email' as const,
+  NUMBER: 'number' as const,
   PASSWORD: 'password' as const,
+  TEXT: 'text' as const,
 } as const;
 
 export function isValidFieldType(value: unknown): value is FieldType {
@@ -1426,10 +1426,10 @@ export const ScrollAlignSchema = z.enum(SCROLL_ALIGNS).openapi({
 export type ScrollAlign = z.infer<typeof ScrollAlignSchema>;
 
 export const ScrollAligns = {
-  START: 'start' as const,
+  AUTO: 'auto' as const,
   CENTER: 'center' as const,
   END: 'end' as const,
-  AUTO: 'auto' as const,
+  START: 'start' as const,
 } as const;
 
 export function isValidScrollAlign(value: unknown): value is ScrollAlign {
@@ -1457,8 +1457,8 @@ export type ApiKeysModalTab = z.infer<typeof ApiKeysModalTabSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const ApiKeysModalTabs = {
-  LIST: 'list' as const,
   CREATE: 'create' as const,
+  LIST: 'list' as const,
 } as const;
 
 export function isValidApiKeysModalTab(value: unknown): value is ApiKeysModalTab {
@@ -1546,9 +1546,9 @@ export type OgImageType = z.infer<typeof OgImageTypeSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const OgImageTypes = {
+  PAGE: 'page' as const,
   PUBLIC_THREAD: 'public-thread' as const,
   THREAD: 'thread' as const,
-  PAGE: 'page' as const,
 } as const;
 
 export function isValidOgImageType(value: unknown): value is OgImageType {

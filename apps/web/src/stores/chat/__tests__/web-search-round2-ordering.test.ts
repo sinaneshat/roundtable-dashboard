@@ -35,10 +35,10 @@ let callOrder: RecordedCall[] = [];
 
 function recordCall(type: CallType, roundNumber: number, data?: unknown): void {
   callOrder.push({
-    type,
-    timestamp: Date.now(),
-    roundNumber,
     data,
+    roundNumber,
+    timestamp: Date.now(),
+    type,
   });
 }
 
@@ -65,15 +65,15 @@ function createTrackedStore(): ChatStoreApi {
   const originalSetWaitingToStartStreaming = store.getState().setWaitingToStartStreaming;
 
   store.setState({
+    addPreSearch: (preSearch) => {
+      recordCall('addPreSearch', preSearch.roundNumber, { status: preSearch.status });
+      originalAddPreSearch(preSearch);
+    },
     setConfigChangeRoundNumber: (roundNumber: number | null) => {
       if (roundNumber !== null) {
         recordCall('setConfigChangeRoundNumber', roundNumber);
       }
       originalSetConfigChangeRoundNumber(roundNumber);
-    },
-    addPreSearch: (preSearch) => {
-      recordCall('addPreSearch', preSearch.roundNumber, { status: preSearch.status });
-      originalAddPreSearch(preSearch);
     },
     setWaitingToStartStreaming: (waiting: boolean) => {
       if (waiting) {
@@ -125,15 +125,15 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
 
     // 2. Add pre-search placeholder AFTER blocking flag
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // 3. Set waiting to start
@@ -171,15 +171,15 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
 
     // Now add pre-search
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // configChangeRoundNumber should STILL be set
@@ -188,7 +188,7 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
     // Effects checking for blocking should see this
     const isBlocked = store.getState().configChangeRoundNumber !== null
       || store.getState().isWaitingForChangelog;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should block pre-search execution until PATCH and changelog complete', () => {
@@ -202,15 +202,15 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
 
     // 2. Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // 3. Set waiting to start
@@ -224,14 +224,14 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
 
     const isBlocked = store.getState().configChangeRoundNumber !== null
       || store.getState().isWaitingForChangelog;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
 
     // Simulate PATCH completion
     store.getState().setIsWaitingForChangelog(true);
 
     // Still blocked (waiting for changelog)
     expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // Simulate changelog completion
     store.getState().setIsWaitingForChangelog(false);
@@ -240,7 +240,7 @@ describe('web Search Enabled on Round 2 - State Update Order', () => {
     // NOW unblocked
     const isUnblocked = store.getState().configChangeRoundNumber === null
       && !store.getState().isWaitingForChangelog;
-    expect(isUnblocked).toBe(true);
+    expect(isUnblocked).toBeTruthy();
   });
 });
 
@@ -263,15 +263,15 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
 
     // 2. Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     // 3. Set waiting to start
@@ -281,14 +281,18 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
     // === ASYNC OPERATIONS ===
 
     // 4. PATCH request (simulated)
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
     recordCall('PATCH', roundNumber);
 
     // 5. After PATCH, set changelog flag
     store.getState().setIsWaitingForChangelog(true);
 
     // 6. Changelog fetch (simulated)
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
     recordCall('changelog', roundNumber);
 
     // 7. Clear blocking flags
@@ -333,15 +337,15 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     store.getState().setStreamingRoundNumber(roundNumber);
@@ -355,9 +359,9 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
     const shouldBlock = store.getState().configChangeRoundNumber !== null
       || store.getState().isWaitingForChangelog;
 
-    expect(shouldBlock).toBe(true);
+    expect(shouldBlock).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
     // Pre-search should still be PENDING (not executed)
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === roundNumber);
@@ -375,22 +379,24 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
 
     store.getState().setStreamingRoundNumber(roundNumber);
     store.getState().setWaitingToStartStreaming(true);
 
     // Simulate PATCH completion
-    await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
     store.getState().setIsWaitingForChangelog(true);
 
     // At this point:
@@ -401,9 +407,9 @@ describe('web Search Round 2 - Full Flow Simulation', () => {
     const shouldBlock = store.getState().configChangeRoundNumber !== null
       || store.getState().isWaitingForChangelog;
 
-    expect(shouldBlock).toBe(true);
+    expect(shouldBlock).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // Pre-search should still be PENDING
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === roundNumber);
@@ -431,37 +437,37 @@ describe('blocking Check Verification', () => {
       || store.getState().configChangeRoundNumber !== null;
 
     // Stage 1: Initial state - NOT blocked
-    expect(checkBlocking()).toBe(false);
+    expect(checkBlocking()).toBeFalsy();
 
     // Stage 2: Set configChangeRoundNumber - BLOCKED
     store.getState().setConfigChangeRoundNumber(roundNumber);
-    expect(checkBlocking()).toBe(true);
+    expect(checkBlocking()).toBeTruthy();
 
     // Stage 3: Add pre-search (configChangeRoundNumber still set) - BLOCKED
     store.getState().addPreSearch({
-      id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
-      roundNumber,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      userQuery: 'Test query',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: `presearch-r${roundNumber}`,
+      roundNumber,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
+      userQuery: 'Test query',
     });
-    expect(checkBlocking()).toBe(true);
+    expect(checkBlocking()).toBeTruthy();
 
     // Stage 4: Set waitingToStart - BLOCKED
     store.getState().setWaitingToStartStreaming(true);
-    expect(checkBlocking()).toBe(true);
+    expect(checkBlocking()).toBeTruthy();
 
     // Stage 5: PATCH completes, set isWaitingForChangelog - BLOCKED
     store.getState().setIsWaitingForChangelog(true);
-    expect(checkBlocking()).toBe(true);
+    expect(checkBlocking()).toBeTruthy();
 
     // Stage 6: Changelog completes, clear flags - NOT BLOCKED
     store.getState().setIsWaitingForChangelog(false);
     store.getState().setConfigChangeRoundNumber(null);
-    expect(checkBlocking()).toBe(false);
+    expect(checkBlocking()).toBeFalsy();
   });
 });

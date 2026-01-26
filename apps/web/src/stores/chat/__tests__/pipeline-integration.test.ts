@@ -32,11 +32,11 @@ import { createChatStore } from '../store';
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return createMockThreadBase({
-    id: 'thread-pipeline-123',
-    title: 'Pipeline Test Thread',
-    slug: 'pipeline-test-thread',
-    mode: ChatModes.ANALYZING,
     enableWebSearch: true,
+    id: 'thread-pipeline-123',
+    mode: ChatModes.ANALYZING,
+    slug: 'pipeline-test-thread',
+    title: 'Pipeline Test Thread',
     ...overrides,
   });
 }
@@ -46,10 +46,10 @@ function createMockParticipants(count: number): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) =>
     createMockParticipant({
       id: `participant-${i}`,
-      threadId: 'thread-pipeline-123',
       modelId: models[i % models.length] as string,
-      role: `Expert ${i}`,
       priority: i,
+      role: `Expert ${i}`,
+      threadId: 'thread-pipeline-123',
     }));
 }
 
@@ -61,37 +61,37 @@ function createMockPreSearch(
   return {
     ...createMockPreSearchBase({
       id: `presearch-${roundNumber}`,
-      threadId: 'thread-pipeline-123',
       roundNumber,
+      threadId: 'thread-pipeline-123',
     }),
-    status,
-    userQuery: `Search query for round ${roundNumber}`,
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    errorMessage: null,
     searchData: hasData
       ? {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-          results: [{
-            query: 'test',
-            answer: 'test answer',
-            results: [{ title: 'Result', url: 'https://example.com', content: 'Content', score: 0.9 }],
-            responseTime: 1000,
-          }],
-          summary: 'Search summary',
-          successCount: 1,
           failureCount: 0,
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+          results: [{
+            answer: 'test answer',
+            query: 'test',
+            responseTime: 1000,
+            results: [{ content: 'Content', score: 0.9, title: 'Result', url: 'https://example.com' }],
+          }],
+          successCount: 1,
+          summary: 'Search summary',
           totalResults: 1,
           totalTime: 1000,
         }
       : undefined,
-    errorMessage: null,
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    status,
+    userQuery: `Search query for round ${roundNumber}`,
   } as StoredPreSearch;
 }
 
 function createRoundMessages(roundNumber: number, participantCount: number): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-pipeline-123_r${roundNumber}_user`,
       content: `Question for round ${roundNumber}`,
+      id: `thread-pipeline-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -99,12 +99,12 @@ function createRoundMessages(roundNumber: number, participantCount: number): UIM
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-pipeline-123_r${roundNumber}_p${i}`,
         content: `Response from participant ${i} for round ${roundNumber}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-pipeline-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -138,12 +138,13 @@ describe('pipeline Phase Transitions', () => {
 
       // Pre-search is pending
       const preSearch0 = getStoreState(store).preSearches[0];
-      if (!preSearch0)
+      if (!preSearch0) {
         throw new Error('expected preSearch0');
+      }
       expect(preSearch0.status).toBe(MessageStatuses.PENDING);
 
       // Streaming should not start yet (controlled by orchestrator)
-      expect(getStoreState(store).isStreaming).toBe(false);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
     });
 
     it('pre-search streaming shows activity', () => {
@@ -153,8 +154,9 @@ describe('pipeline Phase Transitions', () => {
       state.addPreSearch(streamingPreSearch);
 
       const preSearch0 = getStoreState(store).preSearches[0];
-      if (!preSearch0)
+      if (!preSearch0) {
         throw new Error('expected preSearch0');
+      }
       expect(preSearch0.status).toBe(MessageStatuses.STREAMING);
     });
 
@@ -165,14 +167,15 @@ describe('pipeline Phase Transitions', () => {
       state.addPreSearch(completePreSearch);
 
       const preSearch0 = getStoreState(store).preSearches[0];
-      if (!preSearch0)
+      if (!preSearch0) {
         throw new Error('expected preSearch0');
+      }
       expect(preSearch0.status).toBe(MessageStatuses.COMPLETE);
       expect(preSearch0.searchData).toBeDefined();
 
       // Now participant streaming can start
       state.setIsStreaming(true);
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
     });
   });
 
@@ -184,7 +187,7 @@ describe('pipeline Phase Transitions', () => {
       state.setStreamingRoundNumber(0);
       state.setCurrentParticipantIndex(0);
 
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
       expect(getStoreState(store).currentParticipantIndex).toBe(0);
 
       // Advance to next participant
@@ -202,8 +205,8 @@ describe('pipeline Phase Transitions', () => {
       state.setIsStreaming(false);
 
       // Can now mark moderator as ready to create
-      expect(state.tryMarkModeratorCreated(0)).toBe(true);
-      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+      expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
     });
   });
 
@@ -215,10 +218,10 @@ describe('pipeline Phase Transitions', () => {
       state.setMessages(round0Messages);
 
       // First attempt should succeed
-      expect(state.tryMarkModeratorCreated(0)).toBe(true);
+      expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
 
       // Second attempt should fail
-      expect(state.tryMarkModeratorCreated(0)).toBe(false);
+      expect(state.tryMarkModeratorCreated(0)).toBeFalsy();
     });
 
     it('moderator creation can be tracked per round', () => {
@@ -230,13 +233,13 @@ describe('pipeline Phase Transitions', () => {
 
       // Round 0 moderator created
       state.tryMarkModeratorCreated(0);
-      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-      expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(false);
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+      expect(getStoreState(store).createdModeratorRounds.has(1)).toBeFalsy();
 
       // Round 1 moderator created
       state.tryMarkModeratorCreated(1);
-      expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-      expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+      expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+      expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
     });
   });
 });
@@ -265,12 +268,14 @@ describe('pipeline Data Flow', () => {
 
     // Data is accessible
     const storedPreSearch = getStoreState(store).preSearches[0];
-    if (!storedPreSearch)
+    if (!storedPreSearch) {
       throw new Error('expected storedPreSearch');
+    }
     expect(storedPreSearch.searchData).toBeDefined();
     const searchData = storedPreSearch.searchData;
-    if (!searchData)
+    if (!searchData) {
       throw new Error('expected searchData');
+    }
     expect(searchData.results).toHaveLength(1);
     expect(searchData.summary).toBe('Search summary');
   });
@@ -292,17 +297,17 @@ describe('pipeline Data Flow', () => {
     const userQuestion = 'What is the meaning of life?';
     const round0Messages = [
       createTestUserMessage({
-        id: 'user-msg',
         content: userQuestion,
+        id: 'user-msg',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'p0-msg',
         content: 'Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-msg',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(round0Messages);
@@ -354,15 +359,17 @@ describe('multi-Round Pipeline', () => {
     // Verify independence
     expect(getStoreState(store).preSearches).toHaveLength(2);
     const ps0 = getStoreState(store).preSearches[0];
-    if (!ps0)
+    if (!ps0) {
       throw new Error('expected ps0');
+    }
     const ps1 = getStoreState(store).preSearches[1];
-    if (!ps1)
+    if (!ps1) {
       throw new Error('expected ps1');
+    }
     expect(ps0.roundNumber).toBe(0);
     expect(ps1.roundNumber).toBe(1);
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
   });
 
   it('round 1 can access round 0 context', () => {
@@ -414,24 +421,24 @@ describe('pipeline Deduplication', () => {
     state.setMessages(round0Messages);
 
     // First attempt succeeds
-    expect(state.tryMarkModeratorCreated(0)).toBe(true);
+    expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
 
     // Second attempt blocked
-    expect(state.tryMarkModeratorCreated(0)).toBe(false);
+    expect(state.tryMarkModeratorCreated(0)).toBeFalsy();
 
     // Tracking shows moderator was created
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
   });
 
   it('pre-search trigger tracking prevents duplicates', () => {
     const state = getStoreState(store);
 
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeFalsy();
     state.markPreSearchTriggered(0);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
 
     // Already triggered - caller should check this before triggering
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
   });
 });
 
@@ -454,40 +461,43 @@ describe('complete Pipeline Journey', () => {
     // === PHASE 1: Pre-Search ===
     // Trigger pre-search
     state.markPreSearchTriggered(0);
-    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBe(true);
+    expect(getStoreState(store).triggeredPreSearchRounds.has(0)).toBeTruthy();
 
     // Pre-search starts streaming
     const pendingPreSearch = createMockPreSearch(0, MessageStatuses.PENDING);
     state.addPreSearch(pendingPreSearch);
     const pendingPs = getStoreState(store).preSearches[0];
-    if (!pendingPs)
+    if (!pendingPs) {
       throw new Error('expected pendingPs');
+    }
     expect(pendingPs.status).toBe(MessageStatuses.PENDING);
 
     // Pre-search completes with data
     state.updatePreSearchData(0, {
-      queries: [{ query: 'AI trends 2024', rationale: 'User question', searchDepth: 'basic', index: 0, total: 1 }],
-      results: [{
-        query: 'AI trends 2024',
-        answer: 'AI has seen major advances...',
-        results: [
-          { title: 'AI in 2024', url: 'https://example.com/ai', content: 'Article content', score: 0.95 },
-        ],
-        responseTime: 1200,
-      }],
-      summary: 'The search reveals significant AI developments in 2024.',
-      successCount: 1,
       failureCount: 0,
+      queries: [{ index: 0, query: 'AI trends 2024', rationale: 'User question', searchDepth: 'basic', total: 1 }],
+      results: [{
+        answer: 'AI has seen major advances...',
+        query: 'AI trends 2024',
+        responseTime: 1200,
+        results: [
+          { content: 'Article content', score: 0.95, title: 'AI in 2024', url: 'https://example.com/ai' },
+        ],
+      }],
+      successCount: 1,
+      summary: 'The search reveals significant AI developments in 2024.',
       totalResults: 1,
       totalTime: 1200,
     });
     const completePs = getStoreState(store).preSearches[0];
-    if (!completePs)
+    if (!completePs) {
       throw new Error('expected completePs');
+    }
     expect(completePs.status).toBe(MessageStatuses.COMPLETE);
     const completePsData = completePs.searchData;
-    if (!completePsData)
+    if (!completePsData) {
       throw new Error('expected completePsData');
+    }
     expect(completePsData.summary).toContain('AI developments');
 
     // === PHASE 2: Participant Streaming ===
@@ -497,32 +507,32 @@ describe('complete Pipeline Journey', () => {
 
     // Add user message
     const userMessage = createTestUserMessage({
-      id: 'thread-pipeline-123_r0_user',
       content: 'What are the latest AI trends?',
+      id: 'thread-pipeline-123_r0_user',
       roundNumber: 0,
     });
     state.setMessages([userMessage]);
 
     // Participant 0 streams and completes
     const p0Message = createTestAssistantMessage({
-      id: 'thread-pipeline-123_r0_p0',
       content: 'Based on recent developments, AI has made significant strides in...',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-pipeline-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     state.setMessages([userMessage, p0Message]);
     state.setCurrentParticipantIndex(1);
 
     // Participant 1 streams and completes
     const p1Message = createTestAssistantMessage({
-      id: 'thread-pipeline-123_r0_p1',
       content: 'I would add that the transformer architecture has enabled...',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-pipeline-123_r0_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
     state.setMessages([userMessage, p0Message, p1Message]);
 
@@ -532,10 +542,10 @@ describe('complete Pipeline Journey', () => {
     // === PHASE 3: Moderator ===
     // Complete streaming
     state.completeStreaming();
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
 
     // Atomic moderator creation check
-    expect(state.tryMarkModeratorCreated(0)).toBe(true);
+    expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
 
     // Moderator is now created as a moderator message (handled by orchestrator/backend)
     // The store just tracks that moderator was created for this round
@@ -550,8 +560,9 @@ describe('complete Pipeline Journey', () => {
     // Pre-search complete with data
     expect(finalState.preSearches).toHaveLength(1);
     const finalPs = finalState.preSearches[0];
-    if (!finalPs)
+    if (!finalPs) {
       throw new Error('expected finalPs');
+    }
     expect(finalPs.status).toBe(MessageStatuses.COMPLETE);
     expect(finalPs.searchData).toBeDefined();
 
@@ -559,12 +570,12 @@ describe('complete Pipeline Journey', () => {
     expect(finalState.messages).toHaveLength(3);
 
     // Tracking state correct
-    expect(finalState.triggeredPreSearchRounds.has(0)).toBe(true);
-    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
+    expect(finalState.triggeredPreSearchRounds.has(0)).toBeTruthy();
+    expect(finalState.createdModeratorRounds.has(0)).toBeTruthy();
 
     // Flags cleared
-    expect(finalState.isStreaming).toBe(false);
-    expect(finalState.isModeratorStreaming).toBe(false);
+    expect(finalState.isStreaming).toBeFalsy();
+    expect(finalState.isModeratorStreaming).toBeFalsy();
   });
 
   it('pipeline without web search: participants → moderator', () => {
@@ -598,7 +609,7 @@ describe('complete Pipeline Journey', () => {
     const finalState = getStoreState(store);
     expect(finalState.preSearches).toHaveLength(0); // No pre-search
     expect(finalState.messages).toHaveLength(3);
-    expect(finalState.createdModeratorRounds.has(0)).toBe(true);
+    expect(finalState.createdModeratorRounds.has(0)).toBeTruthy();
   });
 });
 
@@ -628,13 +639,14 @@ describe('pipeline Interruption Handling', () => {
     // User stops (simulated by not completing pre-search)
     // Pre-search stays in streaming state
     const streamingPs = getStoreState(store).preSearches[0];
-    if (!streamingPs)
+    if (!streamingPs) {
       throw new Error('expected streamingPs');
+    }
     expect(streamingPs.status).toBe(MessageStatuses.STREAMING);
 
     // Participant streaming can still be started (bypass pre-search)
     state.setIsStreaming(true);
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
   });
 
   it('stop during participants preserves completed messages', () => {
@@ -645,14 +657,14 @@ describe('pipeline Interruption Handling', () => {
 
     // Participant 0 completes
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user', content: 'Q', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q', id: 'user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0',
         content: 'Complete response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(messages);
@@ -663,7 +675,7 @@ describe('pipeline Interruption Handling', () => {
 
     // Participant 0's message preserved
     expect(getStoreState(store).messages).toHaveLength(2);
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
   });
 
   it('navigation clears entire pipeline state', () => {
@@ -680,7 +692,7 @@ describe('pipeline Interruption Handling', () => {
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
 
     // Navigate away
     state.resetForThreadNavigation();

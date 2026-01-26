@@ -46,17 +46,17 @@ export async function generateTitleFromMessage(
   // Single attempt - no retry delays. If it fails, use fallback immediately.
   try {
     const result = await openRouterService.generateText({
-      modelId: TITLE_GENERATION_MODEL_ID,
+      maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
       messages: [
         {
           id: 'msg-title-gen',
+          parts: [{ text: firstMessage, type: MessagePartTypes.TEXT }],
           role: UIMessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: firstMessage }],
         },
       ],
+      modelId: TITLE_GENERATION_MODEL_ID,
       system: TITLE_GENERATION_CONFIG.systemPrompt,
       temperature: TITLE_GENERATION_CONFIG.temperature,
-      maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
     });
 
     let title = result.text.trim().replace(/^["']|["']$/g, '');
@@ -81,11 +81,11 @@ export async function generateTitleFromMessage(
       if (safeInputTokens > 0 || safeOutputTokens > 0) {
         try {
           await finalizeCredits(billingContext.userId, `title-gen-${ulid()}`, {
-            inputTokens: safeInputTokens,
-            outputTokens: safeOutputTokens,
             action: CreditActions.AI_RESPONSE,
-            threadId: billingContext.threadId,
+            inputTokens: safeInputTokens,
             modelId: TITLE_GENERATION_MODEL_ID,
+            outputTokens: safeOutputTokens,
+            threadId: billingContext.threadId,
           });
         } catch (billingError) {
           // Don't fail title generation if billing fails - log and continue
@@ -114,8 +114,8 @@ export async function updateThreadTitleAndSlug(
   const db = await getDbAsync();
 
   const currentThread = await db.query.chatThread.findFirst({
+    columns: { previousSlug: true, slug: true },
     where: eq(tables.chatThread.id, threadId),
-    columns: { slug: true, previousSlug: true },
   });
 
   const newSlug = await generateUniqueSlug(newTitle);
@@ -123,15 +123,15 @@ export async function updateThreadTitleAndSlug(
   await db
     .update(tables.chatThread)
     .set({
-      title: newTitle,
-      slug: newSlug,
-      previousSlug: currentThread?.previousSlug ?? currentThread?.slug ?? null,
       isAiGeneratedTitle: true,
+      previousSlug: currentThread?.previousSlug ?? currentThread?.slug ?? null,
+      slug: newSlug,
+      title: newTitle,
       updatedAt: new Date(),
     })
     .where(eq(tables.chatThread.id, threadId));
 
-  return { title: newTitle, slug: newSlug };
+  return { slug: newSlug, title: newTitle };
 }
 
 /**
@@ -161,7 +161,7 @@ export async function autoGenerateThreadTitle(
 
   // Only auto-generate if thread still has default "New Chat" title
   if (thread.title !== 'New Chat') {
-    return { title: thread.title, slug: thread.slug };
+    return { slug: thread.slug, title: thread.title };
   }
 
   // Generate title from message

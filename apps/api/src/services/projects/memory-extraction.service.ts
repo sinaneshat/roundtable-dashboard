@@ -63,13 +63,13 @@ const MIN_IMPORTANCE_THRESHOLD = 5;
 export async function extractMemoriesFromRound(
   params: MemoryExtractionParams,
 ): Promise<ExtractionResult> {
-  const { projectId, threadId, roundNumber, userQuestion, moderatorSummary, userId, ai, db } = params;
+  const { ai, db, moderatorSummary, projectId, roundNumber, threadId, userId, userQuestion } = params;
 
   const result: ExtractionResult = {
+    duplicates: 0,
     extracted: [],
     memoryIds: [],
     skipped: 0,
-    duplicates: 0,
   };
 
   // Skip if moderator summary is too short (likely error or trivial round)
@@ -77,29 +77,29 @@ export async function extractMemoriesFromRound(
   if (moderatorSummary.length < 50) {
     console.error('[Memory Extraction] Skipped: summary too short', {
       projectId,
-      threadId,
+      required: 50,
       roundNumber,
       summaryLength: moderatorSummary.length,
-      required: 50,
+      threadId,
     });
     return result;
   }
   console.error('[Memory Extraction] Starting extraction', {
     projectId,
-    threadId,
     roundNumber,
     summaryLength: moderatorSummary.length,
+    threadId,
   });
 
   // 1. Fetch existing memories to avoid duplicates
   const existingMemories = await db.query.projectMemory.findMany({
+    columns: { content: true, summary: true },
+    limit: MAX_EXISTING_MEMORIES,
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
     where: and(
       eq(tables.projectMemory.projectId, projectId),
       eq(tables.projectMemory.isActive, true),
     ),
-    columns: { content: true, summary: true },
-    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
-    limit: MAX_EXISTING_MEMORIES,
   });
 
   const existingContent = existingMemories.map(m => m.content);
@@ -115,10 +115,10 @@ export async function extractMemoriesFromRound(
 
   try {
     const response = await ai.run('@cf/meta/llama-3.1-8b-instruct' as Parameters<Ai['run']>[0], {
-      messages: [
-        { role: 'user', content: prompt },
-      ],
       max_tokens: 1024,
+      messages: [
+        { content: prompt, role: 'user' },
+      ],
       temperature: 0.3,
     });
 
@@ -137,33 +137,33 @@ export async function extractMemoriesFromRound(
 
     trackLLMGeneration(
       {
-        userId,
-        threadId,
-        roundNumber,
-        threadMode: 'memory_extraction',
+        modelId: '@cf/meta/llama-3.1-8b-instruct',
         participantId: 'system',
         participantIndex: 0,
-        modelId: '@cf/meta/llama-3.1-8b-instruct',
+        roundNumber,
+        threadId,
+        threadMode: 'memory_extraction',
+        userId,
       },
       {
-        text: responseText,
         finishReason: 'stop',
+        text: responseText,
         usage: {
           inputTokens: estimatedInputTokens,
           outputTokens: estimatedOutputTokens,
         },
       },
-      [{ role: 'user', content: prompt }],
+      [{ content: prompt, role: 'user' }],
       traceId,
       startTime,
       {
-        modelPricing: CLOUDFLARE_AI_PRICING['llama-3.1-8b-instruct'],
         additionalProperties: {
-          projectId,
-          operation_type: 'memory_extraction',
-          provider: 'cloudflare',
           is_token_estimate: true,
+          operation_type: 'memory_extraction',
+          projectId,
+          provider: 'cloudflare',
         },
+        modelPricing: CLOUDFLARE_AI_PRICING['llama-3.1-8b-instruct'],
       },
     ).catch(() => {}); // Fire and forget, don't block
 
@@ -176,8 +176,8 @@ export async function extractMemoriesFromRound(
     if (!jsonMatch) {
       console.error('[Memory Extraction] No JSON array found in response', {
         projectId,
-        threadId,
         responsePreview: responseText.slice(0, 200),
+        threadId,
       });
       return result;
     }
@@ -185,9 +185,9 @@ export async function extractMemoriesFromRound(
     const parsed = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(parsed)) {
       console.error('[Memory Extraction] Parsed result is not an array', {
+        parsedType: typeof parsed,
         projectId,
         threadId,
-        parsedType: typeof parsed,
       });
       return result;
     }
@@ -200,11 +200,11 @@ export async function extractMemoriesFromRound(
     );
 
     console.error('[Memory Extraction] Parsed memories from AI', {
+      memories: extractedMemories.map(m => ({ importance: m.importance, summary: m.summary })),
       projectId,
-      threadId,
       rawCount: parsed.length,
+      threadId,
       validCount: extractedMemories.length,
-      memories: extractedMemories.map(m => ({ summary: m.summary, importance: m.importance })),
     });
   } catch (error) {
     console.error('[Memory Extraction] AI call failed:', error);
@@ -212,7 +212,7 @@ export async function extractMemoriesFromRound(
   }
 
   // 4. Filter and deduplicate
-  const memoriesToInsert: Array<{
+  const memoriesToInsert: {
     id: string;
     projectId: string;
     content: string;
@@ -226,7 +226,7 @@ export async function extractMemoriesFromRound(
     createdBy: string;
     createdAt: Date;
     updatedAt: Date;
-  }> = [];
+  }[] = [];
 
   for (const memory of extractedMemories) {
     // Skip low-importance memories
@@ -249,13 +249,10 @@ export async function extractMemoriesFromRound(
     const now = new Date();
     const memoryId = ulid();
     memoriesToInsert.push({
-      id: memoryId,
-      projectId,
       content: memory.content,
-      summary: memory.summary,
-      source: ProjectMemorySources.CHAT,
-      sourceThreadId: threadId,
-      sourceRoundNumber: roundNumber,
+      createdAt: now,
+      createdBy: userId,
+      id: memoryId,
       importance: Math.min(10, Math.max(1, memory.importance)),
       isActive: true,
       metadata: {
@@ -263,8 +260,11 @@ export async function extractMemoriesFromRound(
         extractedAt: now.toISOString(),
         modelUsed: 'llama-3.1-8b-instruct',
       },
-      createdBy: userId,
-      createdAt: now,
+      projectId,
+      source: ProjectMemorySources.CHAT,
+      sourceRoundNumber: roundNumber,
+      sourceThreadId: threadId,
+      summary: memory.summary,
       updatedAt: now,
     });
 
@@ -274,11 +274,11 @@ export async function extractMemoriesFromRound(
 
   // Log filtering results
   console.error('[Memory Extraction] After filtering', {
+    duplicates: result.duplicates,
     projectId,
+    skipped: result.skipped,
     threadId,
     toInsert: memoriesToInsert.length,
-    skipped: result.skipped,
-    duplicates: result.duplicates,
   });
 
   // 5. Insert valid memories (chunked to avoid D1 100-parameter limit)
@@ -288,17 +288,17 @@ export async function extractMemoriesFromRound(
       await db.insert(tables.projectMemory).values(chunk);
     }
     console.error('[Memory Extraction] Inserted memories', {
-      projectId,
-      threadId,
       count: result.extracted.length,
       memoryIds: result.memoryIds,
+      projectId,
+      threadId,
     });
 
     // 6. Deduct credits for memory extraction (per round, not per memory)
     try {
       await deductCreditsForAction(userId, 'memoryExtraction', {
-        threadId,
         description: `Memory extraction: ${result.extracted.length} memories from round ${roundNumber}`,
+        threadId,
       });
     } catch {
       // Non-critical - don't fail extraction if billing fails
@@ -318,7 +318,7 @@ export type ConversationMemoryParams = {
   threadId: string;
   roundNumber: number;
   userQuestion: string;
-  participantResponses: Array<{ participantName: string; response: string }>;
+  participantResponses: { participantName: string; response: string }[];
   userId: string;
   ai: Ai;
   db: Awaited<ReturnType<typeof getDbAsync>>;
@@ -342,7 +342,7 @@ const MIN_SELECTIVE_IMPORTANCE = 6; // Higher threshold for non-moderator extrac
 export async function extractMemoriesFromConversation(
   params: ConversationMemoryParams,
 ): Promise<ConversationExtractionResult> {
-  const { projectId, threadId, roundNumber, userQuestion, participantResponses, userId, ai, db } = params;
+  const { ai, db, participantResponses, projectId, roundNumber, threadId, userId, userQuestion } = params;
 
   const result: ConversationExtractionResult = {
     extracted: [],
@@ -354,30 +354,30 @@ export async function extractMemoriesFromConversation(
   if (totalResponseLength < 100) {
     console.error('[Conversation Memory] Skipped: responses too short', {
       projectId,
-      threadId,
       roundNumber,
+      threadId,
       totalLength: totalResponseLength,
     });
     return result;
   }
 
   console.error('[Conversation Memory] Starting extraction', {
-    projectId,
-    threadId,
-    roundNumber,
     participantCount: participantResponses.length,
+    projectId,
+    roundNumber,
+    threadId,
     totalResponseLength,
   });
 
   // Fetch existing memories to avoid duplicates
   const existingMemories = await db.query.projectMemory.findMany({
+    columns: { content: true, summary: true },
+    limit: MAX_EXISTING_MEMORIES,
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
     where: and(
       eq(tables.projectMemory.projectId, projectId),
       eq(tables.projectMemory.isActive, true),
     ),
-    columns: { content: true, summary: true },
-    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
-    limit: MAX_EXISTING_MEMORIES,
   });
 
   const existingContent = existingMemories.map(m => m.content);
@@ -397,8 +397,8 @@ export async function extractMemoriesFromConversation(
 
   try {
     const response = await ai.run('@cf/meta/llama-3.1-8b-instruct' as Parameters<Ai['run']>[0], {
-      messages: [{ role: 'user', content: prompt }],
       max_tokens: 1024,
+      messages: [{ content: prompt, role: 'user' }],
       temperature: 0.3,
     });
 
@@ -415,33 +415,33 @@ export async function extractMemoriesFromConversation(
 
     trackLLMGeneration(
       {
-        userId,
-        threadId,
-        roundNumber,
-        threadMode: 'conversation_memory_extraction',
+        modelId: '@cf/meta/llama-3.1-8b-instruct',
         participantId: 'system',
         participantIndex: 0,
-        modelId: '@cf/meta/llama-3.1-8b-instruct',
+        roundNumber,
+        threadId,
+        threadMode: 'conversation_memory_extraction',
+        userId,
       },
       {
-        text: responseText,
         finishReason: 'stop',
+        text: responseText,
         usage: {
           inputTokens: estimatedInputTokens,
           outputTokens: estimatedOutputTokens,
         },
       },
-      [{ role: 'user', content: prompt }],
+      [{ content: prompt, role: 'user' }],
       traceId,
       startTime,
       {
-        modelPricing: CLOUDFLARE_AI_PRICING['llama-3.1-8b-instruct'],
         additionalProperties: {
-          projectId,
-          operation_type: 'conversation_memory_extraction',
-          provider: 'cloudflare',
           is_token_estimate: true,
+          operation_type: 'conversation_memory_extraction',
+          projectId,
+          provider: 'cloudflare',
         },
+        modelPricing: CLOUDFLARE_AI_PRICING['llama-3.1-8b-instruct'],
       },
     ).catch(() => {});
 
@@ -454,8 +454,8 @@ export async function extractMemoriesFromConversation(
     if (!jsonMatch) {
       console.error('[Conversation Memory] No JSON array found', {
         projectId,
-        threadId,
         responsePreview: responseText.slice(0, 200),
+        threadId,
       });
       return result;
     }
@@ -474,8 +474,8 @@ export async function extractMemoriesFromConversation(
 
     console.error('[Conversation Memory] Parsed memories', {
       projectId,
-      threadId,
       rawCount: parsed.length,
+      threadId,
       validCount: extractedMemories.length,
     });
   } catch (error) {
@@ -484,7 +484,7 @@ export async function extractMemoriesFromConversation(
   }
 
   // Filter, deduplicate, and insert
-  const memoriesToInsert: Array<{
+  const memoriesToInsert: {
     id: string;
     projectId: string;
     content: string;
@@ -498,7 +498,7 @@ export async function extractMemoriesFromConversation(
     createdBy: string;
     createdAt: Date;
     updatedAt: Date;
-  }> = [];
+  }[] = [];
 
   for (const memory of extractedMemories) {
     // Skip low-importance memories (higher threshold for selective extraction)
@@ -519,13 +519,10 @@ export async function extractMemoriesFromConversation(
     const now = new Date();
     const memoryId = ulid();
     memoriesToInsert.push({
-      id: memoryId,
-      projectId,
       content: memory.content,
-      summary: memory.summary,
-      source: ProjectMemorySources.CHAT,
-      sourceThreadId: threadId,
-      sourceRoundNumber: roundNumber,
+      createdAt: now,
+      createdBy: userId,
+      id: memoryId,
       importance: Math.min(10, Math.max(1, memory.importance)),
       isActive: true,
       metadata: {
@@ -533,8 +530,11 @@ export async function extractMemoriesFromConversation(
         extractedAt: now.toISOString(),
         modelUsed: 'llama-3.1-8b-instruct',
       },
-      createdBy: userId,
-      createdAt: now,
+      projectId,
+      source: ProjectMemorySources.CHAT,
+      sourceRoundNumber: roundNumber,
+      sourceThreadId: threadId,
+      summary: memory.summary,
       updatedAt: now,
     });
 
@@ -549,17 +549,17 @@ export async function extractMemoriesFromConversation(
       await db.insert(tables.projectMemory).values(chunk);
     }
     console.error('[Conversation Memory] Inserted memories', {
-      projectId,
-      threadId,
       count: memoriesToInsert.length,
       memoryIds: result.memoryIds,
+      projectId,
+      threadId,
     });
 
     // Deduct credits
     try {
       await deductCreditsForAction(userId, 'memoryExtraction', {
-        threadId,
         description: `Conversation memory: ${memoriesToInsert.length} memories from round ${roundNumber}`,
+        threadId,
       });
     } catch {
       console.error('[Conversation Memory] Credit deduction failed', { projectId, userId });

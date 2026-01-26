@@ -81,11 +81,11 @@ describe('streaming Completion Optimization', () => {
       store.getState().setPendingMessage('test message');
 
       // Track state updates
-      const stateSnapshots: Array<{ isStreaming: boolean; isModeratorStreaming: boolean }> = [];
+      const stateSnapshots: { isStreaming: boolean; isModeratorStreaming: boolean }[] = [];
       const unsubscribe = store.subscribe((state) => {
         stateSnapshots.push({
-          isStreaming: state.isStreaming,
           isModeratorStreaming: state.isModeratorStreaming,
+          isStreaming: state.isStreaming,
         });
       });
 
@@ -96,8 +96,8 @@ describe('streaming Completion Optimization', () => {
 
       // Verify all flags are reset
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
+      expect(finalState.isModeratorStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.pendingMessage).toBeNull();
 
@@ -109,8 +109,8 @@ describe('streaming Completion Optimization', () => {
       const store = createChatStore();
 
       // State is already in reset state (defaults)
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // Track state updates (documents behavior, not asserted)
       let _updateCount = 0;
@@ -135,10 +135,10 @@ describe('streaming Completion Optimization', () => {
 
       // Simulate pre-search streaming
       store.getState().addPreSearch({
-        threadId: 'thread-1',
         roundNumber: 1,
-        status: MessageStatuses.STREAMING,
         searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId: 'thread-1',
       });
 
       // Register pre-search animation
@@ -150,7 +150,7 @@ describe('streaming Completion Optimization', () => {
 
       // Verify pre-search is complete
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
-      expect(store.getState().pendingAnimations.has(-1)).toBe(false);
+      expect(store.getState().pendingAnimations.has(-1)).toBeFalsy();
     });
   });
 
@@ -171,7 +171,7 @@ describe('streaming Completion Optimization', () => {
 
       // Before last participant completes
       expect(store.getState().pendingAnimations.size).toBe(1);
-      expect(store.getState().pendingAnimations.has(2)).toBe(true);
+      expect(store.getState().pendingAnimations.has(2)).toBeTruthy();
 
       // Complete last participant
       store.getState().completeAnimation(2);
@@ -226,7 +226,7 @@ describe('streaming Completion Optimization', () => {
       // At this point we have an inconsistent state:
       // isStreaming = false, but streamingRoundNumber = 0
       // This was causing the flash bug where messages were skipped but pending cards weren't shown
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBe(0); // Still set!
 
       // The fix in ChatMessageList ensures messages aren't skipped when isStreaming=false
@@ -238,7 +238,7 @@ describe('streaming Completion Optimization', () => {
       store.getState().completeStreaming();
 
       // Now state is consistent
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
 
@@ -248,32 +248,32 @@ describe('streaming Completion Optimization', () => {
       // Add messages for round 0
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'msg-user',
-          role: MessageRoles.USER as const,
-          parts: [{ type: 'text' as const, text: 'Hello' }],
           metadata: { roundNumber: 0 },
-          createdAt: new Date(),
+          parts: [{ text: 'Hello', type: 'text' as const }],
+          role: MessageRoles.USER as const,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Response 1', type: 'text' as const }],
           role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Response 1' }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
-          createdAt: new Date(),
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p1',
+          metadata: { participantIndex: 1, roundNumber: 0 },
+          parts: [{ text: 'Response 2', type: 'text' as const }],
           role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Response 2' }],
-          metadata: { roundNumber: 0, participantIndex: 1 },
-          createdAt: new Date(),
         },
         {
-          id: 'thread-1_r0_p2',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Response 3' }],
-          metadata: { roundNumber: 0, participantIndex: 2 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p2',
+          metadata: { participantIndex: 2, roundNumber: 0 },
+          parts: [{ text: 'Response 3', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ]);
 
@@ -350,8 +350,8 @@ describe('streaming Completion Optimization', () => {
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(1);
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Simulate abort - moderator trigger calls both completeModeratorStream and completeStreaming
       store.getState().completeModeratorStream();
@@ -359,8 +359,8 @@ describe('streaming Completion Optimization', () => {
 
       // Verify all streaming state is cleared
       const finalState = store.getState();
-      expect(finalState.isModeratorStreaming).toBe(false);
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isModeratorStreaming).toBeFalsy();
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.pendingMessage).toBeNull();
       expect(finalState.pendingAnimations.size).toBe(0);
@@ -379,14 +379,14 @@ describe('streaming Completion Optimization', () => {
       store.getState().setIsModeratorStreaming(true);
 
       expect(store.getState().pendingAnimations.size).toBe(2);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       // Abort moderator
       store.getState().completeModeratorStream();
 
       // Moderator flag cleared, but participant streaming continues
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().pendingAnimations.size).toBe(2);
     });
   });
@@ -404,9 +404,9 @@ describe('streaming Completion Optimization', () => {
       store.getState().completeStreaming();
 
       // All state should be cleared regardless of content
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should handle participant completion with empty response', () => {
@@ -426,7 +426,7 @@ describe('streaming Completion Optimization', () => {
       store.getState().completeStreaming();
 
       // State properly cleared
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
   });
@@ -446,7 +446,7 @@ describe('streaming Completion Optimization', () => {
 
       // All state should be cleared even on error
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.pendingMessage).toBeNull();
       expect(finalState.pendingAnimations.size).toBe(0);
@@ -465,8 +465,8 @@ describe('streaming Completion Optimization', () => {
       store.getState().completeModeratorStream();
       store.getState().completeStreaming();
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
 
@@ -516,7 +516,7 @@ describe('streaming Completion Optimization', () => {
       // Final cleanup
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should handle concurrent completeStreaming calls without errors', () => {
@@ -534,8 +534,8 @@ describe('streaming Completion Optimization', () => {
 
       // Should not throw, state should be clean
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
+      expect(finalState.isModeratorStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
     });
 
@@ -562,9 +562,9 @@ describe('streaming Completion Optimization', () => {
       // completeStreaming clears MODERATOR_STATE_RESET which includes isModeratorStreaming
       // This is the current behavior - both get cleared together
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       // Current behavior: isModeratorStreaming gets cleared by completeStreaming
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isModeratorStreaming).toBeFalsy();
     });
 
     it('should maintain correct state when moderator completes before next round starts', () => {
@@ -577,7 +577,7 @@ describe('streaming Completion Optimization', () => {
       store.getState().completeModeratorStream();
       store.getState().completeStreaming();
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
 
       // Round 1 starts immediately
@@ -585,9 +585,9 @@ describe('streaming Completion Optimization', () => {
       store.getState().setStreamingRoundNumber(1);
 
       // State should be clean and ready for new round
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(1);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       expect(store.getState().pendingAnimations.size).toBe(0);
     });
   });
@@ -625,28 +625,28 @@ describe('streaming Completion Optimization', () => {
       const finalState = store.getState();
 
       // STREAMING_STATE_RESET
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.currentRoundNumber).toBeNull();
-      expect(finalState.waitingToStartStreaming).toBe(false);
+      expect(finalState.waitingToStartStreaming).toBeFalsy();
       expect(finalState.currentParticipantIndex).toBe(0);
 
       // MODERATOR_STATE_RESET (only isModeratorStreaming is cleared)
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isModeratorStreaming).toBeFalsy();
       // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeStreaming()
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
-      expect(finalState.isWaitingForChangelog).toBe(true);
+      expect(finalState.isWaitingForChangelog).toBeTruthy();
 
       // PENDING_MESSAGE_STATE_RESET
       expect(finalState.pendingMessage).toBeNull();
       expect(finalState.pendingAttachmentIds).toBeNull();
       expect(finalState.pendingFileParts).toBeNull();
       expect(finalState.expectedParticipantIds).toBeNull();
-      expect(finalState.hasSentPendingMessage).toBe(false);
+      expect(finalState.hasSentPendingMessage).toBeFalsy();
 
       // REGENERATION_STATE_RESET
-      expect(finalState.isRegenerating).toBe(false);
+      expect(finalState.isRegenerating).toBeFalsy();
       expect(finalState.regeneratingRoundNumber).toBeNull();
 
       // Animation state
@@ -672,9 +672,9 @@ describe('streaming Completion Optimization', () => {
       const stateAfterThird = { ...store.getState() };
 
       // All should result in the same clean state
-      expect(stateAfterFirst.isStreaming).toBe(false);
-      expect(stateAfterSecond.isStreaming).toBe(false);
-      expect(stateAfterThird.isStreaming).toBe(false);
+      expect(stateAfterFirst.isStreaming).toBeFalsy();
+      expect(stateAfterSecond.isStreaming).toBeFalsy();
+      expect(stateAfterThird.isStreaming).toBeFalsy();
 
       expect(stateAfterFirst.streamingRoundNumber).toBeNull();
       expect(stateAfterSecond.streamingRoundNumber).toBeNull();

@@ -10,16 +10,16 @@ type LogoAreaSkeletonProps = {
 } & ComponentProps<'div'>;
 
 const sizeClasses = {
-  small: 'h-12 w-12 sm:h-14 sm:w-14',
-  medium: 'h-16 w-16 sm:h-20 sm:w-20',
   large: 'h-20 w-20 sm:h-24 sm:w-24',
+  medium: 'h-16 w-16 sm:h-20 sm:w-20',
+  small: 'h-12 w-12 sm:h-14 sm:w-14',
 } as const;
 
 export function LogoAreaSkeleton({
-  size = 'large',
-  showTitle = true,
-  showTagline = true,
   className,
+  showTagline = true,
+  showTitle = true,
+  size = 'large',
   ...props
 }: LogoAreaSkeletonProps) {
   return (

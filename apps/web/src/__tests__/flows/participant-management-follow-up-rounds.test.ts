@@ -43,8 +43,8 @@ function setupStoreWithInitialRound(store: ChatStoreApi, participantCount = 2) {
     participants.map(p => ({
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
       priority: p.priority,
+      role: p.role,
     })),
   );
 
@@ -80,8 +80,8 @@ describe('adding Participants Between Rounds', () => {
         ...initialParticipants.map(p => ({
           id: p.id,
           modelId: p.modelId,
-          role: p.role,
           priority: p.priority,
+          role: p.role,
         })),
         createParticipantConfig(2, {
           id: 'participant-2',
@@ -195,8 +195,8 @@ describe('adding Participants Between Rounds', () => {
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
       expect(store.getState().expectedParticipantIds).toHaveLength(3);
     });
 
@@ -217,21 +217,21 @@ describe('adding Participants Between Rounds', () => {
       store.getState().setStreamingRoundNumber(1);
 
       const pendingPreSearch: StoredPreSearch = {
-        id: 'presearch-1',
-        threadId: 'thread-1',
-        roundNumber: 1,
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        userQuery: 'Second message',
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-1',
+        userQuery: 'Second message',
       };
 
       store.getState().addPreSearch(pendingPreSearch);
 
       const shouldWait = shouldWaitForPreSearch(true, pendingPreSearch);
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
   });
 });
@@ -356,14 +356,14 @@ describe('participant Role Changes Between Rounds', () => {
         createParticipantConfig(0, {
           id: participant0.id,
           modelId: participant0.modelId,
-          role: 'Updated Role',
           priority: 0,
+          role: 'Updated Role',
         }),
         createParticipantConfig(1, {
           id: participant1.id,
           modelId: participant1.modelId,
-          role: participant1.role,
           priority: 1,
+          role: participant1.role,
         }),
       ];
 
@@ -384,14 +384,14 @@ describe('participant Role Changes Between Rounds', () => {
         createParticipantConfig(0, {
           id: participant0.id,
           modelId: participant0.modelId,
-          role: 'Analyst',
           priority: 0,
+          role: 'Analyst',
         }),
         createParticipantConfig(1, {
           id: participant1.id,
           modelId: participant1.modelId,
-          role: 'Critic',
           priority: 1,
+          role: 'Critic',
         }),
       ];
 
@@ -419,20 +419,20 @@ describe('participant Role Changes Between Rounds', () => {
         createParticipantConfig(0, {
           id: participant0.id,
           modelId: participant0.modelId,
-          role: 'Strategist',
           priority: 0,
+          role: 'Strategist',
         }),
         createParticipantConfig(1, {
           id: participant1.id,
           modelId: participant1.modelId,
-          role: 'Implementer',
           priority: 1,
+          role: 'Implementer',
         }),
         createParticipantConfig(2, {
           id: participant2.id,
           modelId: participant2.modelId,
-          role: 'Validator',
           priority: 2,
+          role: 'Validator',
         }),
       ];
 
@@ -449,8 +449,8 @@ describe('participant Role Changes Between Rounds', () => {
       setupStoreWithInitialRound(store, 2);
 
       const participant0 = createMockParticipant(0, {
-        threadId: 'thread-1',
         role: null,
+        threadId: 'thread-1',
       });
       store.getState().updateParticipants([participant0]);
 
@@ -458,8 +458,8 @@ describe('participant Role Changes Between Rounds', () => {
         createParticipantConfig(0, {
           id: participant0.id,
           modelId: participant0.modelId,
-          role: 'New Role',
           priority: 0,
+          role: 'New Role',
         }),
       ];
 
@@ -477,8 +477,8 @@ describe('participant Role Changes Between Rounds', () => {
         createParticipantConfig(0, {
           id: participant0.id,
           modelId: participant0.modelId,
-          role: null,
           priority: 0,
+          role: null,
         }),
       ];
 
@@ -505,21 +505,22 @@ describe('multiple Participant Changes in Same Submission', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
       const firstParticipant = initialParticipants[0];
-      if (!firstParticipant)
+      if (!firstParticipant) {
         throw new Error('Expected first participant');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {
           id: firstParticipant.id,
           modelId: firstParticipant.modelId,
-          role: 'Updated Role',
           priority: 0,
+          role: 'Updated Role',
         }),
         createParticipantConfig(3, {
           id: 'participant-3',
           modelId: 'model-3',
-          role: 'New Participant',
           priority: 1,
+          role: 'New Participant',
         }),
       ];
 
@@ -626,8 +627,9 @@ describe('stream Order Updates With Participant Changes', () => {
       const p0 = initialParticipants[0];
       const p1 = initialParticipants[1];
       const p2 = initialParticipants[2];
-      if (!p0 || !p1 || !p2)
+      if (!p0 || !p1 || !p2) {
         throw new Error('Expected 3 participants');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {
@@ -664,8 +666,9 @@ describe('stream Order Updates With Participant Changes', () => {
       const p0 = initialParticipants[0];
       const p1 = initialParticipants[1];
       const p2 = initialParticipants[2];
-      if (!p0 || !p1 || !p2)
+      if (!p0 || !p1 || !p2) {
         throw new Error('Expected 3 participants');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {
@@ -712,8 +715,9 @@ describe('stream Order Updates With Participant Changes', () => {
 
       const p0 = initialParticipants[0];
       const p1 = initialParticipants[1];
-      if (!p0 || !p1)
+      if (!p0 || !p1) {
         throw new Error('Expected 2 participants');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {
@@ -762,8 +766,9 @@ describe('stream Order Updates With Participant Changes', () => {
       const p0 = initialParticipants[0];
       const p1 = initialParticipants[1];
       const p2 = initialParticipants[2];
-      if (!p0 || !p1 || !p2)
+      if (!p0 || !p1 || !p2) {
         throw new Error('Expected 3 participants');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {
@@ -806,8 +811,9 @@ describe('stream Order Updates With Participant Changes', () => {
 
       const p0 = initialParticipants[0];
       const p1 = initialParticipants[1];
-      if (!p0 || !p1)
+      if (!p0 || !p1) {
         throw new Error('Expected 2 participants');
+      }
 
       const newParticipants = [
         createParticipantConfig(0, {

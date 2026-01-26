@@ -31,9 +31,9 @@ type ChatQuickStartProps = {
 };
 
 export function ChatQuickStart({
-  onSuggestionClick,
   className,
   disabled = false,
+  onSuggestionClick,
   quickStartData,
 }: ChatQuickStartProps) {
   const randomPrompts = useMemo(
@@ -53,8 +53,9 @@ export function ChatQuickStart({
     : SubscriptionTiers.FREE;
 
   const allModels: Model[] = useMemo(() => {
-    if (!modelsResponse?.success)
+    if (!modelsResponse?.success) {
       return [];
+    }
     return modelsResponse.data.items;
   }, [modelsResponse]);
 
@@ -98,7 +99,7 @@ export function ChatQuickStart({
   }, [sortedProviders, modelsByProvider]);
 
   const selectUniqueProviderModels = useCallback(
-    (count: number, offset: number = 0): string[] => {
+    (count: number, offset = 0): string[] => {
       const selectedModels: string[] = [];
 
       const rotatedProviders = [
@@ -107,8 +108,9 @@ export function ChatQuickStart({
       ];
 
       for (const provider of rotatedProviders) {
-        if (selectedModels.length >= count)
+        if (selectedModels.length >= count) {
           break;
+        }
         const modelId = modelPerProvider.get(provider);
         if (modelId) {
           selectedModels.push(modelId);
@@ -118,8 +120,9 @@ export function ChatQuickStart({
       if (selectedModels.length < count) {
         const used = new Set(selectedModels);
         for (const model of accessibleModels) {
-          if (selectedModels.length >= count)
+          if (selectedModels.length >= count) {
             break;
+          }
           if (!used.has(model.id)) {
             selectedModels.push(model.id);
             used.add(model.id);
@@ -146,24 +149,25 @@ export function ChatQuickStart({
       const models = selectUniqueProviderModels(idealCount, initialProviderOffset + suggestionIndex);
 
       return {
-        title: template.title,
-        prompt: template.prompt,
         mode: template.mode,
         participants: template.roles
           .slice(0, models.length)
           .map((role, idx) => {
             const modelId = models[idx];
-            if (!modelId)
+            if (!modelId) {
               return null;
+            }
             return {
+              customRoleId: undefined,
               id: `p${idx + 1}`,
               modelId,
-              role,
               priority: idx,
-              customRoleId: undefined,
+              role,
             };
           })
           .filter((p): p is NonNullable<typeof p> => p !== null),
+        prompt: template.prompt,
+        title: template.title,
       };
     };
 

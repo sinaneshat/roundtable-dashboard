@@ -48,7 +48,7 @@ describe('double Message Submission Prevention', () => {
       const canSend = store.getState().pendingMessage !== null
         && !store.getState().hasSentPendingMessage;
 
-      expect(canSend).toBe(false);
+      expect(canSend).toBeFalsy();
     });
 
     it('allows first message send', () => {
@@ -59,7 +59,7 @@ describe('double Message Submission Prevention', () => {
       const canSend = store.getState().pendingMessage !== null
         && !store.getState().hasSentPendingMessage;
 
-      expect(canSend).toBe(true);
+      expect(canSend).toBeTruthy();
     });
 
     it('clears flag after streaming completes', () => {
@@ -68,7 +68,7 @@ describe('double Message Submission Prevention', () => {
       store.getState().setHasSentPendingMessage(true);
       store.getState().completeStreaming();
 
-      expect(store.getState().hasSentPendingMessage).toBe(false);
+      expect(store.getState().hasSentPendingMessage).toBeFalsy();
     });
   });
 
@@ -81,7 +81,7 @@ describe('double Message Submission Prevention', () => {
       const canSubmitNew = !store.getState().waitingToStartStreaming
         && !store.getState().isStreaming;
 
-      expect(canSubmitNew).toBe(false);
+      expect(canSubmitNew).toBeFalsy();
     });
 
     it('prevents new message during streaming', () => {
@@ -92,7 +92,7 @@ describe('double Message Submission Prevention', () => {
       const canSubmitNew = !store.getState().waitingToStartStreaming
         && !store.getState().isStreaming;
 
-      expect(canSubmitNew).toBe(false);
+      expect(canSubmitNew).toBeFalsy();
     });
   });
 
@@ -112,8 +112,8 @@ describe('double Message Submission Prevention', () => {
         return true;
       };
 
-      expect(canSubmit()).toBe(true);
-      expect(canSubmit()).toBe(false); // Too fast
+      expect(canSubmit()).toBeTruthy();
+      expect(canSubmit()).toBeFalsy(); // Too fast
     });
   });
 });
@@ -133,7 +133,7 @@ describe('pre-Search vs Participant Coordination', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
 
     it('participants wait while pre-search is STREAMING', () => {
@@ -145,7 +145,7 @@ describe('pre-Search vs Participant Coordination', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
 
     it('participants proceed after pre-search COMPLETE', () => {
@@ -157,7 +157,7 @@ describe('pre-Search vs Participant Coordination', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
 
     it('participants proceed after pre-search FAILED', () => {
@@ -169,7 +169,7 @@ describe('pre-Search vs Participant Coordination', () => {
       const shouldWait = preSearch?.status === MessageStatuses.PENDING
         || preSearch?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
   });
 
@@ -207,8 +207,8 @@ describe('pre-Search vs Participant Coordination', () => {
 
       const canTrigger2 = !store.getState().hasPreSearchBeenTriggered(0);
 
-      expect(canTrigger1).toBe(true);
-      expect(canTrigger2).toBe(false);
+      expect(canTrigger1).toBeTruthy();
+      expect(canTrigger2).toBeFalsy();
     });
   });
 
@@ -218,28 +218,28 @@ describe('pre-Search vs Participant Coordination', () => {
 
       // First call should succeed
       const result1 = store.getState().tryMarkPreSearchTriggered(0);
-      expect(result1).toBe(true);
+      expect(result1).toBeTruthy();
 
       // Second call should fail (already triggered)
       const result2 = store.getState().tryMarkPreSearchTriggered(0);
-      expect(result2).toBe(false);
+      expect(result2).toBeFalsy();
 
       // Third call should also fail
       const result3 = store.getState().tryMarkPreSearchTriggered(0);
-      expect(result3).toBe(false);
+      expect(result3).toBeFalsy();
     });
 
     it('allows different rounds independently', () => {
       const store = createChatStore();
 
       // Round 0
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
 
       // Round 1 - different round, should succeed
-      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
 
       // Round 0 again - should fail (already marked)
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
     });
 
     it('prevents race condition between multiple concurrent callers', () => {
@@ -261,13 +261,13 @@ describe('pre-Search vs Participant Coordination', () => {
       const store = createChatStore();
 
       // Before calling tryMark
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
 
       // Call tryMark
       store.getState().tryMarkPreSearchTriggered(0);
 
       // After calling tryMark
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
     });
 
     it('does not modify state when returning false', () => {
@@ -289,14 +289,14 @@ describe('pre-Search vs Participant Coordination', () => {
       const store = createChatStore();
 
       // First trigger
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
 
       // Clear tracking
       store.getState().clearPreSearchTracking(0);
 
       // Can trigger again after clearing
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
     });
 
     it('is cleared by startRegeneration', () => {
@@ -304,14 +304,14 @@ describe('pre-Search vs Participant Coordination', () => {
 
       // Mark round 0 as triggered
       store.getState().tryMarkPreSearchTriggered(0);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
 
       // Start regeneration clears tracking
       store.getState().startRegeneration(0);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
 
       // Can trigger again after regeneration
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
     });
   });
 });
@@ -325,11 +325,11 @@ describe('moderator Deduplication', () => {
     it('tracks rounds where moderator was created', () => {
       const store = createChatStore();
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
 
       store.getState().markModeratorCreated(0);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
     });
 
     it('cleared on regeneration', () => {
@@ -338,7 +338,7 @@ describe('moderator Deduplication', () => {
       store.getState().markModeratorCreated(0);
       store.getState().startRegeneration(0);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
     });
   });
 
@@ -349,9 +349,9 @@ describe('moderator Deduplication', () => {
       store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
       // Can check by ID or round
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 1)).toBe(true); // Same ID
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBeTruthy(); // Same round
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 1)).toBeTruthy(); // Same ID
     });
   });
 });
@@ -369,7 +369,7 @@ describe('thread Creation Race Conditions', () => {
 
       const canCreate = !store.getState().isCreatingThread;
 
-      expect(canCreate).toBe(false);
+      expect(canCreate).toBeFalsy();
     });
 
     it('allows thread creation when not in progress', () => {
@@ -377,7 +377,7 @@ describe('thread Creation Race Conditions', () => {
 
       const canCreate = !store.getState().isCreatingThread;
 
-      expect(canCreate).toBe(true);
+      expect(canCreate).toBeTruthy();
     });
   });
 
@@ -426,14 +426,15 @@ describe('navigation Timing Conflicts', () => {
       let hasNavigated = false;
 
       const attemptNavigation = () => {
-        if (hasNavigated)
+        if (hasNavigated) {
           return false;
+        }
         hasNavigated = true;
         return true;
       };
 
-      expect(attemptNavigation()).toBe(true);
-      expect(attemptNavigation()).toBe(false);
+      expect(attemptNavigation()).toBeTruthy();
+      expect(attemptNavigation()).toBeFalsy();
     });
   });
 
@@ -449,16 +450,16 @@ describe('navigation Timing Conflicts', () => {
         && state.moderatorStatus === MessageStatuses.COMPLETE;
 
       // Neither ready
-      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.PENDING })).toBe(false);
+      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.PENDING })).toBeFalsy();
 
       // Only title ready
-      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.STREAMING })).toBe(false);
+      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.STREAMING })).toBeFalsy();
 
       // Only moderator ready
-      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.COMPLETE })).toBe(false);
+      expect(canNavigate({ isAiGeneratedTitle: false, moderatorStatus: MessageStatuses.COMPLETE })).toBeFalsy();
 
       // Both ready
-      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.COMPLETE })).toBe(true);
+      expect(canNavigate({ isAiGeneratedTitle: true, moderatorStatus: MessageStatuses.COMPLETE })).toBeTruthy();
     });
   });
 
@@ -467,7 +468,7 @@ describe('navigation Timing Conflicts', () => {
       const store = createChatStore();
 
       // Concurrent screen mode changes
-      Promise.all([
+      void Promise.all([
         Promise.resolve().then(() => store.getState().setScreenMode(ScreenModes.THREAD)),
         Promise.resolve().then(() => store.getState().setScreenMode(ScreenModes.OVERVIEW)),
       ]);
@@ -490,8 +491,8 @@ describe('stream Resumption Conflicts', () => {
       const attempt1 = store.getState().markResumptionAttempted(0, 1);
       const attempt2 = store.getState().markResumptionAttempted(0, 1);
 
-      expect(attempt1).toBe(true); // First attempt allowed
-      expect(attempt2).toBe(false); // Duplicate blocked
+      expect(attempt1).toBeTruthy(); // First attempt allowed
+      expect(attempt2).toBeFalsy(); // Duplicate blocked
     });
 
     it('allows different participant resumption', () => {
@@ -500,7 +501,7 @@ describe('stream Resumption Conflicts', () => {
       store.getState().markResumptionAttempted(0, 0);
       const canResume = store.getState().markResumptionAttempted(0, 1);
 
-      expect(canResume).toBe(true);
+      expect(canResume).toBeTruthy();
     });
   });
 
@@ -511,15 +512,15 @@ describe('stream Resumption Conflicts', () => {
       // Set up old resumption state
       const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: twoHoursAgo,
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
-      expect(store.getState().isStreamResumptionStale()).toBe(true);
-      expect(store.getState().needsStreamResumption()).toBe(false);
+      expect(store.getState().isStreamResumptionStale()).toBeTruthy();
+      expect(store.getState().needsStreamResumption()).toBeFalsy();
     });
   });
 
@@ -529,26 +530,26 @@ describe('stream Resumption Conflicts', () => {
 
       // Set thread
       store.getState().setThread({
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-456',
-        userId: 'user-123',
-        title: 'Test',
         mode: 'analyzing',
         status: 'active',
-        enableWebSearch: false,
-        createdAt: new Date(),
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-123',
       } as ChatThread);
 
       // Resumption state for different thread
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123', // Different
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123', // Different
       });
 
-      expect(store.getState().needsStreamResumption()).toBe(false);
+      expect(store.getState().needsStreamResumption()).toBeFalsy();
     });
   });
 });
@@ -570,10 +571,10 @@ describe('concurrent Round Operations', () => {
       store.getState().startRegeneration(0);
 
       // Only round 0 cleared
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
     });
   });
 
@@ -587,8 +588,8 @@ describe('concurrent Round Operations', () => {
       const canStreamP0 = store.getState().currentParticipantIndex === 0;
       const canStreamP1 = store.getState().currentParticipantIndex === 1;
 
-      expect(canStreamP0).toBe(true);
-      expect(canStreamP1).toBe(false);
+      expect(canStreamP0).toBeTruthy();
+      expect(canStreamP1).toBeFalsy();
 
       // Advance to next
       store.getState().setCurrentParticipantIndex(1);
@@ -604,8 +605,8 @@ describe('concurrent Round Operations', () => {
       store.getState().setStreamingRoundNumber(1);
 
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
-        createTestUserMessage({ id: 'u1', content: 'Q', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u1', roundNumber: 1 }),
       ];
 
       // When streaming, verify message round matches
@@ -627,12 +628,12 @@ describe('participant Completion Race', () => {
     it('detects completion by finishReason', () => {
       const messages = [
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -642,28 +643,28 @@ describe('participant Completion Race', () => {
           || metadata.finishReason === FinishReasons.LENGTH;
       });
 
-      expect(isComplete).toBe(true);
+      expect(isComplete).toBeTruthy();
     });
 
     it('detects incomplete by UNKNOWN finishReason', () => {
       const messages = [
         {
           id: 'p0-r0',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Streaming...' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
+            hasError: false,
+            isPartialResponse: true,
+            isTransient: true,
+            model: 'gpt-4',
             participantId: 'p0',
             participantIndex: 0,
             participantRole: null,
-            model: 'gpt-4',
-            finishReason: FinishReasons.UNKNOWN,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: true,
-            isPartialResponse: true,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Streaming...', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -673,7 +674,7 @@ describe('participant Completion Race', () => {
           || metadata.finishReason === FinishReasons.LENGTH;
       });
 
-      expect(isComplete).toBe(false);
+      expect(isComplete).toBeFalsy();
     });
   });
 
@@ -682,20 +683,20 @@ describe('participant Completion Race', () => {
       const participantCount = 3;
       const messages = [
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'R1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r0',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // P2 still streaming...
       ];
@@ -706,7 +707,7 @@ describe('participant Completion Race', () => {
 
       const allComplete = completedParticipants === participantCount;
 
-      expect(allComplete).toBe(false);
+      expect(allComplete).toBeFalsy();
     });
   });
 });
@@ -746,8 +747,8 @@ describe('message Sync Race', () => {
 
       // Real message arrives
       const realMessage = createTestUserMessage({
-        id: 'real-msg-r0',
         content: 'Test',
+        id: 'real-msg-r0',
         roundNumber: 0,
       });
 
@@ -826,7 +827,7 @@ describe('state Leakage Prevention', () => {
 
       // Set up state
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       ]);
       store.getState().addPreSearch(createMockStoredPreSearch(0, MessageStatuses.COMPLETE));
 
@@ -903,14 +904,14 @@ describe('round Boundary Integrity', () => {
 
       // Add messages for round 0
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0-0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -918,14 +919,14 @@ describe('round Boundary Integrity', () => {
       const currentMessages = store.getState().messages;
       store.getState().setMessages([
         ...currentMessages,
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1-0',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ]);
 
@@ -958,14 +959,14 @@ describe('round Boundary Integrity', () => {
 
       // Set up round 0 as complete
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0-0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -979,19 +980,20 @@ describe('round Boundary Integrity', () => {
 
       // Add streaming message with correct round number
       const currentMessages = store.getState().messages;
-      if (streamingRoundNumber === null)
+      if (streamingRoundNumber === null) {
         throw new Error('Expected streamingRoundNumber to be set');
+      }
 
       store.getState().setMessages([
         ...currentMessages,
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: streamingRoundNumber }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: streamingRoundNumber }),
         createTestAssistantMessage({
-          id: 'streaming-a1-0',
           content: 'Streaming...',
-          roundNumber: streamingRoundNumber,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'streaming-a1-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: streamingRoundNumber,
         }),
       ]);
 
@@ -1015,12 +1017,12 @@ describe('round Boundary Integrity', () => {
       // Simulate what should NOT happen (message with wrong round)
       // The store should validate this, or timeline grouping should handle it
       const wrongRoundMessage = createTestAssistantMessage({
-        id: 'wrong-round',
         content: 'Wrong',
-        roundNumber: 0, // Wrong! Should be 1
+        finishReason: FinishReasons.UNKNOWN,
+        id: 'wrong-round',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.UNKNOWN,
+        roundNumber: 0, // Wrong! Should be 1
       });
 
       // Verify the mismatch detection
@@ -1035,23 +1037,23 @@ describe('round Boundary Integrity', () => {
 
       // Create interleaved messages (out of order by ID but correct by round)
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a1-0',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'a0-0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -1066,8 +1068,9 @@ describe('round Boundary Integrity', () => {
           messagesByRound.set(round, []);
         }
         const roundMessages = messagesByRound.get(round);
-        if (!roundMessages)
+        if (!roundMessages) {
           throw new Error('Expected roundMessages to be set');
+        }
 
         roundMessages.push(m);
       });
@@ -1079,8 +1082,9 @@ describe('round Boundary Integrity', () => {
 
       // Verify no cross-contamination
       const round0Messages = messagesByRound.get(0);
-      if (!round0Messages)
+      if (!round0Messages) {
         throw new Error('Expected round0Messages to be set');
+      }
 
       const round0Ids = round0Messages.map(m => m.id);
       expect(round0Ids).toContain('u0');
@@ -1094,22 +1098,22 @@ describe('round Boundary Integrity', () => {
 
       // Round 0 with 2 participants
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0-p0',
           content: 'P0-R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0-p1',
           content: 'P1-R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -1121,14 +1125,14 @@ describe('round Boundary Integrity', () => {
       const currentMessages = store.getState().messages;
       store.getState().setMessages([
         ...currentMessages,
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1-p0',
           content: 'P0-R1 streaming...',
-          roundNumber: 1,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'a1-p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 1,
         }),
       ]);
 
@@ -1148,8 +1152,9 @@ describe('round Boundary Integrity', () => {
       // p0 should have exactly 1 message in round 1
       expect(p0InRound1).toHaveLength(1);
       const firstP0Message = p0InRound1[0];
-      if (!firstP0Message)
+      if (!firstP0Message) {
         throw new Error('Expected firstP0Message to be set');
+      }
 
       expect(firstP0Message.id).toBe('a1-p0');
     });
@@ -1161,14 +1166,14 @@ describe('round Boundary Integrity', () => {
 
       // Complete round 0
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0-0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0-0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
       store.getState().completeStreaming();
@@ -1180,7 +1185,7 @@ describe('round Boundary Integrity', () => {
 
       // Verify streaming state is set up correctly
       expect(store.getState().streamingRoundNumber).toBe(1);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Any message added now must be for round 1
       const roundForNewMessage = store.getState().streamingRoundNumber;
@@ -1214,7 +1219,7 @@ describe('round Boundary Integrity', () => {
       store.getState().completeStreaming();
 
       expect(store.getState().streamingRoundNumber).toBeNull();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 });

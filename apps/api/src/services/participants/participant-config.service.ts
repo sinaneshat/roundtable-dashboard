@@ -19,21 +19,30 @@ import { validateParticipantUniqueness } from './participant-validation.service'
 // ============================================================================
 
 export const ParticipantChangeResultSchema = z.object({
-  insertOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
-  updateOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
-  disableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
-  reenableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
   changelogOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  disableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  insertOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
   participantIdMapping: z.custom<Map<string, string>>(val => val instanceof Map),
+  reenableOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
+  updateOps: z.custom<BatchItem<'sqlite'>[]>(val => Array.isArray(val)),
 });
 
 export type ParticipantChangeResult = z.infer<typeof ParticipantChangeResultSchema>;
 
+/**
+ * Result of processing participant changes, including change detection flag
+ */
+export const ProcessParticipantChangesResultSchema = ParticipantChangeResultSchema.extend({
+  hasChanges: z.boolean(),
+});
+
+export type ProcessParticipantChangesResult = z.infer<typeof ProcessParticipantChangesResultSchema>;
+
 export const ChangelogEntrySchema = z.object({
-  id: z.string(),
-  changeType: ChangelogTypeSchema,
-  changeSummary: z.string(),
   changeData: DbChangelogDataSchema,
+  changeSummary: z.string(),
+  changeType: ChangelogTypeSchema,
+  id: z.string(),
 }).strict();
 
 export type ChangelogEntry = z.infer<typeof ChangelogEntrySchema>;
@@ -88,12 +97,12 @@ export function categorizeParticipantChanges(
   });
 
   return {
+    addedParticipants,
     allDbParticipants,
     enabledDbParticipants,
     providedEnabledParticipants,
-    removedParticipants,
-    addedParticipants,
     reenabledParticipants,
+    removedParticipants,
     updatedParticipants,
   };
 }
@@ -109,11 +118,11 @@ export function buildParticipantOperations(
   roundNumber: number,
 ): ParticipantChangeResult {
   const {
+    addedParticipants,
     enabledDbParticipants,
     providedEnabledParticipants,
-    removedParticipants,
-    addedParticipants,
     reenabledParticipants,
+    removedParticipants,
     updatedParticipants,
   } = changes;
 
@@ -124,25 +133,25 @@ export function buildParticipantOperations(
     const newId = ulid();
     participantIdMapping.set(provided.id, newId);
     return db.insert(tables.chatParticipant).values({
-      id: newId,
-      threadId,
-      modelId: provided.modelId,
-      role: provided.role ?? null,
-      customRoleId: provided.customRoleId ?? null,
-      priority: provided.priority,
-      isEnabled: provided.isEnabled ?? true,
-      settings: null,
       createdAt: new Date(),
+      customRoleId: provided.customRoleId ?? null,
+      id: newId,
+      isEnabled: provided.isEnabled ?? true,
+      modelId: provided.modelId,
+      priority: provided.priority,
+      role: provided.role ?? null,
+      settings: null,
+      threadId,
       updatedAt: new Date(),
     }).onConflictDoUpdate({
-      target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
       set: {
-        role: provided.role ?? null,
         customRoleId: provided.customRoleId ?? null,
-        priority: provided.priority,
         isEnabled: provided.isEnabled ?? true,
+        priority: provided.priority,
+        role: provided.role ?? null,
         updatedAt: new Date(),
       },
+      target: [tables.chatParticipant.threadId, tables.chatParticipant.modelId],
     });
   });
 
@@ -155,10 +164,10 @@ export function buildParticipantOperations(
 
       return db.update(tables.chatParticipant)
         .set({
-          role: provided.role ?? null,
           customRoleId: provided.customRoleId ?? null,
-          priority: provided.priority,
           isEnabled: provided.isEnabled ?? true,
+          priority: provided.priority,
+          role: provided.role ?? null,
           updatedAt: new Date(),
         })
         .where(eq(tables.chatParticipant.id, dbP.id));
@@ -182,10 +191,10 @@ export function buildParticipantOperations(
     participantIdMapping.set(provided.id, dbP.id);
     return db.update(tables.chatParticipant)
       .set({
-        isEnabled: true,
-        role: provided.role ?? null,
         customRoleId: provided.customRoleId ?? null,
+        isEnabled: true,
         priority: provided.priority,
+        role: provided.role ?? null,
         updatedAt: new Date(),
       })
       .where(eq(tables.chatParticipant.id, dbP.id));
@@ -196,15 +205,15 @@ export function buildParticipantOperations(
       const modelName = extractModelName(removed.modelId);
       const displayName = removed.role || modelName;
       changelogEntries.push({
-        id: ulid(),
-        changeType: ChangelogTypes.REMOVED,
-        changeSummary: `Removed ${displayName}`,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT,
-          participantId: removed.id,
           modelId: removed.modelId,
+          participantId: removed.id,
           role: removed.role,
+          type: ChangelogChangeTypes.PARTICIPANT,
         },
+        changeSummary: `Removed ${displayName}`,
+        changeType: ChangelogTypes.REMOVED,
+        id: ulid(),
       });
     });
   }
@@ -215,15 +224,15 @@ export function buildParticipantOperations(
       const displayName = added.role || modelName;
       const realDbId = participantIdMapping.get(added.id);
       changelogEntries.push({
-        id: ulid(),
-        changeType: ChangelogTypes.ADDED,
-        changeSummary: `Added ${displayName}`,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT,
-          participantId: realDbId || added.id,
           modelId: added.modelId,
+          participantId: realDbId || added.id,
           role: added.role,
+          type: ChangelogChangeTypes.PARTICIPANT,
         },
+        changeSummary: `Added ${displayName}`,
+        changeType: ChangelogTypes.ADDED,
+        id: ulid(),
       });
     });
   }
@@ -244,16 +253,16 @@ export function buildParticipantOperations(
         const newDisplay = newRole || 'No Role';
 
         changelogEntries.push({
-          id: ulid(),
-          changeType: ChangelogTypes.MODIFIED,
-          changeSummary: `Updated ${modelName} role from "${oldDisplay}" to "${newDisplay}"`,
           changeData: {
-            type: ChangelogChangeTypes.PARTICIPANT_ROLE,
-            participantId: dbP.id,
             modelId: updated.modelId,
-            oldRole,
             newRole,
+            oldRole,
+            participantId: dbP.id,
+            type: ChangelogChangeTypes.PARTICIPANT_ROLE,
           },
+          changeSummary: `Updated ${modelName} role from "${oldDisplay}" to "${newDisplay}"`,
+          changeType: ChangelogTypes.MODIFIED,
+          id: ulid(),
         });
       }
     });
@@ -265,15 +274,15 @@ export function buildParticipantOperations(
       const displayName = reenabled.role || modelName;
       const dbP = changes.allDbParticipants.find(db => db.modelId === reenabled.modelId);
       changelogEntries.push({
-        id: ulid(),
-        changeType: ChangelogTypes.ADDED,
-        changeSummary: `Added ${displayName}`,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT,
-          participantId: dbP?.id || reenabled.id,
           modelId: reenabled.modelId,
+          participantId: dbP?.id || reenabled.id,
           role: reenabled.role,
+          type: ChangelogChangeTypes.PARTICIPANT,
         },
+        changeSummary: `Added ${displayName}`,
+        changeType: ChangelogTypes.ADDED,
+        id: ulid(),
       });
     });
   }
@@ -281,24 +290,24 @@ export function buildParticipantOperations(
   const changelogOps = changelogEntries.map(entry =>
     db.insert(tables.chatThreadChangelog)
       .values({
-        id: entry.id,
-        threadId,
-        roundNumber,
-        changeType: entry.changeType,
-        changeSummary: entry.changeSummary,
         changeData: entry.changeData,
+        changeSummary: entry.changeSummary,
+        changeType: entry.changeType,
         createdAt: new Date(),
+        id: entry.id,
+        roundNumber,
+        threadId,
       })
       .onConflictDoNothing(),
   );
 
   return {
-    insertOps,
-    updateOps,
-    disableOps,
-    reenableOps,
     changelogOps,
+    disableOps,
+    insertOps,
     participantIdMapping,
+    reenableOps,
+    updateOps,
   };
 }
 
@@ -313,7 +322,7 @@ export function processParticipantChanges(
   threadId: string,
   roundNumber: number,
   logger?: TypedLogger,
-): ParticipantChangeResult & { hasChanges: boolean } {
+): ProcessParticipantChangesResult {
   try {
     const changes = categorizeParticipantChanges(allDbParticipants, providedParticipants);
     const operations = buildParticipantOperations(db, changes, threadId, roundNumber);
@@ -327,15 +336,15 @@ export function processParticipantChanges(
 
     if (logger && hasChanges) {
       logger.info('Participant configuration changes detected', {
+        addedCount: operations.insertOps.length,
+        changelogCount: operations.changelogOps.length,
+        disabledCount: operations.disableOps.length,
         logType: LogTypes.OPERATION,
         operationName: 'participant_config_changes',
-        threadId,
-        roundNumber,
-        addedCount: operations.insertOps.length,
-        updatedCount: operations.updateOps.length,
-        disabledCount: operations.disableOps.length,
         reenabledCount: operations.reenableOps.length,
-        changelogCount: operations.changelogOps.length,
+        roundNumber,
+        threadId,
+        updatedCount: operations.updateOps.length,
       });
     }
 
@@ -346,11 +355,11 @@ export function processParticipantChanges(
   } catch (error) {
     if (logger) {
       logger.error('Failed to process participant configuration changes', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'participant_config_changes',
-        threadId,
         roundNumber,
-        error: normalizeError(error).message,
+        threadId,
       });
     }
 

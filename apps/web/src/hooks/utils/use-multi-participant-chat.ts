@@ -31,31 +31,31 @@ import { useSyncedRefs } from './use-synced-refs';
  */
 const ParticipantSettingsValidationSchema = z
   .object({
-    temperature: z.number().min(0).max(2).optional(),
     maxTokens: z.number().int().positive().optional(),
     systemPrompt: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
   })
   .nullable()
   .optional();
 
 const UseMultiParticipantChatOptionsSchema = z.object({
-  threadId: z.string(), // Allow empty string for initial state
-  participants: z.array(z.object({
-    id: z.string(),
-    modelId: z.string(),
-    isEnabled: z.boolean(),
-    priority: z.number().int().nonnegative(),
-    // Database fields that may be present
-    threadId: z.string().optional(),
-    customRoleId: z.string().nullable().optional(),
-    role: z.string().nullable().optional(),
-    settings: ParticipantSettingsValidationSchema,
-    createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
-  })),
   messages: z.array(z.custom<UIMessage>()).optional(),
   mode: z.string().nullable().optional(),
+  participants: z.array(z.object({
+    createdAt: z.string().optional(),
+    customRoleId: z.string().nullable().optional(),
+    id: z.string(),
+    isEnabled: z.boolean(),
+    modelId: z.string(),
+    priority: z.number().int().nonnegative(),
+    role: z.string().nullable().optional(),
+    settings: ParticipantSettingsValidationSchema,
+    // Database fields that may be present
+    threadId: z.string().optional(),
+    updatedAt: z.string().optional(),
+  })),
   regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+  threadId: z.string(), // Allow empty string for initial state
   // Callbacks are not validated - they pass through via TypeScript types
 });
 
@@ -177,7 +177,7 @@ type UseMultiParticipantChatOptions = {
    * Used in continueFromParticipant as defense in depth to prevent triggering
    * participants while pre-search is still streaming.
    */
-  getPreSearches?: () => Array<{ roundNumber: number; status: string; createdAt: string }>;
+  getPreSearches?: () => { roundNumber: number; status: string; createdAt: string }[];
 };
 
 /**
@@ -302,46 +302,46 @@ export function useMultiParticipantChat(
   }
 
   const {
-    threadId,
-    participants,
-    messages: initialMessages = [],
-    onComplete,
-    onRetry,
-    onError,
-    mode,
-    regenerateRoundNumber: regenerateRoundNumberParam,
-    enableWebSearch = false,
-    pendingAttachmentIds = null,
-    pendingFileParts = null,
-    onPreSearchStart,
-    onPreSearchQuery,
-    onPreSearchResult,
-    onPreSearchComplete,
-    onPreSearchError,
-    clearAnimations,
-    completeAnimation,
-    hasEarlyOptimisticMessage = false,
-    streamResumptionPrefilled = false,
-    onResumedStreamComplete,
-    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
-    resumptionRoundNumber = null,
-    nextParticipantToTrigger: nextParticipantToTriggerProp = null,
-    onReconcileWithActiveStream,
-    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
-    setNextParticipantToTrigger,
-    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
-    setPendingFileParts,
-    setPendingAttachmentIds,
-    // ✅ HANDOFF FIX: Callback to set store.isStreaming directly
-    setIsStreaming,
-    // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
-    setParticipantHandoffInProgress,
     // ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
     acknowledgeStreamFinish,
-    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
-    setHasSentPendingMessage,
+    clearAnimations,
+    completeAnimation,
+    enableWebSearch = false,
     // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
     getPreSearches,
+    hasEarlyOptimisticMessage = false,
+    messages: initialMessages = [],
+    mode,
+    nextParticipantToTrigger: nextParticipantToTriggerProp = null,
+    onComplete,
+    onError,
+    onPreSearchComplete,
+    onPreSearchError,
+    onPreSearchQuery,
+    onPreSearchResult,
+    onPreSearchStart,
+    onReconcileWithActiveStream,
+    onResumedStreamComplete,
+    onRetry,
+    participants,
+    pendingAttachmentIds = null,
+    pendingFileParts = null,
+    regenerateRoundNumber: regenerateRoundNumberParam,
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber = null,
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    setHasSentPendingMessage,
+    // ✅ HANDOFF FIX: Callback to set store.isStreaming directly
+    setIsStreaming,
+    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
+    setNextParticipantToTrigger,
+    // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
+    setPendingAttachmentIds,
+    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
+    setPendingFileParts,
+    streamResumptionPrefilled = false,
+    threadId,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -352,40 +352,40 @@ export function useMultiParticipantChat(
   // restricts it to only being called from inside effects, not stored in objects.
   // useSyncedRefs achieves the same goal: stable references that read latest values.
   const callbackRefs = useSyncedRefs({
-    onComplete,
-    onRetry,
-    onError,
-    onPreSearchStart,
-    onPreSearchQuery,
-    onPreSearchResult,
-    onPreSearchComplete,
-    onPreSearchError,
-    threadId,
-    enableWebSearch,
-    pendingAttachmentIds, // ✅ ATTACHMENTS: Pass attachment IDs to streaming request
-    pendingFileParts, // ✅ ATTACHMENTS: Pass file parts for AI SDK message (display in UI)
-    mode, // ✅ FIX: Add mode to refs to prevent transport recreation
-    hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
-    onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
-    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
-    resumptionRoundNumber,
-    nextParticipantToTriggerProp,
-    onReconcileWithActiveStream,
-    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
-    setNextParticipantToTrigger,
-    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
-    setPendingFileParts,
-    setPendingAttachmentIds,
-    // ✅ HANDOFF FIX: Set store.isStreaming directly for immediate effect
-    setIsStreaming,
-    // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
-    setParticipantHandoffInProgress,
     // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
     acknowledgeStreamFinish,
-    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
-    setHasSentPendingMessage,
+    enableWebSearch,
     // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
     getPreSearches,
+    hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
+    mode, // ✅ FIX: Add mode to refs to prevent transport recreation
+    nextParticipantToTriggerProp,
+    onComplete,
+    onError,
+    onPreSearchComplete,
+    onPreSearchError,
+    onPreSearchQuery,
+    onPreSearchResult,
+    onPreSearchStart,
+    onReconcileWithActiveStream,
+    onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
+    onRetry,
+    pendingAttachmentIds, // ✅ ATTACHMENTS: Pass attachment IDs to streaming request
+    pendingFileParts, // ✅ ATTACHMENTS: Pass file parts for AI SDK message (display in UI)
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber,
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    setHasSentPendingMessage,
+    // ✅ HANDOFF FIX: Set store.isStreaming directly for immediate effect
+    setIsStreaming,
+    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
+    setNextParticipantToTrigger,
+    // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
+    setPendingAttachmentIds,
+    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
+    setPendingFileParts,
+    threadId,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -553,13 +553,16 @@ export function useMultiParticipantChat(
     // ✅ DEBUG: Log message state before recovery check
     const allMsgs = messagesRef.current;
     const assistantMsgsInRound = allMsgs.filter((m) => {
-      if (m.role !== MessageRoles.ASSISTANT)
+      if (m.role !== MessageRoles.ASSISTANT) {
         return false;
+      }
       const md = m.metadata;
-      if (!md || typeof md !== 'object')
+      if (!md || typeof md !== 'object') {
         return false;
-      if ('isModerator' in md && md.isModerator === true)
+      }
+      if ('isModerator' in md && md.isModerator === true) {
         return false;
+      }
       const msgRound = 'roundNumber' in md ? md.roundNumber : null;
       return msgRound === currentRound;
     });
@@ -569,14 +572,17 @@ export function useMultiParticipantChat(
     // ✅ RESUMPTION DEBUG: Track what messages the orchestrator sees
     const orchestratorMsgLog: string[] = [];
     for (const msg of messagesRef.current) {
-      if (msg.role !== MessageRoles.ASSISTANT)
+      if (msg.role !== MessageRoles.ASSISTANT) {
         continue;
+      }
       const metadata = msg.metadata;
-      if (!metadata || typeof metadata !== 'object')
+      if (!metadata || typeof metadata !== 'object') {
         continue;
+      }
       // Skip moderator messages
-      if ('isModerator' in metadata && metadata.isModerator === true)
+      if ('isModerator' in metadata && metadata.isModerator === true) {
         continue;
+      }
       // Check if message is for current round
       const msgRound = 'roundNumber' in metadata ? metadata.roundNumber : null;
       const pIdx = 'participantIndex' in metadata && typeof metadata.participantIndex === 'number' ? metadata.participantIndex : null;
@@ -637,8 +643,9 @@ export function useMultiParticipantChat(
     // All participants before this index are implicitly complete due to sequential order
     let highestCompleteIndex = -1;
     for (const idx of participantIndicesWithCompleteMessages) {
-      if (idx > highestCompleteIndex)
+      if (idx > highestCompleteIndex) {
         highestCompleteIndex = idx;
+      }
     }
 
     // ✅ RESUMPTION FIX: Check if ALL messages 0 to highestCompleteIndex exist
@@ -815,9 +822,9 @@ export function useMultiParticipantChat(
             // "Invalid file URL: filename" errors when AI provider uses filename as fallback URL
             ...(fileParts.length > 0 && { files: fileParts }),
             metadata: {
+              isParticipantTrigger: true,
               role: UIMessageRoles.USER,
               roundNumber: currentRoundRef.current,
-              isParticipantTrigger: true,
             },
           });
           // ✅ V4 FIX: Clear handoff flag AFTER sendMessage succeeds (P1 now streaming)
@@ -865,7 +872,7 @@ export function useMultiParticipantChat(
    */
   const prepareSendMessagesRequest = useCallback(
     // ✅ TYPE-SAFE: Properly typed AI SDK transport message format
-    ({ id, messages }: { id: string; messages: Array<{ role?: string; content?: string; id?: string; parts?: Array<{ type: string; text?: string }> }> }) => {
+    ({ id, messages }: { id: string; messages: { role?: string; content?: string; id?: string; parts?: { type: string; text?: string }[] }[] }) => {
       // ✅ CRITICAL FIX: Prevent queue drainage on retries/duplicate calls
       // AI SDK transport may call this function multiple times for the same message
       // (retries, preflight, etc.). We only shift from queue when processing a NEW participant.
@@ -907,8 +914,9 @@ export function useMultiParticipantChat(
             ...lastMessage,
             parts: lastMessage.parts.filter((part) => {
               // Keep non-file parts (text, etc.)
-              if (part.type !== 'file')
+              if (part.type !== 'file') {
                 return true;
+              }
               // For file parts, use shared validation logic
               return isValidFilePartForTransmission(part);
             }),
@@ -958,7 +966,6 @@ export function useMultiParticipantChat(
     () =>
       new DefaultChatTransport({
         api: '/api/v1/chat',
-        prepareSendMessagesRequest,
         // ✅ RESUMABLE STREAMS: Configure resume endpoint for stream reconnection
         // When resume: true, AI SDK calls this on mount to check for active streams
         // Returns the GET endpoint that serves buffered SSE chunks from Cloudflare KV
@@ -982,6 +989,7 @@ export function useMultiParticipantChat(
             credentials: 'include', // Required for session auth
           };
         },
+        prepareSendMessagesRequest,
       }),
     [prepareSendMessagesRequest],
     // threadId accessed in closure at call time, doesn't affect transport creation
@@ -994,21 +1002,31 @@ export function useMultiParticipantChat(
 
   const useChatId = threadId && threadId.trim() !== '' ? threadId : undefined;
 
+  // ✅ exactOptionalPropertyTypes: Build useChat options conditionally
+  // Only include id when it has a value to avoid passing undefined to optional property
+  const useChatOptions = useMemo(() => {
+    const baseOptions = {
+      // onData, onError, onFinish, transport, resume will be added below
+    };
+    if (useChatId !== undefined) {
+      return { ...baseOptions, id: useChatId };
+    }
+    return baseOptions;
+  }, [useChatId]);
+
   const {
+    error: chatError,
     messages,
     sendMessage: aiSendMessage,
-    status,
-    error: chatError,
     setMessages,
+    status,
     stop: stopAiSdk,
   } = useChat({
-    // ✅ CRITICAL FIX: Pass undefined instead of empty string when no thread ID
+    // ✅ CRITICAL FIX: Spread useChatOptions which conditionally includes id
     // AI SDK's Chat class expects either valid ID or undefined, not empty string
     // Empty string causes "Cannot read properties of undefined (reading 'state')" error
     // in Chat.makeRequest because internal state initialization fails
-    id: useChatId,
-    transport,
-
+    ...useChatOptions,
     // ✅ DEBUG: Log all streaming data parts to trace when metadata arrives
     onData: (dataPart) => {
       rlog.msg('cite-data', `type=${dataPart?.type} keys=[${dataPart && typeof dataPart === 'object' ? Object.keys(dataPart).join(',') : 'null'}]`);
@@ -1020,29 +1038,6 @@ export function useMultiParticipantChat(
         callbackRefs.setParticipantHandoffInProgress.current(false);
       }
     },
-
-    // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
-    // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
-    // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
-    //
-    // ⚠️ CLOUDFLARE KV LIMITATION: Unlike Redis with resumable-stream package,
-    // Cloudflare KV doesn't support true pub/sub. Our implementation:
-    // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
-    // 2. GET: Returns buffered chunks + polls for new ones until stream completes
-    //
-    // ✅ FIX: Only enable resume when we have a valid thread ID AND it's not a newly created thread
-    // This prevents "Cannot read properties of undefined (reading 'state')" errors
-    // that occur when AI SDK tries to resume on new threads without an ID.
-    // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
-    // When useChatId is valid (existing thread), resume enables automatic reconnection.
-    // ✅ SERVER-DRIVEN RESUMPTION: Re-enable AI SDK resume for existing threads
-    // Server now handles round continuation via queue-based orchestration:
-    // - onFinish queues next participant/moderator via ROUND_ORCHESTRATION_QUEUE
-    // - GET /stream auto-triggers recovery via queueRoundCompletionCheck
-    // - Client just observes streams, server drives the round forward
-    resume: !!useChatId,
-    // ✅ NEVER pass messages - let AI SDK be uncontrolled
-    // Initial hydration happens via setMessages effect below
 
     /**
      * Handle participant errors - create error UI and continue to next participant
@@ -1063,11 +1058,11 @@ export function useMultiParticipantChat(
       // AI SDK might call onError with unexpected values in edge cases
       if (!error || (typeof error === 'object' && Object.keys(error).length === 0)) {
         console.error('[Chat Streaming Error] Received empty or undefined error', {
+          currentIndex,
           errorType: typeof error,
           errorValue: error,
-          currentIndex,
-          participantId: participant?.id,
           modelId: participant?.modelId,
+          participantId: participant?.id,
           roundParticipantsCount: roundParticipantsRef.current.length,
         });
       }
@@ -1090,14 +1085,14 @@ export function useMultiParticipantChat(
             errorMetadata = {
               errorCategory: parsed.errorCategory,
               errorMessage: parsed.errorMessage,
-              rawErrorMessage: parsed.rawErrorMessage,
-              openRouterError: parsed.openRouterError,
-              openRouterCode: parsed.openRouterCode,
-              statusCode: parsed.statusCode,
-              modelId: parsed.modelId,
-              participantId: parsed.participantId,
               isTransient: parsed.isTransient,
+              modelId: parsed.modelId,
+              openRouterCode: parsed.openRouterCode,
+              openRouterError: parsed.openRouterError,
+              participantId: parsed.participantId,
+              rawErrorMessage: parsed.rawErrorMessage,
               responseBody: parsed.responseBody,
+              statusCode: parsed.statusCode,
               traceId: parsed.traceId,
             };
           }
@@ -1113,16 +1108,16 @@ export function useMultiParticipantChat(
 
       // ✅ ERROR LOGGING: Log full error details for debugging
       console.error('[Chat Streaming Error]', {
-        errorMessage,
         errorCategory: errorMetadata?.errorCategory,
-        statusCode: errorMetadata?.statusCode,
+        errorMessage,
+        isTransient: errorMetadata?.isTransient,
         modelId: errorMetadata?.modelId || participant?.modelId,
         participantId: errorMetadata?.participantId || participant?.id,
         participantIndex: currentIndex,
-        traceId: errorMetadata?.traceId,
-        isTransient: errorMetadata?.isTransient,
         // Include response body for provider errors (truncated)
         responseBody: errorMetadata?.responseBody?.substring(0, 300),
+        statusCode: errorMetadata?.statusCode,
+        traceId: errorMetadata?.traceId,
         // Full metadata in dev mode
         ...(import.meta.env.MODE === 'development' && { fullMetadata: errorMetadata }),
       });
@@ -1157,15 +1152,15 @@ export function useMultiParticipantChat(
               if (existing) {
                 updated[existingIndex] = {
                   ...existing,
-                  parts: existing.parts?.length ? existing.parts : [{ type: MessagePartTypes.TEXT, text: '' }],
                   metadata: {
                     ...(typeof existing.metadata === 'object' ? existing.metadata : {}),
-                    hasError: true,
-                    errorType,
-                    errorMessage,
                     errorCategory: errorMetadata?.errorCategory || errorType,
+                    errorMessage,
+                    errorType,
                     finishReason: FinishReasons.FAILED,
+                    hasError: true,
                   },
+                  parts: existing.parts?.length ? existing.parts : [{ text: '', type: MessagePartTypes.TEXT }],
                 };
               }
               // ✅ FROZEN ARRAY FIX: Deep clone to break Immer freeze
@@ -1419,8 +1414,8 @@ export function useMultiParticipantChat(
         // When this happens, refs and even backend metadata can be stale/wrong
         // The message ID is generated by backend and NEVER changes - it's the source of truth
         const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
-        const roundFromId = idMatch?.[1] ? Number.parseInt(idMatch[1]) : null;
-        const participantFromId = idMatch?.[2] ? Number.parseInt(idMatch[2]) : null;
+        const roundFromId = idMatch?.[1] ? Number.parseInt(idMatch[1], 10) : null;
+        const participantFromId = idMatch?.[2] ? Number.parseInt(idMatch[2], 10) : null;
         // ✅ FIX: Prioritize ID over metadata - metadata can be stale on phantom calls
         const finalRoundNumber = roundFromId ?? backendRoundNumber ?? currentRoundRef.current;
         // ✅ FIX: Use participant index from ID to prevent phantom calls from corrupting messages
@@ -1497,17 +1492,21 @@ export function useMultiParticipantChat(
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
         // ✅ FIX: Use finalParticipantIndex from message ID, not currentIndex from ref
+        // ✅ exactOptionalPropertyTypes: Build options object conditionally
+        const mergeOptions: { hasGeneratedText?: boolean; forceError?: boolean; errorCode?: string } = {
+          forceError: isEmptyCompletion,
+          hasGeneratedText: Boolean(hasGeneratedText),
+        };
+        if (isEmptyCompletion) {
+          mergeOptions.errorCode = 'empty_completion';
+        }
+
         const completeMetadata = mergeParticipantMetadata(
           data.message,
           participant,
           finalParticipantIndex,
           finalRoundNumber, // REQUIRED: Pass round number explicitly
-          {
-            hasGeneratedText: Boolean(hasGeneratedText),
-            // ✅ FIX: Mark empty completions as errors so isMessageComplete() returns true
-            forceError: isEmptyCompletion,
-            errorCode: isEmptyCompletion ? 'empty_completion' : undefined,
-          },
+          mergeOptions,
         );
 
         // Use flushSync to force React to commit metadata update synchronously
@@ -1571,8 +1570,8 @@ export function useMultiParticipantChat(
             const completeMessage: UIMessage = {
               ...data.message,
               id: correctId, // ✅ Use correct ID from backend metadata
-              parts: completedParts, // ✅ Ensure all parts have state='done' and deduplicated
               metadata: completeMetadata, // ✅ Now uses strictly typed metadata
+              parts: completedParts, // ✅ Ensure all parts have state='done' and deduplicated
             };
 
             // ✅ DETERMINISTIC IDs: No duplicate detection needed
@@ -1589,8 +1588,9 @@ export function useMultiParticipantChat(
               // Remove any message with the wrong ID from this participant AND this round
               // ✅ CRITICAL FIX: Must check BOTH participant AND round to avoid removing messages from other rounds
               const filteredMessages = prev.filter((msg: UIMessage) => {
-                if (msg.id !== receivedId)
-                  return true; // Keep messages with different IDs
+                if (msg.id !== receivedId) {
+                  return true;
+                } // Keep messages with different IDs
 
                 // ✅ TYPE-SAFE: Use extraction utility instead of force casting
                 const msgMetadata = getAssistantMetadata(msg.metadata);
@@ -1631,8 +1631,9 @@ export function useMultiParticipantChat(
             if (messagesWithSameId.length > 1) {
               // Remove all duplicates, keep only the first one, then update it
               const deduplicatedPrev = prev.filter((msg, index) => {
-                if (msg.id !== idToSearchFor)
+                if (msg.id !== idToSearchFor) {
                   return true;
+                }
                 // Keep only the first occurrence
                 return prev.findIndex(m => m.id === idToSearchFor) === index;
               });
@@ -1647,15 +1648,17 @@ export function useMultiParticipantChat(
             // No more loose optional chaining - completeMetadata has ALL required fields
             // ✅ CRITICAL FIX: Search for idToSearchFor (original ID if we changed it, otherwise the current ID)
             const existingMessageIndex = prev.findIndex((msg: UIMessage) => {
-              if (msg.id !== idToSearchFor)
+              if (msg.id !== idToSearchFor) {
                 return false;
+              }
 
               // ✅ TYPE-SAFE: Use extraction utility instead of force casting
               const msgMetadata = getAssistantMetadata(msg.metadata);
 
               // If message has no metadata, it's unclaimed - safe to use
-              if (!msgMetadata)
+              if (!msgMetadata) {
                 return true;
+              }
 
               // ✅ CRITICAL: Must match BOTH participant AND round (no optional chaining!)
               // This prevents round 3 from overwriting round 2's message
@@ -1713,7 +1716,11 @@ export function useMultiParticipantChat(
           triggeredNextForRef.current.add(triggerKey);
 
           // Error messages don't animate - trigger next after double RAF
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          await new Promise((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(resolve);
+            });
+          });
           // Skip if from a previous round
           if (finalRoundNumber < currentRoundRef.current) {
             return;
@@ -1748,17 +1755,46 @@ export function useMultiParticipantChat(
       // allowing multiple streams to start concurrently (race condition)
       // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
       // Single RAF only waits for next paint, but React might batch updates across frames
-      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
+      });
       // ✅ PHANTOM GUARD: Skip trigger if message is from a previous round
       // AI SDK calls onFinish twice (phantom call) after round completion when refs are reset
       // Must re-extract round from ID since we're outside the if(participant && data.message) block
       const msgIdMatch = data.message?.id?.match(/_r(\d+)_p/);
-      const msgRoundNumber = msgIdMatch?.[1] ? Number.parseInt(msgIdMatch[1]) : currentRoundRef.current;
+      const msgRoundNumber = msgIdMatch?.[1] ? Number.parseInt(msgIdMatch[1], 10) : currentRoundRef.current;
       if (msgRoundNumber < currentRoundRef.current) {
         return;
       }
       triggerNextParticipantWithRefs();
     },
+    // ✅ NEVER pass messages - let AI SDK be uncontrolled
+    // Initial hydration happens via setMessages effect below
+
+    // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
+    // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
+    // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
+    //
+    // ⚠️ CLOUDFLARE KV LIMITATION: Unlike Redis with resumable-stream package,
+    // Cloudflare KV doesn't support true pub/sub. Our implementation:
+    // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
+    // 2. GET: Returns buffered chunks + polls for new ones until stream completes
+    //
+    // ✅ FIX: Only enable resume when we have a valid thread ID AND it's not a newly created thread
+    // This prevents "Cannot read properties of undefined (reading 'state')" errors
+    // that occur when AI SDK tries to resume on new threads without an ID.
+    // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
+    // When useChatId is valid (existing thread), resume enables automatic reconnection.
+    // ✅ SERVER-DRIVEN RESUMPTION: Re-enable AI SDK resume for existing threads
+    // Server now handles round continuation via queue-based orchestration:
+    // - onFinish queues next participant/moderator via ROUND_ORCHESTRATION_QUEUE
+    // - GET /stream auto-triggers recovery via queueRoundCompletionCheck
+    // - Client just observes streams, server drives the round forward
+    resume: !!useChatId,
+
+    transport,
 
     /**
      * NOTE: Pre-search progress streaming is not implemented
@@ -2255,9 +2291,9 @@ export function useMultiParticipantChat(
           // Without this, Round 0 attachments are never seen by the participant
           ...(fileParts.length > 0 && { files: fileParts }),
           metadata: {
+            isParticipantTrigger: true,
             role: UIMessageRoles.USER,
             roundNumber,
-            isParticipantTrigger: true,
           },
         });
         // ✅ STREAMING BUG FIX: Mark that message was actually sent to AI SDK
@@ -2570,7 +2606,7 @@ export function useMultiParticipantChat(
           setMessages(currentMessages =>
             structuredClone(currentMessages.map(m =>
               m.id === expectedMessageId
-                ? { ...m, parts: [], metadata: isObject(m.metadata) ? { ...m.metadata, finishReason: undefined } : { finishReason: undefined } }
+                ? { ...m, metadata: isObject(m.metadata) ? { ...m.metadata, finishReason: undefined } : { finishReason: undefined }, parts: [] }
                 : m,
             )),
           );
@@ -2643,14 +2679,17 @@ export function useMultiParticipantChat(
             // Sort by role (user first), then round, then participant index
             merged.sort((a, b) => {
               // User messages come first
-              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
                 return -1;
-              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+              }
+              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
                 return 1;
+              }
               const aRound = getRoundNumber(a.metadata) ?? 0;
               const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound)
+              if (aRound !== bRound) {
                 return aRound - bRound;
+              }
               const aIdx = getParticipantIndex(a.metadata) ?? 999;
               const bIdx = getParticipantIndex(b.metadata) ?? 999;
               return aIdx - bIdx;
@@ -2773,12 +2812,12 @@ export function useMultiParticipantChat(
         rlog.stream('resume', `continue r${roundNumber} fromIdx=${fromIndexToUse} userText="${userText.slice(0, 20)}..." msgId=${lastUserMessage.id.slice(-8)}`);
         // Trigger streaming for the specified participant
         await sendFn({
-          text: userText,
           metadata: {
+            isParticipantTrigger: true,
             role: UIMessageRoles.USER,
             roundNumber,
-            isParticipantTrigger: true,
           },
+          text: userText,
         });
         // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
         isTriggeringRef.current = false;
@@ -2923,15 +2962,28 @@ export function useMultiParticipantChat(
           // ✅ DEBUG: Track when aiSendMessage is called from sendMessage (user-initiated)
           rlog.stream('start', `sendMsg r${newRoundNumber} userText="${trimmed.slice(0, 20)}..." files=${fileParts.length}`);
           // Send message without custom ID - let backend generate unique IDs
-          await aiSendMessage({
-            text: trimmed,
-            // ✅ AI SDK v6: Include files so user message has file parts
-            ...(fileParts.length > 0 && { files: fileParts }),
-            metadata: {
-              role: UIMessageRoles.USER,
-              roundNumber: newRoundNumber,
-            },
-          });
+          // ✅ exactOptionalPropertyTypes: Build message object with inline type
+          // AI SDK expects minimal metadata, not full DbUserMessageMetadata
+          if (fileParts.length > 0) {
+            // With files
+            await aiSendMessage({
+              files: fileParts,
+              metadata: {
+                role: 'user' as const,
+                roundNumber: newRoundNumber,
+              },
+              text: trimmed,
+            });
+          } else {
+            // Without files - omit the property entirely
+            await aiSendMessage({
+              metadata: {
+                role: 'user' as const,
+                roundNumber: newRoundNumber,
+              },
+              text: trimmed,
+            });
+          }
           // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
           isTriggeringRef.current = false;
         } catch (error) {
@@ -3111,8 +3163,9 @@ export function useMultiParticipantChat(
     if (streamResumptionPrefilled) {
       // Extract participant info from the currently streaming message
       const streamingMessage = messagesRef.current.find((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         // Look for message with streaming parts (incomplete)
         const hasStreamingParts = m.parts?.some(
           p => 'state' in p && p.state === TextPartStates.STREAMING,
@@ -3152,7 +3205,7 @@ export function useMultiParticipantChat(
 
         // ✅ Reconcile with expected participant since we don't know actual yet
         // This ensures participants are visible during streaming recovery
-        if (expectedNextP != null) {
+        if (expectedNextP !== null) {
           callbackRefs.onReconcileWithActiveStream.current?.(expectedNextP);
         }
 
@@ -3459,18 +3512,18 @@ export function useMultiParticipantChat(
   // The chat object is used as dependency in provider effects - stable reference is critical.
   return useMemo(
     () => ({
-      messages,
-      sendMessage,
-      startRound,
       continueFromParticipant,
+      currentParticipantIndex,
+      error: chatError || null,
+      isReady,
       isStreaming: isActuallyStreaming,
       isStreamingRef,
       isTriggeringRef, // ✅ RACE CONDITION FIX: Expose for provider guards
-      currentParticipantIndex,
-      error: chatError || null,
+      messages,
       retry,
+      sendMessage,
       setMessages,
-      isReady,
+      startRound,
       // ✅ NAVIGATION CLEANUP: Expose stop function for route change cleanup
       stop: stopAiSdk,
     }),

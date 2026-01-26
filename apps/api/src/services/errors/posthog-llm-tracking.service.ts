@@ -75,7 +75,8 @@ type PostHogTool = {
  * ✅ AI SDK TYPE REUSE: Uses LanguageModelUsage from 'ai' package
  */
 export type LLMTrackingOptions = {
-  modelPricing?: { input: number; output: number };
+  // Add | undefined for exactOptionalPropertyTypes compatibility
+  modelPricing?: { input: number; output: number } | undefined;
   customPricing?: {
     inputTokenPrice?: number;
     outputTokenPrice?: number;
@@ -83,8 +84,8 @@ export type LLMTrackingOptions = {
     cacheWriteTokenPrice?: number;
   };
   modelConfig?: {
-    temperature?: number;
-    maxTokens?: number;
+    temperature?: number | undefined;
+    maxTokens?: number | undefined;
   };
   promptTracking?: {
     promptId?: string;
@@ -93,7 +94,7 @@ export type LLMTrackingOptions = {
   };
   tools?: PostHogTool[];
   cacheCreationInputTokens?: number;
-  totalUsage?: LanguageModelUsage;
+  totalUsage?: LanguageModelUsage | undefined;
   reasoningTokens?: number;
   providerUrls?: {
     baseUrl?: string;
@@ -115,6 +116,8 @@ export type LLMTrackingOptions = {
 /**
  * PostHog $ai_generation event properties
  * Reference: https://posthog.com/docs/llm-analytics/generations
+ *
+ * Note: All optional properties include `| undefined` for exactOptionalPropertyTypes compatibility
  */
 type LLMGenerationProperties = {
   // Required properties
@@ -123,100 +126,100 @@ type LLMGenerationProperties = {
   $ai_provider: string;
   $ai_input: LLMInputMessage[];
   $ai_input_tokens: number;
-  $ai_output_choices: Array<{ role: string; content: Array<{ type: string; text: string }> }>;
+  $ai_output_choices: { role: string; content: { type: string; text: string }[] }[];
   $ai_output_tokens: number;
   $ai_latency: number;
-  $ai_http_status?: number;
+  $ai_http_status?: number | undefined;
   $ai_is_error: boolean;
 
   // Session tracking
-  $session_id?: string;
+  $session_id?: string | undefined;
 
-  // ✅ PostHog Official: Span identification for tree-view grouping
-  $ai_span_id?: string; // Unique identifier for this generation
-  $ai_parent_id?: string; // Parent trace/span ID for hierarchical grouping
+  // PostHog Official: Span identification for tree-view grouping
+  $ai_span_id?: string | undefined; // Unique identifier for this generation
+  $ai_parent_id?: string | undefined; // Parent trace/span ID for hierarchical grouping
 
   // Performance metrics
-  $ai_temperature?: number;
-  $ai_max_tokens?: number;
-  $ai_stream?: boolean;
-  $ai_cache_read_input_tokens?: number;
-  $ai_cache_creation_input_tokens?: number; // Anthropic cache write tokens
+  $ai_temperature?: number | undefined;
+  $ai_max_tokens?: number | undefined;
+  $ai_stream?: boolean | undefined;
+  $ai_cache_read_input_tokens?: number | undefined;
+  $ai_cache_creation_input_tokens?: number | undefined; // Anthropic cache write tokens
 
   // Cost tracking
-  $ai_input_cost_usd?: number;
-  $ai_output_cost_usd?: number;
-  $ai_total_cost_usd?: number; // ✅ PostHog Official: Total cost as separate property
+  $ai_input_cost_usd?: number | undefined;
+  $ai_output_cost_usd?: number | undefined;
+  $ai_total_cost_usd?: number | undefined; // PostHog Official: Total cost as separate property
 
-  // ✅ PostHog Official: Custom pricing override properties (per token)
+  // PostHog Official: Custom pricing override properties (per token)
   // Use these to specify custom pricing when PostHog's automatic pricing doesn't apply
-  $ai_input_token_price?: number; // Cost per input token in USD
-  $ai_output_token_price?: number; // Cost per output token in USD
-  $ai_cache_read_token_price?: number; // Cost per cached input token in USD
-  $ai_cache_write_token_price?: number; // Cost per cache creation token in USD
+  $ai_input_token_price?: number | undefined; // Cost per input token in USD
+  $ai_output_token_price?: number | undefined; // Cost per output token in USD
+  $ai_cache_read_token_price?: number | undefined; // Cost per cached input token in USD
+  $ai_cache_write_token_price?: number | undefined; // Cost per cache creation token in USD
 
-  // ✅ PostHog Official: Provider URL tracking
-  $ai_base_url?: string; // Base URL of the LLM provider
-  $ai_request_url?: string; // Full URL of the request
+  // PostHog Official: Provider URL tracking
+  $ai_base_url?: string | undefined; // Base URL of the LLM provider
+  $ai_request_url?: string | undefined; // Full URL of the request
 
   // Tool tracking
-  $ai_tools?: Array<{
+  $ai_tools?: {
     type: string;
     function: {
       name: string;
-      description?: string;
+      description?: string | undefined;
       parameters?: {
-        type?: string;
-        properties?: Record<string, { type?: string; description?: string }>;
+        type?: string | undefined;
+        properties?: Record<string, { type?: string | undefined; description?: string | undefined }>;
         required?: string[];
         [key: string]: unknown;
       };
     };
-  }>; // ✅ Available tools
-  $ai_tools_count?: number;
-  $ai_tool_calls?: Array<{ name: string; arguments: string }>;
-  $ai_tool_calls_count?: number;
+  }[] | undefined; // Available tools
+  $ai_tools_count?: number | undefined;
+  $ai_tool_calls?: { name: string; arguments: string }[] | undefined;
+  $ai_tool_calls_count?: number | undefined;
 
   // Prompt tracking
-  prompt_id?: string;
-  prompt_version?: string;
-  prompt_tokens_system?: number;
+  prompt_id?: string | undefined;
+  prompt_version?: string | undefined;
+  prompt_tokens_system?: number | undefined;
 
   // Trace metadata
-  $ai_span_name?: string;
+  $ai_span_name?: string | undefined;
 
   // =====================================================================
   // APPLICATION-SPECIFIC PROPERTIES (Roundtable Context)
   // =====================================================================
-  thread_id?: string;
-  round_number?: number;
-  participant_id?: string;
-  participant_index?: number;
-  participant_role?: string | null;
-  model_name?: string;
-  conversation_mode?: string;
-  is_regeneration?: boolean;
-  subscription_tier?: string;
-  finish_reason?: string;
-  response_length_chars?: number;
-  response_length_words?: number;
-  latency_ms?: number;
-  tokens_per_second?: number;
-  total_tokens?: number;
-  total_input_tokens?: number;
-  total_output_tokens?: number;
-  total_tokens_cumulative?: number;
-  is_multi_step?: boolean;
-  has_reasoning?: boolean;
-  reasoning_tokens?: number;
-  cost_per_token?: number;
-  total_cost_usd?: number;
-  cost_per_second?: number;
-  cache_hit_tokens?: number;
-  cache_hit_rate?: number;
-  has_cache_hit?: boolean;
-  uses_dynamic_pricing?: boolean;
-  response_id?: string;
+  thread_id?: string | undefined;
+  round_number?: number | undefined;
+  participant_id?: string | undefined;
+  participant_index?: number | undefined;
+  participant_role?: string | null | undefined;
+  model_name?: string | undefined;
+  conversation_mode?: string | undefined;
+  is_regeneration?: boolean | undefined;
+  subscription_tier?: string | undefined;
+  finish_reason?: string | undefined;
+  response_length_chars?: number | undefined;
+  response_length_words?: number | undefined;
+  latency_ms?: number | undefined;
+  tokens_per_second?: number | undefined;
+  total_tokens?: number | undefined;
+  total_input_tokens?: number | undefined;
+  total_output_tokens?: number | undefined;
+  total_tokens_cumulative?: number | undefined;
+  is_multi_step?: boolean | undefined;
+  has_reasoning?: boolean | undefined;
+  reasoning_tokens?: number | undefined;
+  cost_per_token?: number | undefined;
+  total_cost_usd?: number | undefined;
+  cost_per_second?: number | undefined;
+  cache_hit_tokens?: number | undefined;
+  cache_hit_rate?: number | undefined;
+  has_cache_hit?: boolean | undefined;
+  uses_dynamic_pricing?: boolean | undefined;
+  response_id?: string | undefined;
 };
 
 // ============================================================================
@@ -244,8 +247,9 @@ export type ModelPricingPerMillion = {
 export function extractModelPricing(
   model: { pricing: { prompt: string; completion: string } } | undefined,
 ): ModelPricingPerMillion | undefined {
-  if (!model?.pricing)
+  if (!model?.pricing) {
     return undefined;
+  }
 
   const inputPerToken = Number.parseFloat(model.pricing.prompt);
   const outputPerToken = Number.parseFloat(model.pricing.completion);
@@ -363,17 +367,17 @@ export function createTrackingContext(
   },
 ): LLMTrackingContext {
   return {
-    userId,
-    sessionId, // ✅ Better Auth session.id - used as PostHog distinct ID (optional)
-    threadId,
-    roundNumber,
+    isRegeneration: options?.isRegeneration,
+    modelId: participant.modelId,
+    modelName: options?.modelName,
     participantId: participant.id,
     participantIndex,
     participantRole: participant.role,
-    modelId: participant.modelId,
-    modelName: options?.modelName,
+    roundNumber,
+    sessionId, // ✅ Better Auth session.id - used as PostHog distinct ID (optional)
+    threadId,
     threadMode,
-    isRegeneration: options?.isRegeneration,
+    userId,
     userTier: options?.userTier,
   };
 }
@@ -416,7 +420,7 @@ export async function trackLLMGeneration(
 
   if (!posthog) {
     // PostHog not initialized (non-production env)
-    return { traceId, success: false, errorMessage: 'PostHog not initialized' };
+    return { errorMessage: 'PostHog not initialized', success: false, traceId };
   }
 
   try {
@@ -498,26 +502,26 @@ export async function trackLLMGeneration(
     // BUILD POSTHOG EVENT PROPERTIES (Official Schema)
     // =========================================================================
     const properties: LLMGenerationProperties = {
-      // REQUIRED: Trace ID (links related operations)
-      $ai_trace_id: traceId,
+      // POSTHOG BEST PRACTICE: Always include input/output for observability
+      $ai_input: inputMessages,
+      // REQUIRED: Token usage
+      $ai_input_tokens: inputTokens,
       // REQUIRED: Model and Provider
       $ai_model: context.modelId,
+
+      $ai_output_choices: [{
+        content: [{ text: finishResult.text, type: 'text' }],
+        role: MessageRoles.ASSISTANT,
+      }],
+      $ai_output_tokens: outputTokens,
+
+      $ai_parent_id: traceId, // Parent is the trace (enables tree-view in PostHog UI)
       $ai_provider: provider,
 
       // ✅ POSTHOG OFFICIAL: Span identification for tree-view grouping
       $ai_span_id: `span_${ulid()}`, // Unique identifier for this generation
-      $ai_parent_id: traceId, // Parent is the trace (enables tree-view in PostHog UI)
-
-      // POSTHOG BEST PRACTICE: Always include input/output for observability
-      $ai_input: inputMessages,
-      $ai_output_choices: [{
-        role: MessageRoles.ASSISTANT,
-        content: [{ type: 'text', text: finishResult.text }],
-      }],
-
-      // REQUIRED: Token usage
-      $ai_input_tokens: inputTokens,
-      $ai_output_tokens: outputTokens,
+      // REQUIRED: Trace ID (links related operations)
+      $ai_trace_id: traceId,
 
       // ✅ BETTER AUTH SESSION LINKING: Use Better Auth session.id for Session Replay
       // This provides stable, reliable session tracking across requests
@@ -531,19 +535,19 @@ export async function trackLLMGeneration(
         $ai_cache_read_input_tokens: cacheReadTokens,
       }),
 
-      // REQUIRED: Performance metrics
-      $ai_latency: latencySeconds,
       $ai_http_status: 200, // Successful completion
-      $ai_is_error: false,
-
       // ✅ POSTHOG OFFICIAL: Cost tracking with separate total_cost_usd
       $ai_input_cost_usd: inputCost,
+      $ai_is_error: false,
+
+      // REQUIRED: Performance metrics
+      $ai_latency: latencySeconds,
+      $ai_max_tokens: options?.modelConfig?.maxTokens,
       $ai_output_cost_usd: outputCost,
-      $ai_total_cost_usd: inputCost + outputCost, // PostHog requires this as separate property
 
       // Model configuration
       $ai_stream: true, // Our implementation always streams
-      $ai_max_tokens: options?.modelConfig?.maxTokens,
+      $ai_total_cost_usd: inputCost + outputCost, // PostHog requires this as separate property
       ...(options?.modelConfig?.temperature !== undefined && {
         $ai_temperature: options.modelConfig.temperature,
       }),
@@ -556,11 +560,11 @@ export async function trackLLMGeneration(
 
       // Tool/function calling tracking
       ...(hasToolCalls && {
-        $ai_tool_calls_count: toolCalls.length,
         $ai_tool_calls: toolCalls.map(tc => ({
-          name: tc.toolName,
           arguments: JSON.stringify(tc.input), // AI SDK v6: uses 'input' not 'args'
+          name: tc.toolName,
         })),
+        $ai_tool_calls_count: toolCalls.length,
       }),
 
       // ✅ POSTHOG OFFICIAL: Anthropic cache creation tokens (write to cache)
@@ -605,58 +609,58 @@ export async function trackLLMGeneration(
       // Trace metadata
       $ai_span_name: `${context.threadMode}_round_${context.roundNumber}_participant_${context.participantIndex}`,
 
+      cache_hit_rate: cacheReadTokens && inputTokens
+        ? cacheReadTokens / inputTokens
+        : 0,
+      // ✅ CACHING METRICS: Track cache hit rate for cost optimization
+      // AI SDK v6: use cacheReadTokens from inputTokenDetails
+      cache_hit_tokens: cacheReadTokens || 0,
+      conversation_mode: context.threadMode,
+      // ✅ TOKEN EFFICIENCY METRICS: Useful for cost optimization
+      cost_per_second: latencySeconds > 0 ? (inputCost + outputCost) / latencySeconds : 0,
+      // Cost efficiency (PostHog analytics) - based on cumulative usage
+      cost_per_token: cumulativeTotalTokens > 0 ? (inputCost + outputCost) / cumulativeTotalTokens : 0,
+      // Finish reason (PostHog analytics)
+      finish_reason: finishResult.finishReason,
+      has_cache_hit: !!(cacheReadTokens && cacheReadTokens > 0),
+      // ✅ REASONING TOKENS: Track both SDK count and manual calculation
+      has_reasoning: hasReasoning,
+
+      is_multi_step: isMultiStep,
+
+      is_regeneration: context.isRegeneration || false,
+
+      // Performance indicators
+      latency_ms: latencyMs,
+      model_name: context.modelName || context.modelId,
+
+      participant_id: context.participantId,
+      participant_index: context.participantIndex,
+      participant_role: context.participantRole || null,
+
+      reasoning_tokens: reasoningTokens,
+      // Response metrics
+      response_length_chars: finishResult.text.length,
+      response_length_words: finishResult.text.split(/\s+/).length,
+      round_number: context.roundNumber,
+
+      // POSTHOG BEST PRACTICE: Track subscription tier for cost analysis
+      subscription_tier: context.userTier || 'free',
       // =====================================================================
       // APPLICATION-SPECIFIC PROPERTIES (Roundtable Context)
       // =====================================================================
       thread_id: context.threadId,
-      round_number: context.roundNumber,
-      participant_id: context.participantId,
-      participant_index: context.participantIndex,
-      participant_role: context.participantRole || null,
-      model_name: context.modelName || context.modelId,
-      conversation_mode: context.threadMode,
-      is_regeneration: context.isRegeneration || false,
 
-      // POSTHOG BEST PRACTICE: Track subscription tier for cost analysis
-      subscription_tier: context.userTier || 'free',
-
-      // Finish reason (PostHog analytics)
-      finish_reason: finishResult.finishReason,
-
-      // Response metrics
-      response_length_chars: finishResult.text.length,
-      response_length_words: finishResult.text.split(/\s+/).length,
-
-      // Performance indicators
-      latency_ms: latencyMs,
       tokens_per_second: latencySeconds > 0 ? totalOutputTokens / latencySeconds : 0,
-      total_tokens: totalTokens,
+      total_cost_usd: inputCost + outputCost,
 
       // ✅ AI SDK V6 MULTI-STEP TRACKING: Include totalUsage for cumulative metrics
       // This is essential for cost tracking and analytics of multi-step reasoning models
       total_input_tokens: totalInputTokens,
+
       total_output_tokens: totalOutputTokens,
+      total_tokens: totalTokens,
       total_tokens_cumulative: cumulativeTotalTokens,
-      is_multi_step: isMultiStep,
-
-      // ✅ REASONING TOKENS: Track both SDK count and manual calculation
-      has_reasoning: hasReasoning,
-      reasoning_tokens: reasoningTokens,
-
-      // Cost efficiency (PostHog analytics) - based on cumulative usage
-      cost_per_token: cumulativeTotalTokens > 0 ? (inputCost + outputCost) / cumulativeTotalTokens : 0,
-      total_cost_usd: inputCost + outputCost,
-
-      // ✅ TOKEN EFFICIENCY METRICS: Useful for cost optimization
-      cost_per_second: latencySeconds > 0 ? (inputCost + outputCost) / latencySeconds : 0,
-
-      // ✅ CACHING METRICS: Track cache hit rate for cost optimization
-      // AI SDK v6: use cacheReadTokens from inputTokenDetails
-      cache_hit_tokens: cacheReadTokens || 0,
-      cache_hit_rate: cacheReadTokens && inputTokens
-        ? cacheReadTokens / inputTokens
-        : 0,
-      has_cache_hit: !!(cacheReadTokens && cacheReadTokens > 0),
 
       // Pricing source indicator
       uses_dynamic_pricing: !!options?.modelPricing,
@@ -680,10 +684,10 @@ export async function trackLLMGeneration(
     });
 
     // Events auto-flush due to flushAt: 1 config - no shutdown needed
-    return { traceId, success: true };
+    return { success: true, traceId };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return { traceId, success: false, errorMessage };
+    return { errorMessage, success: false, traceId };
   }
 }
 
@@ -716,16 +720,16 @@ export async function trackLLMError(
   try {
     // ✅ ZOD VALIDATION: Extract error details with proper type safety
     const HttpErrorPropsSchema = z.object({
-      statusCode: z.number().optional(),
       responseBody: z.string().optional(),
+      statusCode: z.number().optional(),
     });
 
     type ErrorDetails = {
       error_message: string;
       error_name: string;
-      error_stack?: string;
-      http_status?: number;
-      response_body?: string;
+      error_stack?: string | undefined;
+      http_status?: number | undefined;
+      response_body?: string | undefined;
     };
 
     const baseErrorDetails: ErrorDetails = {
@@ -754,8 +758,8 @@ export async function trackLLMError(
       event: '$exception',
       properties: {
         $exception_message: error.message,
-        $exception_type: error.name,
         $exception_stack_trace_raw: error.stack,
+        $exception_type: error.name,
 
         // ✅ BETTER AUTH SESSION LINKING: Use Better Auth session.id for Session Replay
         ...(context.sessionId && {
@@ -765,13 +769,13 @@ export async function trackLLMError(
         // Link to LLM trace
         $ai_trace_id: traceId,
 
-        // Context
-        thread_id: context.threadId,
-        round_number: context.roundNumber,
+        model_id: context.modelId,
         participant_id: context.participantId,
         participant_index: context.participantIndex,
-        model_id: context.modelId,
+        round_number: context.roundNumber,
         stage,
+        // Context
+        thread_id: context.threadId,
 
         // Error details
         ...errorDetails,
@@ -849,23 +853,23 @@ export async function trackEmbedding(
       distinctId: context.sessionId || context.userId,
       event: '$ai_embedding',
       properties: {
-        // Required properties
-        $ai_trace_id: params.traceId,
-        $ai_span_id: `span_${ulid()}`,
-        $ai_model: params.model,
-        $ai_provider: params.provider,
         $ai_input: params.input,
         $ai_input_tokens: params.inputTokens,
+        $ai_model: params.model,
+        $ai_provider: params.provider,
+        $ai_span_id: `span_${ulid()}`,
+        // Required properties
+        $ai_trace_id: params.traceId,
 
         // Session linking
         ...(context.sessionId && {
           $session_id: context.sessionId,
         }),
 
-        // Performance
-        $ai_latency: latencySeconds,
         $ai_http_status: 200,
         $ai_is_error: false,
+        // Performance
+        $ai_latency: latencySeconds,
 
         // Cost tracking (if applicable)
         ...(options?.totalCostUsd !== undefined && {
@@ -951,21 +955,21 @@ export async function trackSpan(
       distinctId: context.sessionId || context.userId,
       event: '$ai_span',
       properties: {
-        // Required properties
-        $ai_trace_id: params.traceId,
-        $ai_span_id: `span_${ulid()}`,
-        $ai_span_name: params.spanName,
         $ai_input_state: params.inputState,
         $ai_output_state: params.outputState,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_span_name: params.spanName,
+        // Required properties
+        $ai_trace_id: params.traceId,
 
         // Session linking
         ...(context.sessionId && {
           $session_id: context.sessionId,
         }),
 
+        $ai_is_error: options?.isError || false,
         // Performance
         $ai_latency: latencySeconds,
-        $ai_is_error: options?.isError || false,
 
         // Error details
         ...(options?.error && {
@@ -1049,20 +1053,20 @@ export async function trackTrace(
       distinctId: context.sessionId || context.userId,
       event: '$ai_trace',
       properties: {
+        $ai_input_state: params.inputState,
+        $ai_output_state: params.outputState,
         // Required trace properties
         $ai_trace_id: params.traceId,
         $ai_trace_name: params.traceName,
-        $ai_input_state: params.inputState,
-        $ai_output_state: params.outputState,
 
         // Session linking
         ...(context.sessionId && {
           $session_id: context.sessionId,
         }),
 
+        $ai_is_error: options?.isError || false,
         // Performance
         $ai_latency: latencySeconds,
-        $ai_is_error: options?.isError || false,
 
         // Error details
         ...(options?.error && {
@@ -1137,10 +1141,10 @@ export async function trackFeedback(
       distinctId: context.sessionId || context.userId,
       event: '$ai_feedback',
       properties: {
-        // Required feedback properties
-        $ai_trace_id: params.traceId,
         $ai_feedback_score: params.score,
         $ai_feedback_type: params.feedbackType,
+        // Required feedback properties
+        $ai_trace_id: params.traceId,
 
         // Session linking
         ...(context.sessionId && {
@@ -1218,10 +1222,10 @@ export async function trackMetric(
       distinctId: context.sessionId || context.userId,
       event: '$ai_metric',
       properties: {
-        // Required metric properties
-        $ai_trace_id: params.traceId,
         $ai_metric_name: params.metricName,
         $ai_metric_value: params.metricValue,
+        // Required metric properties
+        $ai_trace_id: params.traceId,
 
         // Session linking
         ...(context.sessionId && {
@@ -1279,8 +1283,8 @@ export type PreSearchTrackingResult = {
  */
 export function initializePreSearchTracking(): PreSearchTrackingResult {
   return {
-    traceId: generateTraceId(),
     parentSpanId: `span_${ulid()}`,
+    traceId: generateTraceId(),
   };
 }
 
@@ -1321,27 +1325,27 @@ export async function trackQueryGeneration(
       distinctId: context.sessionId || context.userId,
       event: '$ai_span',
       properties: {
+        $ai_parent_id: params.parentSpanId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_span_name: 'query_generation',
         // Required span properties
         $ai_trace_id: params.traceId,
-        $ai_span_id: `span_${ulid()}`,
-        $ai_parent_id: params.parentSpanId,
-        $ai_span_name: 'query_generation',
 
         // Session linking
         ...(context.sessionId && { $session_id: context.sessionId }),
 
         // Input/Output state
         $ai_input_state: { user_query: context.userQuery },
-        $ai_output_state: {
-          queries_generated: params.queriesGenerated,
-          complexity: params.complexity,
-          analysis_rationale: params.analysisRationale,
-        },
+        $ai_is_error: options?.isError || false,
 
         // Performance
         $ai_latency: latencySeconds,
-        $ai_is_error: options?.isError || false,
         $ai_model: params.modelId,
+        $ai_output_state: {
+          analysis_rationale: params.analysisRationale,
+          complexity: params.complexity,
+          queries_generated: params.queriesGenerated,
+        },
         $ai_provider: provider,
 
         // Token usage (if available from AI SDK)
@@ -1358,13 +1362,13 @@ export async function trackQueryGeneration(
           },
         }),
 
-        // Custom properties
-        thread_id: context.threadId,
-        round_number: context.roundNumber,
-        user_query: context.userQuery,
-        subscription_tier: context.userTier || 'free',
         fallback_used: options?.fallbackUsed || false,
         operation_type: 'pre_search_query_generation',
+        round_number: context.roundNumber,
+        subscription_tier: context.userTier || 'free',
+        // Custom properties
+        thread_id: context.threadId,
+        user_query: context.userQuery,
       },
     });
 
@@ -1411,29 +1415,29 @@ export async function trackWebSearchExecution(
       distinctId: context.sessionId || context.userId,
       event: '$ai_span',
       properties: {
+        $ai_parent_id: params.parentSpanId,
+        $ai_span_id: `span_${ulid()}`,
+        $ai_span_name: `web_search_${params.searchIndex + 1}_of_${params.totalSearches}`,
         // Required span properties
         $ai_trace_id: params.traceId,
-        $ai_span_id: `span_${ulid()}`,
-        $ai_parent_id: params.parentSpanId,
-        $ai_span_name: `web_search_${params.searchIndex + 1}_of_${params.totalSearches}`,
 
         // Session linking
         ...(context.sessionId && { $session_id: context.sessionId }),
 
         // Input/Output state
         $ai_input_state: {
-          search_query: params.searchQuery,
           search_depth: params.searchDepth,
           search_index: params.searchIndex,
+          search_query: params.searchQuery,
         },
-        $ai_output_state: {
-          results_count: params.resultsCount,
-          cache_hit: options?.cacheHit || false,
-        },
+        $ai_is_error: options?.isError || false,
 
         // Performance
         $ai_latency: latencySeconds,
-        $ai_is_error: options?.isError || false,
+        $ai_output_state: {
+          cache_hit: options?.cacheHit || false,
+          results_count: params.resultsCount,
+        },
 
         // ✅ POSTHOG OFFICIAL: Web search cost tracking
         ...(options?.searchCostUsd !== undefined && {
@@ -1448,17 +1452,17 @@ export async function trackWebSearchExecution(
           },
         }),
 
-        // Custom properties
-        thread_id: context.threadId,
-        round_number: context.roundNumber,
-        subscription_tier: context.userTier || 'free',
-        search_query: params.searchQuery,
-        search_index: params.searchIndex,
-        total_searches: params.totalSearches,
-        results_count: params.resultsCount,
-        search_depth: params.searchDepth,
         cache_hit: options?.cacheHit || false,
         operation_type: 'web_search_execution',
+        results_count: params.resultsCount,
+        round_number: context.roundNumber,
+        search_depth: params.searchDepth,
+        search_index: params.searchIndex,
+        search_query: params.searchQuery,
+        subscription_tier: context.userTier || 'free',
+        // Custom properties
+        thread_id: context.threadId,
+        total_searches: params.totalSearches,
       },
     });
 
@@ -1489,7 +1493,7 @@ export async function trackPreSearchComplete(
   options?: {
     isError?: boolean;
     error?: Error;
-    errorCategory?: string;
+    errorCategory?: string | undefined;
   },
 ): Promise<void> {
   const posthog = getPostHogClient();
@@ -1504,26 +1508,26 @@ export async function trackPreSearchComplete(
       distinctId: context.sessionId || context.userId,
       event: '$ai_span',
       properties: {
-        // Required span properties
-        $ai_trace_id: params.traceId,
         $ai_span_id: params.parentSpanId, // Use parent span ID for the summary
         $ai_span_name: 'pre_search_complete',
+        // Required span properties
+        $ai_trace_id: params.traceId,
 
         // Session linking
         ...(context.sessionId && { $session_id: context.sessionId }),
 
         // Input/Output state
         $ai_input_state: { user_query: context.userQuery },
-        $ai_output_state: {
-          total_queries: params.totalQueries,
-          successful_searches: params.successfulSearches,
-          failed_searches: params.failedSearches,
-          total_results: params.totalResults,
-        },
+        $ai_is_error: options?.isError || false,
 
         // Performance
         $ai_latency: latencySeconds,
-        $ai_is_error: options?.isError || false,
+        $ai_output_state: {
+          failed_searches: params.failedSearches,
+          successful_searches: params.successfulSearches,
+          total_queries: params.totalQueries,
+          total_results: params.totalResults,
+        },
 
         // ✅ POSTHOG OFFICIAL: Total web search cost
         ...(params.totalWebSearchCostUsd !== undefined && {
@@ -1538,19 +1542,19 @@ export async function trackPreSearchComplete(
           },
         }),
 
-        // Custom properties
-        thread_id: context.threadId,
-        round_number: context.roundNumber,
-        user_query: context.userQuery,
-        subscription_tier: context.userTier || 'free',
-        total_queries: params.totalQueries,
-        successful_searches: params.successfulSearches,
         failed_searches: params.failedSearches,
-        total_results: params.totalResults,
+        operation_type: 'pre_search_summary',
+        round_number: context.roundNumber,
+        subscription_tier: context.userTier || 'free',
         success_rate: params.totalQueries > 0
           ? params.successfulSearches / params.totalQueries
           : 0,
-        operation_type: 'pre_search_summary',
+        successful_searches: params.successfulSearches,
+        // Custom properties
+        thread_id: context.threadId,
+        total_queries: params.totalQueries,
+        total_results: params.totalResults,
+        user_query: context.userQuery,
         ...(options?.errorCategory && { error_category: options.errorCategory }),
       },
     });
@@ -1602,27 +1606,27 @@ export async function trackRoundComplete(
         // Session linking
         ...(context.sessionId && { $session_id: context.sessionId }),
 
-        // Round context
-        thread_id: context.threadId,
-        round_number: context.roundNumber,
-        thread_mode: context.threadMode,
-        subscription_tier: context.userTier || 'free',
-
-        // Metrics
-        participant_count: params.participantCount,
-        total_tokens: params.totalTokens,
-        total_cost_usd: params.totalCostUsd,
-        has_web_search: params.hasWebSearch,
-        has_analysis: params.hasAnalysis,
-        round_duration_seconds: params.roundDurationMs / 1000,
-
         // Efficiency metrics
         cost_per_participant: params.participantCount > 0
           ? params.totalCostUsd / params.participantCount
           : 0,
+        has_analysis: params.hasAnalysis,
+        has_web_search: params.hasWebSearch,
+        // Metrics
+        participant_count: params.participantCount,
+
+        round_duration_seconds: params.roundDurationMs / 1000,
+        round_number: context.roundNumber,
+        subscription_tier: context.userTier || 'free',
+        // Round context
+        thread_id: context.threadId,
+        thread_mode: context.threadMode,
         tokens_per_participant: params.participantCount > 0
           ? params.totalTokens / params.participantCount
           : 0,
+
+        total_cost_usd: params.totalCostUsd,
+        total_tokens: params.totalTokens,
       },
     });
 
@@ -1664,15 +1668,15 @@ export async function trackThreadCreated(
         // Session linking
         ...(context.sessionId && { $session_id: context.sessionId }),
 
+        enable_web_search: params.enableWebSearch,
+        models: params.models,
+        // Configuration
+        participant_count: params.participantCount,
+
+        subscription_tier: context.userTier || 'free',
         // Thread context
         thread_id: context.threadId,
         thread_mode: context.threadMode,
-        subscription_tier: context.userTier || 'free',
-
-        // Configuration
-        participant_count: params.participantCount,
-        enable_web_search: params.enableWebSearch,
-        models: params.models,
         unique_models: [...new Set(params.models)].length,
       },
     });

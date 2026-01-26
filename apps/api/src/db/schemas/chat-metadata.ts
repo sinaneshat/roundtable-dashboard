@@ -48,8 +48,8 @@ import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
  * to these field names before persistence.
  */
 export const UsageSchema = z.object({
-  promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
+  promptTokens: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
 });
 
@@ -64,8 +64,8 @@ export type Usage = z.infer<typeof UsageSchema>;
  * Standard text content in messages
  */
 export const DbTextPartSchema = z.object({
-  type: z.literal('text'),
   text: z.string(),
+  type: z.literal('text'),
 });
 
 export type DbTextPart = z.infer<typeof DbTextPartSchema>;
@@ -75,8 +75,8 @@ export type DbTextPart = z.infer<typeof DbTextPartSchema>;
  * Claude extended thinking / reasoning content
  */
 export const DbReasoningPartSchema = z.object({
-  type: z.literal('reasoning'),
   text: z.string(),
+  type: z.literal('reasoning'),
 });
 
 export type DbReasoningPart = z.infer<typeof DbReasoningPartSchema>;
@@ -116,10 +116,10 @@ export type DbToolResultValue = z.infer<typeof DbToolResultValueSchema>;
  * Function invocation by AI model
  */
 export const DbToolCallPartSchema = z.object({
-  type: z.literal('tool-call'),
+  args: DbToolCallArgsSchema,
   toolCallId: z.string(),
   toolName: z.string(),
-  args: DbToolCallArgsSchema,
+  type: z.literal('tool-call'),
 });
 
 export type DbToolCallPart = z.infer<typeof DbToolCallPartSchema>;
@@ -129,11 +129,11 @@ export type DbToolCallPart = z.infer<typeof DbToolCallPartSchema>;
  * Execution result from tool call
  */
 export const DbToolResultPartSchema = z.object({
-  type: z.literal('tool-result'),
+  isError: z.boolean().optional(),
+  result: DbToolResultValueSchema,
   toolCallId: z.string(),
   toolName: z.string(),
-  result: DbToolResultValueSchema,
-  isError: z.boolean().optional(),
+  type: z.literal('tool-result'),
 });
 
 export type DbToolResultPart = z.infer<typeof DbToolResultPartSchema>;
@@ -144,10 +144,10 @@ export type DbToolResultPart = z.infer<typeof DbToolResultPartSchema>;
  * Reference: AI SDK v6 FilePart
  */
 export const DbFilePartSchema = z.object({
+  filename: z.string().optional(),
+  mediaType: z.string(),
   type: z.literal('file'),
   url: z.string(),
-  mediaType: z.string(),
-  filename: z.string().optional(),
 });
 
 export type DbFilePart = z.infer<typeof DbFilePartSchema>;
@@ -194,12 +194,12 @@ export type DbMessageParts = z.infer<typeof DbMessagePartsSchema>;
  * Stored in chatMessage.toolCalls column
  */
 export const DbToolCallEntrySchema = z.object({
+  function: z.object({
+    arguments: z.string(),
+    name: z.string(),
+  }),
   id: z.string(),
   type: z.string(),
-  function: z.object({
-    name: z.string(),
-    arguments: z.string(),
-  }),
 });
 
 export type DbToolCallEntry = z.infer<typeof DbToolCallEntrySchema>;
@@ -246,33 +246,33 @@ export type DbModelRoles = z.infer<typeof DbModelRolesSchema>;
  * Frontend: Converts to display numbers [1], [2] and renders hover cards
  */
 export const DbCitationSchema = z.object({
-  // Citation identifier - matches the [source_id] marker in AI response text
-  id: z.string().min(1),
-
-  // Source type from CITATION_SOURCE_TYPES enum
-  sourceType: CitationSourceTypeSchema,
-
-  // ID of the source record (projectMemory.id, chatThread.id, etc.)
-  sourceId: z.string().min(1),
-
   // Display number for frontend rendering [1], [2], etc.
   displayNumber: z.number().int().positive(),
 
-  // Contextual info for hover card (resolved from source)
-  title: z.string().optional(),
+  // Attachment-specific metadata (for file citations)
+  downloadUrl: z.string().optional(),
+
   excerpt: z.string().optional(),
-  url: z.string().optional(),
+
+  filename: z.string().optional(),
+
+  fileSize: z.number().int().nonnegative().optional(),
+  // Citation identifier - matches the [source_id] marker in AI response text
+  id: z.string().min(1),
+  mimeType: z.string().optional(),
+
+  roundNumber: z.number().int().nonnegative().optional(),
+  // ID of the source record (projectMemory.id, chatThread.id, etc.)
+  sourceId: z.string().min(1),
+  // Source type from CITATION_SOURCE_TYPES enum
+  sourceType: CitationSourceTypeSchema,
 
   // Thread-specific metadata
   threadId: z.string().optional(),
   threadTitle: z.string().optional(),
-  roundNumber: z.number().int().nonnegative().optional(),
-
-  // Attachment-specific metadata (for file citations)
-  downloadUrl: z.string().optional(),
-  filename: z.string().optional(),
-  mimeType: z.string().optional(),
-  fileSize: z.number().int().nonnegative().optional(),
+  // Contextual info for hover card (resolved from source)
+  title: z.string().optional(),
+  url: z.string().optional(),
 });
 
 export type DbCitation = z.infer<typeof DbCitationSchema>;
@@ -286,11 +286,11 @@ export type DbCitation = z.infer<typeof DbCitationSchema>;
  * Minimal requirements - only round tracking needed
  */
 export const DbUserMessageMetadataSchema = z.object({
-  role: z.literal(UIMessageRoles.USER),
-  roundNumber: RoundNumberSchema, // ✅ 0-BASED
   createdAt: z.string().datetime().optional(),
   // Frontend-only flag for triggering participants (not persisted)
   isParticipantTrigger: z.boolean().optional(),
+  role: z.literal(UIMessageRoles.USER),
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED
 });
 
 export type DbUserMessageMetadata = z.infer<typeof DbUserMessageMetadataSchema>;
@@ -308,77 +308,77 @@ export type DbUserMessageMetadata = z.infer<typeof DbUserMessageMetadataSchema>;
  * - Error state (hasError, isTransient, isPartialResponse)
  */
 export const DbAssistantMessageMetadataSchema = z.object({
-  role: z.literal(UIMessageRoles.ASSISTANT),
+  aborted: z.boolean().optional(),
 
-  // ✅ REQUIRED: Round tracking
-  roundNumber: RoundNumberSchema, // ✅ 0-BASED
+  // Available sources - files/context that were available to AI (shown even without inline citations)
+  // This enables "Sources" UI to display what files the AI had access to
+  availableSources: z.array(z.object({
+    description: z.string().optional(), // Short description
+    domain: z.string().optional(), // Domain for search results
+    // Attachment-specific fields
+    downloadUrl: z.string().optional(),
+    excerpt: z.string().optional(), // Content excerpt/quote for citation display
+    filename: z.string().optional(),
+    fileSize: z.number().int().nonnegative().optional(),
+    id: z.string(), // Citation ID (e.g., att_abc12345, sch_q0r0)
+    mimeType: z.string().optional(),
+    sourceType: CitationSourceTypeSchema,
+    // Context fields
+    threadTitle: z.string().optional(),
+    title: z.string(), // Filename or source title
+    // Search-specific fields
+    url: z.string().optional(), // Source URL for search results
+  })).optional(),
 
-  // ✅ REQUIRED: Participant identification
-  participantId: z.string().min(1),
-  participantIndex: z.number().int().nonnegative(),
-  participantRole: z.string().nullable(),
+  // RAG citation references (when AI cites project context)
+  citations: z.array(DbCitationSchema).optional(),
+  // Timestamp
+  createdAt: z.string().datetime().optional(),
+  errorCategory: z.string().optional(),
 
-  // ✅ REQUIRED: Model and completion tracking
-  model: z.string().min(1),
+  errorMessage: z.string().optional(),
+  // Optional error details (only when hasError = true)
+  errorType: ErrorTypeSchema.optional(),
+
   finishReason: FinishReasonSchema,
-
-  // ✅ REQUIRED: Usage tracking for cost/performance monitoring
-  usage: UsageSchema,
 
   // ✅ REQUIRED: Error state (with defaults)
   hasError: z.boolean().default(false),
-  isTransient: z.boolean().default(false),
+  isEmptyResponse: z.boolean().optional(),
   isPartialResponse: z.boolean().default(false),
 
-  // Optional error details (only when hasError = true)
-  errorType: ErrorTypeSchema.optional(),
-  errorMessage: z.string().optional(),
-  errorCategory: z.string().optional(),
-  rawErrorMessage: z.string().optional(),
-
-  // Optional backend/debugging fields
-  providerMessage: z.string().optional(),
+  isTransient: z.boolean().default(false),
+  // ✅ REQUIRED: Model and completion tracking
+  model: z.string().min(1),
+  openRouterCode: z.union([z.string(), z.number()]).optional(),
   openRouterError: z.record(z.string(), z.union([
     z.string(),
     z.number(),
     z.boolean(),
     z.null(),
   ])).optional(),
-  openRouterCode: z.union([z.string(), z.number()]).optional(),
-  retryAttempts: z.number().int().nonnegative().optional(),
-  isEmptyResponse: z.boolean().optional(),
-  statusCode: z.number().int().optional(),
-  responseBody: z.string().optional(),
-  aborted: z.boolean().optional(),
 
-  // RAG citation references (when AI cites project context)
-  citations: z.array(DbCitationSchema).optional(),
-
+  // ✅ REQUIRED: Participant identification
+  participantId: z.string().min(1),
+  participantIndex: z.number().int().nonnegative(),
+  participantRole: z.string().nullable(),
+  // Optional backend/debugging fields
+  providerMessage: z.string().optional(),
+  rawErrorMessage: z.string().optional(),
   // Reasoning duration tracking (for "Thought for X seconds" display on page refresh)
   reasoningDuration: z.number().int().nonnegative().optional(),
+  responseBody: z.string().optional(),
+  retryAttempts: z.number().int().nonnegative().optional(),
 
-  // Available sources - files/context that were available to AI (shown even without inline citations)
-  // This enables "Sources" UI to display what files the AI had access to
-  availableSources: z.array(z.object({
-    id: z.string(), // Citation ID (e.g., att_abc12345, sch_q0r0)
-    sourceType: CitationSourceTypeSchema,
-    title: z.string(), // Filename or source title
-    // Attachment-specific fields
-    downloadUrl: z.string().optional(),
-    filename: z.string().optional(),
-    mimeType: z.string().optional(),
-    fileSize: z.number().int().nonnegative().optional(),
-    // Search-specific fields
-    url: z.string().optional(), // Source URL for search results
-    domain: z.string().optional(), // Domain for search results
-    // Context fields
-    threadTitle: z.string().optional(),
-    description: z.string().optional(), // Short description
-    excerpt: z.string().optional(), // Content excerpt/quote for citation display
-  })).optional(),
+  role: z.literal(UIMessageRoles.ASSISTANT),
 
-  // Timestamp
-  createdAt: z.string().datetime().optional(),
+  // ✅ REQUIRED: Round tracking
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED
+
+  statusCode: z.number().int().optional(),
+
+  // ✅ REQUIRED: Usage tracking for cost/performance monitoring
+  usage: UsageSchema,
 });
 
 export type DbAssistantMessageMetadata = z.infer<typeof DbAssistantMessageMetadataSchema>;
@@ -388,38 +388,38 @@ export type DbAssistantMessageMetadata = z.infer<typeof DbAssistantMessageMetada
  * For web search results embedded in system messages
  */
 const DbPreSearchResultItemSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
   content: z.string(),
-  score: z.number().min(0).max(1),
-  publishedDate: z.string().nullable().optional(),
+  contentType: WebSearchContentTypeSchema.optional(),
   domain: z.string().optional(),
   fullContent: z.string().optional(),
-  contentType: WebSearchContentTypeSchema.optional(),
   keyPoints: z.array(z.string()).optional(),
+  publishedDate: z.string().nullable().optional(),
+  score: z.number().min(0).max(1),
+  title: z.string(),
+  url: z.string().url(),
   wordCount: z.number().optional(),
 });
 
 const DbPreSearchResultSchema = z.object({
-  query: z.string(),
   answer: z.string().nullable(),
-  results: z.array(DbPreSearchResultItemSchema),
+  query: z.string(),
   responseTime: z.number(),
+  results: z.array(DbPreSearchResultItemSchema),
 });
 
 export const DbPreSearchDataSchema = z.object({
+  failureCount: z.number().int().nonnegative(),
   queries: z.array(z.object({
+    index: z.number().int().nonnegative(),
     query: z.string(),
     rationale: z.string(),
     searchDepth: WebSearchDepthSchema,
-    index: z.number().int().nonnegative(),
   })),
-  summary: z.string(),
+  results: z.array(DbPreSearchResultSchema),
   successCount: z.number().int().nonnegative(),
-  failureCount: z.number().int().nonnegative(),
+  summary: z.string(),
   totalResults: z.number().int().nonnegative(),
   totalTime: z.number(),
-  results: z.array(DbPreSearchResultSchema),
 });
 
 export type DbPreSearchData = z.infer<typeof DbPreSearchDataSchema>;
@@ -433,9 +433,9 @@ export type DbPreSearchData = z.infer<typeof DbPreSearchDataSchema>;
  * Image schema for Tavily search results
  */
 const DbSearchImageSchema = z.object({
-  url: z.string(),
-  description: z.string().optional(),
   alt: z.string().optional(),
+  description: z.string().optional(),
+  url: z.string(),
 });
 
 /**
@@ -443,65 +443,65 @@ const DbSearchImageSchema = z.object({
  */
 const DbSearchResultMetadataSchema = z.object({
   author: z.string().optional(),
+  description: z.string().optional(),
+  faviconUrl: z.string().optional(),
+  imageUrl: z.string().optional(),
   readingTime: z.number().optional(),
   wordCount: z.number().optional(),
-  description: z.string().optional(),
-  imageUrl: z.string().optional(),
-  faviconUrl: z.string().optional(),
 });
 
 /**
  * Individual search result item schema (Tavily-enhanced)
  */
 const DbSearchResultItemSchema = z.object({
-  title: z.string(),
-  url: z.string(),
   content: z.string(),
+  contentType: z.string().optional(),
+  domain: z.string().optional(),
   excerpt: z.string().optional(),
   fullContent: z.string().optional(),
-  rawContent: z.string().optional(),
-  score: z.number(),
-  publishedDate: z.string().nullable(),
-  domain: z.string().optional(),
-  contentType: z.string().optional(),
+  images: z.array(DbSearchImageSchema).optional(),
   keyPoints: z.array(z.string()).optional(),
   metadata: DbSearchResultMetadataSchema.optional(),
-  images: z.array(DbSearchImageSchema).optional(),
+  publishedDate: z.string().nullable(),
+  rawContent: z.string().optional(),
+  score: z.number(),
+  title: z.string(),
+  url: z.string(),
 });
 
 /**
  * Auto-detected search parameters schema
  */
 const DbAutoParametersSchema = z.object({
-  topic: z.string().optional(),
-  timeRange: z.string().optional(),
-  searchDepth: WebSearchDepthSchema.optional(),
   reasoning: z.string().optional(),
+  searchDepth: WebSearchDepthSchema.optional(),
+  timeRange: z.string().optional(),
+  topic: z.string().optional(),
 });
 
 /**
  * Query result schema with all results for a single query
  */
 const DbQueryResultSchema = z.object({
-  query: z.string(),
   answer: z.string().nullable(),
-  results: z.array(DbSearchResultItemSchema),
-  responseTime: z.number(),
-  images: z.array(z.object({
-    url: z.string(),
-    description: z.string().optional(),
-  })).optional(),
   autoParameters: DbAutoParametersSchema.optional(),
+  images: z.array(z.object({
+    description: z.string().optional(),
+    url: z.string(),
+  })).optional(),
+  query: z.string(),
+  responseTime: z.number(),
+  results: z.array(DbSearchResultItemSchema),
 });
 
 /**
  * Query entry schema for the queries array
  */
 const DbQueryEntrySchema = z.object({
+  index: z.number(),
   query: z.string(),
   rationale: z.string(),
   searchDepth: WebSearchDepthSchema,
-  index: z.number(),
   total: z.number(),
 });
 
@@ -510,11 +510,11 @@ const DbQueryEntrySchema = z.object({
  * Used by chatPreSearch.searchData column
  */
 export const DbPreSearchTableDataSchema = z.object({
+  failureCount: z.number(),
   queries: z.array(DbQueryEntrySchema),
   results: z.array(DbQueryResultSchema),
-  summary: z.string(),
   successCount: z.number(),
-  failureCount: z.number(),
+  summary: z.string(),
   totalResults: z.number(),
   totalTime: z.number(),
 });
@@ -532,11 +532,11 @@ export type DbPreSearchTableData = z.infer<typeof DbPreSearchTableDataSchema>;
  * - Contains preSearch data with web results
  */
 export const DbPreSearchMessageMetadataSchema = z.object({
-  role: z.literal(UIMessageRoles.SYSTEM),
-  roundNumber: RoundNumberSchema, // ✅ 0-BASED
+  createdAt: z.string().datetime().optional(),
   isPreSearch: z.literal(true),
   preSearch: DbPreSearchDataSchema,
-  createdAt: z.string().datetime().optional(),
+  role: z.literal(UIMessageRoles.SYSTEM),
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED
 });
 
 export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetadataSchema>;
@@ -552,22 +552,22 @@ export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetada
  * - Streams text like participants (no structured JSON)
  */
 export const DbModeratorMessageMetadataSchema = z.object({
-  role: z.literal(UIMessageRoles.ASSISTANT),
-  isModerator: z.literal(true), // Discriminator from participant messages
-  roundNumber: RoundNumberSchema, // ✅ 0-BASED
-  model: z.string().min(1), // AI model used for summary (e.g., gemini-2.5-flash)
-
+  // Timestamp
+  createdAt: z.string().datetime().optional(),
+  errorMessage: z.string().optional(),
+  errorType: ErrorTypeSchema.optional(),
   // Completion tracking
   finishReason: FinishReasonSchema.optional(),
-  usage: UsageSchema.optional(),
 
   // Error state
   hasError: z.boolean().default(false),
-  errorType: ErrorTypeSchema.optional(),
-  errorMessage: z.string().optional(),
+  isModerator: z.literal(true), // Discriminator from participant messages
 
-  // Timestamp
-  createdAt: z.string().datetime().optional(),
+  model: z.string().min(1), // AI model used for summary (e.g., gemini-2.5-flash)
+  role: z.literal(UIMessageRoles.ASSISTANT),
+  roundNumber: RoundNumberSchema, // ✅ 0-BASED
+
+  usage: UsageSchema.optional(),
 });
 
 export type DbModeratorMessageMetadata = z.infer<typeof DbModeratorMessageMetadataSchema>;
@@ -599,8 +599,8 @@ export type DbMessageMetadata = z.infer<typeof DbMessageMetadataSchema>;
  * Custom properties for chat threads
  */
 export const DbThreadMetadataSchema = z.object({
-  tags: z.array(z.string()).optional(),
   summary: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 }).strict(); // ✅ STRICT: No additional properties allowed
 
 export type DbThreadMetadata = z.infer<typeof DbThreadMetadataSchema>;
@@ -614,9 +614,9 @@ export type DbThreadMetadata = z.infer<typeof DbThreadMetadataSchema>;
  * Configuration for individual participants
  */
 export const DbParticipantSettingsSchema = z.object({
-  temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
   systemPrompt: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
 }).strict(); // ✅ STRICT: No additional properties allowed
 
 export type DbParticipantSettings = z.infer<typeof DbParticipantSettingsSchema>;
@@ -630,8 +630,8 @@ export type DbParticipantSettings = z.infer<typeof DbParticipantSettingsSchema>;
  * Tags and categorization for custom roles
  */
 export const DbCustomRoleMetadataSchema = z.object({
-  tags: z.array(z.string()).optional(),
   category: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 }).strict(); // ✅ STRICT: No additional properties allowed
 
 export type DbCustomRoleMetadata = z.infer<typeof DbCustomRoleMetadataSchema>;
@@ -659,10 +659,10 @@ export type DbUserPresetMetadata = z.infer<typeof DbUserPresetMetadataSchema>;
  * participantId is optional because ID may not exist yet when adding participants
  */
 const DbParticipantChangeDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.PARTICIPANT),
-  participantId: z.string().optional(), // ✅ Optional for newly added participants
   modelId: z.string(),
+  participantId: z.string().optional(), // ✅ Optional for newly added participants
   role: z.string().nullable().optional(),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT),
 });
 
 /**
@@ -670,11 +670,11 @@ const DbParticipantChangeDataSchema = z.object({
  * For role reassignment events
  */
 const DbParticipantRoleChangeDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.PARTICIPANT_ROLE),
-  participantId: z.string(),
   modelId: z.string(), // ✅ Required for UI to display model info
-  oldRole: z.string().nullable().optional(),
   newRole: z.string().nullable().optional(),
+  oldRole: z.string().nullable().optional(),
+  participantId: z.string(),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT_ROLE),
 });
 
 /**
@@ -682,9 +682,9 @@ const DbParticipantRoleChangeDataSchema = z.object({
  * For conversation mode changes
  */
 const DbModeChangeDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.MODE_CHANGE),
-  oldMode: ChatModeSchema,
   newMode: ChatModeSchema,
+  oldMode: ChatModeSchema,
+  type: z.literal(ChangelogChangeTypes.MODE_CHANGE),
 });
 
 /**
@@ -692,13 +692,13 @@ const DbModeChangeDataSchema = z.object({
  * For priority/order changes
  */
 const DbParticipantReorderDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.PARTICIPANT_REORDER),
   participants: z.array(z.object({
     id: z.string(),
     modelId: z.string(),
-    role: z.string().nullable(),
     priority: z.number().int().nonnegative(),
+    role: z.string().nullable(),
   })),
+  type: z.literal(ChangelogChangeTypes.PARTICIPANT_REORDER),
 });
 
 /**
@@ -706,8 +706,8 @@ const DbParticipantReorderDataSchema = z.object({
  * For enabling/disabling web search mid-conversation
  */
 const DbWebSearchChangeDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.WEB_SEARCH),
   enabled: z.boolean(),
+  type: z.literal(ChangelogChangeTypes.WEB_SEARCH),
 });
 
 /**
@@ -715,13 +715,13 @@ const DbWebSearchChangeDataSchema = z.object({
  * For memories created from conversation context (project threads only)
  */
 const DbMemoryCreatedDataSchema = z.object({
-  type: z.literal(ChangelogChangeTypes.MEMORY_CREATED),
-  memoryCount: z.number().int().nonnegative(),
   memories: z.array(z.object({
     id: z.string(),
     summary: z.string(),
   })),
+  memoryCount: z.number().int().nonnegative(),
   projectId: z.string(),
+  type: z.literal(ChangelogChangeTypes.MEMORY_CREATED),
 });
 
 /**

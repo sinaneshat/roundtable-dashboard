@@ -105,21 +105,21 @@ export default {
    * Uses dynamic imports to avoid loading heavy modules at startup.
    */
   async queue(
-    batch: MessageBatch<unknown>,
+    batch: MessageBatch,
     env: CloudflareEnv,
   ): Promise<void> {
     // Title generation queue
     if (batch.queue.startsWith('title-generation-queue')) {
       const { handleTitleGenerationQueue } = await import('./src/workers/title-generation-queue');
       type TitleMsg = import('./src/types/queues').TitleGenerationQueueMessage;
-      return handleTitleGenerationQueue(batch as MessageBatch<TitleMsg>, env);
+      return await handleTitleGenerationQueue(batch as MessageBatch<TitleMsg>, env);
     }
 
     // Round orchestration queue
     if (batch.queue.startsWith('round-orchestration-queue')) {
       const { handleRoundOrchestrationQueue } = await import('./src/workers/round-orchestration-queue');
       type RoundMsg = import('./src/types/queues').RoundOrchestrationQueueMessage;
-      return handleRoundOrchestrationQueue(batch as MessageBatch<RoundMsg>, env);
+      return await handleRoundOrchestrationQueue(batch as MessageBatch<RoundMsg>, env);
     }
 
     console.error(`[QueueRouter] Unknown queue: ${batch.queue}`);

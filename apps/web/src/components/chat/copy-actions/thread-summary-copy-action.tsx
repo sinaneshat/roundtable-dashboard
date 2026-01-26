@@ -16,18 +16,18 @@ type ThreadSummaryCopyActionProps = {
 };
 
 function ThreadSummaryCopyActionComponent({
+  className,
   messages,
   participants,
   threadTitle,
-  className,
 }: ThreadSummaryCopyActionProps) {
   const t = useTranslations();
 
   const toastMessages = useMemo(() => ({
-    successTitle: t('chat.roundActions.copyThreadSuccess'),
-    successDescription: t('chat.roundActions.copyThreadSuccessDescription'),
-    errorTitle: t('chat.roundActions.copyError'),
     errorDescription: t('chat.roundActions.copyErrorDescription'),
+    errorTitle: t('chat.roundActions.copyError'),
+    successDescription: t('chat.roundActions.copyThreadSuccessDescription'),
+    successTitle: t('chat.roundActions.copyThreadSuccess'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages: toastMessages });

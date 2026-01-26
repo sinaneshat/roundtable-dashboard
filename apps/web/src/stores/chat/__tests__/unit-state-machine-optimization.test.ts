@@ -151,7 +151,7 @@ function getNextAction(
     if (prevState === FlowStates.STREAMING_MODERATOR) {
       return null; // Already handled above
     }
-    return { type: 'NAVIGATE', slug: context.threadSlug };
+    return { slug: context.threadSlug, type: 'NAVIGATE' };
   }
 
   // No action needed for this transition
@@ -176,22 +176,26 @@ function calculateAllParticipantsResponded(
   let completedCount = 0;
 
   for (const m of messages) {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       continue;
+    }
 
     const metadata = m.metadata as { roundNumber?: number; isModerator?: boolean } | undefined;
-    if (metadata?.roundNumber !== currentRound)
+    if (metadata?.roundNumber !== currentRound) {
       continue;
-    if (metadata?.isModerator)
-      continue; // Skip moderator messages
+    }
+    if (metadata?.isModerator) {
+      continue;
+    } // Skip moderator messages
 
     // Check if complete using streaming parts check first
     const hasStreamingParts = m.parts?.some(
       p => 'state' in p && p.state === TextPartStates.STREAMING,
     ) ?? false;
 
-    if (hasStreamingParts)
-      continue; // Not complete
+    if (hasStreamingParts) {
+      continue;
+    } // Not complete
 
     // Check for text content
     const hasTextContent = m.parts?.some(
@@ -242,12 +246,14 @@ function buildFlowContext(
   let completedCount = 0;
 
   for (const m of messages) {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       continue;
+    }
 
     const metadata = m.metadata as { roundNumber?: number; isModerator?: boolean } | undefined;
-    if (metadata?.roundNumber !== currentRound)
+    if (metadata?.roundNumber !== currentRound) {
       continue;
+    }
 
     // Check if moderator
     if (metadata?.isModerator) {
@@ -287,22 +293,22 @@ function buildFlowContext(
   }
 
   return {
+    allParticipantsResponded,
+    currentRound,
+    hasAiGeneratedTitle: options.hasAiGeneratedTitle,
+    hasMessages: messages.length > 0,
+    hasNavigated: options.hasNavigated,
+    isAiSdkStreaming: options.isAiSdkStreaming,
+    isCreatingModerator: options.isCreatingModerator,
+    isCreatingThread: options.isCreatingThread,
+    moderatorExists: !!currentRoundModeratorMessage,
+    moderatorStatus,
+    participantCount: participants.length,
+    pendingAnimations: options.pendingAnimations,
+    screenMode: options.screenMode,
+    streamingJustCompleted: options.streamingJustCompleted,
     threadId: options.threadId,
     threadSlug: options.threadSlug,
-    hasAiGeneratedTitle: options.hasAiGeneratedTitle,
-    currentRound,
-    hasMessages: messages.length > 0,
-    participantCount: participants.length,
-    allParticipantsResponded,
-    moderatorStatus,
-    moderatorExists: !!currentRoundModeratorMessage,
-    isAiSdkStreaming: options.isAiSdkStreaming,
-    streamingJustCompleted: options.streamingJustCompleted,
-    pendingAnimations: options.pendingAnimations,
-    isCreatingThread: options.isCreatingThread,
-    isCreatingModerator: options.isCreatingModerator,
-    hasNavigated: options.hasNavigated,
-    screenMode: options.screenMode,
   };
 }
 
@@ -312,22 +318,22 @@ function buildFlowContext(
 
 function createDefaultContext(): FlowContext {
   return {
+    allParticipantsResponded: false,
+    currentRound: 0,
+    hasAiGeneratedTitle: false,
+    hasMessages: false,
+    hasNavigated: false,
+    isAiSdkStreaming: false,
+    isCreatingModerator: false,
+    isCreatingThread: false,
+    moderatorExists: false,
+    moderatorStatus: null,
+    participantCount: 2,
+    pendingAnimations: new Set(),
+    screenMode: ScreenModes.OVERVIEW,
+    streamingJustCompleted: false,
     threadId: 'thread-123',
     threadSlug: 'test-thread',
-    hasAiGeneratedTitle: false,
-    currentRound: 0,
-    hasMessages: false,
-    participantCount: 2,
-    allParticipantsResponded: false,
-    moderatorStatus: null,
-    moderatorExists: false,
-    isAiSdkStreaming: false,
-    streamingJustCompleted: false,
-    pendingAnimations: new Set(),
-    isCreatingThread: false,
-    isCreatingModerator: false,
-    hasNavigated: false,
-    screenMode: ScreenModes.OVERVIEW,
   };
 }
 
@@ -344,22 +350,22 @@ function createParticipantMessage(
 
   if (options.text !== undefined) {
     parts.push({
-      type: MessagePartTypes.TEXT,
       text: options.text,
+      type: MessagePartTypes.TEXT,
       ...(options.isStreaming ? { state: TextPartStates.STREAMING } : {}),
     });
   }
 
   return {
-    id: `msg-${roundNumber}-${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
     content: options.text ?? '',
-    parts,
+    id: `msg-${roundNumber}-${participantIndex}`,
     metadata: {
-      roundNumber,
       participantIndex,
+      roundNumber,
       ...(options.finishReason ? { finishReason: options.finishReason } : {}),
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -374,21 +380,21 @@ function createModeratorMessage(
 
   if (options.text !== undefined) {
     parts.push({
-      type: MessagePartTypes.TEXT,
       text: options.text,
+      type: MessagePartTypes.TEXT,
       ...(options.isStreaming ? { state: TextPartStates.STREAMING } : {}),
     });
   }
 
   return {
-    id: `moderator-${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
     content: options.text ?? '',
-    parts,
+    id: `moderator-${roundNumber}`,
     metadata: {
-      roundNumber,
       isModerator: true,
+      roundNumber,
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -571,7 +577,7 @@ describe('state Machine Optimization - getNextAction()', () => {
 
       const action = getNextAction(FlowStates.IDLE, FlowStates.NAVIGATING, context);
 
-      expect(action).toEqual({ type: 'NAVIGATE', slug: 'test-slug' });
+      expect(action).toEqual({ slug: 'test-slug', type: 'NAVIGATE' });
     });
   });
 });
@@ -585,28 +591,28 @@ describe('state Machine Optimization - Context Calculation', () => {
         createModeratorMessage(0, { text: 'Summary' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       // Measure scan count by wrapping in performance check
       const start = performance.now();
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: true,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: 'test-slug',
-        hasAiGeneratedTitle: true,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
       const end = performance.now();
 
-      expect(context.moderatorExists).toBe(true);
-      expect(context.allParticipantsResponded).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
+      expect(context.allParticipantsResponded).toBeTruthy();
       expect(context.participantCount).toBe(2);
 
       // Single pass should be very fast even with multiple messages
@@ -619,26 +625,26 @@ describe('state Machine Optimization - Context Calculation', () => {
         createModeratorMessage(0, { text: 'Moderator' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
       ];
 
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
       // All values computed in single pass
-      expect(context.moderatorExists).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
       expect(context.moderatorStatus).toBe(MessageStatuses.COMPLETE);
-      expect(context.allParticipantsResponded).toBe(true);
+      expect(context.allParticipantsResponded).toBeTruthy();
       expect(context.currentRound).toBe(0);
     });
 
@@ -648,23 +654,23 @@ describe('state Machine Optimization - Context Calculation', () => {
       const participants: ChatParticipant[] = Array.from({ length: 10 }, (_, i) => ({
         id: `p${i}`,
         isEnabled: true,
-        priority: i,
         modelId: `m${i}`,
+        priority: i,
         role: null,
       }));
 
       const start = performance.now();
       buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
       const end = performance.now();
 
@@ -679,23 +685,23 @@ describe('state Machine Optimization - Context Calculation', () => {
         Array.from({ length: count }, (_, i) =>
           createParticipantMessage(0, i, { text: `Response ${i}` }));
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
       ];
 
       // Measure time for small dataset
       const messages10 = createMessages(10);
       const start10 = performance.now();
       buildFlowContext(messages10, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
       const end10 = performance.now();
       const time10 = end10 - start10;
@@ -704,16 +710,16 @@ describe('state Machine Optimization - Context Calculation', () => {
       const messages100 = createMessages(100);
       const start100 = performance.now();
       buildFlowContext(messages100, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
       const end100 = performance.now();
       const time100 = end100 - start100;
@@ -734,24 +740,24 @@ describe('state Machine Optimization - Moderator Message Detection', () => {
         createModeratorMessage(0, { text: 'Moderator' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context.moderatorExists).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
       expect(context.moderatorStatus).toBe(MessageStatuses.COMPLETE);
     });
 
@@ -763,27 +769,27 @@ describe('state Machine Optimization - Moderator Message Detection', () => {
       const participants: ChatParticipant[] = Array.from({ length: 5 }, (_, i) => ({
         id: `p${i}`,
         isEnabled: true,
-        priority: i,
         modelId: `m${i}`,
+        priority: i,
         role: null,
       }));
 
       const start = performance.now();
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
       const end = performance.now();
 
-      expect(context.moderatorExists).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
       // O(n) single pass should complete in < 20ms even with 50+ messages
       expect(end - start).toBeLessThan(20);
     });
@@ -792,24 +798,24 @@ describe('state Machine Optimization - Moderator Message Detection', () => {
   describe('streaming Status Detection', () => {
     it('detects streaming moderator in same pass', () => {
       const messages: UIMessage[] = [
-        createModeratorMessage(0, { text: 'Partial', isStreaming: true }),
+        createModeratorMessage(0, { isStreaming: true, text: 'Partial' }),
       ];
       const participants: ChatParticipant[] = [];
 
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: true,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: true,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context.moderatorExists).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
       expect(context.moderatorStatus).toBe(MessageStatuses.STREAMING);
     });
 
@@ -820,19 +826,19 @@ describe('state Machine Optimization - Moderator Message Detection', () => {
       const participants: ChatParticipant[] = [];
 
       const context = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context.moderatorExists).toBe(true);
+      expect(context.moderatorExists).toBeTruthy();
       expect(context.moderatorStatus).toBe(MessageStatuses.COMPLETE);
     });
   });
@@ -846,24 +852,24 @@ describe('state Machine Optimization - Participant Completion', () => {
         createParticipantMessage(0, 1, { text: 'Response 2' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const result = calculateAllParticipantsResponded(messages, participants, 0);
 
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('does not re-scan messages for each participant (avoid O(n×p))', () => {
       const participants: ChatParticipant[] = Array.from({ length: 10 }, (_, i) => ({
         id: `p${i}`,
         isEnabled: true,
-        priority: i,
         modelId: `m${i}`,
+        priority: i,
         role: null,
       }));
-      const messages: UIMessage[] = participants.map((p, i) =>
+      const messages: UIMessage[] = participants.map((_p, i) =>
         createParticipantMessage(0, i, { text: `Response ${i}` }),
       );
 
@@ -879,11 +885,11 @@ describe('state Machine Optimization - Participant Completion', () => {
       const participants: ChatParticipant[] = Array.from({ length: 50 }, (_, i) => ({
         id: `p${i}`,
         isEnabled: true,
-        priority: i,
         modelId: `m${i}`,
+        priority: i,
         role: null,
       }));
-      const messages: UIMessage[] = participants.map((p, i) =>
+      const messages: UIMessage[] = participants.map((_p, i) =>
         createParticipantMessage(0, i, { text: `Response ${i}` }),
       );
 
@@ -891,7 +897,7 @@ describe('state Machine Optimization - Participant Completion', () => {
       const result = calculateAllParticipantsResponded(messages, participants, 0);
       const end = performance.now();
 
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
       // Even with 50 participants, should complete in < 20ms
       expect(end - start).toBeLessThan(20);
     });
@@ -901,16 +907,16 @@ describe('state Machine Optimization - Participant Completion', () => {
     it('returns false immediately when finds streaming message', () => {
       const messages: UIMessage[] = [
         createParticipantMessage(0, 0, { text: 'Response 1' }),
-        createParticipantMessage(0, 1, { text: 'Streaming', isStreaming: true }),
+        createParticipantMessage(0, 1, { isStreaming: true, text: 'Streaming' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const result = calculateAllParticipantsResponded(messages, participants, 0);
 
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when count is insufficient without scanning remaining messages', () => {
@@ -919,13 +925,13 @@ describe('state Machine Optimization - Participant Completion', () => {
         // Only 1 response for 2 participants
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const result = calculateAllParticipantsResponded(messages, participants, 0);
 
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
@@ -937,13 +943,13 @@ describe('state Machine Optimization - Participant Completion', () => {
         createModeratorMessage(0, { text: 'Moderator' }), // Should NOT count
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const result = calculateAllParticipantsResponded(messages, participants, 0);
 
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
       // If moderator was counted, this would be 3 > 2 and still true
       // But logic should exclude it in same pass, not separate filter
     });
@@ -1007,7 +1013,7 @@ describe('state Machine Optimization - FlowContext Memoization', () => {
   describe('dependency Change Detection', () => {
     it('should recalculate when messages change', () => {
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
       ];
       const messages1: UIMessage[] = [
         createParticipantMessage(0, 0, { text: 'Response 1' }),
@@ -1018,33 +1024,33 @@ describe('state Machine Optimization - FlowContext Memoization', () => {
       ];
 
       const context1 = buildFlowContext(messages1, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
       const context2 = buildFlowContext(messages2, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context1.moderatorExists).toBe(false);
-      expect(context2.moderatorExists).toBe(true);
+      expect(context1.moderatorExists).toBeFalsy();
+      expect(context2.moderatorExists).toBeTruthy();
     });
 
     it('should recalculate when participants change', () => {
@@ -1052,41 +1058,41 @@ describe('state Machine Optimization - FlowContext Memoization', () => {
         createParticipantMessage(0, 0, { text: 'Response 1' }),
       ];
       const participants1: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
       ];
       const participants2: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
-        { id: 'p2', isEnabled: true, priority: 1, modelId: 'm2', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
+        { id: 'p2', isEnabled: true, modelId: 'm2', priority: 1, role: null },
       ];
 
       const context1 = buildFlowContext(messages, participants1, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
       const context2 = buildFlowContext(messages, participants2, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context1.allParticipantsResponded).toBe(true);
-      expect(context2.allParticipantsResponded).toBe(false); // Need 2 responses now
+      expect(context1.allParticipantsResponded).toBeTruthy();
+      expect(context2.allParticipantsResponded).toBeFalsy(); // Need 2 responses now
     });
 
     it('should recalculate when streaming flags change', () => {
@@ -1094,33 +1100,33 @@ describe('state Machine Optimization - FlowContext Memoization', () => {
       const participants: ChatParticipant[] = [];
 
       const context1 = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
       const context2 = buildFlowContext(messages, participants, {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: true,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: true,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW,
       });
 
-      expect(context1.isAiSdkStreaming).toBe(false);
-      expect(context2.isAiSdkStreaming).toBe(true);
+      expect(context1.isAiSdkStreaming).toBeFalsy();
+      expect(context2.isAiSdkStreaming).toBeTruthy();
     });
   });
 
@@ -1130,19 +1136,19 @@ describe('state Machine Optimization - FlowContext Memoization', () => {
         createParticipantMessage(0, 0, { text: 'Response 1' }),
       ];
       const participants: ChatParticipant[] = [
-        { id: 'p1', isEnabled: true, priority: 0, modelId: 'm1', role: null },
+        { id: 'p1', isEnabled: true, modelId: 'm1', priority: 0, role: null },
       ];
       const options = {
+        hasAiGeneratedTitle: false,
+        hasNavigated: false,
+        isAiSdkStreaming: false,
+        isCreatingModerator: false,
+        isCreatingThread: false,
+        pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW as const,
+        streamingJustCompleted: false,
         threadId: 'thread-123',
         threadSlug: null,
-        hasAiGeneratedTitle: false,
-        isCreatingThread: false,
-        isCreatingModerator: false,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        pendingAnimations: new Set(),
-        hasNavigated: false,
-        screenMode: ScreenModes.OVERVIEW as const,
       };
 
       const context1 = buildFlowContext(messages, participants, options);

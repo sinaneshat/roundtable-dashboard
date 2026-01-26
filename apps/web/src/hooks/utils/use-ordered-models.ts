@@ -17,13 +17,14 @@ export type UseOrderedModelsOptions = {
  * Used by ChatOverviewScreen and ChatView for consistent model ordering
  */
 export function useOrderedModels({
-  selectedParticipants,
   allEnabledModels,
   modelOrder,
+  selectedParticipants,
 }: UseOrderedModelsOptions): OrderedModel[] {
   return useMemo((): OrderedModel[] => {
-    if (allEnabledModels.length === 0)
+    if (allEnabledModels.length === 0) {
       return [];
+    }
 
     const participantMap = new Map(
       selectedParticipants.map(p => [p.modelId, p]),
@@ -36,28 +37,31 @@ export function useOrderedModels({
 
     // First, add models in the stored order
     for (const modelId of modelOrder) {
-      if (seen.has(modelId))
+      if (seen.has(modelId)) {
         continue;
+      }
       const model = modelMap.get(modelId);
-      if (!model)
+      if (!model) {
         continue;
+      }
       seen.add(modelId);
       result.push({
         model,
-        participant: participantMap.get(modelId) || null,
         order: result.length,
+        participant: participantMap.get(modelId) || null,
       });
     }
 
     // Then, append any models not yet in the order (newly available models)
     for (const model of allEnabledModels) {
-      if (seen.has(model.id))
+      if (seen.has(model.id)) {
         continue;
+      }
       seen.add(model.id);
       result.push({
         model,
-        participant: participantMap.get(model.id) || null,
         order: result.length,
+        participant: participantMap.get(model.id) || null,
       });
     }
 

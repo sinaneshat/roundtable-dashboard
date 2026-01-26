@@ -12,11 +12,9 @@ import {
  * Admin: Discover trending topics for automated jobs
  */
 export const discoverTrendsRoute = createRoute({
+  description: 'Search social media for trending topics and generate discussion prompts with suggested round counts.',
   method: 'post',
   path: '/admin/jobs/trends/discover',
-  tags: ['admin-jobs'],
-  summary: 'Discover trending topics (admin only)',
-  description: 'Search social media for trending topics and generate discussion prompts with suggested round counts.',
   request: {
     body: {
       content: {
@@ -28,13 +26,15 @@ export const discoverTrendsRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Trends discovered successfully',
       content: {
         'application/json': {
           schema: createApiResponseSchema(DiscoverTrendsResponseSchema),
         },
       },
+      description: 'Trends discovered successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Discover trending topics (admin only)',
+  tags: ['admin-jobs'],
 });

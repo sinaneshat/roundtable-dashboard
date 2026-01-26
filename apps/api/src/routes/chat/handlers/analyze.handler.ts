@@ -79,12 +79,12 @@ const AUTO_MODE_FALLBACK_CONFIG: {
   mode: typeof DEFAULT_CHAT_MODE;
   enableWebSearch: boolean;
 } = {
+  enableWebSearch: false,
+  mode: DEFAULT_CHAT_MODE,
   participants: [
     { modelId: 'openai/gpt-4o-mini', role: null },
     { modelId: 'google/gemini-2.0-flash-001', role: null },
   ],
-  mode: DEFAULT_CHAT_MODE,
-  enableWebSearch: false,
 };
 
 // ============================================================================
@@ -92,12 +92,12 @@ const AUTO_MODE_FALLBACK_CONFIG: {
 // ============================================================================
 
 const AIAnalysisOutputSchema = z.object({
+  enableWebSearch: z.boolean(),
+  mode: z.string(),
   participants: z.array(z.object({
     modelId: z.string(),
     role: z.string().nullable(),
   })).min(MIN_PARTICIPANTS_REQUIRED).max(12), // Max (12) matches MAX_PARTICIPANTS_LIMIT from product-logic.service.ts
-  mode: z.string(),
-  enableWebSearch: z.boolean(),
 });
 
 // ============================================================================
@@ -108,11 +108,11 @@ function getModelInfo(accessibleModelIds: string[]): AnalyzeModelInfo[] {
   return HARDCODED_MODELS
     .filter(m => accessibleModelIds.includes(m.id))
     .map(m => ({
-      id: m.id,
-      name: m.name,
       description: m.description || '',
-      isReasoning: m.is_reasoning_model,
       hasVision: m.supports_vision,
+      id: m.id,
+      isReasoning: m.is_reasoning_model,
+      name: m.name,
     }));
 }
 
@@ -124,8 +124,9 @@ function getModelInfo(accessibleModelIds: string[]): AnalyzeModelInfo[] {
  * Type guard for ShortRoleName validation using Zod schema
  */
 function isValidShortRoleName(role: string | null | undefined): role is (typeof SHORT_ROLE_NAMES)[number] {
-  if (!role)
+  if (!role) {
     return false;
+  }
   return ShortRoleNameSchema.safeParse(role).success;
 }
 
@@ -133,8 +134,9 @@ function isValidShortRoleName(role: string | null | undefined): role is (typeof 
  * Type guard for ChatMode validation using Zod schema
  */
 function isValidChatMode(mode: string | undefined): mode is ChatMode {
-  if (!mode)
+  if (!mode) {
     return false;
+  }
   return ChatModeSchema.safeParse(mode).success;
 }
 
@@ -152,12 +154,15 @@ function validateAndCleanConfig(
   const validParticipants: RecommendedParticipant[] = [];
 
   for (const p of partial.participants) {
-    if (!p || !p.modelId)
+    if (!p?.modelId) {
       continue;
-    if (!accessibleModelIds.includes(p.modelId))
+    }
+    if (!accessibleModelIds.includes(p.modelId)) {
       continue;
-    if (validParticipants.length >= maxModels)
+    }
+    if (validParticipants.length >= maxModels) {
       break;
+    }
 
     // Type guard narrows p.role to valid ShortRoleName or returns null
     const validatedRole: string | null = isValidShortRoleName(p.role) ? (p.role ?? null) : null;
@@ -177,9 +182,9 @@ function validateAndCleanConfig(
   const validatedMode = isValidChatMode(partial.mode) ? partial.mode : DEFAULT_CHAT_MODE;
 
   return {
-    participants: validParticipants,
-    mode: validatedMode,
     enableWebSearch: partial.enableWebSearch ?? false,
+    mode: validatedMode,
+    participants: validParticipants,
   };
 }
 
@@ -190,15 +195,15 @@ function validateAndCleanConfig(
 export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: AnalyzePromptRequestSchema,
     operationName: 'analyzePrompt',
+    validateBody: AnalyzePromptRequestSchema,
   },
   async (c) => {
     // ✅ LAZY LOAD AI SDK: Load at handler invocation, not module startup
     const { Output, streamText } = await getAiSdk();
 
     const { user } = c.auth();
-    const { prompt, hasImageFiles, hasDocumentFiles } = c.validated.body;
+    const { hasDocumentFiles, hasImageFiles, prompt } = c.validated.body;
 
     const requiresVision = hasImageFiles;
     const requiresFile = hasDocumentFiles;
@@ -221,14 +226,14 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
     // Filter models accessible to user's tier
     const accessibleModels = HARDCODED_MODELS.filter((model) => {
       const modelForPricing: ModelForPricing = {
+        capabilities: model.capabilities,
+        context_length: model.context_length,
+        created: model.created,
         id: model.id,
         name: model.name,
         pricing: model.pricing,
-        context_length: model.context_length,
-        created: model.created,
         pricing_display: model.pricing_display,
         provider: model.provider,
-        capabilities: model.capabilities,
       };
       return canAccessModelByPricing(userTier, modelForPricing);
     });
@@ -263,14 +268,14 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
 
       // Helper for sending SSE events
       const writeSSE = async (event: string, data: string) => {
-        await stream.writeSSE({ event, data });
+        await stream.writeSSE({ data, event });
       };
 
       try {
         // Send start event
         await writeSSE(AnalyzePromptSseEvents.START, JSON.stringify({
-          timestamp: Date.now(),
           prompt: prompt.substring(0, 100),
+          timestamp: Date.now(),
         }));
 
         // Initialize OpenRouter
@@ -279,13 +284,13 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
 
         // ✅ STREAM: Use streamText with Output.object() for structured output
         const analysisStream = streamText({
-          model: client.chat(PROMPT_ANALYSIS_MODEL_ID),
-          output: Output.object({ schema: AIAnalysisOutputSchema }),
-          system: systemPrompt,
-          prompt,
-          temperature: ANALYSIS_TEMPERATURE,
           // ✅ STREAMING TIMEOUT: 30 min for prompt analysis
           abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.default),
+          model: client.chat(PROMPT_ANALYSIS_MODEL_ID),
+          output: Output.object({ schema: AIAnalysisOutputSchema }),
+          prompt,
+          system: systemPrompt,
+          temperature: ANALYSIS_TEMPERATURE,
         });
 
         // Track best partial result for fallback
@@ -309,9 +314,9 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
               if (configJson !== lastSentConfig) {
                 lastSentConfig = configJson;
                 await writeSSE(AnalyzePromptSseEvents.CONFIG, JSON.stringify({
-                  timestamp: Date.now(),
                   config: validated,
                   partial: true,
+                  timestamp: Date.now(),
                 }));
               }
             }
@@ -348,10 +353,10 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
             if (shouldBill && (safeInputTokens > 0 || safeOutputTokens > 0)) {
               c.executionCtx.waitUntil(
                 finalizeCredits(user.id, `analyze-prompt-${ulid()}`, {
-                  inputTokens: safeInputTokens,
-                  outputTokens: safeOutputTokens,
                   action: CreditActions.AI_RESPONSE,
+                  inputTokens: safeInputTokens,
                   modelId: PROMPT_ANALYSIS_MODEL_ID,
+                  outputTokens: safeOutputTokens,
                 }),
               );
             }
@@ -364,33 +369,33 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
             c.executionCtx.waitUntil(
               trackLLMGeneration(
                 {
-                  userId: user.id,
-                  threadId: `analyze-${ulid()}`,
-                  roundNumber: 0,
-                  threadMode: 'prompt_analysis',
+                  modelId: PROMPT_ANALYSIS_MODEL_ID,
                   participantId: 'system',
                   participantIndex: 0,
-                  modelId: PROMPT_ANALYSIS_MODEL_ID,
+                  roundNumber: 0,
+                  threadId: `analyze-${ulid()}`,
+                  threadMode: 'prompt_analysis',
+                  userId: user.id,
                   userTier,
                 },
                 {
-                  text: JSON.stringify(finalConfig),
                   finishReason: 'stop',
+                  text: JSON.stringify(finalConfig),
                   usage: {
                     inputTokens: safeInputTokens,
                     outputTokens: safeOutputTokens,
                   },
                 },
-                [{ role: 'user', content: prompt }],
+                [{ content: prompt, role: 'user' }],
                 traceId,
                 startTime,
                 {
-                  modelPricing: analysisPricing,
                   additionalProperties: {
-                    operation_type: 'prompt_analysis',
-                    has_image_files: hasImageFiles,
                     has_document_files: hasDocumentFiles,
+                    has_image_files: hasImageFiles,
+                    operation_type: 'prompt_analysis',
                   },
+                  modelPricing: analysisPricing,
                 },
               ),
             );
@@ -401,18 +406,18 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
 
         // Send final done event with complete config
         await writeSSE(AnalyzePromptSseEvents.DONE, JSON.stringify({
-          timestamp: Date.now(),
           config: finalConfig,
           duration: performance.now() - startTime,
+          timestamp: Date.now(),
         }));
       } catch (error) {
         console.error('[Analyze] Handler error:', error);
 
         // Send error event with fallback config
         await writeSSE(AnalyzePromptSseEvents.FAILED, JSON.stringify({
-          timestamp: Date.now(),
-          error: error instanceof Error ? error.message : 'Analysis failed',
           config: AUTO_MODE_FALLBACK_CONFIG,
+          error: error instanceof Error ? error.message : 'Analysis failed',
+          timestamp: Date.now(),
         }));
       }
     });

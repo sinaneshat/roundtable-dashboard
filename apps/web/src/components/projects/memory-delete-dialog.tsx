@@ -14,27 +14,28 @@ type MemoryDeleteDialogProps = {
 };
 
 export function MemoryDeleteDialog({
-  open,
-  onOpenChange,
-  projectId,
   memoryId,
+  onOpenChange,
+  open,
+  projectId,
 }: MemoryDeleteDialogProps) {
   const t = useTranslations();
   const mutation = useDeleteProjectMemoryMutation();
 
   const handleConfirm = () => {
-    if (!memoryId)
+    if (!memoryId) {
       return;
+    }
 
     mutation.mutate(
       { param: { id: projectId, memoryId } },
       {
+        onError: () => {
+          toastManager.error(t('projects.memoryRemoveError'));
+        },
         onSuccess: () => {
           toastManager.success(t('projects.memoryRemoved'));
           onOpenChange(false);
-        },
-        onError: () => {
-          toastManager.error(t('projects.memoryRemoveError'));
         },
       },
     );

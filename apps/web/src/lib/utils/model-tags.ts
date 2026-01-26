@@ -6,21 +6,32 @@
  */
 
 import type { ModelCapabilityTag } from '@roundtable/shared';
-import { ModelCapabilityTags } from '@roundtable/shared';
+import { ModelCapabilityTags, ModelCapabilityTagSchema } from '@roundtable/shared';
+import { z } from 'zod';
 
 import type { Model } from '@/services/api';
+
+/**
+ * Schema for validating model tags array from API response
+ */
+const ModelTagsArraySchema = z.array(ModelCapabilityTagSchema);
 
 /**
  * Derive capability tags from model properties
  * Uses API-provided tags when available, derives locally as fallback
  */
 export function getModelTags(model: Model | undefined): ModelCapabilityTag[] {
-  if (!model)
+  if (!model) {
     return [];
+  }
 
-  // Use pre-computed tags from backend if available
+  // Use pre-computed tags from backend if available - validate with Zod
   if (model.tags && Array.isArray(model.tags)) {
-    return model.tags as ModelCapabilityTag[];
+    const parseResult = ModelTagsArraySchema.safeParse(model.tags);
+    if (parseResult.success) {
+      return parseResult.data;
+    }
+    // Fall through to derive locally if tags validation fails
   }
 
   // Derive locally if API doesn't provide tags

@@ -45,55 +45,55 @@ function isNonRenderableReasoningPart(part: MessagePart): boolean {
 }
 
 type ModelMessageCardProps = {
-  model?: Model;
-  role?: string | null;
+  model?: Model | undefined;
+  role?: string | null | undefined;
   participantIndex: number;
   status: MessageStatus;
-  parts?: MessagePart[];
+  parts?: MessagePart[] | undefined;
   avatarSrc: string;
   avatarName: string;
-  className?: string;
-  messageId?: string;
-  metadata?: DbMessageMetadata | null;
-  isAccessible?: boolean;
-  hideInlineHeader?: boolean;
-  hideAvatar?: boolean;
+  className?: string | undefined;
+  messageId?: string | undefined;
+  metadata?: DbMessageMetadata | null | undefined;
+  isAccessible?: boolean | undefined;
+  hideInlineHeader?: boolean | undefined;
+  hideAvatar?: boolean | undefined;
   /** Hide the copy action (used for moderator where council actions handle it) */
-  hideActions?: boolean;
+  hideActions?: boolean | undefined;
   /** Custom loading text to display instead of "Generating response from {model}..." */
-  loadingText?: string;
+  loadingText?: string | undefined;
   /** Max height for scrollable content area. When set, wraps content in ScrollArea */
-  maxContentHeight?: number;
+  maxContentHeight?: number | undefined;
   /**
    * Fallback sources from group messages for streaming citation display
    * When streaming, message metadata isn't populated yet, so we use sources
    * collected from all messages in the same group as fallback.
    */
-  groupAvailableSources?: AvailableSource[];
+  groupAvailableSources?: AvailableSource[] | undefined;
   /** Skip opacity transitions for SSR/read-only pages to prevent hydration delay */
-  skipTransitions?: boolean;
+  skipTransitions?: boolean | undefined;
 };
 const DEFAULT_PARTS: MessagePart[] = [];
 
 export const ModelMessageCard = memo(({
-  model,
-  role,
-  participantIndex,
-  status,
-  parts = DEFAULT_PARTS,
-  avatarSrc,
   avatarName,
+  avatarSrc,
   className,
-  messageId,
-  metadata,
-  isAccessible,
-  hideInlineHeader = false,
-  hideAvatar = false,
+  groupAvailableSources,
   hideActions = false,
+  hideAvatar = false,
+  hideInlineHeader = false,
+  isAccessible,
   loadingText,
   maxContentHeight,
-  groupAvailableSources,
+  messageId,
+  metadata,
+  model,
+  participantIndex,
+  parts = DEFAULT_PARTS,
+  role,
   skipTransitions = false,
+  status,
 }: ModelMessageCardProps) => {
   const t = useTranslations();
   const isMounted = useIsMounted();
@@ -102,9 +102,9 @@ export const ModelMessageCard = memo(({
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
   const storeData = useChatStoreOptional(
     useShallow(s => ({
+      completeAnimation: s.completeAnimation,
       globalIsStreaming: s.isStreaming,
       registerAnimation: s.registerAnimation,
-      completeAnimation: s.completeAnimation,
     })),
   );
 
@@ -305,14 +305,14 @@ export const ModelMessageCard = memo(({
 
   function renderContentParts() {
     const MESSAGE_PART_ORDER: Readonly<Record<MessagePartType, number>> = {
+      [MessagePartTypes.FILE]: 4,
       [MessagePartTypes.REASONING]: 0,
+      [MessagePartTypes.SOURCE_DOCUMENT]: 7,
+      [MessagePartTypes.SOURCE_URL]: 6,
+      [MessagePartTypes.STEP_START]: 5,
       [MessagePartTypes.TEXT]: 1,
       [MessagePartTypes.TOOL_CALL]: 2,
       [MessagePartTypes.TOOL_RESULT]: 3,
-      [MessagePartTypes.FILE]: 4,
-      [MessagePartTypes.STEP_START]: 5,
-      [MessagePartTypes.SOURCE_URL]: 6,
-      [MessagePartTypes.SOURCE_DOCUMENT]: 7,
     };
     const sortedParts = [...renderableParts].sort((a, b) => {
       return MESSAGE_PART_ORDER[a.type] - MESSAGE_PART_ORDER[b.type];

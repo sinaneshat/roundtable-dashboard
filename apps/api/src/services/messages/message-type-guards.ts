@@ -13,8 +13,9 @@ export function isDbPreSearchMessage(message: ChatMessage): boolean {
 }
 
 export function isDbParticipantMessage(message: ChatMessage): boolean {
-  if (!message.participantId)
+  if (!message.participantId) {
     return false;
+  }
   return getParticipantMetadata(message.metadata) !== null;
 }
 

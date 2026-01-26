@@ -114,12 +114,12 @@ export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
   const hasAnyContent = hasTextContent || hasToolCalls;
 
   return {
-    textParts,
     displayableParts,
-    sourceParts,
+    hasAnyContent,
     hasTextContent,
     hasToolCalls,
-    hasAnyContent,
+    sourceParts,
+    textParts,
   };
 }
 
@@ -179,9 +179,9 @@ export type MessageStatusInput = {
  * ```
  */
 export function getMessageStatus({
-  message,
-  isStreaming = false,
   hasAnyContent = true,
+  isStreaming = false,
+  message,
 }: MessageStatusInput): MessageStatus {
   // Extract metadata using type-safe utility
   // getAssistantMetadata already returns AssistantMessageMetadata | null with validation
@@ -237,9 +237,9 @@ export function analyzeMessage(
 ): { parts: MessagePartsAnalysis; status: MessageStatus } {
   const parts = getMessageParts(message);
   const status = getMessageStatus({
-    message,
-    isStreaming,
     hasAnyContent: parts.hasAnyContent,
+    isStreaming,
+    message,
   });
 
   return { parts, status };

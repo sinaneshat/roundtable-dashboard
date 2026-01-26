@@ -42,25 +42,27 @@ export function useSidebarThreadsQuery(search?: string) {
     // Use shared SSR options for non-search, custom options for search
     ...(isSearchQuery
       ? {
-          queryKey: queryKeys.threads.sidebar(search),
+          // Search queries are client-only, gate on auth
+          enabled: isAuthenticated,
+          getNextPageParam: (lastPage: Awaited<ReturnType<typeof listSidebarThreadsService>> | undefined) => {
+            if (!lastPage?.success) {
+              return undefined;
+            }
+            return lastPage.data?.pagination?.nextCursor;
+          },
+          initialPageParam: undefined as string | undefined,
           queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
             const params: { cursor?: string; search: string; limit: number } = {
               limit: LIMITS.SEARCH_RESULTS,
               search: search ?? '',
             };
-            if (pageParam)
+            if (pageParam) {
               params.cursor = pageParam;
+            }
             return listSidebarThreadsService({ query: params });
           },
-          initialPageParam: undefined as string | undefined,
-          getNextPageParam: (lastPage: Awaited<ReturnType<typeof listSidebarThreadsService>> | undefined) => {
-            if (!lastPage?.success)
-              return undefined;
-            return lastPage.data?.pagination?.nextCursor;
-          },
+          queryKey: queryKeys.threads.sidebar(search),
           staleTime: STALE_TIMES.threadsSidebar,
-          // Search queries are client-only, gate on auth
-          enabled: isAuthenticated,
         }
       : sidebarThreadsQueryOptions),
     // Non-search queries: DON'T gate on auth - SSR prefetched on protected route

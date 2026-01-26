@@ -27,10 +27,10 @@ import type { TimelineItem } from '@/hooks/utils';
  */
 function createMockTimelineItems(count: number): TimelineItem[] {
   return Array.from({ length: count }, (_, index) => ({
-    type: 'messages' as const,
     data: [],
     key: `round-${index + 1}-messages`,
     roundNumber: index + 1,
+    type: 'messages' as const,
   }));
 }
 
@@ -53,7 +53,7 @@ function shouldAdjustScrollPosition(params: {
   scrollOffset: number;
   scrollDirection: 'forward' | 'backward' | null;
 }): boolean {
-  const { isStreaming, isStreamingFromStore, itemStart, scrollOffset, scrollDirection } = params;
+  const { isStreaming, isStreamingFromStore, itemStart, scrollDirection, scrollOffset } = params;
 
   // Check BOTH ref and store for streaming state (race condition fix)
   const isCurrentlyStreaming = isStreaming || (isStreamingFromStore ?? false);
@@ -83,7 +83,7 @@ function getEffectiveTotalSize(params: {
   effectiveTotalSize: number;
   updatedMinTotalSize: number | null;
 } {
-  const { newTotalSize, isStreaming, isStreamingFromStore, minTotalSize } = params;
+  const { isStreaming, isStreamingFromStore, minTotalSize, newTotalSize } = params;
 
   // Check BOTH ref and store for streaming state
   const isCurrentlyStreaming = isStreaming || (isStreamingFromStore ?? false);
@@ -125,41 +125,41 @@ function hasCountChanged(prevCount: number, newCount: number): boolean {
 
 describe('virtualizer enablement logic', () => {
   it('enables virtualizer when data is ready and items exist', () => {
-    expect(shouldEnableVirtualizer(true, 5)).toBe(true);
+    expect(shouldEnableVirtualizer(true, 5)).toBeTruthy();
   });
 
   it('disables virtualizer when data is not ready', () => {
-    expect(shouldEnableVirtualizer(false, 5)).toBe(false);
+    expect(shouldEnableVirtualizer(false, 5)).toBeFalsy();
   });
 
   it('disables virtualizer when no items exist', () => {
-    expect(shouldEnableVirtualizer(true, 0)).toBe(false);
+    expect(shouldEnableVirtualizer(true, 0)).toBeFalsy();
   });
 
   it('disables virtualizer when both conditions fail', () => {
-    expect(shouldEnableVirtualizer(false, 0)).toBe(false);
+    expect(shouldEnableVirtualizer(false, 0)).toBeFalsy();
   });
 });
 
 describe('count change detection', () => {
   it('detects count increase', () => {
-    expect(hasCountChanged(3, 5)).toBe(true);
+    expect(hasCountChanged(3, 5)).toBeTruthy();
   });
 
   it('detects count decrease', () => {
-    expect(hasCountChanged(5, 3)).toBe(true);
+    expect(hasCountChanged(5, 3)).toBeTruthy();
   });
 
   it('detects no change when count same', () => {
-    expect(hasCountChanged(3, 3)).toBe(false);
+    expect(hasCountChanged(3, 3)).toBeFalsy();
   });
 
   it('handles zero to non-zero transition', () => {
-    expect(hasCountChanged(0, 1)).toBe(true);
+    expect(hasCountChanged(0, 1)).toBeTruthy();
   });
 
   it('handles non-zero to zero transition', () => {
-    expect(hasCountChanged(1, 0)).toBe(true);
+    expect(hasCountChanged(1, 0)).toBeTruthy();
   });
 });
 
@@ -169,10 +169,10 @@ describe('scroll position adjustment logic', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('prevents scroll adjustment when store says streaming', () => {
@@ -180,10 +180,10 @@ describe('scroll position adjustment logic', () => {
         isStreaming: false, // Prop says not streaming
         isStreamingFromStore: true, // But store says streaming
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('prevents scroll adjustment when BOTH indicate streaming', () => {
@@ -191,10 +191,10 @@ describe('scroll position adjustment logic', () => {
         isStreaming: true,
         isStreamingFromStore: true,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('prevents scroll adjustment regardless of item position', () => {
@@ -202,17 +202,17 @@ describe('scroll position adjustment logic', () => {
       expect(shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
-      })).toBe(false);
+        scrollOffset: 300,
+      })).toBeFalsy();
 
       // Item below viewport
       expect(shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart: 400,
-        scrollOffset: 300,
         scrollDirection: 'backward',
-      })).toBe(false);
+        scrollOffset: 300,
+      })).toBeFalsy();
     });
 
     it('prevents scroll adjustment regardless of scroll direction', () => {
@@ -220,17 +220,17 @@ describe('scroll position adjustment logic', () => {
       expect(shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
-      })).toBe(false);
+        scrollOffset: 300,
+      })).toBeFalsy();
 
       // Forward scroll
       expect(shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'forward',
-      })).toBe(false);
+        scrollOffset: 300,
+      })).toBeFalsy();
     });
   });
 
@@ -239,50 +239,50 @@ describe('scroll position adjustment logic', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('does not adjust for item below viewport during backward scroll', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 400,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('does not adjust for item above viewport during forward scroll', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'forward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('does not adjust for item below viewport during forward scroll', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 400,
-        scrollOffset: 300,
         scrollDirection: 'forward',
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('does not adjust when scroll direction is null', () => {
       const result = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: null,
+        scrollOffset: 300,
       });
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 });
@@ -291,9 +291,9 @@ describe('totalSize Behavior During Streaming', () => {
   describe('streaming Active with Minimum Captured', () => {
     it('allows totalSize to grow above minimum', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 1200,
         isStreaming: true,
         minTotalSize: 1000,
+        newTotalSize: 1200,
       });
 
       expect(result.effectiveTotalSize).toBe(1200);
@@ -302,9 +302,9 @@ describe('totalSize Behavior During Streaming', () => {
 
     it('prevents totalSize from shrinking below minimum', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 800,
         isStreaming: true,
         minTotalSize: 1000,
+        newTotalSize: 800,
       });
 
       expect(result.effectiveTotalSize).toBe(1000); // Clamped to minimum
@@ -313,9 +313,9 @@ describe('totalSize Behavior During Streaming', () => {
 
     it('maintains totalSize when equal to minimum', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: true,
         minTotalSize: 1000,
+        newTotalSize: 1000,
       });
 
       expect(result.effectiveTotalSize).toBe(1000);
@@ -326,9 +326,9 @@ describe('totalSize Behavior During Streaming', () => {
   describe('streaming Just Started (No Minimum)', () => {
     it('captures current totalSize as minimum', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: true,
         minTotalSize: null,
+        newTotalSize: 1000,
       });
 
       expect(result.effectiveTotalSize).toBe(1000);
@@ -337,9 +337,9 @@ describe('totalSize Behavior During Streaming', () => {
 
     it('handles zero totalSize when streaming starts', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 0,
         isStreaming: true,
         minTotalSize: null,
+        newTotalSize: 0,
       });
 
       expect(result.effectiveTotalSize).toBe(0);
@@ -350,9 +350,9 @@ describe('totalSize Behavior During Streaming', () => {
   describe('streaming Ended', () => {
     it('resets minimum and uses actual totalSize', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 800,
         isStreaming: false,
         minTotalSize: 1000, // Had a minimum, but streaming ended
+        newTotalSize: 800,
       });
 
       expect(result.effectiveTotalSize).toBe(800); // Uses actual size
@@ -361,9 +361,9 @@ describe('totalSize Behavior During Streaming', () => {
 
     it('allows totalSize to decrease after streaming ends', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 500,
         isStreaming: false,
         minTotalSize: 1000,
+        newTotalSize: 500,
       });
 
       expect(result.effectiveTotalSize).toBe(500);
@@ -374,10 +374,10 @@ describe('totalSize Behavior During Streaming', () => {
   describe('store-Based Streaming Check', () => {
     it('uses store value when prop is false but store is true', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 800,
         isStreaming: false, // Prop says not streaming
         isStreamingFromStore: true, // But store says streaming
         minTotalSize: 1000,
+        newTotalSize: 800,
       });
 
       // Should prevent shrinking because store says streaming
@@ -387,10 +387,10 @@ describe('totalSize Behavior During Streaming', () => {
 
     it('falls back to prop when store not provided', () => {
       const result = getEffectiveTotalSize({
-        newTotalSize: 800,
         isStreaming: true,
         // No isStreamingFromStore
         minTotalSize: 1000,
+        newTotalSize: 800,
       });
 
       // Should prevent shrinking because prop says streaming
@@ -447,18 +447,18 @@ describe('edge cases and regression scenarios', () => {
       const newCount = 4;
 
       // This change should trigger the useLayoutEffect in the hook
-      expect(hasCountChanged(prevCount, newCount)).toBe(true);
+      expect(hasCountChanged(prevCount, newCount)).toBeTruthy();
     });
 
     it('handles multiple rapid count changes', () => {
       const changes = [
-        { prev: 3, new: 5 },
-        { prev: 5, new: 7 },
-        { prev: 7, new: 4 },
+        { new: 5, prev: 3 },
+        { new: 7, prev: 5 },
+        { new: 4, prev: 7 },
       ];
 
-      changes.forEach(({ prev, new: newCount }) => {
-        expect(hasCountChanged(prev, newCount)).toBe(true);
+      changes.forEach(({ new: newCount, prev }) => {
+        expect(hasCountChanged(prev, newCount)).toBeTruthy();
       });
     });
   });
@@ -467,9 +467,9 @@ describe('edge cases and regression scenarios', () => {
     it('handles streaming start (captures minimum)', () => {
       // Not streaming → streaming (should capture minimum)
       const result = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: true,
         minTotalSize: null, // Was null before streaming started
+        newTotalSize: 1000,
       });
 
       expect(result.updatedMinTotalSize).toBe(1000);
@@ -478,9 +478,9 @@ describe('edge cases and regression scenarios', () => {
     it('handles streaming end (resets minimum)', () => {
       // Streaming → not streaming (should reset minimum)
       const result = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: false,
         minTotalSize: 1000, // Had minimum during streaming
+        newTotalSize: 1000,
       });
 
       expect(result.updatedMinTotalSize).toBeNull();
@@ -489,25 +489,25 @@ describe('edge cases and regression scenarios', () => {
     it('handles rapid streaming toggles', () => {
       // Start streaming
       const start = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: true,
         minTotalSize: null,
+        newTotalSize: 1000,
       });
       expect(start.updatedMinTotalSize).toBe(1000);
 
       // End streaming
       const end = getEffectiveTotalSize({
-        newTotalSize: 1000,
         isStreaming: false,
         minTotalSize: start.updatedMinTotalSize,
+        newTotalSize: 1000,
       });
       expect(end.updatedMinTotalSize).toBeNull();
 
       // Start again
       const restart = getEffectiveTotalSize({
-        newTotalSize: 1200,
         isStreaming: true,
         minTotalSize: end.updatedMinTotalSize,
+        newTotalSize: 1200,
       });
       expect(restart.updatedMinTotalSize).toBe(1200);
     });
@@ -522,12 +522,12 @@ describe('edge cases and regression scenarios', () => {
       const shouldAdjust = shouldAdjustScrollPosition({
         isStreaming: true,
         itemStart,
-        scrollOffset,
         scrollDirection: 'backward',
+        scrollOffset,
       });
 
       // Should NOT adjust to prevent scroll jump
-      expect(shouldAdjust).toBe(false);
+      expect(shouldAdjust).toBeFalsy();
     });
 
     it('prevents jumps during moderator streaming', () => {
@@ -536,11 +536,11 @@ describe('edge cases and regression scenarios', () => {
         isStreaming: false, // Participant not streaming
         isStreamingFromStore: true, // But moderator is streaming
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
 
-      expect(shouldAdjust).toBe(false);
+      expect(shouldAdjust).toBeFalsy();
     });
 
     it('allows normal adjustments when not streaming', () => {
@@ -548,12 +548,12 @@ describe('edge cases and regression scenarios', () => {
       const shouldAdjust = shouldAdjustScrollPosition({
         isStreaming: false,
         itemStart: 100,
-        scrollOffset: 300,
         scrollDirection: 'backward',
+        scrollOffset: 300,
       });
 
       // Should adjust for reading experience
-      expect(shouldAdjust).toBe(true);
+      expect(shouldAdjust).toBeTruthy();
     });
   });
 });

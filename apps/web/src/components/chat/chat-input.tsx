@@ -59,40 +59,40 @@ const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
 const EMPTY_ATTACHMENTS: PendingAttachment[] = [];
 
 export const ChatInput = memo(({
-  value,
-  onChange,
-  onSubmit,
-  status,
-  onStop,
-  placeholder,
-  disabled = false,
-  autoFocus = false,
-  toolbar,
-  participants = EMPTY_PARTICIPANTS,
-  className,
-  enableSpeech = true,
-  minHeight = 72,
-  maxHeight = 200,
-  showCreditAlert: _showCreditAlert = false,
-  attachments = EMPTY_ATTACHMENTS,
-  onAddAttachments,
-  onRemoveAttachment,
-  enableAttachments = true,
   attachmentClickRef,
-  isUploading = false,
-  isHydrating = false,
-  isSubmitting = false,
-  isModelsLoading = false,
-  hideInternalAlerts: _hideInternalAlerts = false,
-  borderVariant = BorderVariants.DEFAULT,
+  attachments = EMPTY_ATTACHMENTS,
+  autoFocus = false,
   autoMode = false,
+  borderVariant = BorderVariants.DEFAULT,
+  className,
+  disabled = false,
+  enableAttachments = true,
+  enableSpeech = true,
+  hideInternalAlerts: _hideInternalAlerts = false,
+  isHydrating = false,
+  isModelsLoading = false,
+  isSubmitting = false,
+  isUploading = false,
+  maxHeight = 200,
+  minHeight = 72,
+  onAddAttachments,
+  onChange,
+  onRemoveAttachment,
+  onStop,
+  onSubmit,
+  participants = EMPTY_PARTICIPANTS,
+  placeholder,
+  showCreditAlert: _showCreditAlert = false,
+  status,
+  toolbar,
+  value,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isStreaming = status !== AiSdkStatuses.READY;
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { isFreeUser, hasUsedTrial } = useFreeTrialState();
+  const { hasUsedTrial, isFreeUser } = useFreeTrialState();
 
   const handleCapture = useCallback((capturedValue: string) => {
     onChange(capturedValue);
@@ -100,9 +100,9 @@ export const ChatInput = memo(({
   useHydrationInputCapture(textareaRef, handleCapture, value);
 
   const creditEstimate = useCreditEstimation({
-    participants,
     autoMode: false,
     enableWebSearch: false,
+    participants,
   });
 
   const isQuotaExceeded = useMemo(() => {
@@ -142,8 +142,9 @@ export const ChatInput = memo(({
   }, []);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (!enableAttachments || !onAddAttachments)
+    if (!enableAttachments || !onAddAttachments) {
       return;
+    }
 
     const files = Array.from(e.clipboardData.files);
     if (files.length > 0) {
@@ -158,24 +159,24 @@ export const ChatInput = memo(({
     }
   }, [attachmentClickRef, enableAttachments, handleAttachmentClick]);
 
-  const { isDragging, dragHandlers } = useDragDrop(handleFilesSelected);
+  const { dragHandlers, isDragging } = useDragDrop(handleFilesSelected);
 
   useAutoResizeTextarea(textareaRef, {
-    value,
-    minHeight,
     maxHeight,
+    minHeight,
+    value,
   });
 
   const baseTextRef = useRef('');
 
   const {
-    isListening,
-    isSupported: isSpeechSupported,
-    toggle: toggleSpeech,
-    reset: resetTranscripts,
     audioLevels,
     finalTranscript,
     interimTranscript,
+    isListening,
+    isSupported: isSpeechSupported,
+    reset: resetTranscripts,
+    toggle: toggleSpeech,
   } = useSpeechRecognition({
     continuous: true,
     enableAudioVisualization: true,
@@ -185,10 +186,10 @@ export const ChatInput = memo(({
     onChange(newValue);
   });
 
-  const prevIsListening = useRef(false);
+  const prevIsListeningRef = useRef(false);
   useEffect(() => {
-    const wasListening = prevIsListening.current;
-    prevIsListening.current = isListening;
+    const wasListening = prevIsListeningRef.current;
+    prevIsListeningRef.current = isListening;
 
     if (!wasListening && isListening) {
       baseTextRef.current = value;
@@ -200,8 +201,9 @@ export const ChatInput = memo(({
   }, [isListening, value, finalTranscript, resetTranscripts]);
 
   useEffect(() => {
-    if (!isListening)
+    if (!isListening) {
       return;
+    }
 
     const parts = [baseTextRef.current, finalTranscript, interimTranscript].filter(Boolean);
     const displayText = parts.join(' ').trim();
@@ -273,7 +275,7 @@ export const ChatInput = memo(({
           {attachments.length > 0 && (
             <ChatInputAttachments
               attachments={attachments}
-              onRemove={enableAttachments ? onRemoveAttachment : undefined}
+              {...(enableAttachments && onRemoveAttachment ? { onRemove: onRemoveAttachment } : {})}
             />
           )}
 

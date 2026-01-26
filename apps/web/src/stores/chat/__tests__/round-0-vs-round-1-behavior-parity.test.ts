@@ -41,43 +41,43 @@ function createTestStore(initialState?: Partial<ChatStore>) {
 
 function createMockThread(): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: 'brainstorming',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: 'brainstorming',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
   } as ChatThread;
 }
 
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'test-thread-123',
-      modelId: 'claude-3-5-sonnet',
-      role: 'Critic',
-      priority: 1,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'claude-3-5-sonnet',
+      priority: 1,
+      role: 'Critic',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -87,13 +87,13 @@ function createUserMessage(roundNumber: number, text: string, isOptimistic = fal
   const baseId = isOptimistic ? `optimistic-user-${Date.now()}` : `user-msg-round-${roundNumber}`;
   return {
     id: baseId,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
       ...(isOptimistic ? { isOptimistic: true } : {}),
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -104,21 +104,21 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `assistant-msg-round-${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex + 1}`,
-      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
-      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
       finishReason: 'stop',
       hasError: false,
-      isTransient: false,
       isPartialResponse: false,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      isTransient: false,
+      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
+      participantId: `participant-${participantIndex + 1}`,
+      participantIndex,
+      participantRole: participantIndex === 0 ? 'Analyst' : 'Critic',
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -182,8 +182,8 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
       const round0Present = store.getState().messages.some(m => m.id === round0Optimistic.id);
       const round1Present = store.getState().messages.some(m => m.id === round1Optimistic.id);
 
-      expect(round0Present).toBe(true);
-      expect(round1Present).toBe(true);
+      expect(round0Present).toBeTruthy();
+      expect(round1Present).toBeTruthy();
     });
 
     it('pARITY: user message should survive ID change from optimistic to DB ID (both rounds)', () => {
@@ -241,23 +241,25 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
       // Simulate AI SDK adding participant trigger message
       const participantTrigger: UIMessage = {
         id: 'trigger-msg-123',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       store.getState().setMessages([...store.getState().messages, participantTrigger]);
 
       // CRITICAL CHECK: Original user message MUST still be present
       const userMessagesAfterTrigger = store.getState().messages.filter((m) => {
-        if (m.role !== MessageRoles.USER)
+        if (m.role !== MessageRoles.USER) {
           return false;
-        if (getRoundNumber(m.metadata) !== 1)
+        }
+        if (getRoundNumber(m.metadata) !== 1) {
           return false;
+        }
         const metadata = m.metadata as { isParticipantTrigger?: boolean };
         return !metadata.isParticipantTrigger;
       });
@@ -320,16 +322,16 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
       // Round 0 persisted (not optimistic) should NOT skip animation
       const shouldSkipAnimation = isOptimistic || (roundNumber !== null && roundNumber > 0);
 
-      expect(shouldSkipAnimation).toBe(false);
+      expect(shouldSkipAnimation).toBeFalsy();
     });
 
     it('cRITICAL: round 1+ messages should ALWAYS skip animation', () => {
       // Test multiple scenarios for round 1+
       const scenarios = [
-        { round: 1, optimistic: false, desc: 'round 1 persisted' },
-        { round: 1, optimistic: true, desc: 'round 1 optimistic' },
-        { round: 2, optimistic: false, desc: 'round 2 persisted' },
-        { round: 5, optimistic: true, desc: 'round 5 optimistic' },
+        { desc: 'round 1 persisted', optimistic: false, round: 1 },
+        { desc: 'round 1 optimistic', optimistic: true, round: 1 },
+        { desc: 'round 2 persisted', optimistic: false, round: 2 },
+        { desc: 'round 5 optimistic', optimistic: true, round: 5 },
       ];
 
       for (const scenario of scenarios) {
@@ -339,7 +341,7 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
 
         const shouldSkipAnimation = isOptimistic || (roundNumber !== null && roundNumber > 0);
 
-        expect(shouldSkipAnimation).toBe(true);
+        expect(shouldSkipAnimation).toBeTruthy();
       }
     });
 
@@ -350,7 +352,7 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
         const optimisticMsg = createUserMessage(roundNum, `Round ${roundNum}`, true);
         const isOptimistic = (optimisticMsg.metadata as { isOptimistic?: boolean })?.isOptimistic;
 
-        expect(isOptimistic).toBe(true);
+        expect(isOptimistic).toBeTruthy();
       }
     });
   });
@@ -457,8 +459,8 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
       );
 
       // CRITICAL: Round 1 must be in timeline
-      expect(uniqueRounds.has(0)).toBe(true);
-      expect(uniqueRounds.has(1)).toBe(true);
+      expect(uniqueRounds.has(0)).toBeTruthy();
+      expect(uniqueRounds.has(1)).toBeTruthy();
     });
   });
 
@@ -538,9 +540,9 @@ describe('round 0 vs Round 1+ Behavior Parity', () => {
     it('should return null for missing roundNumber (default to 0 in UI)', () => {
       const messageWithoutRound: UIMessage = {
         id: 'msg-no-round',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'No round' }],
         metadata: { role: MessageRoles.USER },
+        parts: [{ text: 'No round', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const extracted = getRoundNumber(messageWithoutRound.metadata);

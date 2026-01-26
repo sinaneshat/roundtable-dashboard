@@ -26,11 +26,11 @@ export function useInView<T extends Element = Element>(
   options: UseInViewOptions = {},
 ): UseInViewReturn<T> {
   const {
+    initialValue = false,
+    once = true,
     root = null,
     rootMargin = '0px',
     threshold = 0,
-    once = true,
-    initialValue = false,
   } = options;
 
   const ref = useRef<T | null>(null);
@@ -68,5 +68,5 @@ export function useInView<T extends Element = Element>(
     return () => observer.disconnect();
   }, [root, rootMargin, threshold, once, isInView]);
 
-  return { ref, isInView };
+  return { isInView, ref };
 }

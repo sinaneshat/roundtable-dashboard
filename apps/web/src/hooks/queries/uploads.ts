@@ -34,28 +34,31 @@ export function useUploadsQuery(status?: ChatAttachmentStatus) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.uploads.lists(), status],
+    enabled: isAuthenticated,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: async ({ pageParam }) => {
       const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
 
       const query: { cursor?: string; status?: ChatAttachmentStatus; limit: number } = { limit };
-      if (pageParam)
+      if (pageParam) {
         query.cursor = pageParam;
-      if (status)
+      }
+      if (status) {
         query.status = status;
+      }
 
       return listAttachmentsService({ query });
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: isAuthenticated,
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryKey: [...queryKeys.uploads.lists(), status],
     retry: false,
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds
     throwOnError: false,
   });
 }
@@ -78,15 +81,15 @@ export function useDownloadUrlQuery(uploadId: string, enabled: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.uploads.downloadUrl(uploadId),
+    enabled: enabled && isAuthenticated && !!uploadId,
+    gcTime: GC_TIMES.STANDARD, // Keep in cache for 5 minutes
     queryFn: () => getDownloadUrlService({ param: { id: uploadId } }),
+    queryKey: queryKeys.uploads.downloadUrl(uploadId),
+    retry: 1, // Only retry once for URL fetch failures
     // ✅ RATE LIMIT FIX: Cache for 2 minutes to prevent excessive refetches
     // Signed URLs are valid for 1 hour, so this is safe and prevents
     // rate limit issues when components re-render during streaming
     staleTime: STALE_TIME_PRESETS.medium, // 2 minutes - safe since URLs valid for 1 hour
-    gcTime: GC_TIMES.STANDARD, // Keep in cache for 5 minutes
-    enabled: enabled && isAuthenticated && !!uploadId,
-    retry: 1, // Only retry once for URL fetch failures
     throwOnError: false,
   });
 }

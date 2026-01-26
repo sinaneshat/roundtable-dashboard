@@ -22,7 +22,7 @@ export type WebSearchImageGalleryProps = {
   className?: string;
 };
 
-export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
+export function WebSearchImageGallery({ className, results }: WebSearchImageGalleryProps) {
   const tImages = useTranslations('chat.tools.webSearch.images');
   const [failedImages, setFailedImages] = useState(() => new Set<string>());
   const [loadedImages, setLoadedImages] = useState(() => new Set<string>());
@@ -41,21 +41,21 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
 
     if (result.metadata?.imageUrl) {
       images.push({
-        url: result.metadata.imageUrl,
-        title: result.title,
-        sourceUrl: result.url,
         domain,
+        sourceUrl: result.url,
+        title: result.title,
+        url: result.metadata.imageUrl,
       });
     }
 
     if (result.images && result.images.length > 0) {
       result.images.forEach((img: { url: string; description?: string; alt?: string }) => {
         images.push({
-          url: img.url,
-          title: result.title,
-          sourceUrl: result.url,
           alt: img.alt,
           domain,
+          sourceUrl: result.url,
+          title: result.title,
+          url: img.url,
         });
       });
     }

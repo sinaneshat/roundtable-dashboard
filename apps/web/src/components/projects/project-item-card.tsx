@@ -48,19 +48,19 @@ type ProjectItemCardProps = {
 const DEFAULT_CONTENT_THRESHOLD = 300;
 
 export function ProjectItemCard({
-  icon,
-  iconBgClass = 'bg-primary/10',
-  thumbnail,
-  title,
+  actions,
+  badges,
+  children,
+  className,
   content,
   contentThreshold = DEFAULT_CONTENT_THRESHOLD,
-  badges,
-  subtitle,
-  actions,
-  showActionsOnHover = false,
+  icon,
+  iconBgClass = 'bg-primary/10',
   onClick,
-  className,
-  children,
+  showActionsOnHover = false,
+  subtitle,
+  thumbnail,
+  title,
 }: ProjectItemCardProps) {
   const t = useTranslations();
   const isExpanded = useBoolean(false);

@@ -143,12 +143,12 @@ async function setThreadActiveStream(
   participantStatuses[participantIndex] = ParticipantStreamStatuses.ACTIVE;
 
   const activeStream: ThreadActiveStream = {
-    streamId,
-    roundNumber,
-    participantIndex,
     createdAt: existing?.roundNumber === roundNumber ? existing.createdAt : new Date().toISOString(),
-    totalParticipants,
+    participantIndex,
     participantStatuses,
+    roundNumber,
+    streamId,
+    totalParticipants,
   };
 
   await kv.put(getThreadActiveStreamKey(threadId), JSON.stringify(activeStream));
@@ -162,7 +162,7 @@ async function getThreadActiveStream(kv: MockKVStore, threadId: string): Promise
 async function updateParticipantStatus(
   kv: MockKVStore,
   threadId: string,
-  roundNumber: number,
+  _roundNumber: number,
   participantIndex: number,
   status: typeof ParticipantStreamStatuses.COMPLETED | typeof ParticipantStreamStatuses.FAILED,
 ): Promise<boolean> {
@@ -209,8 +209,8 @@ async function getNextParticipantToStream(
     const status = existing.participantStatuses[i];
     if (status === ParticipantStreamStatuses.ACTIVE || status === undefined) {
       return {
-        roundNumber: existing.roundNumber,
         participantIndex: i,
+        roundNumber: existing.roundNumber,
         totalParticipants: existing.totalParticipants,
       };
     }
@@ -231,14 +231,14 @@ async function initializeStreamBuffer(
   participantIndex: number,
 ): Promise<void> {
   const meta: StreamBufferMetadata = {
+    chunkCount: 0,
+    completedAt: null,
+    createdAt: new Date().toISOString(),
+    participantIndex,
+    roundNumber,
+    status: 'active',
     streamId,
     threadId,
-    roundNumber,
-    participantIndex,
-    status: 'active',
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    chunkCount: 0,
   };
   await kv.put(getStreamBufferMetaKey(streamId), JSON.stringify(meta));
   await kv.put(getStreamBufferChunksKey(streamId), JSON.stringify([]));
@@ -332,12 +332,12 @@ async function simulateResumeEndpoint(
 
   // Return live stream indication
   return {
-    status: 200,
     metadata: {
-      roundNumber: nextParticipant.roundNumber,
       participantIndex: nextParticipant.participantIndex,
       phase: 'participant',
+      roundNumber: nextParticipant.roundNumber,
     },
+    status: 200,
   };
 }
 
@@ -415,8 +415,9 @@ describe('thread Active Stream Tracking', () => {
 
       const active = await getThreadActiveStream(kv, 'thread-123');
       expect(active?.createdAt).toBeDefined();
-      if (!active)
+      if (!active) {
         throw new Error('expected active stream');
+      }
       expect(new Date(active.createdAt).getTime()).toBeGreaterThanOrEqual(new Date(before).getTime());
     });
   });
@@ -490,7 +491,7 @@ describe('multi-Participant Coordination', () => {
         ParticipantStreamStatuses.COMPLETED,
       );
 
-      expect(allFinished).toBe(false);
+      expect(allFinished).toBeFalsy();
       // Active stream should still exist
       const active = await getThreadActiveStream(kv, 'thread-123');
       expect(active).not.toBeNull();
@@ -502,14 +503,14 @@ describe('multi-Participant Coordination', () => {
 
       // P0 completes
       let allFinished = await updateParticipantStatus(kv, 'thread-123', 0, 0, ParticipantStreamStatuses.COMPLETED);
-      expect(allFinished).toBe(false);
+      expect(allFinished).toBeFalsy();
 
       // P1 starts
       await setThreadActiveStream(kv, 'thread-123', 'thread-123_r0_p1', 0, 1, 2);
 
       // P1 completes - now all finished
       allFinished = await updateParticipantStatus(kv, 'thread-123', 0, 1, ParticipantStreamStatuses.COMPLETED);
-      expect(allFinished).toBe(true);
+      expect(allFinished).toBeTruthy();
 
       // Active stream should be cleared
       const active = await getThreadActiveStream(kv, 'thread-123');
@@ -526,13 +527,13 @@ describe('multi-Participant Coordination', () => {
 
       // P1 completes
       const allFinished = await updateParticipantStatus(kv, 'thread-123', 0, 1, ParticipantStreamStatuses.COMPLETED);
-      expect(allFinished).toBe(true);
+      expect(allFinished).toBeTruthy();
     });
 
     it('returns false for non-existent active stream', async () => {
       const kv = new MockKVStore();
       const result = await updateParticipantStatus(kv, 'non-existent', 0, 0, ParticipantStreamStatuses.COMPLETED);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
@@ -622,8 +623,8 @@ describe('multi-Participant Coordination', () => {
       expect(next?.participantIndex).toBe(3);
       const allFinished = await updateParticipantStatus(kv, threadId, 0, 3, ParticipantStreamStatuses.COMPLETED);
 
-      expect(allFinished).toBe(true);
-      expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+      expect(allFinished).toBeTruthy();
+      await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
     });
 
     it('tracks partial completion state for resume', async () => {
@@ -750,48 +751,48 @@ describe('stream Buffer (consumeSseStream)', () => {
 describe('stale Stream Detection', () => {
   it('detects fresh stream as not stale', () => {
     const meta: StreamBufferMetadata = {
+      chunkCount: 5,
+      completedAt: null,
+      createdAt: new Date().toISOString(),
+      participantIndex: 0,
+      roundNumber: 0,
+      status: 'active',
       streamId: 'test',
       threadId: 'thread-123',
-      roundNumber: 0,
-      participantIndex: 0,
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-      chunkCount: 5,
     };
 
-    expect(isStreamStale(meta)).toBe(false);
+    expect(isStreamStale(meta)).toBeFalsy();
   });
 
   it('detects stream older than 30s as stale', () => {
     const meta: StreamBufferMetadata = {
+      chunkCount: 0,
+      completedAt: null,
+      createdAt: new Date(Date.now() - 35000).toISOString(), // 35 seconds ago
+      participantIndex: 0,
+      roundNumber: 0,
+      status: 'active',
       streamId: 'test',
       threadId: 'thread-123',
-      roundNumber: 0,
-      participantIndex: 0,
-      status: 'active',
-      createdAt: new Date(Date.now() - 35000).toISOString(), // 35 seconds ago
-      completedAt: null,
-      chunkCount: 0,
     };
 
-    expect(isStreamStale(meta)).toBe(true);
+    expect(isStreamStale(meta)).toBeTruthy();
   });
 
   it('stream at exactly 30s boundary is stale', () => {
     const meta: StreamBufferMetadata = {
+      chunkCount: 10,
+      completedAt: null,
+      createdAt: new Date(Date.now() - 30000).toISOString(), // exactly 30 seconds ago
+      participantIndex: 0,
+      roundNumber: 0,
+      status: 'active',
       streamId: 'test',
       threadId: 'thread-123',
-      roundNumber: 0,
-      participantIndex: 0,
-      status: 'active',
-      createdAt: new Date(Date.now() - 30000).toISOString(), // exactly 30 seconds ago
-      completedAt: null,
-      chunkCount: 10,
     };
 
     // At exactly 30s boundary, consider it stale due to >= check
-    expect(isStreamStale(meta)).toBe(true);
+    expect(isStreamStale(meta)).toBeTruthy();
   });
 });
 
@@ -861,14 +862,14 @@ describe('resume Endpoint Behavior (GET)', () => {
 
       // Create buffer with old timestamp (stale)
       const meta: StreamBufferMetadata = {
+        chunkCount: 0,
+        completedAt: null,
+        createdAt: new Date(Date.now() - 35000).toISOString(), // 35s ago - stale
+        participantIndex: 0,
+        roundNumber: 0,
+        status: 'active',
         streamId,
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
-        status: 'active',
-        createdAt: new Date(Date.now() - 35000).toISOString(), // 35s ago - stale
-        completedAt: null,
-        chunkCount: 0,
       };
       await kv.put(getStreamBufferMetaKey(streamId), JSON.stringify(meta));
 
@@ -919,8 +920,8 @@ describe('phase Transitions', () => {
       await setThreadActiveStream(kv, threadId, `${threadId}_r0_p3`, 0, 3, 4);
       const allDone = await updateParticipantStatus(kv, threadId, 0, 3, ParticipantStreamStatuses.COMPLETED);
 
-      expect(allDone).toBe(true);
-      expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+      expect(allDone).toBeTruthy();
+      await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
 
       // Moderator can now start (would use separate tracking)
     });
@@ -938,7 +939,7 @@ describe('phase Transitions', () => {
       }
 
       // Should be cleared
-      expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+      await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
 
       // Round 1 can start fresh
       await setThreadActiveStream(kv, threadId, `${threadId}_r1_p0`, 1, 0, 4);
@@ -969,8 +970,8 @@ describe('onFinish Callback Behavior', () => {
       ParticipantStreamStatuses.COMPLETED,
     );
 
-    expect(roundComplete).toBe(true);
-    expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+    expect(roundComplete).toBeTruthy();
+    await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
   });
 
   it('preserves activeStreamId until last participant finishes', async () => {
@@ -989,14 +990,14 @@ describe('onFinish Callback Behavior', () => {
     }
 
     // Active stream should still exist
-    expect(await getThreadActiveStream(kv, threadId)).not.toBeNull();
+    await expect(getThreadActiveStream(kv, threadId)).resolves.not.toBeNull();
 
     // P3 finishes
     await setThreadActiveStream(kv, threadId, `${threadId}_r0_p3`, 0, 3, 4);
     await updateParticipantStatus(kv, threadId, 0, 3, ParticipantStreamStatuses.COMPLETED);
 
     // Now cleared
-    expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+    await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
   });
 });
 
@@ -1046,8 +1047,8 @@ describe('race Condition Prevention', () => {
     const allDone = await updateParticipantStatus(kv, threadId, 0, 1, ParticipantStreamStatuses.COMPLETED);
 
     // Both finished (failed + completed = all done)
-    expect(allDone).toBe(true);
-    expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+    expect(allDone).toBeTruthy();
+    await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
   });
 });
 
@@ -1079,8 +1080,8 @@ describe('edge Cases', () => {
       await setThreadActiveStream(kv, threadId, `${threadId}_r0_p0`, 0, 0, 1);
       const allDone = await updateParticipantStatus(kv, threadId, 0, 0, ParticipantStreamStatuses.COMPLETED);
 
-      expect(allDone).toBe(true);
-      expect(await getThreadActiveStream(kv, threadId)).toBeNull();
+      expect(allDone).toBeTruthy();
+      await expect(getThreadActiveStream(kv, threadId)).resolves.toBeNull();
     });
   });
 
@@ -1162,7 +1163,7 @@ describe('edge Cases', () => {
         // Application must choose one or the other
       };
 
-      expect(useChatConfig.resume).toBe(true);
+      expect(useChatConfig.resume).toBeTruthy();
 
       // The trade-off:
       // - resume: true = can reconnect to active streams after page reload

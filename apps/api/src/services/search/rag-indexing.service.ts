@@ -19,6 +19,7 @@
 import type { AiSearchCheckStatus, ProjectIndexStatus } from '@roundtable/shared/enums';
 import { AiSearchCheckStatuses, LogTypes, ProjectIndexStatuses } from '@roundtable/shared/enums';
 import { and, eq, inArray } from 'drizzle-orm';
+import * as z from 'zod';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -28,37 +29,80 @@ import type { TypedLogger } from '@/types/logger';
 // The Ai class includes autorag() method that returns AutoRAG with list/search/aiSearch
 
 // ============================================================================
-// Type Definitions
+// Zod Schemas - Type Definitions
 // ============================================================================
 
-export type RagIndexingParams = {
-  db: Awaited<ReturnType<typeof getDbAsync>>;
-  logger?: TypedLogger;
-};
+/**
+ * Base parameters for RAG indexing operations
+ */
+export const RagIndexingParamsSchema = z.object({
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  logger: z.union([z.custom<TypedLogger>(), z.undefined()]).optional(),
+});
 
-export type UpdateIndexStatusParams = RagIndexingParams & {
-  projectAttachmentId: string;
-  status: ProjectIndexStatus;
-};
+export type RagIndexingParams = z.infer<typeof RagIndexingParamsSchema>;
 
-export type SyncProjectFilesParams = RagIndexingParams & {
-  projectId: string;
+/**
+ * Parameters for updating index status
+ */
+export const UpdateIndexStatusParamsSchema = RagIndexingParamsSchema.extend({
+  projectAttachmentId: z.string().min(1),
+  status: z.custom<ProjectIndexStatus>(),
+});
+
+export type UpdateIndexStatusParams = z.infer<typeof UpdateIndexStatusParamsSchema>;
+
+/**
+ * Parameters for syncing project files with AI Search
+ */
+export const SyncProjectFilesParamsSchema = RagIndexingParamsSchema.extend({
   /** ✅ Uses global Ai type from cloudflare-env.d.ts */
-  ai?: Ai;
-};
+  ai: z.custom<Ai>().optional(),
+  projectId: z.string().min(1),
+});
 
-export type GetIndexStatusParams = RagIndexingParams & {
-  projectId: string;
-};
+export type SyncProjectFilesParams = z.infer<typeof SyncProjectFilesParamsSchema>;
 
-export type IndexStatusSummary = {
-  total: number;
-  pending: number;
-  inProgress: number;
-  indexed: number;
-  failed: number;
-  lastIndexedAt: Date | null;
-};
+/**
+ * Parameters for getting project index status
+ */
+export const GetIndexStatusParamsSchema = RagIndexingParamsSchema.extend({
+  projectId: z.string().min(1),
+});
+
+export type GetIndexStatusParams = z.infer<typeof GetIndexStatusParamsSchema>;
+
+/**
+ * Parameters for marking attachments as pending
+ */
+export const MarkAttachmentsPendingParamsSchema = RagIndexingParamsSchema.extend({
+  attachmentIds: z.array(z.string()),
+});
+
+export type MarkAttachmentsPendingParams = z.infer<typeof MarkAttachmentsPendingParamsSchema>;
+
+/**
+ * Parameters for verifying project file locations
+ */
+export const VerifyProjectFileLocationsParamsSchema = RagIndexingParamsSchema.extend({
+  projectId: z.string().min(1),
+});
+
+export type VerifyProjectFileLocationsParams = z.infer<typeof VerifyProjectFileLocationsParamsSchema>;
+
+/**
+ * Index status summary schema
+ */
+export const IndexStatusSummarySchema = z.object({
+  failed: z.number().int().nonnegative(),
+  indexed: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  lastIndexedAt: z.date().nullable(),
+  pending: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+});
+
+export type IndexStatusSummary = z.infer<typeof IndexStatusSummarySchema>;
 
 // ============================================================================
 // Index Status Management
@@ -73,7 +117,7 @@ export type IndexStatusSummary = {
 export async function updateIndexStatus(
   params: UpdateIndexStatusParams,
 ): Promise<void> {
-  const { projectAttachmentId, status, db, logger } = params;
+  const { db, logger, projectAttachmentId, status } = params;
 
   await db
     .update(tables.projectAttachment)
@@ -98,12 +142,13 @@ export async function updateIndexStatus(
  * Since AI Search indexes every 6 hours, we mark as 'pending' until indexed.
  */
 export async function markAttachmentsPending(
-  params: RagIndexingParams & { attachmentIds: string[] },
+  params: MarkAttachmentsPendingParams,
 ): Promise<void> {
   const { attachmentIds, db, logger } = params;
 
-  if (attachmentIds.length === 0)
+  if (attachmentIds.length === 0) {
     return;
+  }
 
   await db
     .update(tables.projectAttachment)
@@ -114,9 +159,9 @@ export async function markAttachmentsPending(
     .where(inArray(tables.projectAttachment.id, attachmentIds));
 
   logger?.info('Marked attachments as pending indexing', {
+    count: attachmentIds.length,
     logType: LogTypes.OPERATION,
     operationName: 'markAttachmentsPending',
-    count: attachmentIds.length,
   });
 }
 
@@ -128,15 +173,15 @@ export async function markAttachmentsPending(
 export async function getProjectIndexStatus(
   params: GetIndexStatusParams,
 ): Promise<IndexStatusSummary> {
-  const { projectId, db } = params;
+  const { db, projectId } = params;
 
   const attachments = await db.query.projectAttachment.findMany({
-    where: eq(tables.projectAttachment.projectId, projectId),
     columns: {
       indexStatus: true,
       updatedAt: true,
     },
     orderBy: (t, { desc }) => [desc(t.updatedAt)],
+    where: eq(tables.projectAttachment.projectId, projectId),
   });
 
   let pending = 0;
@@ -166,12 +211,12 @@ export async function getProjectIndexStatus(
   }
 
   return {
-    total: attachments.length,
-    pending,
-    inProgress: indexing,
-    indexed,
     failed,
+    indexed,
+    inProgress: indexing,
     lastIndexedAt,
+    pending,
+    total: attachments.length,
   };
 }
 
@@ -204,27 +249,27 @@ export async function checkAiSearchInstance(
 
     if (!instance) {
       logger?.warn('AI Search instance not found', {
+        availableInstances: instances.map(i => i.id),
+        instanceId,
         logType: LogTypes.OPERATION,
         operationName: 'checkAiSearchInstance',
-        instanceId,
-        availableInstances: instances.map(i => i.id),
       });
-      return { available: false, status: AiSearchCheckStatuses.NOT_FOUND, paused: false };
+      return { available: false, paused: false, status: AiSearchCheckStatuses.NOT_FOUND };
     }
 
     return {
       available: instance.enable,
-      status: instance.status,
       paused: instance.paused,
+      status: instance.status,
     };
   } catch (error) {
     logger?.warn('Failed to check AI Search instance', {
+      error: error instanceof Error ? error.message : String(error),
+      instanceId,
       logType: LogTypes.OPERATION,
       operationName: 'checkAiSearchInstance',
-      instanceId,
-      error: error instanceof Error ? error.message : String(error),
     });
-    return { available: false, status: AiSearchCheckStatuses.ERROR, paused: false };
+    return { available: false, paused: false, status: AiSearchCheckStatuses.ERROR };
   }
 }
 
@@ -235,20 +280,20 @@ export async function checkAiSearchInstance(
  * Files must be in projects/{projectId}/ folder to be included in search.
  */
 export async function verifyProjectFileLocations(
-  params: RagIndexingParams & { projectId: string },
+  params: VerifyProjectFileLocationsParams,
 ): Promise<{
   correctlyLocated: number;
   incorrectlyLocated: string[];
 }> {
-  const { projectId, db, logger } = params;
+  const { db, logger, projectId } = params;
 
   // Get project with its R2 folder prefix
   const project = await db.query.chatProject.findFirst({
-    where: eq(tables.chatProject.id, projectId),
     columns: {
       id: true,
       r2FolderPrefix: true,
     },
+    where: eq(tables.chatProject.id, projectId),
   });
 
   if (!project) {
@@ -281,11 +326,11 @@ export async function verifyProjectFileLocations(
 
   if (incorrectlyLocated.length > 0) {
     logger?.warn('Found attachments in incorrect R2 location', {
+      expectedPrefix: project.r2FolderPrefix,
+      incorrectCount: incorrectlyLocated.length,
       logType: LogTypes.OPERATION,
       operationName: 'verifyProjectFileLocations',
       projectId,
-      expectedPrefix: project.r2FolderPrefix,
-      incorrectCount: incorrectlyLocated.length,
     });
   }
 
@@ -311,7 +356,7 @@ export async function syncIndexingStatus(
   synced: number;
   updated: number;
 }> {
-  const { projectId, ai, db, logger } = params;
+  const { ai, db, logger, projectId } = params;
 
   if (!ai) {
     logger?.warn('AI binding not available for sync', {
@@ -323,12 +368,12 @@ export async function syncIndexingStatus(
   }
 
   const project = await db.query.chatProject.findFirst({
-    where: eq(tables.chatProject.id, projectId),
     columns: {
-      id: true,
       autoragInstanceId: true,
+      id: true,
       r2FolderPrefix: true,
     },
+    where: eq(tables.chatProject.id, projectId),
   });
 
   if (!project?.autoragInstanceId) {
@@ -359,23 +404,24 @@ export async function syncIndexingStatus(
 
   // For each pending attachment, try to search for it to verify indexing
   for (const att of pendingAttachments) {
-    if (!att.upload)
+    if (!att.upload) {
       continue;
+    }
 
     try {
       // Search for the specific file by name
       // Uses "starts with" filter pattern per Cloudflare docs:
       // https://developers.cloudflare.com/ai-search/how-to/multitenancy/
       const searchResult = await ai.autorag(project.autoragInstanceId).search({
-        query: att.upload.filename,
-        max_num_results: 1,
         filters: {
-          type: 'and',
           filters: [
             { key: 'folder', type: 'gt', value: `${project.r2FolderPrefix}//` },
             { key: 'folder', type: 'lte', value: `${project.r2FolderPrefix}/z` },
           ],
+          type: 'and',
         },
+        max_num_results: 1,
+        query: att.upload.filename,
       });
 
       // If we found results matching this filename, mark as indexed
@@ -385,20 +431,20 @@ export async function syncIndexingStatus(
 
       if (found) {
         await updateIndexStatus({
-          projectAttachmentId: att.id,
-          status: ProjectIndexStatuses.INDEXED,
           db,
           logger,
+          projectAttachmentId: att.id,
+          status: ProjectIndexStatuses.INDEXED,
         });
         updated++;
       }
     } catch (error) {
       // If search fails for this file, it might not be indexed yet
       logger?.debug('Search verification failed for attachment', {
-        logType: LogTypes.OPERATION,
-        operationName: 'syncIndexingStatus',
         attachmentId: att.id,
         error: error instanceof Error ? error.message : String(error),
+        logType: LogTypes.OPERATION,
+        operationName: 'syncIndexingStatus',
       });
     }
   }

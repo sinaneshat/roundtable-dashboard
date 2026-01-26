@@ -54,57 +54,57 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // P0 fails with error
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error: Rate limit exceeded',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       // P1 succeeds
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'This is my successful response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // P2 succeeds
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'I agree with P1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // P3 succeeds
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Great points from P1 and P2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
 
       // Round completes with 1 error + 3 successes
       expect(getStoreState(store).messages).toHaveLength(5);
-      expect((getStoreState(store).messages[1]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[1]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
       expect((getStoreState(store).messages[2]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);
       expect((getStoreState(store).messages[3]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);
       expect((getStoreState(store).messages[4]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);
@@ -114,57 +114,57 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // P0 succeeds
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'First response success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // P1 fails (middle participant)
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: '', // Empty content due to error
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p1',
+        participantId: 'participant-1',
+        participantIndex: 1,
+        roundNumber: 0,
       });
 
       // P2 succeeds (should see P0 and failed P1 in context)
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Response after P1 failure',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // P3 succeeds
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Final response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
 
       expect(getStoreState(store).messages).toHaveLength(5);
       // Verify P1 failed but round continued
-      expect((getStoreState(store).messages[2]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[2]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
       expect((getStoreState(store).messages[3]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);
     });
 
@@ -172,53 +172,53 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'First success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Second success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Third success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // Last participant fails
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Partial response before timeout...',
-        roundNumber: 0,
-        participantId: 'participant-3',
-        participantIndex: 3,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p3',
+        participantId: 'participant-3',
+        participantIndex: 3,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
 
       expect(getStoreState(store).messages).toHaveLength(5);
-      expect((getStoreState(store).messages[4]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[4]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
     });
   });
 
@@ -227,53 +227,53 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error: Connection timeout',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Successful response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: '', // Content filter triggered
-        roundNumber: 0,
+        finishReason: FinishReasons.CONTENT_FILTER,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.CONTENT_FILTER,
+        roundNumber: 0,
       });
 
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Another successful response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
 
       expect(getStoreState(store).messages).toHaveLength(5);
       // 2 failures
-      expect((getStoreState(store).messages[1]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[1]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
       expect((getStoreState(store).messages[3]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.CONTENT_FILTER);
       // 2 successes
       expect((getStoreState(store).messages[2]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);
@@ -284,48 +284,48 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'First success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // Consecutive failures
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Error: Model unavailable',
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p1',
+        participantId: 'participant-1',
+        participantIndex: 1,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Error: Rate limited',
-        roundNumber: 0,
-        participantId: 'participant-2',
-        participantIndex: 2,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p2',
+        participantId: 'participant-2',
+        participantIndex: 2,
+        roundNumber: 0,
       });
 
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Final success despite previous failures',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
@@ -341,47 +341,47 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // Different error types
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: '', // Content filter
-        roundNumber: 0,
+        finishReason: FinishReasons.CONTENT_FILTER,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.CONTENT_FILTER,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Very long response that was truncated because it exceeded the maximum token limit...',
-        roundNumber: 0,
+        finishReason: FinishReasons.LENGTH,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.LENGTH,
+        roundNumber: 0,
       });
 
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Normal successful completion',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
@@ -405,26 +405,26 @@ describe('participant Sequential Error Recovery', () => {
       state.setCurrentParticipantIndex(0);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // P0 fails
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message]);
 
       // Streaming should continue (not stopped by single failure)
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
 
       // Move to next participant
       state.setCurrentParticipantIndex(1);
@@ -432,18 +432,18 @@ describe('participant Sequential Error Recovery', () => {
 
       // P1 succeeds
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message]);
 
       // Still streaming for remaining participants
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
     });
 
     it('completeStreaming clears state after all participants (including failures)', () => {
@@ -456,7 +456,7 @@ describe('participant Sequential Error Recovery', () => {
       // All participants done (mixed success/failure)
       state.completeStreaming();
 
-      expect(getStoreState(store).isStreaming).toBe(false);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
       expect(getStoreState(store).streamingRoundNumber).toBeNull();
     });
   });
@@ -466,58 +466,58 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // P0 fails, P1-P3 succeed
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p3Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p3',
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p3',
         participantId: 'participant-3',
         participantIndex: 3,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message, p3Message]);
 
       // Moderator creation should not be blocked by P0 failure
       const canCreateModerator = !state.hasModeratorBeenCreated(0);
-      expect(canCreateModerator).toBe(true);
+      expect(canCreateModerator).toBeTruthy();
 
       // Mark moderator created
       const wasMarked = state.tryMarkModeratorCreated(0);
-      expect(wasMarked).toBe(true);
+      expect(wasMarked).toBeTruthy();
     });
   });
 
@@ -528,50 +528,50 @@ describe('participant Sequential Error Recovery', () => {
 
       // Pre-search completes successfully
       state.addPreSearch({
+        completedAt: new Date(),
+        createdAt: new Date(),
+        errorMessage: null,
         id: 'presearch-0',
-        threadId: 'thread-123',
         roundNumber: 0,
-        status: MessageStatuses.COMPLETE,
-        userQuery: 'test query',
         searchData: {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          moderatorSummary: 'Test',
-          successCount: 1,
           failureCount: 0,
+          moderatorSummary: 'Test',
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
           totalResults: 3,
           totalTime: 5000,
         },
-        errorMessage: null,
-        createdAt: new Date(),
-        completedAt: new Date(),
+        status: MessageStatuses.COMPLETE,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       });
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test with web search',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // P0 fails despite successful pre-search
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
 
       // P1 succeeds with pre-search context
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Based on web search results...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message]);
@@ -586,29 +586,29 @@ describe('participant Sequential Error Recovery', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       // Round 0 with partial failures
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'thread-123_r0_p1',
+        participantId: 'participant-1',
+        participantIndex: 1,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message]);
@@ -617,7 +617,7 @@ describe('participant Sequential Error Recovery', () => {
       state.setIsRegenerating(true);
       state.setRegeneratingRoundNumber(0);
 
-      expect(getStoreState(store).isRegenerating).toBe(true);
+      expect(getStoreState(store).isRegenerating).toBeTruthy();
       expect(getStoreState(store).regeneratingRoundNumber).toBe(0);
 
       // Clear failed messages (simulating backend deletion)
@@ -625,21 +625,21 @@ describe('participant Sequential Error Recovery', () => {
 
       // Regenerate all participants (including previously failed P1)
       const newP0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0_regenerated',
         content: 'New attempt - success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0_regenerated',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const newP1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1_regenerated',
         content: 'Retry succeeded this time',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1_regenerated',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, newP0Message, newP1Message]);
@@ -648,7 +648,7 @@ describe('participant Sequential Error Recovery', () => {
       state.setIsRegenerating(false);
       state.setRegeneratingRoundNumber(null);
 
-      expect(getStoreState(store).isRegenerating).toBe(false);
+      expect(getStoreState(store).isRegenerating).toBeFalsy();
       expect(getStoreState(store).messages).toHaveLength(3);
       // Both participants succeeded on retry
       expect((getStoreState(store).messages[1]?.metadata as { finishReason: string }).finishReason).toBe(FinishReasons.STOP);

@@ -1,9 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { use } from 'react';
+import { z } from 'zod';
 
 import { ChatStoreContext } from '@/components/providers/chat-store-provider/context';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type { AddParticipantResponse, UpdateThreadResponse } from '@/services/api';
+import type {
+  AddParticipantResponse,
+  DeleteParticipantRequest,
+  UpdateParticipantRequest,
+  UpdateThreadResponse,
+} from '@/services/api';
 import {
   addParticipantService,
   createCustomRoleService,
@@ -28,41 +34,45 @@ import {
   validateThreadsListPages,
 } from '@/stores/chat';
 
-/**
- * Input type for toggle favorite mutation
- * Convenience wrapper around updateThreadService
- */
-type ToggleFavoriteInput = {
-  threadId: string;
-  isFavorite: boolean;
-  slug?: string;
-};
+// ============================================================================
+// INPUT TYPE SCHEMAS - Zod-based extensions for cache invalidation context
+// ============================================================================
 
 /**
- * Input type for toggle public mutation
- * Convenience wrapper around updateThreadService
+ * Toggle favorite input schema
  */
-type TogglePublicInput = {
-  threadId: string;
-  isPublic: boolean;
-  slug?: string;
-};
+const _ToggleFavoriteInputSchema = z.object({
+  isFavorite: z.boolean(),
+  slug: z.string().optional(),
+  threadId: z.string(),
+});
+type ToggleFavoriteInput = z.infer<typeof _ToggleFavoriteInputSchema>;
 
 /**
- * Input type for update participant mutation
- * Augmented with threadId for cache invalidation
+ * Toggle public input schema
  */
-type UpdateParticipantInput = Parameters<typeof updateParticipantService>[0] & {
-  threadId?: string;
-};
+const _TogglePublicInputSchema = z.object({
+  isPublic: z.boolean(),
+  slug: z.string().optional(),
+  threadId: z.string(),
+});
+type TogglePublicInput = z.infer<typeof _TogglePublicInputSchema>;
 
 /**
- * Input type for delete participant mutation
- * Augmented with threadId for cache invalidation
+ * Update participant input schema - extends RPC request type with threadId for cache invalidation
  */
-type DeleteParticipantInput = Parameters<typeof deleteParticipantService>[0] & {
-  threadId?: string;
-};
+const _UpdateParticipantInputSchema = z.custom<UpdateParticipantRequest>().and(
+  z.object({ threadId: z.string().optional() }),
+);
+type UpdateParticipantInput = z.infer<typeof _UpdateParticipantInputSchema>;
+
+/**
+ * Delete participant input schema - extends RPC request type with threadId for cache invalidation
+ */
+const _DeleteParticipantInputSchema = z.custom<DeleteParticipantRequest>().and(
+  z.object({ threadId: z.string().optional() }),
+);
+type DeleteParticipantInput = z.infer<typeof _DeleteParticipantInputSchema>;
 
 export function useCreateThreadMutation() {
   const queryClient = useQueryClient();
@@ -73,6 +83,11 @@ export function useCreateThreadMutation() {
       await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
       return { previousUsage };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
+      }
     },
     onSuccess: (_data, variables) => {
       // Invalidate project-related caches when thread is created in a project
@@ -85,11 +100,6 @@ export function useCreateThreadMutation() {
       // Always invalidate thread lists and sidebar
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.sidebar() });
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previousUsage) {
-        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
-      }
     },
     retry: false,
     throwOnError: false,
@@ -105,8 +115,9 @@ export function useUpdateThreadMutation() {
     mutationFn: updateThreadService,
     onSuccess: (data: UpdateThreadResponse, variables) => {
       const threadId = variables.param.id;
-      if (!data.success)
+      if (!data.success) {
         return;
+      }
       const updatedThread = data.data;
 
       // Sync title to Zustand store so breadcrumb updates immediately
@@ -125,23 +136,26 @@ export function useUpdateThreadMutation() {
       // This prevents waiting for a refetch and shows the update instantly
       queryClient.setQueriesData(
         {
-          queryKey: queryKeys.threads.all,
           predicate: (query) => {
-            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
               return false;
+            }
             return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
           },
+          queryKey: queryKeys.threads.all,
         },
         (old) => {
           const parsedQuery = validateInfiniteQueryCache(old);
-          if (!parsedQuery)
+          if (!parsedQuery) {
             return old;
+          }
 
           return {
             ...parsedQuery,
             pages: parsedQuery.pages.map((page) => {
-              if (!page.success || !page.data?.items)
+              if (!page.success || !page.data?.items) {
                 return page;
+              }
 
               return {
                 ...page,
@@ -149,8 +163,9 @@ export function useUpdateThreadMutation() {
                   ...page.data,
                   items: page.data.items.map((thread) => {
                     const threadData = ChatThreadCacheSchema.safeParse(thread);
-                    if (!threadData.success || threadData.data.id !== threadId)
+                    if (!threadData.success || threadData.data.id !== threadId) {
                       return thread;
+                    }
 
                     // Merge the response data with existing thread
                     return {
@@ -175,11 +190,11 @@ export function useUpdateThreadMutation() {
         queryKeys.threads.detail(threadId),
         (old) => {
           const parsedData = validateThreadDetailPayloadCache(old);
-          if (!parsedData)
+          if (!parsedData) {
             return old;
+          }
 
           return {
-            success: true,
             data: {
               ...parsedData,
               thread: {
@@ -191,6 +206,7 @@ export function useUpdateThreadMutation() {
                 ...('slug' in variables.json && { slug: variables.json.slug }),
               },
             },
+            success: true,
           };
         },
       );
@@ -202,11 +218,11 @@ export function useUpdateThreadMutation() {
           queryKeys.threads.bySlug(newSlug),
           (old) => {
             const parsedData = validateThreadDetailPayloadCache(old);
-            if (!parsedData)
+            if (!parsedData) {
               return old;
+            }
 
             return {
-              success: true,
               data: {
                 ...parsedData,
                 thread: {
@@ -218,6 +234,7 @@ export function useUpdateThreadMutation() {
                   slug: newSlug,
                 },
               },
+              success: true,
             };
           },
         );
@@ -229,13 +246,15 @@ export function useUpdateThreadMutation() {
 }
 
 /**
- * Input type for delete thread mutation
- * Extended with optional metadata for cache cleanup
+ * Delete thread input schema - extends RPC request type with metadata for cache cleanup
  */
-type DeleteThreadInput = Parameters<typeof deleteThreadService>[0] & {
-  slug?: string;
-  projectId?: string;
-};
+const _DeleteThreadInputSchema = z.custom<Parameters<typeof deleteThreadService>[0]>().and(
+  z.object({
+    projectId: z.string().optional(),
+    slug: z.string().optional(),
+  }),
+);
+type DeleteThreadInput = z.infer<typeof _DeleteThreadInputSchema>;
 
 export function useDeleteThreadMutation() {
   const queryClient = useQueryClient();
@@ -263,21 +282,24 @@ export function useDeleteThreadMutation() {
         {
           queryKey: queryKeys.threads.all,
           predicate: (query) => {
-            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
               return false;
+            }
             return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
           },
         },
         (old) => {
           const parsedQuery = validateInfiniteQueryCache(old);
-          if (!parsedQuery)
+          if (!parsedQuery) {
             return old;
+          }
 
           return {
             ...parsedQuery,
             pages: parsedQuery.pages.map((page) => {
-              if (!page.success || !page.data?.items)
+              if (!page.success || !page.data?.items) {
                 return page;
+              }
 
               return {
                 ...page,
@@ -300,14 +322,16 @@ export function useDeleteThreadMutation() {
           { queryKey: queryKeys.projects.threads(variables.projectId) },
           (old) => {
             const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery)
+            if (!parsedQuery) {
               return old;
+            }
 
             return {
               ...parsedQuery,
               pages: parsedQuery.pages.map((page) => {
-                if (!page.success || !page.data?.items)
+                if (!page.success || !page.data?.items) {
                   return page;
+                }
 
                 return {
                   ...page,
@@ -327,10 +351,19 @@ export function useDeleteThreadMutation() {
 
       return { previousThreads, previousUsage, threadId, slug: variables.slug, projectId: variables.projectId };
     },
+    onError: (_error, _variables, context) => {
+      if (context?.previousThreads) {
+        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
+      }
+      if (context?.previousUsage) {
+        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
+      }
+    },
     onSuccess: (data, _variables, context) => {
-      if (!context)
+      if (!context) {
         return;
-      const { threadId, slug } = context;
+      }
+      const { slug, threadId } = context;
 
       // Use projectId from response (fallback to context if not available)
       const projectId = (data.success && data.data?.projectId)
@@ -364,14 +397,6 @@ export function useDeleteThreadMutation() {
       // Invalidate usage stats
       queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
-    onError: (_error, _variables, context) => {
-      if (context?.previousThreads) {
-        queryClient.setQueryData(queryKeys.threads.all, context.previousThreads);
-      }
-      if (context?.previousUsage) {
-        queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);
-      }
-    },
     retry: false,
     throwOnError: false,
   });
@@ -381,8 +406,8 @@ export function useToggleFavoriteMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, isFavorite }: ToggleFavoriteInput) =>
-      updateThreadService({ param: { id: threadId }, json: { isFavorite } }),
+    mutationFn: ({ isFavorite, threadId }: ToggleFavoriteInput) =>
+      updateThreadService({ json: { isFavorite }, param: { id: threadId } }),
     onMutate: async (variables) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
       if (variables.slug) {
@@ -397,19 +422,23 @@ export function useToggleFavoriteMutation() {
       queryClient.setQueriesData(
         { queryKey: queryKeys.threads.all },
         (old) => {
-          if (!old || typeof old !== 'object')
+          if (!old || typeof old !== 'object') {
             return old;
-          if (!('pages' in old))
+          }
+          if (!('pages' in old)) {
             return old;
+          }
           const pages = validateThreadsListPages(old.pages);
-          if (!pages)
+          if (!pages) {
             return old;
+          }
 
           return {
             ...old,
             pages: pages.map((page) => {
-              if (!page.success || !page.data?.items)
+              if (!page.success || !page.data?.items) {
                 return page;
+              }
 
               return {
                 ...page,
@@ -433,8 +462,9 @@ export function useToggleFavoriteMutation() {
           queryKeys.threads.bySlug(variables.slug),
           (old) => {
             const parsedData = validateThreadDetailPayloadCache(old);
-            if (!parsedData)
+            if (!parsedData) {
               return old;
+            }
 
             return {
               success: true,
@@ -456,8 +486,9 @@ export function useToggleFavoriteMutation() {
         queryKeys.threads.detail(variables.threadId),
         (old) => {
           const parsedData = validateThreadDetailPayloadCache(old);
-          if (!parsedData)
+          if (!parsedData) {
             return old;
+          }
 
           return {
             success: true,
@@ -494,8 +525,8 @@ export function useTogglePublicMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ threadId, isPublic }: TogglePublicInput) =>
-      updateThreadService({ param: { id: threadId }, json: { isPublic } }),
+    mutationFn: ({ isPublic, threadId }: TogglePublicInput) =>
+      updateThreadService({ json: { isPublic }, param: { id: threadId } }),
     onMutate: async (variables) => {
       // Only cancel/update detail caches - NOT the threads list
       // Updating threads.all causes sidebar re-render which closes the share dialog
@@ -514,8 +545,9 @@ export function useTogglePublicMutation() {
         queryKeys.threads.detail(variables.threadId),
         (old) => {
           const parsedData = validateThreadDetailPayloadCache(old);
-          if (!parsedData)
+          if (!parsedData) {
             return old;
+          }
 
           return {
             success: true,
@@ -535,8 +567,9 @@ export function useTogglePublicMutation() {
           queryKeys.threads.bySlug(variables.slug),
           (old) => {
             const parsedData = validateThreadDetailPayloadCache(old);
-            if (!parsedData)
+            if (!parsedData) {
               return old;
+            }
 
             return {
               success: true,
@@ -554,6 +587,14 @@ export function useTogglePublicMutation() {
 
       return { previousDetail, previousBySlug, slug: variables.slug, threadId: variables.threadId };
     },
+    onError: (_error, _variables, context) => {
+      if (context?.threadId && context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);
+      }
+      if (context?.slug && context?.previousBySlug) {
+        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      }
+    },
     onSuccess: (_data, variables) => {
       // ✅ CACHE INVALIDATION: Invalidate public thread cache when visibility changes
       // This ensures the public page shows the correct state (no longer public / now public)
@@ -562,14 +603,6 @@ export function useTogglePublicMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.public(variables.slug) });
         // Also invalidate the public slugs list
         queryClient.invalidateQueries({ queryKey: queryKeys.threads.publicSlugs() });
-      }
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.threadId && context?.previousDetail) {
-        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);
-      }
-      if (context?.slug && context?.previousBySlug) {
-        queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
       }
     },
     retry: false,
@@ -592,16 +625,20 @@ export function useAddParticipantMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(threadId),
         (old) => {
-          if (!old || typeof old !== 'object')
+          if (!old || typeof old !== 'object') {
             return old;
-          if (!('success' in old) || !old.success)
+          }
+          if (!('success' in old) || !old.success) {
             return old;
-          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+          }
+          if (!('data' in old) || !old.data || typeof old.data !== 'object') {
             return old;
+          }
 
           const data = validateThreadDetailCache(old.data);
-          if (!data)
+          if (!data) {
             return old;
+          }
 
           const { json: participantData } = variables;
           const optimisticParticipant = {
@@ -640,8 +677,9 @@ export function useAddParticipantMutation() {
         queryKeys.threads.detail(threadId),
         (old) => {
           const cache = validateThreadDetailResponseCache(old);
-          if (!cache || !cache.data.participants)
+          if (!cache || !cache.data.participants) {
             return old;
+          }
 
           const newParticipant = data.success ? data.data : null;
 
@@ -670,8 +708,9 @@ export function useUpdateParticipantMutation() {
       updateParticipantService(data),
     onMutate: async (variables) => {
       const threadId = variables.threadId;
-      if (!threadId)
+      if (!threadId) {
         return { previousThread: null, threadId: null };
+      }
 
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
 
@@ -680,16 +719,20 @@ export function useUpdateParticipantMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(threadId),
         (old) => {
-          if (!old || typeof old !== 'object')
+          if (!old || typeof old !== 'object') {
             return old;
-          if (!('success' in old) || !old.success)
+          }
+          if (!('success' in old) || !old.success) {
             return old;
-          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+          }
+          if (!('data' in old) || !old.data || typeof old.data !== 'object') {
             return old;
+          }
 
           const data = validateThreadDetailCache(old.data);
-          if (!data)
+          if (!data) {
             return old;
+          }
 
           return {
             ...old,
@@ -725,8 +768,9 @@ export function useDeleteParticipantMutation() {
       deleteParticipantService(data),
     onMutate: async (variables) => {
       const threadId = variables.threadId;
-      if (!threadId)
+      if (!threadId) {
         return { previousThread: null, threadId: null };
+      }
 
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
 
@@ -735,16 +779,20 @@ export function useDeleteParticipantMutation() {
       queryClient.setQueryData(
         queryKeys.threads.detail(threadId),
         (old) => {
-          if (!old || typeof old !== 'object')
+          if (!old || typeof old !== 'object') {
             return old;
-          if (!('success' in old) || !old.success)
+          }
+          if (!('success' in old) || !old.success) {
             return old;
-          if (!('data' in old) || !old.data || typeof old.data !== 'object')
+          }
+          if (!('data' in old) || !old.data || typeof old.data !== 'object') {
             return old;
+          }
 
           const data = validateThreadDetailCache(old.data);
-          if (!data)
+          if (!data) {
             return old;
+          }
 
           return {
             ...old,

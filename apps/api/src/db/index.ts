@@ -93,8 +93,8 @@ async function initLocalDb() {
   sqlite.pragma('mmap_size = 268435456'); // 256MB memory-mapped I/O
 
   const db = drizzleBetter(sqlite, {
-    schema,
     logger: process.env.NODE_ENV === NodeEnvs.DEVELOPMENT,
+    schema,
   });
 
   return db;
@@ -142,7 +142,7 @@ export function getDb() {
  * Async version of getDb - uses async initialization for local SQLite
  */
 export async function getDbAsync() {
-  return createDbInstanceAsync();
+  return await createDbInstanceAsync();
 }
 
 /**
@@ -188,17 +188,21 @@ function createD1Instance(): D1DbInstance {
   const kvBinding = getKVBinding();
   const kvCache = kvBinding
     ? new CloudflareKVCache({
-        kv: kvBinding,
-        global: false,
         defaultTtl: 300,
+        global: false,
+        kv: kvBinding,
       })
     : undefined;
 
-  return drizzleD1(d1Database, {
-    schema,
+  // Build config with optional cache (satisfies exactOptionalPropertyTypes)
+  const config = {
     logger: false, // Disable logging in Workers
-    cache: kvCache,
-  });
+    schema,
+  };
+  if (kvCache !== undefined) {
+    return drizzleD1(d1Database, { ...config, cache: kvCache });
+  }
+  return drizzleD1(d1Database, config);
 }
 
 /**
@@ -220,17 +224,21 @@ function createDbInstance(): DbInstance {
     const kvBinding = getKVBinding();
     const kvCache = kvBinding
       ? new CloudflareKVCache({
-          kv: kvBinding,
-          global: false,
           defaultTtl: 300,
+          global: false,
+          kv: kvBinding,
         })
       : undefined;
 
-    return drizzleD1(d1Database, {
-      schema,
+    // Build config with optional cache (satisfies exactOptionalPropertyTypes)
+    const config = {
       logger: process.env.NODE_ENV !== 'production',
-      cache: kvCache,
-    });
+      schema,
+    };
+    if (kvCache !== undefined) {
+      return drizzleD1(d1Database, { ...config, cache: kvCache });
+    }
+    return drizzleD1(d1Database, config);
   }
 
   // Local SQLite - this path is only reached in local dev without D1
@@ -253,21 +261,25 @@ async function createDbInstanceAsync(): Promise<DbInstance> {
     const kvBinding = getKVBinding();
     const kvCache = kvBinding
       ? new CloudflareKVCache({
-          kv: kvBinding,
-          global: false,
           defaultTtl: 300,
+          global: false,
+          kv: kvBinding,
         })
       : undefined;
 
-    return drizzleD1(d1Database, {
-      schema,
+    // Build config with optional cache (satisfies exactOptionalPropertyTypes)
+    const config = {
       logger: process.env.NODE_ENV !== NodeEnvs.PRODUCTION,
-      cache: kvCache,
-    });
+      schema,
+    };
+    if (kvCache !== undefined) {
+      return drizzleD1(d1Database, { ...config, cache: kvCache });
+    }
+    return drizzleD1(d1Database, config);
   }
 
   // Local SQLite for development
-  return initLocalDb();
+  return await initLocalDb();
 }
 
 /**

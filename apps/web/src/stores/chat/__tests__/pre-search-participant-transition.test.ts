@@ -31,15 +31,15 @@ import { getParticipantCompletionStatus } from '../utils/participant-completion-
 
 function createParticipant(id: string, index: number): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date('2024-01-01'),
+    customRoleId: null,
+    id,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date('2024-01-01'),
   };
 }
@@ -47,9 +47,9 @@ function createParticipant(id: string, index: number): ChatParticipant {
 function createUserMessage(roundNumber: number, text = 'Question'): UIMessage {
   return {
     id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -59,22 +59,22 @@ function createAssistantMessage(
   participantIndex: number,
   options: { streaming?: boolean; hasContent?: boolean; finishReason?: string } = {},
 ): UIMessage {
-  const { streaming = false, hasContent = true, finishReason = 'stop' } = options;
+  const { finishReason = 'stop', hasContent = true, streaming = false } = options;
 
   return {
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: hasContent
-      ? [{ type: 'text', text: `Response from ${participantId}`, state: streaming ? 'streaming' as const : 'done' as const }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: streaming ? undefined : finishReason,
+      model: `model-${participantIndex}`,
       participantId,
       participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: streaming ? undefined : finishReason,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: hasContent
+      ? [{ state: streaming ? 'streaming' as const : 'done' as const, text: `Response from ${participantId}`, type: 'text' }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -84,24 +84,24 @@ function createPreSearch(
   searchData?: StoredPreSearch['searchData'],
 ): StoredPreSearch {
   return {
+    completedAt: status === MessageStatuses.COMPLETE ? new Date('2024-01-01') : null,
+    createdAt: new Date('2024-01-01'),
     id: `ps-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    status,
-    userQuery: `Question for round ${roundNumber}`,
     searchData: status === MessageStatuses.COMPLETE
       ? (searchData ?? {
+          failureCount: 0,
           queries: [`query for round ${roundNumber}`],
           results: [],
-          summary: `Summary for round ${roundNumber}`,
           successCount: 0,
-          failureCount: 0,
+          summary: `Summary for round ${roundNumber}`,
           totalResults: 0,
           totalTime: 100,
         })
       : null,
-    createdAt: new Date('2024-01-01'),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date('2024-01-01') : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: `Question for round ${roundNumber}`,
   };
 }
 
@@ -133,7 +133,7 @@ describe('pre-Search to Participant Transition', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
       expect(participantStatus.completedCount).toBe(2);
 
       // No pre-search blocking
@@ -142,7 +142,7 @@ describe('pre-Search to Participant Transition', () => {
 
       // Should allow next phase (moderator, etc.)
       const canProceed = participantStatus.allComplete && !preSearchBlocking;
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
 
     it('should detect streaming participants correctly without pre-search', () => {
@@ -156,7 +156,7 @@ describe('pre-Search to Participant Transition', () => {
 
       const participantStatus = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(participantStatus.allComplete).toBe(false);
+      expect(participantStatus.allComplete).toBeFalsy();
       expect(participantStatus.completedCount).toBe(1);
       expect(participantStatus.streamingCount).toBe(1);
       expect(participantStatus.streamingParticipantIds).toContain('p2');
@@ -187,7 +187,7 @@ describe('pre-Search to Participant Transition', () => {
       // Pre-search is PENDING - should block participants
       expect(preSearchForRound?.status).toBe(MessageStatuses.PENDING);
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should wait for pre-search STREAMING before starting participants', () => {
@@ -213,7 +213,7 @@ describe('pre-Search to Participant Transition', () => {
       // Pre-search is STREAMING - should block participants
       expect(preSearchForRound?.status).toBe(MessageStatuses.STREAMING);
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should start participants after pre-search COMPLETES', () => {
@@ -237,7 +237,7 @@ describe('pre-Search to Participant Transition', () => {
       // Pre-search is COMPLETE - should NOT block participants
       expect(preSearchForRound?.status).toBe(MessageStatuses.COMPLETE);
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
 
       // Participants are streaming
       expect(participantStatus.streamingCount).toBe(2); // p1 streaming, p2 not started yet
@@ -247,21 +247,21 @@ describe('pre-Search to Participant Transition', () => {
   describe('pre-Search Data Isolation', () => {
     it('should NOT contaminate Round 1 participants with Round 2 pre-search data', () => {
       const round1PreSearchData = {
+        failureCount: 0,
         queries: ['round 1 query'],
         results: [],
-        summary: 'Round 1 Summary',
         successCount: 1,
-        failureCount: 0,
+        summary: 'Round 1 Summary',
         totalResults: 5,
         totalTime: 150,
       };
 
       const round2PreSearchData = {
+        failureCount: 0,
         queries: ['round 2 query'],
         results: [],
-        summary: 'Round 2 Summary',
         successCount: 2,
-        failureCount: 0,
+        summary: 'Round 2 Summary',
         totalResults: 10,
         totalTime: 250,
       };
@@ -295,8 +295,8 @@ describe('pre-Search to Participant Transition', () => {
       // Verify participant messages don't contain pre-search data
       const round1P1Message = messages.find(m => m.id === 'msg-p1-r1');
       expect(round1P1Message?.parts[0]).toMatchObject({
-        type: 'text',
         text: 'Response from p1',
+        type: 'text',
       });
 
       // Pre-search data should NOT be in message metadata
@@ -313,11 +313,11 @@ describe('pre-Search to Participant Transition', () => {
       // Pre-search data should not contaminate participant metadata
       const _preSearches: StoredPreSearch[] = [
         createPreSearch(0, MessageStatuses.COMPLETE, {
+          failureCount: 0,
           queries: ['contaminating query'],
           results: [],
-          summary: 'This should NOT appear in participant metadata',
           successCount: 1,
-          failureCount: 0,
+          summary: 'This should NOT appear in participant metadata',
           totalResults: 5,
           totalTime: 100,
         }),
@@ -327,11 +327,11 @@ describe('pre-Search to Participant Transition', () => {
 
       // Participant message should have its own metadata
       expect(participantMessage?.metadata).toMatchObject({
-        role: MessageRoles.ASSISTANT,
-        roundNumber: 0,
+        model: 'model-0',
         participantId: 'p1',
         participantIndex: 0,
-        model: 'model-0',
+        role: MessageRoles.ASSISTANT,
+        roundNumber: 0,
       });
 
       // Pre-search data should NOT contaminate participant metadata
@@ -357,7 +357,7 @@ describe('pre-Search to Participant Transition', () => {
       const participantStatus = getParticipantCompletionStatus(messages, participants, 0);
 
       // Participant completion should be detected independently of pre-search status
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
       expect(participantStatus.completedCount).toBe(2);
       expect(participantStatus.streamingCount).toBe(0);
 
@@ -381,12 +381,12 @@ describe('pre-Search to Participant Transition', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search complete - should NOT block
       expect(preSearchForRound?.status).toBe(MessageStatuses.COMPLETE);
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
     });
 
     it('should handle FAILED pre-search without blocking participants', () => {
@@ -405,12 +405,12 @@ describe('pre-Search to Participant Transition', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search FAILED counts as "not blocking" (same as COMPLETE)
       expect(preSearchForRound?.status).toBe(MessageStatuses.FAILED);
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(true); // FAILED still blocks, needs handling
+      expect(shouldBlock).toBeTruthy(); // FAILED still blocks, needs handling
     });
   });
 
@@ -436,14 +436,14 @@ describe('pre-Search to Participant Transition', () => {
       const round0Status = getParticipantCompletionStatus(messages, participants, 0);
       const round0PreSearch = preSearches.find(ps => ps.roundNumber === 0);
 
-      expect(round0Status.allComplete).toBe(true);
+      expect(round0Status.allComplete).toBeTruthy();
       expect(round0PreSearch).toBeUndefined();
 
       // Check Round 1
       const round1Status = getParticipantCompletionStatus(messages, participants, 1);
       const round1PreSearch = preSearches.find(ps => ps.roundNumber === 1);
 
-      expect(round1Status.allComplete).toBe(true);
+      expect(round1Status.allComplete).toBeTruthy();
       expect(round1PreSearch?.status).toBe(MessageStatuses.COMPLETE);
     });
 
@@ -475,13 +475,13 @@ describe('pre-Search to Participant Transition', () => {
       const round1PreSearch = preSearches.find(ps => ps.roundNumber === 1);
       expect(round1PreSearch?.status).toBe(MessageStatuses.STREAMING);
       const round1Blocking = round1PreSearch && round1PreSearch.status !== MessageStatuses.COMPLETE;
-      expect(round1Blocking).toBe(true);
+      expect(round1Blocking).toBeTruthy();
 
       // Round 2 - pending, should block participants
       const round2PreSearch = preSearches.find(ps => ps.roundNumber === 2);
       expect(round2PreSearch?.status).toBe(MessageStatuses.PENDING);
       const round2Blocking = round2PreSearch && round2PreSearch.status !== MessageStatuses.COMPLETE;
-      expect(round2Blocking).toBe(true);
+      expect(round2Blocking).toBeTruthy();
     });
   });
 
@@ -498,26 +498,26 @@ describe('pre-Search to Participant Transition', () => {
         {
           label: 'User message sent',
           messages: [createUserMessage(0)],
-          preSearchStatus: undefined,
           participantCount: 0,
+          preSearchStatus: undefined,
         },
         {
           label: 'Pre-search pending',
           messages: [createUserMessage(0)],
-          preSearchStatus: MessageStatuses.PENDING,
           participantCount: 0,
+          preSearchStatus: MessageStatuses.PENDING,
         },
         {
           label: 'Pre-search streaming',
           messages: [createUserMessage(0)],
-          preSearchStatus: MessageStatuses.STREAMING,
           participantCount: 0,
+          preSearchStatus: MessageStatuses.STREAMING,
         },
         {
           label: 'Pre-search complete',
           messages: [createUserMessage(0)],
-          preSearchStatus: MessageStatuses.COMPLETE,
           participantCount: 0,
+          preSearchStatus: MessageStatuses.COMPLETE,
         },
         {
           label: 'Participants streaming',
@@ -525,8 +525,8 @@ describe('pre-Search to Participant Transition', () => {
             createUserMessage(0),
             createAssistantMessage('p1', 0, 0, { streaming: true }),
           ],
-          preSearchStatus: MessageStatuses.COMPLETE,
           participantCount: 1,
+          preSearchStatus: MessageStatuses.COMPLETE,
         },
       ];
 
@@ -544,7 +544,7 @@ describe('pre-Search to Participant Transition', () => {
         // If participants exist and pre-search exists, pre-search must be COMPLETE
         const preSearchStatusValid = !(preSearch && step.participantCount > 0)
           || preSearch.status === MessageStatuses.COMPLETE;
-        expect(preSearchStatusValid).toBe(true);
+        expect(preSearchStatusValid).toBeTruthy();
       });
     });
 
@@ -572,7 +572,7 @@ describe('pre-Search to Participant Transition', () => {
 
       // Should not block - pre-search is done
       const shouldBlock = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
     });
   });
 
@@ -595,7 +595,7 @@ describe('pre-Search to Participant Transition', () => {
       const participantStatus = getParticipantCompletionStatus(messages, participants, 0);
 
       // Participants are complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search is STREAMING but stale
       expect(preSearch.status).toBe(MessageStatuses.STREAMING);
@@ -607,7 +607,7 @@ describe('pre-Search to Participant Transition', () => {
       const elapsed = Date.now() - createdTime;
       const isStale = elapsed > 15_000;
 
-      expect(isStale).toBe(true);
+      expect(isStale).toBeTruthy();
       expect(elapsed).toBeGreaterThan(15_000);
 
       // Stale pre-search should not block participant completion
@@ -641,7 +641,7 @@ describe('pre-Search to Participant Transition', () => {
       const elapsed = Date.now() - createdTime;
       const isStale = elapsed > 15_000;
 
-      expect(isStale).toBe(false);
+      expect(isStale).toBeFalsy();
       expect(elapsed).toBeLessThan(15_000);
 
       // Fresh pre-search SHOULD block participant streaming
@@ -652,19 +652,19 @@ describe('pre-Search to Participant Transition', () => {
   describe('pre-Search Metadata and State Leaks', () => {
     it('should keep Round 1 pre-search separate from Round 2 participants', () => {
       const round1SearchData = {
+        failureCount: 0,
         queries: ['round 1 specific query'],
         results: [
           {
-            query: 'round 1 specific query',
             answer: 'Round 1 Answer',
-            results: [],
-            responseTime: 100,
             index: 0,
+            query: 'round 1 specific query',
+            responseTime: 100,
+            results: [],
           },
         ],
-        summary: 'Round 1 Summary',
         successCount: 1,
-        failureCount: 0,
+        summary: 'Round 1 Summary',
         totalResults: 5,
         totalTime: 150,
       };
@@ -709,21 +709,21 @@ describe('pre-Search to Participant Transition', () => {
       // get associated with Round 1 participant messages due to race conditions
 
       const round1PreSearchData = {
+        failureCount: 0,
         queries: ['query 1'],
         results: [],
-        summary: 'Summary 1',
         successCount: 1,
-        failureCount: 0,
+        summary: 'Summary 1',
         totalResults: 3,
         totalTime: 100,
       };
 
       const round2PreSearchData = {
+        failureCount: 0,
         queries: ['query 2'],
         results: [],
-        summary: 'Summary 2',
         successCount: 2,
-        failureCount: 0,
+        summary: 'Summary 2',
         totalResults: 7,
         totalTime: 200,
       };

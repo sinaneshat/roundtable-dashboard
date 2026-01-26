@@ -24,10 +24,10 @@ export function useBoolean(defaultValue = false): UseBooleanReturn {
   }, []);
 
   return {
-    value,
-    onTrue,
     onFalse,
     onToggle,
+    onTrue,
     setValue,
+    value,
   };
 }

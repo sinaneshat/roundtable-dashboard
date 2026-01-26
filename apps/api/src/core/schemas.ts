@@ -44,9 +44,9 @@ import { APP_VERSION } from '@/constants/version';
  * Used in error responses and validation logging
  */
 export const ValidationErrorSchema = z.object({
+  code: z.string().optional(),
   field: z.string(),
   message: z.string(),
-  code: z.string().optional(),
 }).openapi('ValidationError');
 
 export type ValidationError = z.infer<typeof ValidationErrorSchema>;
@@ -70,106 +70,22 @@ export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema
  * Following Context7 best practices for maximum reusability
  */
 export const CoreSchemas = {
-  // Identifiers
-  uuid: () => z.string().uuid().openapi({
-    example: 'abc123e4-5678-9012-3456-789012345678',
-    description: 'UUID identifier',
-  }),
-
-  id: () => z.string().min(1).openapi({
-    example: 'id_123456789',
-    description: 'String identifier',
-  }),
-
-  // Text fields
-  email: () => z.string().email().openapi({
-    example: 'user@example.com',
-    description: 'Valid email address',
-  }),
-
-  url: () => z.url().openapi({
-    example: 'https://example.com',
-    description: 'Valid URL',
-  }),
-
   // Numeric fields
   amount: () => z.number().nonnegative().openapi({
-    example: 99.00,
     description: 'Amount in USD',
+    example: 99.00,
   }),
-
-  positiveInt: () => z.number().int().positive().openapi({
-    example: 1,
-    description: 'Positive integer',
-  }),
-
-  // Temporal fields
-  timestamp: () => z.string().datetime().openapi({
-    example: new Date().toISOString(),
-    description: 'ISO 8601 timestamp',
-  }),
-
-  // Pagination (using constants from single source of truth)
-  page: () => z.coerce.number().int().min(1).default(1).openapi({
-    example: 1,
-    description: 'Page number (1-based)',
-  }),
-
-  limit: () => z.coerce.number().int().min(1).max(API.MAX_PAGE_SIZE).default(API.DEFAULT_PAGE_SIZE).openapi({
-    example: API.DEFAULT_PAGE_SIZE,
-    description: `Results per page (max ${API.MAX_PAGE_SIZE})`,
-  }),
-
-  // Common enums
-  sortOrder: () => SortDirectionSchema.openapi({
-    example: 'desc',
-    description: 'Sort order',
-  }),
-  // String fields with common limits (Single Source of Truth)
-  /**
-   * Name field (1-100 chars)
-   * Used for: role names, preset names, custom role names, model roles
-   */
-  name: (opts?: { min?: number; max?: number }) => z.string()
-    .min(opts?.min ?? 1, 'Name is required')
-    .max(opts?.max ?? 100, `Name must be at most ${opts?.max ?? 100} characters`)
-    .openapi({
-      description: 'Name field (1-100 chars)',
-      example: 'My Name',
-    }),
 
   /**
-   * Title field (1-200 chars)
-   * Used for: thread titles, project names, preset names
+   * Change summary field (1-500 chars)
+   * Used for: changelog summaries
    */
-  title: (opts?: { min?: number; max?: number }) => z.string()
-    .min(opts?.min ?? 1, 'Title is required')
-    .max(opts?.max ?? 200, `Title must be at most ${opts?.max ?? 200} characters`)
+  changeSummary: () => z.string()
+    .min(1, 'Summary is required')
+    .max(500, 'Summary must be at most 500 characters')
     .openapi({
-      description: 'Title field (1-200 chars)',
-      example: 'My Title',
-    }),
-
-  /**
-   * Description field (max 500 chars)
-   * Used for: project descriptions, role descriptions
-   */
-  description: (opts?: { max?: number }) => z.string()
-    .max(opts?.max ?? 500, `Description must be at most ${opts?.max ?? 500} characters`)
-    .openapi({
-      description: 'Description field (max 500 chars)',
-      example: 'A helpful description',
-    }),
-
-  /**
-   * Long description field (max 1000 chars)
-   * Used for: project descriptions, memory summaries
-   */
-  longDescription: (opts?: { max?: number }) => z.string()
-    .max(opts?.max ?? 1000, `Description must be at most ${opts?.max ?? 1000} characters`)
-    .openapi({
-      description: 'Long description field (max 1000 chars)',
-      example: 'A longer, more detailed description',
+      description: 'Change summary (1-500 chars)',
+      example: 'Added new participant',
     }),
 
   /**
@@ -185,17 +101,21 @@ export const CoreSchemas = {
     }),
 
   /**
-   * Role field (nullable, 1-100 chars when present)
-   * Used for: participant roles, custom roles
+   * Description field (max 500 chars)
+   * Used for: project descriptions, role descriptions
    */
-  role: () => z.string()
-    .min(1, 'Role is required when specified')
-    .max(100, 'Role must be at most 100 characters')
-    .nullish()
+  description: (opts?: { max?: number }) => z.string()
+    .max(opts?.max ?? 500, `Description must be at most ${opts?.max ?? 500} characters`)
     .openapi({
-      description: 'Role field (nullable, 1-100 chars)',
-      example: 'The Ideator',
+      description: 'Description field (max 500 chars)',
+      example: 'A helpful description',
     }),
+
+  // Text fields
+  email: () => z.string().email().openapi({
+    description: 'Valid email address',
+    example: 'user@example.com',
+  }),
 
   /**
    * Filename field (1-255 chars)
@@ -209,17 +129,97 @@ export const CoreSchemas = {
       example: 'document.pdf',
     }),
 
+  id: () => z.string().min(1).openapi({
+    description: 'String identifier',
+    example: 'id_123456789',
+  }),
+
+  limit: () => z.coerce.number().int().min(1).max(API.MAX_PAGE_SIZE).default(API.DEFAULT_PAGE_SIZE).openapi({
+    description: `Results per page (max ${API.MAX_PAGE_SIZE})`,
+    example: API.DEFAULT_PAGE_SIZE,
+  }),
+
   /**
-   * Change summary field (1-500 chars)
-   * Used for: changelog summaries
+   * Long description field (max 1000 chars)
+   * Used for: project descriptions, memory summaries
    */
-  changeSummary: () => z.string()
-    .min(1, 'Summary is required')
-    .max(500, 'Summary must be at most 500 characters')
+  longDescription: (opts?: { max?: number }) => z.string()
+    .max(opts?.max ?? 1000, `Description must be at most ${opts?.max ?? 1000} characters`)
     .openapi({
-      description: 'Change summary (1-500 chars)',
-      example: 'Added new participant',
+      description: 'Long description field (max 1000 chars)',
+      example: 'A longer, more detailed description',
     }),
+
+  // String fields with common limits (Single Source of Truth)
+  /**
+   * Name field (1-100 chars)
+   * Used for: role names, preset names, custom role names, model roles
+   */
+  name: (opts?: { min?: number; max?: number }) => z.string()
+    .min(opts?.min ?? 1, 'Name is required')
+    .max(opts?.max ?? 100, `Name must be at most ${opts?.max ?? 100} characters`)
+    .openapi({
+      description: 'Name field (1-100 chars)',
+      example: 'My Name',
+    }),
+  // Pagination (using constants from single source of truth)
+  page: () => z.coerce.number().int().min(1).default(1).openapi({
+    description: 'Page number (1-based)',
+    example: 1,
+  }),
+
+  positiveInt: () => z.number().int().positive().openapi({
+    description: 'Positive integer',
+    example: 1,
+  }),
+
+  /**
+   * Role field (nullable, 1-100 chars when present)
+   * Used for: participant roles, custom roles
+   */
+  role: () => z.string()
+    .min(1, 'Role is required when specified')
+    .max(100, 'Role must be at most 100 characters')
+    .nullish()
+    .openapi({
+      description: 'Role field (nullable, 1-100 chars)',
+      example: 'The Ideator',
+    }),
+
+  // Common enums
+  sortOrder: () => SortDirectionSchema.openapi({
+    description: 'Sort order',
+    example: 'desc',
+  }),
+
+  // Temporal fields
+  timestamp: () => z.string().datetime().openapi({
+    description: 'ISO 8601 timestamp',
+    example: new Date().toISOString(),
+  }),
+
+  /**
+   * Title field (1-200 chars)
+   * Used for: thread titles, project names, preset names
+   */
+  title: (opts?: { min?: number; max?: number }) => z.string()
+    .min(opts?.min ?? 1, 'Title is required')
+    .max(opts?.max ?? 200, `Title must be at most ${opts?.max ?? 200} characters`)
+    .openapi({
+      description: 'Title field (1-200 chars)',
+      example: 'My Title',
+    }),
+
+  url: () => z.url().openapi({
+    description: 'Valid URL',
+    example: 'https://example.com',
+  }),
+
+  // Identifiers
+  uuid: () => z.string().uuid().openapi({
+    description: 'UUID identifier',
+    example: 'abc123e4-5678-9012-3456-789012345678',
+  }),
 } as const;
 
 // ============================================================================
@@ -232,65 +232,65 @@ export const CoreSchemas = {
  */
 export const LoggerDataSchema = z.discriminatedUnion('logType', [
   z.object({
+    duration: z.number().optional(),
     logType: z.literal('operation' as const),
     operationName: z.string(),
-    duration: z.number().optional(),
     requestId: z.string().optional(),
-    userId: z.string().optional(),
     resource: z.string().optional(),
+    userId: z.string().optional(),
   }),
   z.object({
+    cacheHits: z.number().optional(),
+    dbQueries: z.number().optional(),
+    duration: z.number(),
     logType: z.literal('performance' as const),
     marks: z.record(z.string(), z.number()).optional(),
-    duration: z.number(),
     memoryUsage: z.number().optional(),
-    dbQueries: z.number().optional(),
-    cacheHits: z.number().optional(),
   }),
   z.object({
-    logType: z.literal('validation' as const),
     fieldCount: z.number().optional(),
+    logType: z.literal('validation' as const),
     schemaName: z.string().optional(),
     validationErrors: z.array(ValidationErrorSchema).optional(),
   }),
   z.object({
+    ipAddress: z.string().optional(),
     logType: z.literal('auth' as const),
     mode: AuthModeSchema,
-    userId: z.string().optional(),
     sessionId: z.string().optional(),
-    ipAddress: z.string().optional(),
+    userId: z.string().optional(),
   }),
   z.object({
+    affected: z.number().optional(),
     logType: z.literal('database' as const),
     operation: DatabaseOperationSchema,
     table: z.string().optional(),
-    affected: z.number().optional(),
     transactionId: z.string().optional(),
   }),
   z.object({
     logType: z.literal('api' as const),
     method: HttpMethodSchema,
     path: z.string(),
-    statusCode: z.number().optional(),
     responseTime: z.number().optional(),
+    statusCode: z.number().optional(),
     userAgent: z.string().optional(),
   }),
   z.object({
-    logType: z.literal('system' as const),
-    component: z.string(),
     action: z.string(),
-    result: z.string().optional(),
+    component: z.string(),
     // System logs can contain arbitrary diagnostic data - use record for JSON-serializable values
     details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+    logType: z.literal('system' as const),
+    result: z.string().optional(),
   }),
 ]).optional().openapi({
+  description: 'Type-safe logger context data',
   example: {
+    duration: 150,
     logType: 'operation',
     operationName: 'createSubscription',
-    duration: 150,
     userId: 'user_123',
   },
-  description: 'Type-safe logger context data',
 });
 
 /**
@@ -299,44 +299,44 @@ export const LoggerDataSchema = z.discriminatedUnion('logType', [
  */
 export const ResponseMetadataSchema = z.discriminatedUnion('metaType', [
   z.object({
-    metaType: z.literal('pagination'),
     currentPage: z.number().int().positive(),
-    totalPages: z.number().int().positive(),
     hasNext: z.boolean(),
     hasPrev: z.boolean(),
+    metaType: z.literal('pagination'),
+    totalPages: z.number().int().positive(),
   }),
   z.object({
-    metaType: z.literal('performance'),
+    cacheHits: z.number().int().nonnegative().optional(),
     duration: z.number().positive(),
     memoryUsage: z.number().positive().optional(),
+    metaType: z.literal('performance'),
     queries: z.number().int().nonnegative().optional(),
-    cacheHits: z.number().int().nonnegative().optional(),
   }),
   z.object({
     metaType: z.literal('location'),
-    resourceUrl: z.url(),
     resourceId: z.string(),
     resourceType: z.string(),
+    resourceUrl: z.url(),
   }),
   z.object({
+    deprecationNotice: z.string().optional(),
+    endpoint: z.string(),
     metaType: z.literal('api'),
     version: z.string(),
-    endpoint: z.string(),
-    deprecationNotice: z.string().optional(),
   }),
   z.object({
-    metaType: z.literal('security'),
-    tokenExpires: z.iso.datetime().optional(),
-    permissions: z.array(z.string()).optional(),
     ipAddress: z.string().optional(),
+    metaType: z.literal('security'),
+    permissions: z.array(z.string()).optional(),
+    tokenExpires: z.iso.datetime().optional(),
   }),
 ]).optional().openapi({
+  description: 'Type-safe response metadata',
   example: {
-    metaType: 'performance',
     duration: 150,
     memoryUsage: 1024000,
+    metaType: 'performance',
   },
-  description: 'Type-safe response metadata',
 });
 
 /**
@@ -348,109 +348,111 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     errorType: z.literal(ErrorContextTypes.VALIDATION),
     field: z.string().optional(),
     fieldErrors: z.array(z.object({
-      field: z.string(),
-      message: z.string(),
       code: z.string().optional(),
       expected: z.string().optional(),
+      field: z.string(),
+      message: z.string(),
       received: z.string().optional(),
     })).optional(),
     schemaName: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal(ErrorContextTypes.AUTHENTICATION),
     attemptedEmail: z.string().email().optional(),
+    errorType: z.literal(ErrorContextTypes.AUTHENTICATION),
     failureReason: AuthFailureReasonSchema.optional(),
+    // eslint-disable-next-line security/detect-unsafe-regex -- IP validation regex with bounded quantifiers, safe from ReDoS
+    ipAddress: z.string().regex(/^(?:\d{1,3}\.){3}\d{1,3}$|^[\da-f]{1,4}(?::[\da-f]{0,4}){0,7}$/i, 'Invalid IP address').optional(),
     operation: z.string().optional(),
-    ipAddress: z.string().regex(/^(?:(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d{1,2})$|^(?:[\da-f]{1,4}:){7}[\da-f]{1,4}$/i, 'Invalid IP address').optional(),
-    userAgent: z.string().optional(),
     service: z.string().optional(),
+    userAgent: z.string().optional(),
   }),
   z.object({
+    actualPermission: z.string().optional(),
     errorType: z.literal(ErrorContextTypes.AUTHORIZATION),
+    requiredPermission: z.string().optional(),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     userId: z.string().optional(),
-    requiredPermission: z.string().optional(),
-    actualPermission: z.string().optional(),
   }),
   z.object({
+    constraint: z.string().optional(),
     errorType: z.literal(ErrorContextTypes.DATABASE),
     operation: DatabaseOperationSchema,
-    table: z.string().optional(),
-    constraint: z.string().optional(),
-    sqlState: z.string().optional(),
     resourceId: z.string().optional(),
+    sqlState: z.string().optional(),
+    table: z.string().optional(),
     userId: z.string().optional(),
   }),
   z.object({
-    errorType: z.literal(ErrorContextTypes.EXTERNAL_SERVICE),
-    serviceName: z.string().optional(),
-    service: z.string().optional(),
-    operation: z.string().optional(),
     endpoint: z.string().optional(),
+    errorType: z.literal(ErrorContextTypes.EXTERNAL_SERVICE),
     httpStatus: z.number().optional(),
+    operation: z.string().optional(),
+    resourceId: z.string().optional(),
     responseTime: z.number().optional(),
     retryAttempt: z.number().int().optional(),
-    resourceId: z.string().optional(),
+    service: z.string().optional(),
+    serviceName: z.string().optional(),
     userId: z.string().optional(),
   }),
   z.object({
     errorType: z.literal(ErrorContextTypes.RESOURCE),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
-    userId: z.string().optional(),
     service: z.string().optional(),
+    userId: z.string().optional(),
   }),
   z.object({
     errorType: z.literal(ErrorContextTypes.RESOURCE_UNAVAILABLE),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     resourceStatus: z.string().optional(),
-    wasPublic: z.boolean().optional(),
     unavailabilityReason: ResourceUnavailableReasonSchema.optional(),
+    wasPublic: z.boolean().optional(),
   }),
   z.object({
-    errorType: z.literal(ErrorContextTypes.CONFIGURATION),
-    service: z.string().optional(),
     configKey: z.string().optional(),
+    errorType: z.literal(ErrorContextTypes.CONFIGURATION),
     operation: z.string().optional(),
+    service: z.string().optional(),
   }),
   z.object({
+    current: z.number().optional(),
     errorType: z.literal(ErrorContextTypes.QUOTA),
+    limit: z.number().optional(),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
     userId: z.string().optional(),
-    limit: z.number().optional(),
-    current: z.number().optional(),
   }),
   z.object({
+    currentPlan: z.string().optional(),
     errorType: z.literal(ErrorContextTypes.SUBSCRIPTION),
+    requiredPlan: z.string().optional(),
     resource: z.string().optional(),
     userId: z.string().optional(),
-    requiredPlan: z.string().optional(),
-    currentPlan: z.string().optional(),
   }),
   z.object({
     errorType: z.literal(ErrorContextTypes.MODERATOR_ERROR),
-    threadId: z.string().optional(),
-    roundNumber: z.number().optional(),
     operation: z.string().optional(),
     reason: z.string().optional(),
+    roundNumber: z.number().optional(),
+    threadId: z.string().optional(),
   }),
   z.object({
     errorType: z.literal(ErrorContextTypes.RETRY_EXHAUSTED),
+    lastError: z.string().optional(),
+    maxRetries: z.number().optional(),
     resource: z.string().optional(),
     resourceId: z.string().optional(),
-    maxRetries: z.number().optional(),
-    lastError: z.string().optional(),
   }),
   z.object({
     errorType: z.literal(ErrorContextTypes.QUEUE),
-    queueName: z.string().optional(),
-    operation: z.string().optional(),
     messageId: z.string().optional(),
+    operation: z.string().optional(),
+    queueName: z.string().optional(),
   }),
 ]).optional().openapi({
+  description: 'Type-safe error context information',
   example: {
     errorType: ErrorContextTypes.VALIDATION,
     fieldErrors: [{
@@ -458,7 +460,6 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
       message: 'Invalid email format',
     }],
   },
-  description: 'Type-safe error context information',
 });
 
 // ============================================================================
@@ -470,13 +471,13 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
  */
 export function createApiResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
-    success: z.literal(true),
     data: dataSchema,
     meta: z.object({
       requestId: z.string().uuid().optional(),
       timestamp: z.iso.datetime().optional(),
       version: z.string().optional(),
     }).optional(),
+    success: z.literal(true),
   }).openapi({
     description: 'Successful API response with type-safe data',
   });
@@ -486,30 +487,29 @@ export function createApiResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) {
  * Error response schema with discriminated union context
  */
 export const ApiErrorResponseSchema = z.object({
-  success: z.literal(false),
   error: z.object({
     code: z.string(),
-    message: z.string(),
+    context: ErrorContextSchema,
     // Error details - JSON-serializable values for additional context
     details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())])).optional(),
-    context: ErrorContextSchema,
+    message: z.string(),
     validation: z.array(z.object({
+      code: z.string().optional(),
       field: z.string(),
       message: z.string(),
-      code: z.string().optional(),
     })).optional(),
   }),
   meta: z.object({
+    correlationId: z.string().optional(),
     requestId: z.string().uuid().optional(),
     timestamp: z.iso.datetime().optional(),
-    correlationId: z.string().optional(),
   }).optional(),
+  success: z.literal(false),
 }).openapi({
+  description: 'Error response with type-safe context',
   example: {
-    success: false,
     error: {
       code: 'VALIDATION_ERROR',
-      message: 'Request validation failed',
       context: {
         errorType: 'validation',
         fieldErrors: [{
@@ -517,13 +517,14 @@ export const ApiErrorResponseSchema = z.object({
           message: 'Invalid email format',
         }],
       },
+      message: 'Request validation failed',
     },
     meta: {
       requestId: 'req_123456789',
       timestamp: new Date().toISOString(),
     },
+    success: false,
   },
-  description: 'Error response with type-safe context',
 });
 
 /**
@@ -533,12 +534,12 @@ export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema
   return createApiResponseSchema(z.object({
     items: z.array(itemSchema),
     pagination: z.object({
-      page: CoreSchemas.positiveInt(),
-      limit: CoreSchemas.positiveInt(),
-      total: z.number().int().nonnegative(),
-      pages: CoreSchemas.positiveInt(),
       hasNext: z.boolean(),
       hasPrev: z.boolean(),
+      limit: CoreSchemas.positiveInt(),
+      page: CoreSchemas.positiveInt(),
+      pages: CoreSchemas.positiveInt(),
+      total: z.number().int().nonnegative(),
     }),
   })).openapi({
     description: 'Paginated response with items and pagination metadata',
@@ -553,17 +554,17 @@ export function createCursorPaginatedResponseSchema<T extends z.ZodTypeAny>(item
   return createApiResponseSchema(z.object({
     items: z.array(itemSchema),
     pagination: z.object({
-      nextCursor: z.string().nullable().openapi({
-        description: 'Cursor for next page (null if no more items)',
-        example: '2024-01-15T10:30:00Z',
+      count: z.number().int().nonnegative().openapi({
+        description: 'Number of items in current response',
+        example: 20,
       }),
       hasMore: z.boolean().openapi({
         description: 'Whether more items exist',
         example: true,
       }),
-      count: z.number().int().nonnegative().openapi({
-        description: 'Number of items in current response',
-        example: 20,
+      nextCursor: z.string().nullable().openapi({
+        description: 'Cursor for next page (null if no more items)',
+        example: '2024-01-15T10:30:00Z',
       }),
     }),
   })).openapi({
@@ -579,8 +580,8 @@ export function createCursorPaginatedResponseSchema<T extends z.ZodTypeAny>(item
  * Pagination query parameters (page-based)
  */
 export const PaginationQuerySchema = z.object({
-  page: CoreSchemas.page(),
   limit: CoreSchemas.limit(),
+  page: CoreSchemas.page(),
 }).openapi('PaginationQuery');
 
 /**
@@ -588,8 +589,8 @@ export const PaginationQuerySchema = z.object({
  */
 export const SortingQuerySchema = z.object({
   sortBy: z.string().min(1).optional().openapi({
-    example: 'createdAt',
     description: 'Field to sort by',
+    example: 'createdAt',
   }),
   sortOrder: CoreSchemas.sortOrder(),
 }).openapi('SortingQuery');
@@ -599,8 +600,8 @@ export const SortingQuerySchema = z.object({
  */
 export const SearchQuerySchema = z.object({
   search: z.string().min(1).optional().openapi({
-    example: 'search term',
     description: 'Search query string',
+    example: 'search term',
   }),
 }).openapi('SearchQuery');
 
@@ -617,8 +618,8 @@ export const ListQuerySchema = PaginationQuerySchema
  */
 export const IdParamSchema = z.object({
   id: CoreSchemas.id().openapi({
-    param: { name: 'id', in: 'path' },
     description: 'Resource identifier',
+    param: { in: 'path', name: 'id' },
   }),
 }).openapi('IdParam');
 
@@ -627,8 +628,8 @@ export const IdParamSchema = z.object({
  */
 export const UuidParamSchema = z.object({
   id: CoreSchemas.uuid().openapi({
-    param: { name: 'id', in: 'path' },
     description: 'UUID resource identifier',
+    param: { in: 'path', name: 'id' },
   }),
 }).openapi('UuidParam');
 
@@ -651,10 +652,11 @@ export const CommonFieldSchemas = {
   }),
 
   /**
-   * Nullable string field (common for optional text)
+   * Positive integer field
    */
-  nullableString: () => z.string().nullable().optional().openapi({
-    description: 'Optional text field',
+  count: () => z.number().int().nonnegative().openapi({
+    description: 'Non-negative integer count',
+    example: 0,
   }),
 
   /**
@@ -675,19 +677,10 @@ export const CommonFieldSchemas = {
   }),
 
   /**
-   * Array of strings (tags, features, etc.)
+   * Nullable string field (common for optional text)
    */
-  stringArray: () => z.array(z.string()).openapi({
-    description: 'Array of strings',
-    example: ['tag1', 'tag2'],
-  }),
-
-  /**
-   * Positive integer field
-   */
-  count: () => z.number().int().nonnegative().openapi({
-    description: 'Non-negative integer count',
-    example: 0,
+  nullableString: () => z.string().nullable().optional().openapi({
+    description: 'Optional text field',
   }),
 
   /**
@@ -696,6 +689,14 @@ export const CommonFieldSchemas = {
   priority: () => z.number().int().min(0).openapi({
     description: 'Priority/order (0-indexed)',
     example: 0,
+  }),
+
+  /**
+   * Array of strings (tags, features, etc.)
+   */
+  stringArray: () => z.array(z.string()).openapi({
+    description: 'Array of strings',
+    example: ['tag1', 'tag2'],
   }),
 } as const;
 
@@ -710,9 +711,9 @@ export const CommonFieldSchemas = {
  */
 export const ThreadIdParamSchema = z.object({
   threadId: CoreSchemas.id().openapi({
-    param: { name: 'threadId', in: 'path' },
     description: 'Thread identifier',
     example: 'thread_abc123',
+    param: { in: 'path', name: 'threadId' },
   }),
 }).openapi('ThreadIdParam');
 
@@ -722,9 +723,9 @@ export const ThreadIdParamSchema = z.object({
  */
 export const ThreadSlugParamSchema = z.object({
   slug: z.string().openapi({
-    param: { name: 'slug', in: 'path' },
     description: 'Thread slug for public access',
     example: 'product-strategy-brainstorm-abc123',
+    param: { in: 'path', name: 'slug' },
   }),
 }).openapi('ThreadSlugParam');
 
@@ -734,9 +735,9 @@ export const ThreadSlugParamSchema = z.object({
  */
 export const ParticipantIdParamSchema = z.object({
   participantId: CoreSchemas.id().openapi({
-    param: { name: 'participantId', in: 'path' },
     description: 'Participant identifier',
     example: 'participant_abc123',
+    param: { in: 'path', name: 'participantId' },
   }),
 }).openapi('ParticipantIdParam');
 
@@ -746,9 +747,9 @@ export const ParticipantIdParamSchema = z.object({
  */
 export const CustomRoleIdParamSchema = z.object({
   roleId: CoreSchemas.id().openapi({
-    param: { name: 'roleId', in: 'path' },
     description: 'Custom role identifier',
     example: 'role_abc123',
+    param: { in: 'path', name: 'roleId' },
   }),
 }).openapi('CustomRoleIdParam');
 
@@ -758,9 +759,9 @@ export const CustomRoleIdParamSchema = z.object({
  */
 export const RoundNumberParamSchema = z.object({
   roundNumber: z.string().openapi({
-    param: { name: 'roundNumber', in: 'path' },
     description: 'Round number (✅ 0-BASED: first round is 0)',
     example: '0',
+    param: { in: 'path', name: 'roundNumber' },
   }),
 }).openapi('RoundNumberParam');
 
@@ -769,15 +770,15 @@ export const RoundNumberParamSchema = z.object({
  * ✅ REUSABLE: Used for round moderator endpoints
  */
 export const ThreadRoundParamSchema = z.object({
-  threadId: CoreSchemas.id().openapi({
-    param: { name: 'threadId', in: 'path' },
-    description: 'Thread identifier',
-    example: 'thread_abc123',
-  }),
   roundNumber: z.string().openapi({
-    param: { name: 'roundNumber', in: 'path' },
     description: 'Round number (✅ 0-BASED: first round is 0)',
     example: '0',
+    param: { in: 'path', name: 'roundNumber' },
+  }),
+  threadId: CoreSchemas.id().openapi({
+    description: 'Thread identifier',
+    example: 'thread_abc123',
+    param: { in: 'path', name: 'threadId' },
   }),
 }).openapi('ThreadRoundParam');
 
@@ -790,54 +791,14 @@ export const ThreadRoundParamSchema = z.object({
  * ✅ ZOD-FIRST PATTERN: Type inferred from schema
  */
 export const SSEStreamMetadataSchema = z.object({
-  /** Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex}) */
-  streamId: z.string().optional().openapi({
-    description: 'Stream ID for resumption',
-    example: 'thread_123_r0_p0',
-  }),
-  /** Current stream phase (presearch, participant, moderator) */
-  phase: StreamPhaseSchema.optional().openapi({
-    description: 'Current stream phase',
-    example: 'participant',
-  }),
-  /** 0-based round number */
-  roundNumber: z.number().int().nonnegative().optional().openapi({
-    description: '0-based round number',
-    example: 0,
-  }),
-  /** Current participant index */
-  participantIndex: z.number().int().nonnegative().optional().openapi({
-    description: 'Current participant index',
-    example: 0,
-  }),
-  /** Total participants in this round */
-  totalParticipants: z.number().int().positive().optional().openapi({
-    description: 'Total participants in this round',
-    example: 3,
+  /** Whether auto-trigger was queued for round recovery */
+  autoTriggerQueued: z.boolean().optional().openapi({
+    description: 'Whether auto-trigger was queued for round recovery',
+    example: true,
   }),
   /** Whether stream is actively streaming */
   isActive: z.boolean().optional().openapi({
     description: 'Whether stream is actively streaming',
-    example: true,
-  }),
-  /** Status of each participant in the round */
-  participantStatuses: z.record(z.string(), z.string()).optional().openapi({
-    description: 'Status of each participant in the round',
-    example: { 0: 'completed', 1: 'streaming', 2: 'pending' },
-  }),
-  /** Index of next participant to stream (if any) */
-  nextParticipantIndex: z.number().int().nonnegative().optional().openapi({
-    description: 'Index of next participant to stream',
-    example: 1,
-  }),
-  /** Whether round is complete */
-  roundComplete: z.boolean().optional().openapi({
-    description: 'Whether round is complete',
-    example: false,
-  }),
-  /** Whether stream was resumed from buffer */
-  resumedFromBuffer: z.boolean().optional().openapi({
-    description: 'Whether stream was resumed from buffer',
     example: true,
   }),
   /** Moderator message ID (for moderator phase) */
@@ -845,10 +806,50 @@ export const SSEStreamMetadataSchema = z.object({
     description: 'Moderator message ID for moderator phase',
     example: 'moderator_abc123',
   }),
-  /** Whether auto-trigger was queued for round recovery */
-  autoTriggerQueued: z.boolean().optional().openapi({
-    description: 'Whether auto-trigger was queued for round recovery',
+  /** Index of next participant to stream (if any) */
+  nextParticipantIndex: z.number().int().nonnegative().optional().openapi({
+    description: 'Index of next participant to stream',
+    example: 1,
+  }),
+  /** Current participant index */
+  participantIndex: z.number().int().nonnegative().optional().openapi({
+    description: 'Current participant index',
+    example: 0,
+  }),
+  /** Status of each participant in the round */
+  participantStatuses: z.record(z.string(), z.string()).optional().openapi({
+    description: 'Status of each participant in the round',
+    example: { 0: 'completed', 1: 'streaming', 2: 'pending' },
+  }),
+  /** Current stream phase (presearch, participant, moderator) */
+  phase: StreamPhaseSchema.optional().openapi({
+    description: 'Current stream phase',
+    example: 'participant',
+  }),
+  /** Whether stream was resumed from buffer */
+  resumedFromBuffer: z.boolean().optional().openapi({
+    description: 'Whether stream was resumed from buffer',
     example: true,
+  }),
+  /** Whether round is complete */
+  roundComplete: z.boolean().optional().openapi({
+    description: 'Whether round is complete',
+    example: false,
+  }),
+  /** 0-based round number */
+  roundNumber: z.number().int().nonnegative().optional().openapi({
+    description: '0-based round number',
+    example: 0,
+  }),
+  /** Stream ID (format: {threadId}_r{roundNumber}_p{participantIndex}) */
+  streamId: z.string().optional().openapi({
+    description: 'Stream ID for resumption',
+    example: 'thread_123_r0_p0',
+  }),
+  /** Total participants in this round */
+  totalParticipants: z.number().int().positive().optional().openapi({
+    description: 'Total participants in this round',
+    example: 3,
   }),
 }).openapi('SSEStreamMetadata');
 
@@ -859,29 +860,29 @@ export type SSEStreamMetadata = z.infer<typeof SSEStreamMetadataSchema>;
  * ✅ ZOD-FIRST PATTERN: Type inferred from schema
  */
 export const TextStreamMetadataSchema = z.object({
-  /** Stream ID for resumption */
-  streamId: z.string().optional().openapi({
-    description: 'Stream ID for resumption',
+  /** Moderator message ID for round moderator streams */
+  moderatorMessageId: z.string().optional().openapi({
+    description: 'Moderator message ID for round moderator streams',
     example: 'moderator_123',
-  }),
-  /** Whether stream was resumed from buffer */
-  resumedFromBuffer: z.boolean().optional().openapi({
-    description: 'Whether stream was resumed from buffer',
-    example: true,
   }),
   /** Resource ID (e.g., moderator message ID) */
   resourceId: z.string().optional().openapi({
     description: 'Resource ID (e.g., moderator message ID)',
     example: 'moderator_abc123',
   }),
+  /** Whether stream was resumed from buffer */
+  resumedFromBuffer: z.boolean().optional().openapi({
+    description: 'Whether stream was resumed from buffer',
+    example: true,
+  }),
   /** Round number for round moderator streams */
   roundNumber: z.number().int().nonnegative().optional().openapi({
     description: 'Round number for round moderator streams',
     example: 0,
   }),
-  /** Moderator message ID for round moderator streams */
-  moderatorMessageId: z.string().optional().openapi({
-    description: 'Moderator message ID for round moderator streams',
+  /** Stream ID for resumption */
+  streamId: z.string().optional().openapi({
+    description: 'Stream ID for resumption',
     example: 'moderator_123',
   }),
   /** Stream status (e.g., 'completed', 'streaming') */
@@ -902,22 +903,22 @@ export type TextStreamMetadata = z.infer<typeof TextStreamMetadataSchema>;
  * ✅ ZOD-FIRST PATTERN: Uses HealthStatusSchema from enums
  */
 export const HealthDependencySchema = z.object({
-  status: HealthStatusSchema.openapi({
-    description: 'Health status of the dependency',
-    example: 'healthy',
-  }),
-  message: z.string().openapi({
-    description: 'Status message',
-    example: 'Connected',
+  // Health details - JSON-serializable diagnostic data
+  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().openapi({
+    description: 'Additional health details',
+    example: { version: APP_VERSION },
   }),
   duration: z.number().nonnegative().optional().openapi({
     description: 'Response time in milliseconds',
     example: 45,
   }),
-  // Health details - JSON-serializable diagnostic data
-  details: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional().openapi({
-    description: 'Additional health details',
-    example: { version: APP_VERSION },
+  message: z.string().openapi({
+    description: 'Status message',
+    example: 'Connected',
+  }),
+  status: HealthStatusSchema.openapi({
+    description: 'Health status of the dependency',
+    example: 'healthy',
   }),
 }).openapi('HealthDependency');
 
@@ -928,17 +929,17 @@ export type HealthDependency = z.infer<typeof HealthDependencySchema>;
  * ✅ ZOD-FIRST PATTERN: Type inferred from schema
  */
 export const HealthSummarySchema = z.object({
-  total: z.number().int().nonnegative().openapi({
-    description: 'Total number of dependencies',
-    example: 4,
+  degraded: z.number().int().nonnegative().openapi({
+    description: 'Number of degraded dependencies',
+    example: 1,
   }),
   healthy: z.number().int().nonnegative().openapi({
     description: 'Number of healthy dependencies',
     example: 3,
   }),
-  degraded: z.number().int().nonnegative().openapi({
-    description: 'Number of degraded dependencies',
-    example: 1,
+  total: z.number().int().nonnegative().openapi({
+    description: 'Total number of dependencies',
+    example: 4,
   }),
   unhealthy: z.number().int().nonnegative().openapi({
     description: 'Number of unhealthy dependencies',
@@ -962,16 +963,15 @@ export type HealthSummary = z.infer<typeof HealthSummarySchema>;
  */
 export const StreamingEventSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('start'),
     threadId: z.string().openapi({
       description: 'Thread ID for the conversation',
     }),
     timestamp: z.number().openapi({
       description: 'Unix timestamp in milliseconds',
     }),
+    type: z.literal('start'),
   }),
   z.object({
-    type: z.literal('chunk'),
     content: z.string().openapi({
       description: 'Partial content chunk',
     }),
@@ -981,39 +981,40 @@ export const StreamingEventSchema = z.discriminatedUnion('type', [
     timestamp: z.number().openapi({
       description: 'Unix timestamp in milliseconds',
     }),
+    type: z.literal('chunk'),
   }),
   z.object({
-    type: z.literal('complete'),
     messageId: z.string().openapi({
       description: 'Final message ID',
     }),
+    timestamp: z.number().openapi({
+      description: 'Unix timestamp in milliseconds',
+    }),
+    type: z.literal('complete'),
     usage: z.object({
       messagesCreated: z.number().int(),
       messagesLimit: z.number().int(),
     }).optional(),
-    timestamp: z.number().openapi({
-      description: 'Unix timestamp in milliseconds',
-    }),
   }),
   z.object({
-    type: z.literal('failed'),
-    error: z.string().openapi({
-      description: 'Error message',
-    }),
     code: z.string().optional().openapi({
       description: 'Error code',
     }),
+    error: z.string().openapi({
+      description: 'Error message',
+    }),
     timestamp: z.number().openapi({
       description: 'Unix timestamp in milliseconds',
     }),
+    type: z.literal('failed'),
   }),
 ]).openapi({
   description: 'Server-Sent Event for streaming AI responses',
   example: {
-    type: 'chunk',
     content: 'This is a partial response...',
     messageId: null,
     timestamp: Date.now(),
+    type: 'chunk',
   },
 });
 

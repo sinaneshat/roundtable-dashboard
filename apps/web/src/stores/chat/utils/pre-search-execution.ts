@@ -81,8 +81,9 @@ export async function readPreSearchStreamData(
   onPartialUpdate?: (partialData: PartialPreSearchData) => void,
 ): Promise<PreSearchDataPayload | null> {
   const reader = response.body?.getReader();
-  if (!reader)
+  if (!reader) {
     return null;
+  }
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -97,26 +98,36 @@ export async function readPreSearchStreamData(
 
   // Helper to build and emit partial update
   const emitPartialUpdate = () => {
-    if (!onPartialUpdate)
+    if (!onPartialUpdate) {
       return;
+    }
 
     const queries = Array.from(queriesMap.values()).sort((a, b) => a.index - b.index);
     const results = Array.from(resultsMap.values()).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
     if (queries.length > 0 || results.length > 0) {
-      onPartialUpdate({
+      // ✅ PATTERN: Build object conditionally for exactOptionalPropertyTypes compliance
+      // summary is optional in PartialPreSearchData, so only include when defined
+      const partialData: PartialPreSearchData = {
         queries,
         results,
-        summary: analysisRationale,
-      });
+      };
+
+      // Conditionally add summary to satisfy exactOptionalPropertyTypes
+      if (analysisRationale !== undefined) {
+        partialData.summary = analysisRationale;
+      }
+
+      onPartialUpdate(partialData);
     }
   };
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done)
+      if (done) {
         break;
+      }
 
       onActivity?.();
 
@@ -140,21 +151,21 @@ export async function readPreSearchStreamData(
             } else if (currentEvent === PreSearchSseEvents.QUERY) {
               const queryData = JSON.parse(currentData);
               queriesMap.set(queryData.index, {
+                index: queryData.index,
                 query: queryData.query || '',
                 rationale: queryData.rationale || '',
                 searchDepth: queryData.searchDepth || WebSearchDepths.BASIC,
-                index: queryData.index,
                 total: queryData.total || 1,
               });
               emitPartialUpdate();
             } else if (currentEvent === PreSearchSseEvents.RESULT) {
               const resultData = JSON.parse(currentData);
               resultsMap.set(resultData.index, {
-                query: resultData.query || '',
                 answer: resultData.answer ?? null,
-                results: resultData.results || [],
-                responseTime: resultData.responseTime || 0,
                 index: resultData.index,
+                query: resultData.query || '',
+                responseTime: resultData.responseTime || 0,
+                results: resultData.results || [],
               });
               emitPartialUpdate();
             } else if (currentEvent === PreSearchSseEvents.DONE) {
@@ -219,14 +230,14 @@ export async function executePreSearch(
   options: ExecutePreSearchOptions,
 ): Promise<PreSearchExecutionResult> {
   const {
+    executePreSearchMutateAsync,
+    existingPreSearch,
+    fileContext,
+    onQueryInvalidate,
+    roundNumber,
     store,
     threadId,
-    roundNumber,
     userQuery,
-    fileContext,
-    existingPreSearch,
-    executePreSearchMutateAsync,
-    onQueryInvalidate,
   } = options;
 
   const state = store.getState();
@@ -260,13 +271,13 @@ export async function executePreSearch(
     // ✅ PATTERN: Use mutation instead of direct service import
     // ✅ FILE CONTEXT: Pass file content for query generation consideration
     const response = await executePreSearchMutateAsync({
-      param: {
-        threadId,
-        roundNumber: roundNumber.toString(),
-      },
       json: {
         userQuery,
         ...(fileContext && { fileContext }),
+      },
+      param: {
+        roundNumber: roundNumber.toString(),
+        threadId,
       },
     });
 

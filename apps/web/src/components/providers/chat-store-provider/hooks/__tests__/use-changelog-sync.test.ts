@@ -36,10 +36,10 @@ type MockStoreState = {
 
 function createMockStore(initial?: Partial<MockStoreState>) {
   return createStore<MockStoreState>(set => ({
-    isWaitingForChangelog: false,
     configChangeRoundNumber: null,
-    setIsWaitingForChangelog: value => set({ isWaitingForChangelog: value }),
+    isWaitingForChangelog: false,
     setConfigChangeRoundNumber: value => set({ configChangeRoundNumber: value }),
+    setIsWaitingForChangelog: value => set({ isWaitingForChangelog: value }),
     ...initial,
   }));
 }
@@ -49,17 +49,17 @@ function createMockChangelog(
   overrides?: Partial<ChatThreadChangelog>,
 ): ChatThreadChangelog {
   return {
-    id: `changelog-r${roundNumber}-${Date.now()}`,
-    threadId: 'thread-123',
-    roundNumber,
-    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
-    changeType: ChangelogTypes.ADDED,
-    changeSummary: 'Test change',
     changeData: {
+      changes: [{ modelId: 'gpt-4', participantId: 'p1', type: 'added' }],
       type: 'participant',
-      changes: [{ type: 'added', participantId: 'p1', modelId: 'gpt-4' }],
     },
+    changeSummary: 'Test change',
+    changeType: ChangelogTypes.ADDED,
     createdAt: new Date().toISOString(),
+    id: `changelog-r${roundNumber}-${Date.now()}`,
+    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
+    roundNumber,
+    threadId: 'thread-123',
     ...overrides,
   };
 }
@@ -84,41 +84,41 @@ function simulateChangelogMerge(params: {
   reason: string;
 } {
   const {
+    configChangeRoundNumber,
+    existingCache,
+    isWaitingForChangelog,
+    roundChangelogData,
     roundChangelogFetching,
     roundChangelogSuccess,
-    roundChangelogData,
-    configChangeRoundNumber,
-    isWaitingForChangelog,
-    existingCache,
   } = params;
 
   // Guard 1: Don't process while fetching (ROOT CAUSE FIX)
   if (roundChangelogFetching) {
     return {
-      shouldProcess: false,
-      shouldMerge: false,
       mergedItems: [],
       reason: 'Fetching in progress - waiting for fresh data',
+      shouldMerge: false,
+      shouldProcess: false,
     };
   }
 
   // Guard 2: Check success and data
   if (!roundChangelogSuccess || !roundChangelogData?.success) {
     return {
-      shouldProcess: false,
-      shouldMerge: false,
       mergedItems: [],
       reason: 'Query not successful or no data',
+      shouldMerge: false,
+      shouldProcess: false,
     };
   }
 
   // Guard 3: Both flags must be set
   if (configChangeRoundNumber === null || !isWaitingForChangelog) {
     return {
-      shouldProcess: false,
-      shouldMerge: false,
       mergedItems: [],
       reason: 'Flags not properly set',
+      shouldMerge: false,
+      shouldProcess: false,
     };
   }
 
@@ -130,20 +130,20 @@ function simulateChangelogMerge(params: {
 
   if (!allItemsForCorrectRound && newItems.length > 0) {
     return {
-      shouldProcess: false,
-      shouldMerge: false,
       mergedItems: [],
       reason: `Data is for wrong round - expected ${configChangeRoundNumber}, got ${newItems[0]?.roundNumber}`,
+      shouldMerge: false,
+      shouldProcess: false,
     };
   }
 
   // Empty changelog - clear flags but don't merge
   if (newItems.length === 0) {
     return {
-      shouldProcess: true,
-      shouldMerge: false,
       mergedItems: [],
       reason: 'Empty changelog - flags cleared',
+      shouldMerge: false,
+      shouldProcess: true,
     };
   }
 
@@ -155,10 +155,10 @@ function simulateChangelogMerge(params: {
   const mergedItems = [...uniqueNewItems, ...existingItems];
 
   return {
-    shouldProcess: true,
-    shouldMerge: true,
     mergedItems,
     reason: `Merged ${uniqueNewItems.length} new items (${newItems.length - uniqueNewItems.length} duplicates skipped)`,
+    shouldMerge: true,
+    shouldProcess: true,
   };
 }
 
@@ -170,36 +170,36 @@ describe('use-changelog-sync isFetching Guard', () => {
   describe('prevents processing during fetch transitions', () => {
     it('should NOT process data while isFetching is true', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] },
+          success: true,
+        },
         roundChangelogFetching: true, // KEY: Fetching in progress
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] },
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('Fetching in progress');
     });
 
     it('should process data after isFetching becomes false', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] },
+          success: true,
+        },
         roundChangelogFetching: false, // KEY: Fetch complete
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] },
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(true);
-      expect(result.shouldMerge).toBe(true);
+      expect(result.shouldProcess).toBeTruthy();
+      expect(result.shouldMerge).toBeTruthy();
     });
 
     it('should handle rapid round changes with isFetching guard', () => {
@@ -208,37 +208,37 @@ describe('use-changelog-sync isFetching Guard', () => {
 
       // Step 1: Round 1 data available, but we're fetching round 2
       const step1 = simulateChangelogMerge({
+        configChangeRoundNumber: 2, // We need round 2
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(1)] }, // STALE: Round 1 data
+          success: true,
+        },
         roundChangelogFetching: true, // Fetching round 2
         roundChangelogSuccess: true, // Round 1 data still in cache
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(1)] }, // STALE: Round 1 data
-        },
-        configChangeRoundNumber: 2, // We need round 2
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
       // Should NOT process stale data
-      expect(step1.shouldProcess).toBe(false);
+      expect(step1.shouldProcess).toBeFalsy();
       expect(step1.reason).toContain('Fetching in progress');
 
       // Step 2: Round 2 fetch completes
       const step2 = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] }, // FRESH: Round 2 data
+          success: true,
+        },
         roundChangelogFetching: false, // Fetch complete
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] }, // FRESH: Round 2 data
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
       // Should process fresh data
-      expect(step2.shouldProcess).toBe(true);
-      expect(step2.shouldMerge).toBe(true);
+      expect(step2.shouldProcess).toBeTruthy();
+      expect(step2.shouldMerge).toBeTruthy();
       expect(step2.mergedItems[0]?.roundNumber).toBe(2);
     });
   });
@@ -252,18 +252,18 @@ describe('use-changelog-sync Round Number Validation', () => {
   describe('prevents merging data from wrong rounds', () => {
     it('should reject data for wrong round number', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2, // We need round 2
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(1)] }, // Round 1 data
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(1)] }, // Round 1 data
-        },
-        configChangeRoundNumber: 2, // We need round 2
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('wrong round');
       expect(result.reason).toContain('expected 2');
       expect(result.reason).toContain('got 1');
@@ -271,49 +271,49 @@ describe('use-changelog-sync Round Number Validation', () => {
 
     it('should accept data for correct round number', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2, // We need round 2
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] }, // Round 2 data
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] }, // Round 2 data
-        },
-        configChangeRoundNumber: 2, // We need round 2
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(true);
-      expect(result.shouldMerge).toBe(true);
+      expect(result.shouldProcess).toBeTruthy();
+      expect(result.shouldMerge).toBeTruthy();
     });
 
     it('should reject mixed round data', () => {
       const result = simulateChangelogMerge({
-        roundChangelogFetching: false,
-        roundChangelogSuccess: true,
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
         roundChangelogData: {
-          success: true,
           data: {
             items: [
               createMockChangelog(2),
               createMockChangelog(1), // Mixed: Wrong round
             ],
           },
+          success: true,
         },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
+        roundChangelogFetching: false,
+        roundChangelogSuccess: true,
       });
 
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('wrong round');
     });
 
     it('should accept multiple items for correct round', () => {
       const result = simulateChangelogMerge({
-        roundChangelogFetching: false,
-        roundChangelogSuccess: true,
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
         roundChangelogData: {
-          success: true,
           data: {
             items: [
               createMockChangelog(2, { id: 'cl-1' }),
@@ -321,14 +321,14 @@ describe('use-changelog-sync Round Number Validation', () => {
               createMockChangelog(2, { id: 'cl-3' }),
             ],
           },
+          success: true,
         },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
+        roundChangelogFetching: false,
+        roundChangelogSuccess: true,
       });
 
-      expect(result.shouldProcess).toBe(true);
-      expect(result.shouldMerge).toBe(true);
+      expect(result.shouldProcess).toBeTruthy();
+      expect(result.shouldMerge).toBeTruthy();
       expect(result.mergedItems).toHaveLength(3);
     });
   });
@@ -336,19 +336,19 @@ describe('use-changelog-sync Round Number Validation', () => {
   describe('handles empty changelog correctly', () => {
     it('should accept empty changelog and clear flags', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [] }, // Empty
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [] }, // Empty
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(true);
-      expect(result.shouldMerge).toBe(false); // No merge needed
+      expect(result.shouldProcess).toBeTruthy();
+      expect(result.shouldMerge).toBeFalsy(); // No merge needed
       expect(result.reason).toContain('Empty changelog');
     });
   });
@@ -365,21 +365,21 @@ describe('use-changelog-sync Duplicate Prevention', () => {
     const duplicateItem = createMockChangelog(2, { id: 'existing-1' }); // Same ID
 
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 2,
+      existingCache: {
+        data: { items: [existingItem] },
+        success: true,
+      },
+      isWaitingForChangelog: true,
+      roundChangelogData: {
+        data: { items: [newItem, duplicateItem] },
+        success: true,
+      },
       roundChangelogFetching: false,
       roundChangelogSuccess: true,
-      roundChangelogData: {
-        success: true,
-        data: { items: [newItem, duplicateItem] },
-      },
-      configChangeRoundNumber: 2,
-      isWaitingForChangelog: true,
-      existingCache: {
-        success: true,
-        data: { items: [existingItem] },
-      },
     });
 
-    expect(result.shouldMerge).toBe(true);
+    expect(result.shouldMerge).toBeTruthy();
     expect(result.mergedItems).toHaveLength(2); // 1 new + 1 existing
     expect(result.reason).toContain('1 duplicates skipped');
 
@@ -393,21 +393,21 @@ describe('use-changelog-sync Duplicate Prevention', () => {
     const existingItem = createMockChangelog(2, { id: 'existing-1' });
 
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 2,
+      existingCache: {
+        data: { items: [existingItem] },
+        success: true,
+      },
+      isWaitingForChangelog: true,
+      roundChangelogData: {
+        data: { items: [createMockChangelog(2, { id: 'existing-1' })] }, // All duplicates
+        success: true,
+      },
       roundChangelogFetching: false,
       roundChangelogSuccess: true,
-      roundChangelogData: {
-        success: true,
-        data: { items: [createMockChangelog(2, { id: 'existing-1' })] }, // All duplicates
-      },
-      configChangeRoundNumber: 2,
-      isWaitingForChangelog: true,
-      existingCache: {
-        success: true,
-        data: { items: [existingItem] },
-      },
     });
 
-    expect(result.shouldMerge).toBe(true);
+    expect(result.shouldMerge).toBeTruthy();
     expect(result.mergedItems).toHaveLength(1); // Only original
     expect(result.reason).toContain('0 new items');
   });
@@ -421,52 +421,52 @@ describe('use-changelog-sync Flag Requirements', () => {
   describe('requires both flags to process', () => {
     it('should NOT process when configChangeRoundNumber is null', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: null, // Not set
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] },
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] },
-        },
-        configChangeRoundNumber: null, // Not set
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('Flags not properly set');
     });
 
     it('should NOT process when isWaitingForChangelog is false', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: false, // Not set
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] },
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] },
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: false, // Not set
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('Flags not properly set');
     });
 
     it('should process when both flags are properly set', () => {
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2,
+        existingCache: null,
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: { items: [createMockChangelog(2)] },
+          success: true,
+        },
         roundChangelogFetching: false,
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: { items: [createMockChangelog(2)] },
-        },
-        configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
-        existingCache: null,
       });
 
-      expect(result.shouldProcess).toBe(true);
+      expect(result.shouldProcess).toBeTruthy();
     });
   });
 });
@@ -488,7 +488,7 @@ describe('use-changelog-sync Store Integration', () => {
     store.getState().setConfigChangeRoundNumber(2);
 
     // Verify flags are set
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(2);
 
     // Simulate successful merge clearing flags
@@ -496,8 +496,8 @@ describe('use-changelog-sync Store Integration', () => {
     store.getState().setConfigChangeRoundNumber(null);
 
     // Verify flags are cleared
-    expect(store.getState().isWaitingForChangelog).toBe(false);
-    expect(store.getState().configChangeRoundNumber).toBe(null);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
+    expect(store.getState().configChangeRoundNumber).toBeNull();
   });
 
   it('should detect inconsistent state and self-heal', () => {
@@ -508,14 +508,14 @@ describe('use-changelog-sync Store Integration', () => {
     const state = store.getState();
     const isInconsistent = state.isWaitingForChangelog && state.configChangeRoundNumber === null;
 
-    expect(isInconsistent).toBe(true);
+    expect(isInconsistent).toBeTruthy();
 
     // The hook should detect and fix this
     if (isInconsistent) {
       store.getState().setIsWaitingForChangelog(false);
     }
 
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
   });
 });
 
@@ -535,41 +535,41 @@ describe('use-changelog-sync Race Condition Scenarios', () => {
       for (const round of rounds) {
         // Simulate effect running with stale data during transition
         const withStaleData = simulateChangelogMerge({
+          configChangeRoundNumber: round,
+          existingCache: null,
+          isWaitingForChangelog: true,
+          roundChangelogData: {
+            data: { items: [createMockChangelog(round - 1)] }, // STALE
+            success: true,
+          },
           roundChangelogFetching: true, // Fetching new round
           roundChangelogSuccess: true,
-          roundChangelogData: {
-            success: true,
-            data: { items: [createMockChangelog(round - 1)] }, // STALE
-          },
-          configChangeRoundNumber: round,
-          isWaitingForChangelog: true,
-          existingCache: null,
         });
 
         // Should NOT process stale data
-        expect(withStaleData.shouldProcess).toBe(false);
+        expect(withStaleData.shouldProcess).toBeFalsy();
 
         // Simulate effect running after fetch completes
         const withFreshData = simulateChangelogMerge({
+          configChangeRoundNumber: round,
+          existingCache: null,
+          isWaitingForChangelog: true,
+          roundChangelogData: {
+            data: { items: [createMockChangelog(round)] }, // FRESH
+            success: true,
+          },
           roundChangelogFetching: false,
           roundChangelogSuccess: true,
-          roundChangelogData: {
-            success: true,
-            data: { items: [createMockChangelog(round)] }, // FRESH
-          },
-          configChangeRoundNumber: round,
-          isWaitingForChangelog: true,
-          existingCache: null,
         });
 
-        results.push({ round, processed: withFreshData.shouldProcess });
+        results.push({ processed: withFreshData.shouldProcess, round });
       }
 
       // All rounds should be processed with correct data
       expect(results).toEqual([
-        { round: 1, processed: true },
-        { round: 2, processed: true },
-        { round: 3, processed: true },
+        { processed: true, round: 1 },
+        { processed: true, round: 2 },
+        { processed: true, round: 3 },
       ]);
     });
   });
@@ -585,12 +585,12 @@ describe('use-changelog-sync Race Condition Scenarios', () => {
       effectRuns.push({
         fetching: true,
         processed: simulateChangelogMerge({
+          configChangeRoundNumber: 2,
+          existingCache: null,
+          isWaitingForChangelog: true,
+          roundChangelogData: null,
           roundChangelogFetching: true,
           roundChangelogSuccess: false,
-          roundChangelogData: null,
-          configChangeRoundNumber: 2,
-          isWaitingForChangelog: true,
-          existingCache: null,
         }).shouldProcess,
       });
 
@@ -598,15 +598,15 @@ describe('use-changelog-sync Race Condition Scenarios', () => {
       effectRuns.push({
         fetching: true,
         processed: simulateChangelogMerge({
+          configChangeRoundNumber: 2,
+          existingCache: null,
+          isWaitingForChangelog: true,
+          roundChangelogData: {
+            data: { items: [createMockChangelog(1)] }, // STALE
+            success: true,
+          },
           roundChangelogFetching: true,
           roundChangelogSuccess: true, // Previous success cached
-          roundChangelogData: {
-            success: true,
-            data: { items: [createMockChangelog(1)] }, // STALE
-          },
-          configChangeRoundNumber: 2,
-          isWaitingForChangelog: true,
-          existingCache: null,
         }).shouldProcess,
       });
 
@@ -614,22 +614,22 @@ describe('use-changelog-sync Race Condition Scenarios', () => {
       effectRuns.push({
         fetching: false,
         processed: simulateChangelogMerge({
+          configChangeRoundNumber: 2,
+          existingCache: null,
+          isWaitingForChangelog: true,
+          roundChangelogData: {
+            data: { items: [createMockChangelog(2)] }, // FRESH
+            success: true,
+          },
           roundChangelogFetching: false,
           roundChangelogSuccess: true,
-          roundChangelogData: {
-            success: true,
-            data: { items: [createMockChangelog(2)] }, // FRESH
-          },
-          configChangeRoundNumber: 2,
-          isWaitingForChangelog: true,
-          existingCache: null,
         }).shouldProcess,
       });
 
       // Only the last run should process
-      expect(effectRuns[0]?.processed).toBe(false);
-      expect(effectRuns[1]?.processed).toBe(false);
-      expect(effectRuns[2]?.processed).toBe(true);
+      expect(effectRuns[0]?.processed).toBeFalsy();
+      expect(effectRuns[1]?.processed).toBeFalsy();
+      expect(effectRuns[2]?.processed).toBeTruthy();
     });
   });
 });
@@ -641,66 +641,66 @@ describe('use-changelog-sync Race Condition Scenarios', () => {
 describe('use-changelog-sync Edge Cases', () => {
   it('should handle round 0 correctly', () => {
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 0,
+      existingCache: null,
+      isWaitingForChangelog: true,
+      roundChangelogData: {
+        data: { items: [createMockChangelog(0)] },
+        success: true,
+      },
       roundChangelogFetching: false,
       roundChangelogSuccess: true,
-      roundChangelogData: {
-        success: true,
-        data: { items: [createMockChangelog(0)] },
-      },
-      configChangeRoundNumber: 0,
-      isWaitingForChangelog: true,
-      existingCache: null,
     });
 
-    expect(result.shouldProcess).toBe(true);
-    expect(result.shouldMerge).toBe(true);
+    expect(result.shouldProcess).toBeTruthy();
+    expect(result.shouldMerge).toBeTruthy();
   });
 
   it('should handle very high round numbers', () => {
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 999,
+      existingCache: null,
+      isWaitingForChangelog: true,
+      roundChangelogData: {
+        data: { items: [createMockChangelog(999)] },
+        success: true,
+      },
       roundChangelogFetching: false,
       roundChangelogSuccess: true,
-      roundChangelogData: {
-        success: true,
-        data: { items: [createMockChangelog(999)] },
-      },
-      configChangeRoundNumber: 999,
-      isWaitingForChangelog: true,
-      existingCache: null,
     });
 
-    expect(result.shouldProcess).toBe(true);
-    expect(result.shouldMerge).toBe(true);
+    expect(result.shouldProcess).toBeTruthy();
+    expect(result.shouldMerge).toBeTruthy();
   });
 
   it('should handle query failure gracefully', () => {
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 2,
+      existingCache: null,
+      isWaitingForChangelog: true,
+      roundChangelogData: null,
       roundChangelogFetching: false,
       roundChangelogSuccess: false, // Query failed
-      roundChangelogData: null,
-      configChangeRoundNumber: 2,
-      isWaitingForChangelog: true,
-      existingCache: null,
     });
 
-    expect(result.shouldProcess).toBe(false);
+    expect(result.shouldProcess).toBeFalsy();
     expect(result.reason).toContain('not successful');
   });
 
   it('should handle malformed data gracefully', () => {
     const result = simulateChangelogMerge({
+      configChangeRoundNumber: 2,
+      existingCache: null,
+      isWaitingForChangelog: true,
+      roundChangelogData: {
+        data: { items: [] },
+        success: false, // Data indicates failure
+      },
       roundChangelogFetching: false,
       roundChangelogSuccess: true,
-      roundChangelogData: {
-        success: false, // Data indicates failure
-        data: { items: [] },
-      },
-      configChangeRoundNumber: 2,
-      isWaitingForChangelog: true,
-      existingCache: null,
     });
 
-    expect(result.shouldProcess).toBe(false);
+    expect(result.shouldProcess).toBeFalsy();
   });
 });
 
@@ -730,65 +730,65 @@ describe('use-changelog-sync Regression Prevention', () => {
     it('should NOT merge round 1 data when waiting for round 2', () => {
       // The buggy scenario
       const result = simulateChangelogMerge({
+        configChangeRoundNumber: 2, // We need round 2
+        existingCache: {
+          data: {
+            items: [
+              createMockChangelog(1, { id: 'E1ACHH' }),
+              createMockChangelog(1, { id: '6W5H97' }),
+            ],
+          },
+          success: true,
+        },
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: {
+            items: [
+              createMockChangelog(1, { id: 'E1ACHH' }),
+              createMockChangelog(1, { id: '6W5H97' }),
+            ],
+          },
+          success: true,
+        },
         roundChangelogFetching: false, // Without isFetching guard, this was true
         roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: {
-            items: [
-              createMockChangelog(1, { id: 'E1ACHH' }),
-              createMockChangelog(1, { id: '6W5H97' }),
-            ],
-          },
-        },
-        configChangeRoundNumber: 2, // We need round 2
-        isWaitingForChangelog: true,
-        existingCache: {
-          success: true,
-          data: {
-            items: [
-              createMockChangelog(1, { id: 'E1ACHH' }),
-              createMockChangelog(1, { id: '6W5H97' }),
-            ],
-          },
-        },
       });
 
       // The fix: Should NOT process this data
-      expect(result.shouldProcess).toBe(false);
+      expect(result.shouldProcess).toBeFalsy();
       expect(result.reason).toContain('wrong round');
     });
 
     it('should correctly merge round 2 data after fetch completes', () => {
       // The fixed scenario
       const result = simulateChangelogMerge({
-        roundChangelogFetching: false, // Fetch complete
-        roundChangelogSuccess: true,
-        roundChangelogData: {
-          success: true,
-          data: {
-            items: [
-              createMockChangelog(2, { id: 'NEW-R2-1' }),
-              createMockChangelog(2, { id: 'NEW-R2-2' }),
-            ],
-          },
-        },
         configChangeRoundNumber: 2,
-        isWaitingForChangelog: true,
         existingCache: {
-          success: true,
           data: {
             items: [
               createMockChangelog(1, { id: 'E1ACHH' }),
               createMockChangelog(1, { id: '6W5H97' }),
             ],
           },
+          success: true,
         },
+        isWaitingForChangelog: true,
+        roundChangelogData: {
+          data: {
+            items: [
+              createMockChangelog(2, { id: 'NEW-R2-1' }),
+              createMockChangelog(2, { id: 'NEW-R2-2' }),
+            ],
+          },
+          success: true,
+        },
+        roundChangelogFetching: false, // Fetch complete
+        roundChangelogSuccess: true,
       });
 
       // Should process and merge correctly
-      expect(result.shouldProcess).toBe(true);
-      expect(result.shouldMerge).toBe(true);
+      expect(result.shouldProcess).toBeTruthy();
+      expect(result.shouldMerge).toBeTruthy();
 
       // New round 2 items should be at the beginning
       expect(result.mergedItems[0]?.id).toBe('NEW-R2-1');

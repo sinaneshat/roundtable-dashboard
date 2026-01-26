@@ -19,24 +19,24 @@ type ChatRenameDialogProps = {
 };
 
 export function ChatRenameDialog({
-  open,
-  onOpenChange,
-  threadId,
   currentTitle,
+  onOpenChange,
+  open,
+  threadId,
 }: ChatRenameDialogProps) {
   const t = useTranslations();
   const updateThreadMutation = useUpdateThreadMutation();
 
   const methods = useForm<ChatRenameFormValues>({
-    resolver: zodResolver(ChatRenameFormSchema),
     defaultValues: { title: currentTitle },
     mode: 'onChange',
+    resolver: zodResolver(ChatRenameFormSchema),
   });
 
   const {
+    formState: { isDirty, isSubmitting, isValid },
     handleSubmit,
     reset,
-    formState: { isDirty, isValid, isSubmitting },
   } = methods;
 
   useEffect(() => {
@@ -52,8 +52,8 @@ export function ChatRenameDialog({
       if (trimmedTitle && trimmedTitle !== currentTitle) {
         updateThreadMutation.mutate(
           {
-            param: { id: threadId },
             json: { title: trimmedTitle },
+            param: { id: threadId },
           },
           {
             onSuccess: () => {
@@ -69,8 +69,9 @@ export function ChatRenameDialog({
   );
 
   const handleClose = useCallback(() => {
-    if (updateThreadMutation.isPending)
+    if (updateThreadMutation.isPending) {
       return;
+    }
     onOpenChange(false);
   }, [updateThreadMutation.isPending, onOpenChange]);
 

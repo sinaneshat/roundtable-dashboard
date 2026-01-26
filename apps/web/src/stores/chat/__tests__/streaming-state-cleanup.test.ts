@@ -46,16 +46,16 @@ function createParticipantMessage(
   content = 'Test response',
 ): ApiMessage {
   return {
+    createdAt: new Date(),
     id: `thread-1_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: content }],
     metadata: {
-      roundNumber,
+      model: `model-${participantIndex}`,
       participantIndex,
       role: MessageRoles.ASSISTANT,
-      model: `model-${participantIndex}`,
+      roundNumber,
     },
-    createdAt: new Date(),
+    parts: [{ text: content, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -64,11 +64,11 @@ function createParticipantMessage(
  */
 function createUserMessage(roundNumber: number, content = 'User query'): ApiMessage {
   return {
-    id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: content }],
-    metadata: { roundNumber },
     createdAt: new Date(),
+    id: `user-r${roundNumber}`,
+    metadata: { roundNumber },
+    parts: [{ text: content, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -89,8 +89,8 @@ function simulateCompleteRound(store: ReturnType<typeof createChatStore>, roundN
   // Moderator message
   messages.push(
     createTestModeratorMessage({
-      id: `moderator-r${roundNumber}`,
       content: 'Round moderator',
+      id: `moderator-r${roundNumber}`,
       roundNumber,
     }),
   );
@@ -112,7 +112,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setStreamingRoundNumber(0);
       store.getState().setCurrentParticipantIndex(2);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(0);
       expect(store.getState().currentParticipantIndex).toBe(2);
 
@@ -120,7 +120,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: All streaming state should be cleared
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
       expect(store.getState().currentParticipantIndex).toBe(0);
     });
@@ -146,12 +146,12 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setWaitingToStartStreaming(true);
       store.getState().setIsStreaming(true);
 
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: waitingToStartStreaming should be cleared
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
     });
   });
 
@@ -164,19 +164,19 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setIsWaitingForChangelog(true);
       store.getState().setStreamingRoundNumber(0);
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Complete moderator stream
       store.getState().completeModeratorStream();
 
       // ✅ CRITICAL: isModeratorStreaming should be cleared
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeModeratorStream()
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should clear moderator state when completeStreaming is called', () => {
@@ -190,12 +190,12 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: completeStreaming should clear isModeratorStreaming
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeStreaming()
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
   });
 
@@ -212,7 +212,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       expect(store.getState().pendingMessage).toBe('Test message');
       expect(store.getState().pendingAttachmentIds).toHaveLength(2);
       expect(store.getState().expectedParticipantIds).toHaveLength(2);
-      expect(store.getState().hasSentPendingMessage).toBe(true);
+      expect(store.getState().hasSentPendingMessage).toBeTruthy();
 
       // Complete streaming
       store.getState().completeStreaming();
@@ -221,7 +221,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       expect(store.getState().pendingMessage).toBeNull();
       expect(store.getState().pendingAttachmentIds).toBeNull();
       expect(store.getState().expectedParticipantIds).toBeNull();
-      expect(store.getState().hasSentPendingMessage).toBe(false);
+      expect(store.getState().hasSentPendingMessage).toBeFalsy();
     });
 
     it('should clear pendingFileParts when streaming completes', () => {
@@ -236,13 +236,13 @@ describe('streaming State Cleanup Between Rounds', () => {
         'Test message',
         ['model-1'],
         undefined, // no attachment IDs
-        [{ type: 'file', name: 'test.pdf', url: 'http://test.com/file', uploadId: 'upload-1' }],
+        [{ name: 'test.pdf', type: 'file', uploadId: 'upload-1', url: 'http://test.com/file' }],
       );
 
       // Note: prepareForNewMessage sets pendingFileParts but ALSO resets isStreaming=false
       // This is the current behavior - it resets streaming flags as part of preparing
       expect(store.getState().pendingFileParts).toHaveLength(1);
-      expect(store.getState().isStreaming).toBe(false); // Reset by prepareForNewMessage
+      expect(store.getState().isStreaming).toBeFalsy(); // Reset by prepareForNewMessage
 
       // Set streaming back to true to simulate actual streaming state
       store.getState().setIsStreaming(true);
@@ -316,7 +316,7 @@ describe('streaming State Cleanup Between Rounds', () => {
 
       // Verify round 0 cleanup
       const afterRound0 = store.getState();
-      expect(afterRound0.isStreaming).toBe(false);
+      expect(afterRound0.isStreaming).toBeFalsy();
       expect(afterRound0.streamingRoundNumber).toBeNull();
       expect(afterRound0.currentRoundNumber).toBeNull();
       expect(afterRound0.currentParticipantIndex).toBe(0);
@@ -330,7 +330,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setPendingMessage('Round 1 message');
 
       const duringRound1 = store.getState();
-      expect(duringRound1.isStreaming).toBe(true);
+      expect(duringRound1.isStreaming).toBeTruthy();
       expect(duringRound1.streamingRoundNumber).toBe(1);
       expect(duringRound1.currentRoundNumber).toBe(1);
       expect(duringRound1.currentParticipantIndex).toBe(0); // Should start at 0
@@ -341,7 +341,7 @@ describe('streaming State Cleanup Between Rounds', () => {
 
       // ✅ CRITICAL: Round 1 should have fresh state, no carry-over from round 0
       const afterRound1 = store.getState();
-      expect(afterRound1.isStreaming).toBe(false);
+      expect(afterRound1.isStreaming).toBeFalsy();
       expect(afterRound1.streamingRoundNumber).toBeNull();
       expect(afterRound1.currentRoundNumber).toBeNull();
       expect(afterRound1.currentParticipantIndex).toBe(0);
@@ -366,14 +366,14 @@ describe('streaming State Cleanup Between Rounds', () => {
         store.getState().completeStreaming();
 
         // Verify cleanup
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
         expect(store.getState().streamingRoundNumber).toBeNull();
         expect(store.getState().currentRoundNumber).toBeNull();
       }
 
       // After 5 rounds, state should be clean
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.currentRoundNumber).toBeNull();
       expect(finalState.currentParticipantIndex).toBe(0);
@@ -413,12 +413,12 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setIsModeratorStreaming(true);
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       // Moderator completes
       store.getState().completeModeratorStream();
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // ⚠️ NOTE: isWaitingForChangelog is NOT cleared by completeModeratorStream()
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched.
@@ -433,23 +433,23 @@ describe('streaming State Cleanup Between Rounds', () => {
       const finalState = store.getState();
 
       // STREAMING_STATE_RESET
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.streamingRoundNumber).toBeNull();
       expect(finalState.currentRoundNumber).toBeNull();
-      expect(finalState.waitingToStartStreaming).toBe(false);
+      expect(finalState.waitingToStartStreaming).toBeFalsy();
       expect(finalState.currentParticipantIndex).toBe(0);
 
       // MODERATOR_STATE_RESET (only isModeratorStreaming is in this reset now)
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isModeratorStreaming).toBeFalsy();
       // ⚠️ changelog flags cleared by simulated changelog sync above
-      expect(finalState.isWaitingForChangelog).toBe(false);
+      expect(finalState.isWaitingForChangelog).toBeFalsy();
 
       // PENDING_MESSAGE_STATE_RESET
       expect(finalState.pendingMessage).toBeNull();
       expect(finalState.pendingAttachmentIds).toBeNull();
       expect(finalState.pendingFileParts).toBeNull();
       expect(finalState.expectedParticipantIds).toBeNull();
-      expect(finalState.hasSentPendingMessage).toBe(false);
+      expect(finalState.hasSentPendingMessage).toBeFalsy();
 
       // Animation state
       expect(finalState.pendingAnimations.size).toBe(0);
@@ -470,8 +470,8 @@ describe('streaming State Cleanup Between Rounds', () => {
       // Moderator starts IMMEDIATELY (before completeStreaming is called)
       store.getState().setIsModeratorStreaming(true);
 
-      expect(store.getState().isStreaming).toBe(true); // Still streaming (moderator)
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy(); // Still streaming (moderator)
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       // Now complete participant streaming
       store.getState().completeStreaming();
@@ -479,8 +479,8 @@ describe('streaming State Cleanup Between Rounds', () => {
       // ✅ BUG POTENTIAL: completeStreaming clears BOTH participant and moderator flags
       // This is current behavior - both are cleared together
       const afterComplete = store.getState();
-      expect(afterComplete.isStreaming).toBe(false);
-      expect(afterComplete.isModeratorStreaming).toBe(false);
+      expect(afterComplete.isStreaming).toBeFalsy();
+      expect(afterComplete.isModeratorStreaming).toBeFalsy();
 
       // This documents the current behavior where completeStreaming clears moderator state
       // If this is a bug, the test would fail and reveal the issue
@@ -494,14 +494,14 @@ describe('streaming State Cleanup Between Rounds', () => {
       // Start regeneration
       store.getState().startRegeneration(0);
 
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
       expect(store.getState().regeneratingRoundNumber).toBe(0);
 
       // Complete streaming (includes regeneration cleanup)
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: Regeneration state should be cleared
-      expect(store.getState().isRegenerating).toBe(false);
+      expect(store.getState().isRegenerating).toBeFalsy();
       expect(store.getState().regeneratingRoundNumber).toBeNull();
     });
 
@@ -513,12 +513,12 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(0);
 
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
 
       // Complete round 0 regeneration
       store.getState().completeStreaming();
 
-      expect(store.getState().isRegenerating).toBe(false);
+      expect(store.getState().isRegenerating).toBeFalsy();
       expect(store.getState().regeneratingRoundNumber).toBeNull();
 
       // Start new round 1 (not regenerating)
@@ -526,7 +526,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().setStreamingRoundNumber(1);
 
       // ✅ CRITICAL: No regeneration state from round 0
-      expect(store.getState().isRegenerating).toBe(false);
+      expect(store.getState().isRegenerating).toBeFalsy();
       expect(store.getState().regeneratingRoundNumber).toBeNull();
     });
   });
@@ -537,10 +537,10 @@ describe('streaming State Cleanup Between Rounds', () => {
 
       // Add pre-search for round 0
       store.getState().addPreSearch({
-        threadId: 'thread-1',
         roundNumber: 0,
-        status: MessageStatuses.STREAMING,
         searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId: 'thread-1',
       });
 
       // Start participant streaming
@@ -551,13 +551,13 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
 
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
-      expect(store.getState().isStreaming).toBe(true); // Participants still streaming
+      expect(store.getState().isStreaming).toBeTruthy(); // Participants still streaming
 
       // Participants complete
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: Streaming state cleared, pre-search data preserved
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE); // Preserved
     });
@@ -576,7 +576,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().completeStreaming();
 
       // Should not throw, state should remain clean
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
 
@@ -584,14 +584,14 @@ describe('streaming State Cleanup Between Rounds', () => {
       const store = createChatStore();
 
       // State is already clean (defaults)
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
 
       // Call completeStreaming anyway
       store.getState().completeStreaming();
 
       // Should not throw, state should remain clean
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
 
@@ -603,14 +603,14 @@ describe('streaming State Cleanup Between Rounds', () => {
       // Don't set isStreaming or currentParticipantIndex
 
       expect(store.getState().streamingRoundNumber).toBe(0);
-      expect(store.getState().isStreaming).toBe(false); // Still default
+      expect(store.getState().isStreaming).toBeFalsy(); // Still default
 
       // Complete streaming
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: Even partial state should be cleared
       expect(store.getState().streamingRoundNumber).toBeNull();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should clear state even if messages array is empty', () => {
@@ -627,7 +627,7 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().completeStreaming();
 
       // ✅ CRITICAL: State should be cleared regardless of messages
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
   });
@@ -640,16 +640,16 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().markPreSearchTriggered(0);
       store.getState().markModeratorCreated(0);
 
-      expect(store.getState().triggeredPreSearchRounds.has(0)).toBe(true);
-      expect(store.getState().createdModeratorRounds.has(0)).toBe(true);
+      expect(store.getState().triggeredPreSearchRounds.has(0)).toBeTruthy();
+      expect(store.getState().createdModeratorRounds.has(0)).toBeTruthy();
 
       // Complete streaming for round 0
       store.getState().completeStreaming();
 
       // ✅ IMPORTANT: Tracking state should PERSIST across rounds
       // These sets prevent duplicate triggers and should NOT be cleared by completeStreaming
-      expect(store.getState().triggeredPreSearchRounds.has(0)).toBe(true);
-      expect(store.getState().createdModeratorRounds.has(0)).toBe(true);
+      expect(store.getState().triggeredPreSearchRounds.has(0)).toBeTruthy();
+      expect(store.getState().createdModeratorRounds.has(0)).toBeTruthy();
 
       // This ensures we don't accidentally re-trigger pre-search or moderator for completed rounds
     });
@@ -661,19 +661,19 @@ describe('streaming State Cleanup Between Rounds', () => {
       store.getState().markModeratorStreamTriggered('moderator-id-0', 0);
       store.getState().markModeratorStreamTriggered('moderator-id-1', 1);
 
-      expect(store.getState().triggeredModeratorRounds.has(0)).toBe(true);
-      expect(store.getState().triggeredModeratorRounds.has(1)).toBe(true);
-      expect(store.getState().triggeredModeratorIds.has('moderator-id-0')).toBe(true);
-      expect(store.getState().triggeredModeratorIds.has('moderator-id-1')).toBe(true);
+      expect(store.getState().triggeredModeratorRounds.has(0)).toBeTruthy();
+      expect(store.getState().triggeredModeratorRounds.has(1)).toBeTruthy();
+      expect(store.getState().triggeredModeratorIds.has('moderator-id-0')).toBeTruthy();
+      expect(store.getState().triggeredModeratorIds.has('moderator-id-1')).toBeTruthy();
 
       // Complete streaming
       store.getState().completeStreaming();
 
       // ✅ IMPORTANT: Moderator tracking should persist
-      expect(store.getState().triggeredModeratorRounds.has(0)).toBe(true);
-      expect(store.getState().triggeredModeratorRounds.has(1)).toBe(true);
-      expect(store.getState().triggeredModeratorIds.has('moderator-id-0')).toBe(true);
-      expect(store.getState().triggeredModeratorIds.has('moderator-id-1')).toBe(true);
+      expect(store.getState().triggeredModeratorRounds.has(0)).toBeTruthy();
+      expect(store.getState().triggeredModeratorRounds.has(1)).toBeTruthy();
+      expect(store.getState().triggeredModeratorIds.has('moderator-id-0')).toBeTruthy();
+      expect(store.getState().triggeredModeratorIds.has('moderator-id-1')).toBeTruthy();
     });
   });
 });

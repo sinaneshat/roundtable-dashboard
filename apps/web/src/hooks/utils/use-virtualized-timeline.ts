@@ -72,16 +72,16 @@ export type UseVirtualizedTimelineResult = {
  * Previous implementation used state + RAF which caused stale positions during streaming.
  */
 export function useVirtualizedTimeline({
-  timelineItems,
-  listRef,
   estimateSize = 200,
-  overscan = 5,
-  paddingStart = 0,
-  paddingEnd = 0,
-  isDataReady = true,
-  isStreaming = false,
   getIsStreamingFromStore,
   initialScrollToBottom = false,
+  isDataReady = true,
+  isStreaming = false,
+  listRef,
+  overscan = 5,
+  paddingEnd = 0,
+  paddingStart = 0,
+  timelineItems,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // ✅ SSR FIX: Detect client-side mount using useSyncExternalStore
   // Window virtualizer requires window object - disable during SSR to render content
@@ -106,8 +106,9 @@ export function useVirtualizedTimeline({
 
   // Measure scrollMargin from listRef using ResizeObserver
   useLayoutEffect(() => {
-    if (!shouldEnable || !listRef.current)
+    if (!shouldEnable || !listRef.current) {
       return;
+    }
 
     const measureScrollMargin = () => {
       if (listRef.current) {
@@ -159,15 +160,15 @@ export function useVirtualizedTimeline({
   // React 19 batches updates naturally, so synchronous flushSync is not needed
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
-    estimateSize: () => estimateSize,
-    overscan,
-    scrollMargin: scrollMarginRef.current,
-    paddingStart,
-    paddingEnd,
     enabled: shouldEnable,
-    useFlushSync: false, // React 19 compatibility - prevents flushSync warning
+    estimateSize: () => estimateSize,
     // ✅ SSR: Start scrolled to bottom for initial hydration
     initialOffset: getInitialOffset,
+    overscan,
+    paddingEnd,
+    paddingStart,
+    scrollMargin: scrollMarginRef.current,
+    useFlushSync: false, // React 19 compatibility - prevents flushSync warning
   });
 
   // Scroll position adjustment during streaming
@@ -214,8 +215,9 @@ export function useVirtualizedTimeline({
 
   const scrollToBottom = useCallback(
     (options?: { behavior?: 'auto' | 'smooth' }) => {
-      if (timelineItems.length === 0)
+      if (timelineItems.length === 0) {
         return;
+      }
       virtualizer.scrollToIndex(timelineItems.length - 1, {
         align: 'end',
         behavior: options?.behavior ?? 'auto',
@@ -244,8 +246,9 @@ export function useVirtualizedTimeline({
   // If user scrolls away from initial position, skip auto-scroll (respect user intent)
   useEffect(() => {
     // Only track until initial scroll decision is made
-    if (hasInitialScrolledRef.current || !initialScrollToBottom)
+    if (hasInitialScrolledRef.current || !initialScrollToBottom) {
       return;
+    }
 
     // Capture initial scroll position on mount
     if (initialScrollPositionRef.current === null) {
@@ -254,8 +257,9 @@ export function useVirtualizedTimeline({
 
     const handleUserScroll = () => {
       // If already processed, ignore
-      if (hasInitialScrolledRef.current)
+      if (hasInitialScrolledRef.current) {
         return;
+      }
 
       const currentScroll = window.scrollY;
       const initialScroll = initialScrollPositionRef.current ?? 0;
@@ -280,8 +284,9 @@ export function useVirtualizedTimeline({
       hasInitialScrolledRef.current = true;
 
       // Skip auto-scroll if user already scrolled during initial load
-      if (userScrolledBeforeInitialRef.current)
+      if (userScrolledBeforeInitialRef.current) {
         return;
+      }
 
       // Use virtualizer's scrollToIndex for accurate positioning
       virtualizer.scrollToIndex(timelineItems.length - 1, {
@@ -292,11 +297,11 @@ export function useVirtualizedTimeline({
   }, [initialScrollToBottom, shouldEnable, timelineItems.length, virtualizer]);
 
   return {
-    virtualizer,
+    isVirtualizationEnabled: shouldEnable,
     measureElement: virtualizer.measureElement,
+    scrollToBottom,
     scrollToIndex,
     scrollToOffset,
-    scrollToBottom,
-    isVirtualizationEnabled: shouldEnable,
+    virtualizer,
   };
 }

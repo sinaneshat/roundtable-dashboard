@@ -36,11 +36,11 @@ const mockStore = vi.hoisted(() => {
 
   return {
     getState: () => storeState,
-    setState: (newState: Partial<ChatStore>) => {
-      storeState = { ...storeState, ...newState };
-    },
     reset: () => {
       storeState = {};
+    },
+    setState: (newState: Partial<ChatStore>) => {
+      storeState = { ...storeState, ...newState };
     },
     subscribe: vi.fn(),
   };
@@ -66,14 +66,14 @@ vi.mock('@/components/providers/chat-store-provider', async (importOriginal) => 
  */
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: 'analyzing',
     status: 'active',
-    enableWebSearch: false,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
     ...overrides,
   } as ChatThread;
 }
@@ -82,17 +82,17 @@ function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
  * Creates mock participants for testing
  * Uses 'gpt-4' as default model to match test helper createTestAssistantMessage
  */
-function createMockParticipants(count: number = 2): ChatParticipant[] {
+function createMockParticipants(count = 2): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: 'gpt-4', // Match default in createTestAssistantMessage
-    role: '',
-    customRoleId: null,
-    isEnabled: true,
-    priority: i,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: 'gpt-4', // Match default in createTestAssistantMessage
+    priority: i,
+    role: '',
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   })) as ChatParticipant[];
 }
@@ -106,15 +106,15 @@ function createMockPreSearch(
   overrides?: Partial<StoredPreSearch>,
 ): StoredPreSearch {
   return {
-    id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status,
-    userQuery: 'test query',
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'test query',
     ...overrides,
   } as StoredPreSearch;
 }
@@ -128,8 +128,8 @@ function createCompleteRoundMessages(
 ): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -137,12 +137,12 @@ function createCompleteRoundMessages(
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Assistant ${i} response for round ${roundNumber}`,
-        roundNumber,
+        finishReason: 'stop',
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: 'stop',
+        roundNumber,
       }),
     );
   }
@@ -156,27 +156,27 @@ function createCompleteRoundMessages(
 function createStreamingAssistantMessage(
   roundNumber: number,
   participantIndex: number,
-  hasContent: boolean = true,
+  hasContent = true,
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: hasContent
-      ? [{ type: 'text' as const, text: 'Partial response...', state: 'streaming' as const }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: FinishReasons.UNKNOWN,
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
       participantId: `participant-${participantIndex}`,
       participantIndex,
       participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.UNKNOWN,
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: hasContent
+      ? [{ state: 'streaming' as const, text: 'Partial response...', type: 'text' as const }]
+      : [],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -189,21 +189,21 @@ function createEmptyInterruptedMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [], // Empty - no content generated before interrupt
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: FinishReasons.UNKNOWN, // Unknown = interrupted
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
       participantId: `participant-${participantIndex}`,
       participantIndex,
       participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.UNKNOWN, // Unknown = interrupted
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: [], // Empty - no content generated before interrupt
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -212,39 +212,39 @@ function createEmptyInterruptedMessage(
  */
 function setupMockStore(overrides?: Partial<ChatStore>): void {
   const defaultActions = {
+    clearStreamResumption: vi.fn(),
+    prepareForNewMessage: vi.fn(),
+    setCurrentParticipantIndex: vi.fn(),
+    setExpectedParticipantIds: vi.fn(),
+    setIsModeratorStreaming: vi.fn(),
+    setIsStreaming: vi.fn(),
+    setIsWaitingForChangelog: vi.fn(),
+    setMessages: vi.fn(),
     setNextParticipantToTrigger: vi.fn(),
     setStreamingRoundNumber: vi.fn(),
-    setCurrentParticipantIndex: vi.fn(),
     setWaitingToStartStreaming: vi.fn(),
-    setIsStreaming: vi.fn(),
-    prepareForNewMessage: vi.fn(),
-    setExpectedParticipantIds: vi.fn(),
-    setMessages: vi.fn(),
-    setIsWaitingForChangelog: vi.fn(),
-    clearStreamResumption: vi.fn(),
-    setIsModeratorStreaming: vi.fn(),
-    transitionToParticipantsPhase: vi.fn(),
     transitionToModeratorPhase: vi.fn(),
+    transitionToParticipantsPhase: vi.fn(),
   };
 
   mockStore.setState({
-    messages: [],
-    participants: createMockParticipants(2),
-    preSearches: [],
-    isStreaming: false,
-    waitingToStartStreaming: false,
-    pendingMessage: null,
-    hasSentPendingMessage: false,
-    hasEarlyOptimisticMessage: false,
-    enableWebSearch: false,
-    thread: createMockThread(),
     // Phase-based resumption state
     currentResumptionPhase: null,
-    preSearchResumption: null,
+    enableWebSearch: false,
+    hasEarlyOptimisticMessage: false,
+    hasSentPendingMessage: false,
+    isModeratorStreaming: false,
+    isStreaming: false,
+    messages: [],
     moderatorResumption: null,
+    participants: createMockParticipants(2),
+    pendingMessage: null,
+    preSearches: [],
+    preSearchResumption: null,
     resumptionRoundNumber: null,
     streamResumptionPrefilled: false,
-    isModeratorStreaming: false,
+    thread: createMockThread(),
+    waitingToStartStreaming: false,
     ...defaultActions,
     ...overrides,
   });
@@ -277,22 +277,22 @@ describe('useIncompleteRoundResumption', () => {
       const streamingPreSearch = createMockPreSearch(roundNumber, MessageStatuses.STREAMING);
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test query',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         preSearches: [streamingPreSearch],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -312,33 +312,33 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
       const completePreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Test summary',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Test summary',
           totalResults: 0,
           totalTime: 0,
         },
       });
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test query',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         preSearches: [completePreSearch],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -356,29 +356,29 @@ describe('useIncompleteRoundResumption', () => {
       // SCENARIO: User refreshes during search - pre-search exists but user message doesn't
       const roundNumber = 0;
       const orphanedPreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
-        userQuery: 'My search query that was lost',
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Test',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Test',
           totalResults: 0,
           totalTime: 0,
         },
+        userQuery: 'My search query that was lost',
       });
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [], // No user message exists
         preSearches: [orphanedPreSearch],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -386,7 +386,7 @@ describe('useIncompleteRoundResumption', () => {
       // AND call prepareForNewMessage (participant triggering)
       await waitFor(() => {
         const setMessagesFn = mockStore.getState().setMessages;
-        expect(setMessagesFn).toHaveBeenCalled();
+        expect(setMessagesFn).toHaveBeenCalledWith();
       }, { timeout: 500 });
     });
   });
@@ -403,8 +403,8 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createStreamingAssistantMessage(roundNumber, 0, true),
@@ -414,8 +414,8 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -424,7 +424,7 @@ describe('useIncompleteRoundResumption', () => {
         // Participant 0 has streaming parts with content - counted as "in progress"
         // So nextParticipantIndex should be 1 (the first participant that's not accounted for)
         expect(result.current.nextParticipantIndex).toBe(1);
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
       }, { timeout: 500 });
     });
 
@@ -435,17 +435,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Response from participant 0',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(2),
@@ -453,13 +453,13 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(1);
       }, { timeout: 500 });
     });
@@ -470,28 +470,28 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        isStreaming: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           // Participant 0 is streaming (not complete)
           createStreamingAssistantMessage(roundNumber, 0, false),
         ],
         participants: createMockParticipants(2),
-        isStreaming: true,
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should NOT be incomplete while streaming
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
 
     it('should retry empty interrupted responses (finishReason: unknown, 0 tokens)', async () => {
@@ -502,8 +502,8 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createEmptyInterruptedMessage(roundNumber, 0),
@@ -513,14 +513,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Empty interrupted message should be retried
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(0); // Retry participant 0
       }, { timeout: 500 });
     });
@@ -534,17 +534,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Response 0',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(3),
@@ -552,8 +552,8 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result: result1 } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -565,33 +565,33 @@ describe('useIncompleteRoundResumption', () => {
       mockStore.setState({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Response 0',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p1`,
             content: 'Response 1',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p1`,
             participantId: 'participant-1',
             participantIndex: 1,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
       });
 
       const { result: result2 } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -612,17 +612,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Complete response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           createStreamingAssistantMessage(roundNumber, 1, true),
         ],
@@ -631,14 +631,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Round is still incomplete because participant 1 is streaming
       // Summary should NOT trigger yet
-      expect(result.current.isIncomplete).toBe(false); // Don't try to resume in-progress streams
+      expect(result.current.isIncomplete).toBeFalsy(); // Don't try to resume in-progress streams
     });
 
     it('should mark round complete when ALL participants have finished', () => {
@@ -652,14 +652,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Round is complete
-      expect(result.current.isIncomplete).toBe(false);
-      expect(result.current.nextParticipantIndex).toBe(null);
+      expect(result.current.isIncomplete).toBeFalsy();
+      expect(result.current.nextParticipantIndex).toBeNull();
     });
 
     it('should wait for pre-search before checking participant completeness', async () => {
@@ -667,29 +667,29 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test query',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
-        preSearches: [createMockPreSearch(roundNumber, MessageStatuses.STREAMING)],
-        enableWebSearch: true,
-        thread: createMockThread({ enableWebSearch: true }),
         participants: createMockParticipants(2),
+        preSearches: [createMockPreSearch(roundNumber, MessageStatuses.STREAMING)],
+        thread: createMockThread({ enableWebSearch: true }),
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should be incomplete, but participants should NOT trigger yet
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
       }, { timeout: 500 });
     });
   });
@@ -702,25 +702,25 @@ describe('useIncompleteRoundResumption', () => {
       // SCENARIO: isStreaming stuck true after refresh, but stream finished
       // ✅ EVENT-DRIVEN: Uses streamFinishAcknowledged flag instead of timeout
       setupMockStore({
-        isStreaming: true,
-        waitingToStartStreaming: false,
-        pendingMessage: null,
         hasEarlyOptimisticMessage: false,
-        streamFinishAcknowledged: true, // Event-driven signal that stream finished
+        isStreaming: true,
         messages: [
           createTestUserMessage({
-            id: 'thread-123_r0_user',
             content: 'Test',
+            id: 'thread-123_r0_user',
             roundNumber: 0,
           }),
         ],
         participants: createMockParticipants(2),
+        pendingMessage: null,
+        streamFinishAcknowledged: true, // Event-driven signal that stream finished
+        waitingToStartStreaming: false,
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -735,25 +735,25 @@ describe('useIncompleteRoundResumption', () => {
       // SCENARIO: isStreaming true but stream might still be active
       // ✅ EVENT-DRIVEN: Wait for streamFinishAcknowledged signal
       setupMockStore({
-        isStreaming: true,
-        waitingToStartStreaming: false,
-        pendingMessage: null,
         hasEarlyOptimisticMessage: false,
-        streamFinishAcknowledged: false, // Stream not yet finished
+        isStreaming: true,
         messages: [
           createTestUserMessage({
-            id: 'thread-123_r0_user',
             content: 'Test',
+            id: 'thread-123_r0_user',
             roundNumber: 0,
           }),
         ],
         participants: createMockParticipants(2),
+        pendingMessage: null,
+        streamFinishAcknowledged: false, // Stream not yet finished
+        waitingToStartStreaming: false,
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -772,22 +772,22 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        isStreaming: false,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         participants: createMockParticipants(2),
-        isStreaming: false,
         waitingToStartStreaming: false,
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -811,51 +811,51 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        hasEarlyOptimisticMessage: true, // Submission in progress
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         participants: createMockParticipants(2),
-        hasEarlyOptimisticMessage: true, // Submission in progress
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
 
     it('should NOT trigger when pendingMessage exists', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        hasSentPendingMessage: false,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         participants: createMockParticipants(2),
         pendingMessage: 'New message being sent',
-        hasSentPendingMessage: false,
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
 
     it('should NOT duplicate triggers on rapid refreshes', async () => {
@@ -864,8 +864,8 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
@@ -875,8 +875,8 @@ describe('useIncompleteRoundResumption', () => {
       // First render
       const { unmount: unmount1 } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -886,8 +886,8 @@ describe('useIncompleteRoundResumption', () => {
       // Second render
       const { unmount: unmount2 } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -896,8 +896,8 @@ describe('useIncompleteRoundResumption', () => {
       // Third render
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -905,7 +905,7 @@ describe('useIncompleteRoundResumption', () => {
       await waitFor(() => {
         const setNextFn = mockStore.getState().setNextParticipantToTrigger;
         // Should be called but not multiple times per thread
-        expect(setNextFn).toHaveBeenCalled();
+        expect(setNextFn).toHaveBeenCalledWith();
       }, { timeout: 500 });
     });
 
@@ -917,43 +917,43 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Response from old model',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
+            model: 'old-model', // Different model than current config
             participantId: 'old-participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
-            model: 'old-model', // Different model than current config
+            roundNumber,
           }),
         ],
         participants: [
           {
-            id: 'new-participant-0',
-            threadId: 'thread-123',
-            modelId: 'new-model', // Different from message's model
-            role: '',
-            customRoleId: null,
-            isEnabled: true,
-            priority: 0,
-            settings: null,
             createdAt: new Date(),
+            customRoleId: null,
+            id: 'new-participant-0',
+            isEnabled: true,
+            modelId: 'new-model', // Different from message's model
+            priority: 0,
+            role: '',
+            settings: null,
+            threadId: 'thread-123',
             updatedAt: new Date(),
           },
           {
-            id: 'new-participant-1',
-            threadId: 'thread-123',
-            modelId: 'new-model-2',
-            role: '',
-            customRoleId: null,
-            isEnabled: true,
-            priority: 1,
-            settings: null,
             createdAt: new Date(),
+            customRoleId: null,
+            id: 'new-participant-1',
+            isEnabled: true,
+            modelId: 'new-model-2',
+            priority: 1,
+            role: '',
+            settings: null,
+            threadId: 'thread-123',
             updatedAt: new Date(),
           },
         ] as ChatParticipant[],
@@ -961,14 +961,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should NOT be incomplete due to participant config mismatch
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(false);
+        expect(result.current.isIncomplete).toBeFalsy();
       });
     });
   });
@@ -985,13 +985,13 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(false);
-      expect(result.current.nextParticipantIndex).toBe(null);
+      expect(result.current.isIncomplete).toBeFalsy();
+      expect(result.current.nextParticipantIndex).toBeNull();
     });
 
     it('should handle disabled participants', async () => {
@@ -1000,34 +1000,34 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         participants: [
           {
-            id: 'participant-0',
-            threadId: 'thread-123',
-            modelId: 'model-0',
-            role: '',
-            customRoleId: null,
-            isEnabled: true, // Only this one is enabled
-            priority: 0,
-            settings: null,
             createdAt: new Date(),
+            customRoleId: null,
+            id: 'participant-0',
+            isEnabled: true, // Only this one is enabled
+            modelId: 'model-0',
+            priority: 0,
+            role: '',
+            settings: null,
+            threadId: 'thread-123',
             updatedAt: new Date(),
           },
           {
-            id: 'participant-1',
-            threadId: 'thread-123',
-            modelId: 'model-1',
-            role: '',
-            customRoleId: null,
-            isEnabled: false, // Disabled
-            priority: 1,
-            settings: null,
             createdAt: new Date(),
+            customRoleId: null,
+            id: 'participant-1',
+            isEnabled: false, // Disabled
+            modelId: 'model-1',
+            priority: 1,
+            role: '',
+            settings: null,
+            threadId: 'thread-123',
             updatedAt: new Date(),
           },
         ] as ChatParticipant[],
@@ -1035,14 +1035,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should only expect 1 participant (the enabled one)
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(0);
       }, { timeout: 500 });
     });
@@ -1051,8 +1051,8 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: 'thread-123_r0_user',
             content: 'Test',
+            id: 'thread-123_r0_user',
             roundNumber: 0,
           }),
         ],
@@ -1061,12 +1061,12 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: false, // Disabled
+          threadId: 'thread-123',
         }),
       );
 
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
 
     it('should reset refs on threadId change', () => {
@@ -1078,8 +1078,8 @@ describe('useIncompleteRoundResumption', () => {
       const { rerender } = renderHook(
         ({ threadId }) =>
           useIncompleteRoundResumption({
-            threadId,
             enabled: true,
+            threadId,
           }),
         { initialProps: { threadId: 'thread-123' } },
       );
@@ -1099,13 +1099,13 @@ describe('useIncompleteRoundResumption', () => {
         messages: [
           {
             id: `optimistic-user-123-r${roundNumber}`,
-            role: UIMessageRoles.USER as const,
-            parts: [{ type: 'text' as const, text: 'New message' }],
             metadata: {
+              isOptimistic: true, // Optimistic flag
               role: MessageRoles.USER,
               roundNumber,
-              isOptimistic: true, // Optimistic flag
             },
+            parts: [{ text: 'New message', type: 'text' as const }],
+            role: UIMessageRoles.USER as const,
           },
         ],
         participants: createMockParticipants(2),
@@ -1113,13 +1113,13 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should NOT try to resume an optimistic message - it's a new submission
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
   });
 
@@ -1133,28 +1133,28 @@ describe('useIncompleteRoundResumption', () => {
       const pendingPreSearch = createMockPreSearch(roundNumber, MessageStatuses.PENDING);
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test query',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         preSearches: [pendingPreSearch],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should detect incomplete but NOT trigger participants while search pending
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
       }, { timeout: 500 });
     });
 
@@ -1163,39 +1163,39 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
       const completePreSearch = createMockPreSearch(roundNumber, MessageStatuses.COMPLETE, {
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Test',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Test',
           totalResults: 0,
           totalTime: 100,
         },
       });
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test query',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
         ],
         preSearches: [completePreSearch],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Search complete, should trigger participant 0
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(0);
       }, { timeout: 500 });
     });
@@ -1206,36 +1206,36 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        isStreaming: false,
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Participant 0 complete response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(3), // 3 participants
-        isStreaming: false,
         waitingToStartStreaming: false,
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should trigger participant 1 (not 0, not 2)
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(1);
       }, { timeout: 500 });
     });
@@ -1246,25 +1246,25 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'P0 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p1`,
             content: 'P1 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p1`,
             participantId: 'participant-1',
             participantIndex: 1,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(3),
@@ -1272,14 +1272,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Should trigger participant 2
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(2);
       }, { timeout: 500 });
     });
@@ -1290,25 +1290,25 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'P0 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p1`,
             content: 'P1 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p1`,
             participantId: 'participant-1',
             participantIndex: 1,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(2), // Only 2 participants
@@ -1316,14 +1316,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // All participants responded - round is complete
-      expect(result.current.isIncomplete).toBe(false);
-      expect(result.current.nextParticipantIndex).toBe(null);
+      expect(result.current.isIncomplete).toBeFalsy();
+      expect(result.current.nextParticipantIndex).toBeNull();
     });
   });
 
@@ -1336,37 +1336,37 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        isStreaming: false, // Stream interrupted by refresh
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'P0 complete',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           // Participant 1 is mid-stream (has streaming parts with content)
           createStreamingAssistantMessage(roundNumber, 1, true),
         ],
         participants: createMockParticipants(2),
-        isStreaming: false, // Stream interrupted by refresh
       });
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Participant 1 has partial content - don't re-trigger
       // The round should NOT be incomplete since p1 is in-progress (has content)
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
 
     it('should retry participant with empty interrupted response after refresh', async () => {
@@ -1376,17 +1376,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'P0 complete',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           // Participant 1 was interrupted before generating content
           createEmptyInterruptedMessage(roundNumber, 1),
@@ -1396,14 +1396,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Empty interrupted response should be retried
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(1);
       }, { timeout: 500 });
     });
@@ -1414,20 +1414,20 @@ describe('useIncompleteRoundResumption', () => {
       const roundNumber = 0;
 
       setupMockStore({
+        enableWebSearch: true,
         messages: [], // No messages - user message wasn't persisted
         preSearches: [
           createMockPreSearch(roundNumber, MessageStatuses.STREAMING, {
             userQuery: 'User query that needs recovery',
           }),
         ],
-        enableWebSearch: true,
         thread: createMockThread({ enableWebSearch: true }),
       });
 
       renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
@@ -1435,7 +1435,7 @@ describe('useIncompleteRoundResumption', () => {
       // The setMessages action should be called to add optimistic user message
       await waitFor(() => {
         const setMessagesFn = mockStore.getState().setMessages;
-        expect(setMessagesFn).toHaveBeenCalled();
+        expect(setMessagesFn).toHaveBeenCalledWith();
       }, { timeout: 500 });
     });
   });
@@ -1451,17 +1451,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'Complete response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           // Participant 1 has message but streaming parts with no content yet
           createStreamingAssistantMessage(roundNumber, 1, false), // hasContent = false
@@ -1471,14 +1471,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Participant 1 is streaming without content - should retry
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(1);
       }, { timeout: 500 });
     });
@@ -1489,25 +1489,25 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: `thread-123_r${roundNumber}_user`,
             content: 'Test',
+            id: `thread-123_r${roundNumber}_user`,
             roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p0`,
             content: 'P0 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p0`,
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber,
           }),
           createTestAssistantMessage({
-            id: `thread-123_r${roundNumber}_p1`,
             content: 'P1 response',
-            roundNumber,
+            finishReason: 'stop',
+            id: `thread-123_r${roundNumber}_p1`,
             participantId: 'participant-1',
             participantIndex: 1,
-            finishReason: 'stop',
+            roundNumber,
           }),
         ],
         participants: createMockParticipants(2),
@@ -1515,14 +1515,14 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // All participants complete - ready for summary
-      expect(result.current.isIncomplete).toBe(false);
-      expect(result.current.resumingRoundNumber).toBe(null);
+      expect(result.current.isIncomplete).toBeFalsy();
+      expect(result.current.resumingRoundNumber).toBeNull();
     });
   });
 
@@ -1536,18 +1536,18 @@ describe('useIncompleteRoundResumption', () => {
         messages: [
           ...createCompleteRoundMessages(0, 2),
           createTestUserMessage({
-            id: 'thread-123_r1_user',
             content: 'Follow-up question',
+            id: 'thread-123_r1_user',
             roundNumber: 1,
           }),
           // Only participant 0 responded in round 1
           createTestAssistantMessage({
-            id: 'thread-123_r1_p0',
             content: 'Response',
-            roundNumber: 1,
+            finishReason: 'stop',
+            id: 'thread-123_r1_p0',
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber: 1,
           }),
         ],
         participants: createMockParticipants(2),
@@ -1555,13 +1555,13 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       await waitFor(() => {
-        expect(result.current.isIncomplete).toBe(true);
+        expect(result.current.isIncomplete).toBeTruthy();
         expect(result.current.nextParticipantIndex).toBe(1);
         expect(result.current.resumingRoundNumber).toBe(1);
       });
@@ -1573,17 +1573,17 @@ describe('useIncompleteRoundResumption', () => {
       setupMockStore({
         messages: [
           createTestUserMessage({
-            id: 'thread-123_r0_user',
             content: 'First question',
+            id: 'thread-123_r0_user',
             roundNumber: 0,
           }),
           createTestAssistantMessage({
-            id: 'thread-123_r0_p0',
             content: 'R0 Response',
-            roundNumber: 0,
+            finishReason: 'stop',
+            id: 'thread-123_r0_p0',
             participantId: 'participant-0',
             participantIndex: 0,
-            finishReason: 'stop',
+            roundNumber: 0,
           }),
           // Round 0 p1 missing
           ...createCompleteRoundMessages(1, 2), // Round 1 complete
@@ -1593,13 +1593,13 @@ describe('useIncompleteRoundResumption', () => {
 
       const { result } = renderHook(() =>
         useIncompleteRoundResumption({
-          threadId: 'thread-123',
           enabled: true,
+          threadId: 'thread-123',
         }),
       );
 
       // Latest round (1) is complete
-      expect(result.current.isIncomplete).toBe(false);
+      expect(result.current.isIncomplete).toBeFalsy();
     });
   });
 });

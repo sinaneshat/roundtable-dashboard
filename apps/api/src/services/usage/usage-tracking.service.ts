@@ -83,18 +83,18 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
       const result = await db
         .insert(tables.userChatUsage)
         .values({
-          id: ulid(),
-          userId,
-          currentPeriodStart: periodStart,
-          currentPeriodEnd: periodEnd,
-          threadsCreated: 0,
-          messagesCreated: 0,
-          customRolesCreated: 0,
           analysisGenerated: 0,
-          subscriptionTier: SubscriptionTiers.FREE,
-          isAnnual: false,
           createdAt: now,
+          currentPeriodEnd: periodEnd,
+          currentPeriodStart: periodStart,
+          customRolesCreated: 0,
+          id: ulid(),
+          isAnnual: false,
+          messagesCreated: 0,
+          subscriptionTier: SubscriptionTiers.FREE,
+          threadsCreated: 0,
           updatedAt: now,
+          userId,
         })
         .returning();
 
@@ -224,17 +224,17 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
   const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
   const historyInsert = db.insert(tables.userChatUsageHistory).values({
-    id: ulid(),
-    userId,
-    periodStart: currentUsage.currentPeriodStart,
-    periodEnd: currentUsage.currentPeriodEnd,
-    threadsCreated: currentUsage.threadsCreated,
-    messagesCreated: currentUsage.messagesCreated,
-    customRolesCreated: currentUsage.customRolesCreated,
     analysisGenerated: currentUsage.analysisGenerated,
-    subscriptionTier: currentUsage.subscriptionTier,
-    isAnnual: currentUsage.isAnnual,
     createdAt: now,
+    customRolesCreated: currentUsage.customRolesCreated,
+    id: ulid(),
+    isAnnual: currentUsage.isAnnual,
+    messagesCreated: currentUsage.messagesCreated,
+    periodEnd: currentUsage.currentPeriodEnd,
+    periodStart: currentUsage.currentPeriodStart,
+    subscriptionTier: currentUsage.subscriptionTier,
+    threadsCreated: currentUsage.threadsCreated,
+    userId,
   });
 
   if (hasPendingTierChange && currentUsage.pendingTierChange) {
@@ -243,18 +243,18 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
 
     const usageUpdate = db.update(tables.userChatUsage)
       .set({
-        subscriptionTier: pendingTier,
-        isAnnual: pendingIsAnnual,
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        currentPeriodEnd: periodEnd,
+        currentPeriodStart: periodStart,
+        customRolesCreated: 0,
+        isAnnual: pendingIsAnnual,
+        messagesCreated: 0,
         pendingTierChange: null,
         pendingTierIsAnnual: null,
-        version: sql`${tables.userChatUsage.version} + 1`,
+        subscriptionTier: pendingTier,
+        threadsCreated: 0,
         updatedAt: now,
+        version: sql`${tables.userChatUsage.version} + 1`,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
@@ -265,18 +265,18 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
   if (shouldDowngradeToFree && !hasPendingTierChange) {
     const freeUpdate = db.update(tables.userChatUsage)
       .set({
-        subscriptionTier: SubscriptionTiers.FREE,
-        isAnnual: false,
-        currentPeriodStart: periodStart,
-        currentPeriodEnd: periodEnd,
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        currentPeriodEnd: periodEnd,
+        currentPeriodStart: periodStart,
+        customRolesCreated: 0,
+        isAnnual: false,
+        messagesCreated: 0,
         pendingTierChange: null,
         pendingTierIsAnnual: null,
-        version: sql`${tables.userChatUsage.version} + 1`,
+        subscriptionTier: SubscriptionTiers.FREE,
+        threadsCreated: 0,
         updatedAt: now,
+        version: sql`${tables.userChatUsage.version} + 1`,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
@@ -286,14 +286,14 @@ async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage
 
   const resetUpdate = db.update(tables.userChatUsage)
     .set({
-      currentPeriodStart: periodStart,
-      currentPeriodEnd: periodEnd,
-      threadsCreated: 0,
-      messagesCreated: 0,
-      customRolesCreated: 0,
       analysisGenerated: 0,
-      version: sql`${tables.userChatUsage.version} + 1`,
+      currentPeriodEnd: periodEnd,
+      currentPeriodStart: periodStart,
+      customRolesCreated: 0,
+      messagesCreated: 0,
+      threadsCreated: 0,
       updatedAt: now,
+      version: sql`${tables.userChatUsage.version} + 1`,
     })
     .where(eq(tables.userChatUsage.userId, userId));
 
@@ -347,35 +347,35 @@ export async function getUserUsageStats(userId: string): Promise<UsageStatsPaylo
   // Build pending tier change info
   const pendingChange = usageRecord.pendingTierChange
     ? {
-        pendingTier: usageRecord.pendingTierChange,
         effectiveDate: usageRecord.currentPeriodEnd.toISOString(),
+        pendingTier: usageRecord.pendingTierChange,
       }
     : null;
 
   return {
     credits: {
-      balance: creditBalance.balance,
       available: creditBalance.available,
+      balance: creditBalance.balance,
       status: creditStatus,
     },
     plan: isPaidTier
       ? {
-          type: 'paid' as const,
-          name: 'Pro',
-          monthlyCredits: creditBalance.monthlyCredits,
-          hasActiveSubscription,
           freeRoundUsed: false,
+          hasActiveSubscription,
+          monthlyCredits: creditBalance.monthlyCredits,
+          name: 'Pro',
           nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
           pendingChange,
+          type: 'paid' as const,
         }
       : {
-          type: PlanTypes.FREE,
-          name: 'Free',
-          monthlyCredits: creditBalance.monthlyCredits,
-          hasActiveSubscription: false,
           freeRoundUsed,
+          hasActiveSubscription: false,
+          monthlyCredits: creditBalance.monthlyCredits,
+          name: 'Free',
           nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
           pendingChange: null,
+          type: PlanTypes.FREE,
         },
   };
 }
@@ -478,10 +478,10 @@ export async function syncUserQuotaFromSubscription(
     await db
       .update(tables.userChatUsage)
       .set({
-        currentPeriodStart,
         currentPeriodEnd,
-        version: sql`${tables.userChatUsage.version} + 1`,
+        currentPeriodStart,
         updatedAt: new Date(),
+        version: sql`${tables.userChatUsage.version} + 1`,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
@@ -503,10 +503,10 @@ export async function syncUserQuotaFromSubscription(
   let resetUsage = {};
   if (isPeriodReset) {
     resetUsage = {
-      threadsCreated: 0,
-      messagesCreated: 0,
-      customRolesCreated: 0,
       analysisGenerated: 0,
+      customRolesCreated: 0,
+      messagesCreated: 0,
+      threadsCreated: 0,
     };
   }
 
@@ -517,12 +517,12 @@ export async function syncUserQuotaFromSubscription(
     await db
       .update(tables.userChatUsage)
       .set({
+        currentPeriodEnd,
+        currentPeriodStart,
         pendingTierChange: tier,
         pendingTierIsAnnual: isAnnual,
-        currentPeriodStart,
-        currentPeriodEnd,
-        version: sql`${tables.userChatUsage.version} + 1`,
         updatedAt: new Date(),
+        version: sql`${tables.userChatUsage.version} + 1`,
       })
       .where(eq(tables.userChatUsage.userId, userId));
 
@@ -532,16 +532,16 @@ export async function syncUserQuotaFromSubscription(
   // Build update operation (upgrade or period reset)
   const usageUpdate = db.update(tables.userChatUsage)
     .set({
-      subscriptionTier: tier,
-      isAnnual,
-      currentPeriodStart, // Always update to Stripe's billing period
       currentPeriodEnd, // Always update to Stripe's billing period
+      currentPeriodStart, // Always update to Stripe's billing period
+      isAnnual,
       // Clear any pending tier changes (upgrade overrides scheduled downgrade, or period has reset)
       pendingTierChange: null,
       pendingTierIsAnnual: null,
+      subscriptionTier: tier,
       ...resetUsage, // Reset usage counters if period changed
-      version: sql`${tables.userChatUsage.version} + 1`,
       updatedAt: new Date(),
+      version: sql`${tables.userChatUsage.version} + 1`,
     })
     .where(eq(tables.userChatUsage.userId, userId));
 
@@ -550,18 +550,18 @@ export async function syncUserQuotaFromSubscription(
     // Archive historical usage (COUNTERS ONLY, no limits)
     // ✅ SINGLE SOURCE OF TRUTH: Limits calculated from subscriptionTier + TIER_QUOTAS in code
     const historyArchive = db.insert(tables.userChatUsageHistory).values({
-      id: ulid(),
-      userId,
-      periodStart: currentUsage.currentPeriodStart,
-      periodEnd: currentUsage.currentPeriodEnd,
-      // Usage counters (what actually happened)
-      threadsCreated: currentUsage.threadsCreated,
-      messagesCreated: currentUsage.messagesCreated,
+      createdAt: new Date(),
       customRolesCreated: currentUsage.customRolesCreated,
+      id: ulid(),
+      isAnnual: currentUsage.isAnnual,
+      messagesCreated: currentUsage.messagesCreated,
+      periodEnd: currentUsage.currentPeriodEnd,
+      periodStart: currentUsage.currentPeriodStart,
       // Tier identifier (look up limits from TIER_QUOTAS in code)
       subscriptionTier: currentUsage.subscriptionTier,
-      isAnnual: currentUsage.isAnnual,
-      createdAt: new Date(),
+      // Usage counters (what actually happened)
+      threadsCreated: currentUsage.threadsCreated,
+      userId,
     });
 
     // Execute atomically with batch (Cloudflare D1) or sequentially (local SQLite)

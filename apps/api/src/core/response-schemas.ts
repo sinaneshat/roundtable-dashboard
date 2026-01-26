@@ -67,77 +67,17 @@ import { ApiErrorResponseSchema } from './schemas';
  */
 export const StandardApiResponses = {
   /**
-   * 401 Unauthorized - Authentication required or failed
-   * Used when: User is not authenticated or session/token is invalid
-   */
-  UNAUTHORIZED: {
-    [HttpStatusCodes.UNAUTHORIZED]: {
-      description: HttpStatusPhrases.UNAUTHORIZED,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-
-  /**
-   * 403 Forbidden - Authenticated but insufficient permissions
-   * Used when: User is authenticated but doesn't have permission for this resource
-   */
-  FORBIDDEN: {
-    [HttpStatusCodes.FORBIDDEN]: {
-      description: HttpStatusPhrases.FORBIDDEN,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-
-  /**
-   * 404 Not Found - Resource does not exist
-   * Used when: Requested resource ID doesn't exist in database
-   */
-  NOT_FOUND: {
-    [HttpStatusCodes.NOT_FOUND]: {
-      description: HttpStatusPhrases.NOT_FOUND,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-
-  /**
    * 400 Bad Request - Invalid request data
    * Used when: Request validation fails (invalid parameters, malformed data)
    */
   BAD_REQUEST: {
     [HttpStatusCodes.BAD_REQUEST]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
       description: HttpStatusPhrases.BAD_REQUEST,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-    },
-  },
-
-  /**
-   * 500 Internal Server Error - Unexpected server error
-   * Used when: Unhandled exceptions, database errors, or other internal failures
-   */
-  INTERNAL_SERVER_ERROR: {
-    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
-      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
     },
   },
 
@@ -147,12 +87,57 @@ export const StandardApiResponses = {
    */
   CONFLICT: {
     [HttpStatusCodes.CONFLICT]: {
-      description: HttpStatusPhrases.CONFLICT,
       content: {
         'application/json': {
           schema: ApiErrorResponseSchema,
         },
       },
+      description: HttpStatusPhrases.CONFLICT,
+    },
+  },
+
+  /**
+   * 403 Forbidden - Authenticated but insufficient permissions
+   * Used when: User is authenticated but doesn't have permission for this resource
+   */
+  FORBIDDEN: {
+    [HttpStatusCodes.FORBIDDEN]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.FORBIDDEN,
+    },
+  },
+
+  /**
+   * 500 Internal Server Error - Unexpected server error
+   * Used when: Unhandled exceptions, database errors, or other internal failures
+   */
+  INTERNAL_SERVER_ERROR: {
+    [HttpStatusCodes.INTERNAL_SERVER_ERROR]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.INTERNAL_SERVER_ERROR,
+    },
+  },
+
+  /**
+   * 404 Not Found - Resource does not exist
+   * Used when: Requested resource ID doesn't exist in database
+   */
+  NOT_FOUND: {
+    [HttpStatusCodes.NOT_FOUND]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.NOT_FOUND,
     },
   },
 
@@ -162,12 +147,27 @@ export const StandardApiResponses = {
    */
   SERVICE_UNAVAILABLE: {
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: {
-      description: HttpStatusPhrases.SERVICE_UNAVAILABLE,
       content: {
         'application/json': {
           schema: ApiErrorResponseSchema,
         },
       },
+      description: HttpStatusPhrases.SERVICE_UNAVAILABLE,
+    },
+  },
+
+  /**
+   * 401 Unauthorized - Authentication required or failed
+   * Used when: User is not authenticated or session/token is invalid
+   */
+  UNAUTHORIZED: {
+    [HttpStatusCodes.UNAUTHORIZED]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.UNAUTHORIZED,
     },
   },
 } as const;

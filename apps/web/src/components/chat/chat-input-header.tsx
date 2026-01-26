@@ -17,11 +17,11 @@ type ChatInputHeaderProps = {
 
 export const ChatInputHeader = memo(({
   autoMode,
-  onAutoModeChange,
-  isAnalyzing = false,
-  disabled = false,
   borderVariant = BorderVariants.DEFAULT,
   className,
+  disabled = false,
+  isAnalyzing = false,
+  onAutoModeChange,
 }: ChatInputHeaderProps) => {
   const { isFreeUser } = useFreeTrialState();
 

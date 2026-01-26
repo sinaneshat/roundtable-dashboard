@@ -20,9 +20,9 @@ import {
  * Used in SidebarLoadingFallback for consistent loading states.
  */
 export function SidebarThreadSkeletons({
-  count = 7,
   animated = false,
   className,
+  count = 7,
 }: {
   count?: number;
   animated?: boolean;

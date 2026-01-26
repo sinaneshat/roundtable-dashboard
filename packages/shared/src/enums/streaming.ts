@@ -27,12 +27,12 @@ export const DEFAULT_OPERATION_STATUS: OperationStatus = 'idle';
 
 // 5. CONSTANT OBJECT
 export const OperationStatuses = {
-  IDLE: 'idle' as const,
-  PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
-  STREAMING: 'streaming' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  IDLE: 'idle' as const,
+  PENDING: 'pending' as const,
+  STREAMING: 'streaming' as const,
 } as const;
 
 // ============================================================================
@@ -56,10 +56,10 @@ export const DEFAULT_STREAMING_EVENT_TYPE: StreamingEventType = 'start';
 
 // 5. CONSTANT OBJECT
 export const StreamingEventTypes = {
-  START: 'start' as const,
   CHUNK: 'chunk' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  START: 'start' as const,
 } as const;
 
 // ============================================================================
@@ -83,14 +83,14 @@ export const DEFAULT_STREAM_STATUS: StreamStatus = 'pending';
 
 // 5. CONSTANT OBJECT
 export const StreamStatuses = {
-  PENDING: 'pending' as const,
-  INITIALIZING: 'initializing' as const,
-  STREAMING: 'streaming' as const,
-  COMPLETING: 'completing' as const,
   ACTIVE: 'active' as const,
   COMPLETED: 'completed' as const,
-  FAILED: 'failed' as const,
+  COMPLETING: 'completing' as const,
   EXPIRED: 'expired' as const,
+  FAILED: 'failed' as const,
+  INITIALIZING: 'initializing' as const,
+  PENDING: 'pending' as const,
+  STREAMING: 'streaming' as const,
   TIMEOUT: 'timeout' as const,
 } as const;
 
@@ -115,10 +115,10 @@ export const DEFAULT_PARTICIPANT_STREAM_STATUS: ParticipantStreamStatus = 'pendi
 
 // 5. CONSTANT OBJECT
 export const ParticipantStreamStatuses = {
-  PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
+  PENDING: 'pending' as const,
 } as const;
 
 // ============================================================================
@@ -142,11 +142,11 @@ export const DEFAULT_ROUND_EXECUTION_STATUS: RoundExecutionStatus = 'not_started
 
 // 5. CONSTANT OBJECT
 export const RoundExecutionStatuses = {
-  NOT_STARTED: 'not_started' as const,
-  RUNNING: 'running' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
   INCOMPLETE: 'incomplete' as const,
+  NOT_STARTED: 'not_started' as const,
+  RUNNING: 'running' as const,
 } as const;
 
 // ============================================================================
@@ -170,9 +170,9 @@ export const DEFAULT_ROUND_EXECUTION_PHASE: RoundExecutionPhase = 'participants'
 
 // 5. CONSTANT OBJECT
 export const RoundExecutionPhases = {
-  PARTICIPANTS: 'participants' as const,
-  MODERATOR: 'moderator' as const,
   COMPLETE: 'complete' as const,
+  MODERATOR: 'moderator' as const,
+  PARTICIPANTS: 'participants' as const,
 } as const;
 
 // ============================================================================
@@ -196,14 +196,14 @@ export const DEFAULT_FLOW_STATE: FlowState = 'idle';
 
 // 5. CONSTANT OBJECT
 export const FlowStates = {
-  IDLE: 'idle' as const,
-  CREATING_THREAD: 'creating_thread' as const,
-  STREAMING_PARTICIPANTS: 'streaming_participants' as const,
-  CREATING_MODERATOR: 'creating_moderator' as const,
-  STREAMING_MODERATOR: 'streaming_moderator' as const,
-  COMPLETING: 'completing' as const,
-  NAVIGATING: 'navigating' as const,
   COMPLETE: 'complete' as const,
+  COMPLETING: 'completing' as const,
+  CREATING_MODERATOR: 'creating_moderator' as const,
+  CREATING_THREAD: 'creating_thread' as const,
+  IDLE: 'idle' as const,
+  NAVIGATING: 'navigating' as const,
+  STREAMING_MODERATOR: 'streaming_moderator' as const,
+  STREAMING_PARTICIPANTS: 'streaming_participants' as const,
 } as const;
 
 // ============================================================================
@@ -237,15 +237,15 @@ export const DEFAULT_ROUND_FLOW_STATE: RoundFlowState = 'idle';
 
 // 5. CONSTANT OBJECT
 export const RoundFlowStates = {
-  IDLE: 'idle' as const,
-  PRE_SEARCH_PENDING: 'pre_search_pending' as const,
-  PRE_SEARCH_STREAMING: 'pre_search_streaming' as const,
-  PARTICIPANT_STREAMING: 'participant_streaming' as const,
-  PARTICIPANT_TRANSITION: 'participant_transition' as const,
-  MODERATOR_PENDING: 'moderator_pending' as const,
-  MODERATOR_STREAMING: 'moderator_streaming' as const,
   COMPLETE: 'complete' as const,
   ERROR: 'error' as const,
+  IDLE: 'idle' as const,
+  MODERATOR_PENDING: 'moderator_pending' as const,
+  MODERATOR_STREAMING: 'moderator_streaming' as const,
+  PARTICIPANT_STREAMING: 'participant_streaming' as const,
+  PARTICIPANT_TRANSITION: 'participant_transition' as const,
+  PRE_SEARCH_PENDING: 'pre_search_pending' as const,
+  PRE_SEARCH_STREAMING: 'pre_search_streaming' as const,
 } as const;
 
 // 6. TYPE GUARD
@@ -289,20 +289,20 @@ export const DEFAULT_ROUND_FLOW_EVENT: RoundFlowEvent = 'RESET';
 
 // 5. CONSTANT OBJECT
 export const RoundFlowEvents = {
-  START_ROUND: 'START_ROUND' as const,
-  RESUME_ROUND: 'RESUME_ROUND' as const,
-  PRE_SEARCH_START: 'PRE_SEARCH_START' as const,
-  PRE_SEARCH_COMPLETE: 'PRE_SEARCH_COMPLETE' as const,
-  PRE_SEARCH_SKIP: 'PRE_SEARCH_SKIP' as const,
-  PRE_SEARCH_ERROR: 'PRE_SEARCH_ERROR' as const,
-  PARTICIPANT_START: 'PARTICIPANT_START' as const,
-  PARTICIPANT_COMPLETE: 'PARTICIPANT_COMPLETE' as const,
-  PARTICIPANT_ERROR: 'PARTICIPANT_ERROR' as const,
-  MODERATOR_START: 'MODERATOR_START' as const,
+  ABORT: 'ABORT' as const,
   MODERATOR_COMPLETE: 'MODERATOR_COMPLETE' as const,
   MODERATOR_ERROR: 'MODERATOR_ERROR' as const,
-  ABORT: 'ABORT' as const,
+  MODERATOR_START: 'MODERATOR_START' as const,
+  PARTICIPANT_COMPLETE: 'PARTICIPANT_COMPLETE' as const,
+  PARTICIPANT_ERROR: 'PARTICIPANT_ERROR' as const,
+  PARTICIPANT_START: 'PARTICIPANT_START' as const,
+  PRE_SEARCH_COMPLETE: 'PRE_SEARCH_COMPLETE' as const,
+  PRE_SEARCH_ERROR: 'PRE_SEARCH_ERROR' as const,
+  PRE_SEARCH_SKIP: 'PRE_SEARCH_SKIP' as const,
+  PRE_SEARCH_START: 'PRE_SEARCH_START' as const,
   RESET: 'RESET' as const,
+  RESUME_ROUND: 'RESUME_ROUND' as const,
+  START_ROUND: 'START_ROUND' as const,
 } as const;
 
 // 6. TYPE GUARD
@@ -331,9 +331,9 @@ export const DEFAULT_CHAIN_OF_THOUGHT_STEP_STATUS: ChainOfThoughtStepStatus = 'p
 
 // 5. CONSTANT OBJECT
 export const ChainOfThoughtStepStatuses = {
-  PENDING: 'pending' as const,
   ACTIVE: 'active' as const,
   COMPLETE: 'complete' as const,
+  PENDING: 'pending' as const,
 } as const;
 
 // ============================================================================
@@ -366,14 +366,14 @@ export const DEFAULT_PENDING_MESSAGE_VALIDATION_REASON: PendingMessageValidation
 
 // 5. CONSTANT OBJECT
 export const PendingMessageValidationReasons = {
-  PUBLIC_SCREEN_MODE: 'public screen mode' as const,
-  NO_PENDING_MESSAGE: 'no pending message or expected participants' as const,
   ALREADY_SENT: 'already sent' as const,
   CURRENTLY_STREAMING: 'currently streaming' as const,
+  NO_PENDING_MESSAGE: 'no pending message or expected participants' as const,
   PARTICIPANT_MISMATCH: 'participant mismatch' as const,
+  PUBLIC_SCREEN_MODE: 'public screen mode' as const,
   WAITING_FOR_CHANGELOG: 'waiting for changelog' as const,
-  WAITING_FOR_PRE_SEARCH_CREATION: 'waiting for pre-search creation' as const,
   WAITING_FOR_PRE_SEARCH: 'waiting for pre-search' as const,
+  WAITING_FOR_PRE_SEARCH_CREATION: 'waiting for pre-search creation' as const,
 } as const;
 
 // ============================================================================
@@ -397,11 +397,11 @@ export const DEFAULT_ROUND_PHASE: RoundPhase = 'idle';
 
 // 5. CONSTANT OBJECT
 export const RoundPhases = {
-  IDLE: 'idle' as const,
-  PRE_SEARCH: 'pre_search' as const,
-  PARTICIPANTS: 'participants' as const,
-  MODERATOR: 'moderator' as const,
   COMPLETE: 'complete' as const,
+  IDLE: 'idle' as const,
+  MODERATOR: 'moderator' as const,
+  PARTICIPANTS: 'participants' as const,
+  PRE_SEARCH: 'pre_search' as const,
 } as const;
 
 // ============================================================================
@@ -425,9 +425,9 @@ export const DEFAULT_STREAM_PHASE: StreamPhase = 'participant';
 
 // 5. CONSTANT OBJECT
 export const StreamPhases = {
-  PRESEARCH: 'presearch' as const,
-  PARTICIPANT: 'participant' as const,
   MODERATOR: 'moderator' as const,
+  PARTICIPANT: 'participant' as const,
+  PRESEARCH: 'presearch' as const,
 } as const;
 
 // 6. TYPE GUARD (optional helper)
@@ -483,8 +483,8 @@ export const DEFAULT_POLLING_STATUS: PollingStatus = 'pending';
 // 5. CONSTANT OBJECT
 export const PollingStatuses = {
   PENDING: 'pending' as const,
-  STREAMING: 'streaming' as const,
   PROCESSING: 'processing' as const,
+  STREAMING: 'streaming' as const,
 } as const;
 
 // ============================================================================
@@ -515,12 +515,12 @@ export const DEFAULT_PRE_SEARCH_STREAMING_EVENT_TYPE: PreSearchStreamingEventTyp
 
 // 5. CONSTANT OBJECT
 export const PreSearchStreamingEventTypes = {
-  PRE_SEARCH_START: 'pre_search_start' as const,
-  PRE_SEARCH_QUERY_GENERATED: 'pre_search_query_generated' as const,
-  PRE_SEARCH_QUERY: 'pre_search_query' as const,
-  PRE_SEARCH_RESULT: 'pre_search_result' as const,
   PRE_SEARCH_COMPLETE: 'pre_search_complete' as const,
   PRE_SEARCH_ERROR: 'pre_search_error' as const,
+  PRE_SEARCH_QUERY: 'pre_search_query' as const,
+  PRE_SEARCH_QUERY_GENERATED: 'pre_search_query_generated' as const,
+  PRE_SEARCH_RESULT: 'pre_search_result' as const,
+  PRE_SEARCH_START: 'pre_search_start' as const,
 } as const;
 
 // ============================================================================
@@ -553,12 +553,12 @@ export const DEFAULT_SSE_EVENT_TYPE: SSEEventType = 'unknown';
 
 // 5. CONSTANT OBJECT
 export const SSEEventTypes = {
-  TEXT_DELTA: 'text-delta' as const,
-  REASONING_DELTA: 'reasoning-delta' as const,
-  FINISH: 'finish' as const,
-  ERROR: 'error' as const,
-  STEP_FINISH: 'step-finish' as const,
   DATA: 'data' as const,
+  ERROR: 'error' as const,
+  FINISH: 'finish' as const,
+  REASONING_DELTA: 'reasoning-delta' as const,
+  STEP_FINISH: 'step-finish' as const,
+  TEXT_DELTA: 'text-delta' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
 
@@ -566,11 +566,11 @@ export const SSEEventTypes = {
 // Keys are string prefixes extracted from SSE data lines
 export const SSE_PREFIX_TO_EVENT = {
   0: 'text-delta',
-  g: 'reasoning-delta',
-  d: 'finish',
-  3: 'error',
-  e: 'step-finish',
   2: 'data',
+  3: 'error',
+  d: 'finish',
+  e: 'step-finish',
+  g: 'reasoning-delta',
 } as const satisfies Record<string | number, SSEEventType>;
 
 /**
@@ -579,7 +579,7 @@ export const SSE_PREFIX_TO_EVENT = {
  */
 export function parseSSEEventType(data: string): SSEEventType {
   // Skip empty lines or lines without colon
-  if (!data || !data.includes(':')) {
+  if (!data.includes(':')) {
     return SSEEventTypes.UNKNOWN;
   }
 
@@ -624,13 +624,13 @@ export const DEFAULT_ROUND_ORCHESTRATION_MESSAGE_TYPE: RoundOrchestrationMessage
 
 // 5. CONSTANT OBJECT
 export const RoundOrchestrationMessageTypes = {
-  TRIGGER_PARTICIPANT: 'trigger-participant' as const,
-  TRIGGER_MODERATOR: 'trigger-moderator' as const,
   CHECK_ROUND_COMPLETION: 'check-round-completion' as const,
-  TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
-  START_AUTOMATED_JOB: 'start-automated-job' as const,
-  CONTINUE_AUTOMATED_JOB: 'continue-automated-job' as const,
   COMPLETE_AUTOMATED_JOB: 'complete-automated-job' as const,
+  CONTINUE_AUTOMATED_JOB: 'continue-automated-job' as const,
+  START_AUTOMATED_JOB: 'start-automated-job' as const,
+  TRIGGER_MODERATOR: 'trigger-moderator' as const,
+  TRIGGER_PARTICIPANT: 'trigger-participant' as const,
+  TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
 } as const;
 
 // ============================================================================
@@ -658,7 +658,7 @@ export const DEFAULT_CHECK_ROUND_COMPLETION_REASON: CheckRoundCompletionReason =
 
 // 5. CONSTANT OBJECT
 export const CheckRoundCompletionReasons = {
-  STALE_STREAM: 'stale_stream' as const,
   RESUME_TRIGGER: 'resume_trigger' as const,
   SCHEDULED_CHECK: 'scheduled_check' as const,
+  STALE_STREAM: 'stale_stream' as const,
 } as const;

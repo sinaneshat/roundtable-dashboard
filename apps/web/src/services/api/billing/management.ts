@@ -61,3 +61,21 @@ export async function cancelSubscriptionService(data: CancelSubscriptionRequest)
   }
   return res.json();
 }
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard to check if cancel response is successful
+ */
+export function isCancelSuccess(response: CancelSubscriptionResponse | undefined): response is Extract<CancelSubscriptionResponse, { success: true }> {
+  return response !== undefined && response.success === true;
+}
+
+/**
+ * Type guard to check if switch response is successful
+ */
+export function isSwitchSuccess(response: SwitchSubscriptionResponse | undefined): response is Extract<SwitchSubscriptionResponse, { success: true }> {
+  return response !== undefined && response.success === true;
+}

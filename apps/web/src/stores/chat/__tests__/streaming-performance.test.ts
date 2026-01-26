@@ -31,12 +31,12 @@ describe('streaming Performance - Immediate Start Verification', () => {
     // Simulate pre-search completion
     store.getState().addPreSearch({
       id: 'presearch-1',
-      threadId: 'thread-1',
-      roundNumber: 0,
-      query: 'test',
-      status: MessageStatuses.PENDING,
       queries: [],
+      query: 'test',
       results: [],
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-1',
     });
 
     timestamps.push(Date.now());
@@ -66,15 +66,15 @@ describe('streaming Performance - Immediate Start Verification', () => {
     timestamps.push(Date.now());
     store.getState().setMessages([
       {
-        id: 'thread-1_r0_p0',
-        role: UIMessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response 0' }],
-        metadata: {
-          roundNumber: 0,
-          participantIndex: 0,
-          finishReason: 'stop',
-        },
         createdAt: new Date(),
+        id: 'thread-1_r0_p0',
+        metadata: {
+          finishReason: 'stop',
+          participantIndex: 0,
+          roundNumber: 0,
+        },
+        parts: [{ text: 'Response 0', type: MessagePartTypes.TEXT }],
+        role: UIMessageRoles.ASSISTANT,
       },
     ]);
 
@@ -132,7 +132,7 @@ describe('streaming Performance - Immediate Start Verification', () => {
     vi.advanceTimersByTime(0);
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
     expect(state.streamingRoundNumber).toBe(0);
     expect(state.currentParticipantIndex).toBe(0);
 
@@ -150,7 +150,7 @@ describe('streaming Performance - Pre-Search Timeout Compliance', () => {
      * - Timeout checked based on lastActivityAt timestamp
      * - Prevents indefinite blocking by stale pre-search
      */
-    expect(true).toBe(true); // Documentation test
+    expect(true).toBeTruthy(); // Documentation test
   });
 });
 
@@ -160,11 +160,11 @@ describe('streaming Performance - Message Lookup Efficiency', () => {
 
     // Create large message array
     const messages = Array.from({ length: 1000 }, (_, i) => ({
-      id: `msg-${i}`,
-      role: UIMessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: `Message ${i}` }],
-      metadata: { roundNumber: 0, participantIndex: i % 3 },
       createdAt: new Date(),
+      id: `msg-${i}`,
+      metadata: { participantIndex: i % 3, roundNumber: 0 },
+      parts: [{ text: `Message ${i}`, type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.ASSISTANT,
     }));
 
     store.getState().setMessages(messages);
@@ -208,25 +208,25 @@ describe('streaming Performance - Message Lookup Efficiency', () => {
     // Create messages with different participants
     const messages = [
       {
+        createdAt: new Date(),
         id: 'msg-user',
-        role: UIMessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
         metadata: { roundNumber: 0 },
-        createdAt: new Date(),
+        parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
+        role: UIMessageRoles.USER,
       },
       {
+        createdAt: new Date(),
         id: 'thread-1_r0_p0',
+        metadata: { participantIndex: 0, roundNumber: 0 },
+        parts: [{ text: 'Response 0', type: MessagePartTypes.TEXT }],
         role: UIMessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response 0' }],
-        metadata: { roundNumber: 0, participantIndex: 0 },
-        createdAt: new Date(),
       },
       {
-        id: 'thread-1_r0_p1',
-        role: UIMessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }],
-        metadata: { roundNumber: 0, participantIndex: 1 },
         createdAt: new Date(),
+        id: 'thread-1_r0_p1',
+        metadata: { participantIndex: 1, roundNumber: 0 },
+        parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }],
+        role: UIMessageRoles.ASSISTANT,
       },
     ];
 
@@ -269,11 +269,11 @@ describe('streaming Performance - State Update Frequency', () => {
     for (let i = 1; i <= 10; i++) {
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Hello '.repeat(i) }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Hello '.repeat(i), type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         },
       ]);
     }
@@ -337,8 +337,8 @@ describe('streaming Performance - State Update Frequency', () => {
     expect(updateCount).toBe(1);
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 });
@@ -349,7 +349,7 @@ describe('streaming Performance - Synchronous State Transitions', () => {
 
     // Start streaming
     store.getState().setIsStreaming(true);
-    expect(store.getState().isStreaming).toBe(true); // Immediate
+    expect(store.getState().isStreaming).toBeTruthy(); // Immediate
 
     store.getState().setStreamingRoundNumber(0);
     expect(store.getState().streamingRoundNumber).toBe(0); // Immediate
@@ -364,19 +364,19 @@ describe('streaming Performance - Synchronous State Transitions', () => {
     const store = createChatStore();
 
     const beforeState = store.getState();
-    expect(beforeState.pendingMessage).toBe(null);
+    expect(beforeState.pendingMessage).toBeNull();
 
     store.getState().prepareForNewMessage('Test message', []);
 
     const afterState = store.getState();
     expect(afterState.pendingMessage).toBe('Test message'); // Immediate
-    expect(afterState.waitingToStartStreaming).toBe(false); // Cleared immediately
+    expect(afterState.waitingToStartStreaming).toBeFalsy(); // Cleared immediately
   });
 
   it('setNextParticipantToTrigger updates immediately (no delay)', () => {
     const store = createChatStore();
 
-    expect(store.getState().nextParticipantToTrigger).toBe(null);
+    expect(store.getState().nextParticipantToTrigger).toBeNull();
 
     store.getState().setNextParticipantToTrigger(2);
 
@@ -390,19 +390,19 @@ describe('streaming Performance - Concurrent Operations', () => {
 
     // Simulate rapid concurrent updates
     const message1 = {
-      id: 'msg-1',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'First' }],
-      metadata: { roundNumber: 0, participantIndex: 0 },
       createdAt: new Date(),
+      id: 'msg-1',
+      metadata: { participantIndex: 0, roundNumber: 0 },
+      parts: [{ text: 'First', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.ASSISTANT,
     };
 
     const message2 = {
-      id: 'msg-2',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Second' }],
-      metadata: { roundNumber: 0, participantIndex: 1 },
       createdAt: new Date(),
+      id: 'msg-2',
+      metadata: { participantIndex: 1, roundNumber: 0 },
+      parts: [{ text: 'Second', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.ASSISTANT,
     };
 
     // Rapid updates
@@ -424,18 +424,18 @@ describe('streaming Performance - Concurrent Operations', () => {
     store.getState().setStreamingRoundNumber(0);
 
     const message = {
-      id: 'thread-1_r0_p0',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Streaming...' }],
-      metadata: { roundNumber: 0, participantIndex: 0 },
       createdAt: new Date(),
+      id: 'thread-1_r0_p0',
+      metadata: { participantIndex: 0, roundNumber: 0 },
+      parts: [{ text: 'Streaming...', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.ASSISTANT,
     };
 
     store.getState().setMessages([message]);
 
     // All state should be consistent
     const state = store.getState();
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
     expect(state.currentParticipantIndex).toBe(0);
     expect(state.streamingRoundNumber).toBe(0);
     expect(state.messages).toHaveLength(1);
@@ -450,11 +450,11 @@ describe('streaming Performance - Memory Efficiency', () => {
     for (let i = 1; i <= 100; i++) {
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Text '.repeat(i) }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Text '.repeat(i), type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         },
       ]);
     }
@@ -476,8 +476,8 @@ describe('streaming Performance - Memory Efficiency', () => {
 
     // All streaming state should be cleared
     let state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
 
     // Round 1
@@ -489,8 +489,8 @@ describe('streaming Performance - Memory Efficiency', () => {
 
     // Again, all should be cleared
     state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 });
@@ -556,9 +556,9 @@ describe('streaming Performance - Edge Case Timing', () => {
     store.getState().setIsStreaming(false);
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
+    expect(state.waitingToStartStreaming).toBeFalsy();
   });
 });
 
@@ -579,7 +579,7 @@ describe('streaming Performance - Regression Prevention', () => {
     // - Cascading state updates
     // - Memory leaks (unbounded array growth)
     //
-    expect(true).toBe(true); // Documentation test
+    expect(true).toBeTruthy(); // Documentation test
   });
 
   it('verifies no performance regressions in core streaming loop', () => {
@@ -596,11 +596,11 @@ describe('streaming Performance - Regression Prevention', () => {
     for (let i = 1; i <= 10; i++) {
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: `Chunk ${i}` }],
-          metadata: { roundNumber: 0, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: `Chunk ${i}`, type: MessagePartTypes.TEXT }],
+          role: UIMessageRoles.ASSISTANT,
         },
       ]);
     }

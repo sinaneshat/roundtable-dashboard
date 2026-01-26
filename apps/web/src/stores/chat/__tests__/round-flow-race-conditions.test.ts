@@ -39,7 +39,7 @@ describe('round Flow Race Conditions', () => {
 
       // Streaming should STILL be blocked
       const isBlocked = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('should detect race when isWaitingForChangelog cleared but configChangeRoundNumber still set', () => {
@@ -52,7 +52,7 @@ describe('round Flow Race Conditions', () => {
 
       // Should still be blocked by configChangeRoundNumber
       const isBlocked = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('should detect inconsistent state: isWaitingForChangelog=true but configChangeRoundNumber=null', () => {
@@ -63,24 +63,24 @@ describe('round Flow Race Conditions', () => {
       const state = store.getState();
       const isInconsistent = state.isWaitingForChangelog && state.configChangeRoundNumber === null;
 
-      expect(isInconsistent).toBe(true);
+      expect(isInconsistent).toBeTruthy();
 
       // The shouldFetch condition would be false (won't fetch changelog)
       const shouldFetch = state.isWaitingForChangelog && state.configChangeRoundNumber !== null;
-      expect(shouldFetch).toBe(false);
+      expect(shouldFetch).toBeFalsy();
     });
   });
 
   describe('participant Index Race Conditions', () => {
     it('should handle rapid participant changes during streaming setup', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
 
       // Simulate rapid config change while streaming is being set up
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
       store.getState().setParticipants([p3, p2]);
 
       // Now index 0 has p3 but trigger expects p1
@@ -94,9 +94,9 @@ describe('round Flow Race Conditions', () => {
     });
 
     it('should handle participant count decrease during streaming', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
+      const p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2, p3]);
       store.getState().setCurrentParticipantIndex(2); // About to trigger p3
@@ -112,7 +112,7 @@ describe('round Flow Race Conditions', () => {
 
       expect(trigger?.index).toBe(2);
       expect(participantCount).toBe(2);
-      expect(trigger && trigger.index >= participantCount).toBe(true);
+      expect(trigger && trigger.index >= participantCount).toBeTruthy();
     });
   });
 
@@ -124,8 +124,8 @@ describe('round Flow Race Conditions', () => {
 
       // Both hooks would check waitingToStartStreaming
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.nextParticipantToTrigger).not.toBe(null);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.nextParticipantToTrigger).not.toBeNull();
 
       // First hook triggers
       store.getState().setWaitingToStartStreaming(false);
@@ -133,8 +133,8 @@ describe('round Flow Race Conditions', () => {
 
       // Second hook should see streaming already started
       const afterFirstTrigger = store.getState();
-      expect(afterFirstTrigger.isStreaming).toBe(true);
-      expect(afterFirstTrigger.waitingToStartStreaming).toBe(false);
+      expect(afterFirstTrigger.isStreaming).toBeTruthy();
+      expect(afterFirstTrigger.waitingToStartStreaming).toBeFalsy();
     });
 
     it('should handle concurrent prepareForNewMessage and streaming completion', () => {
@@ -163,10 +163,10 @@ describe('round Flow Race Conditions', () => {
       store.getState().setIsWaitingForChangelog(true);
       store.getState().addPreSearch({
         id: 'pre-search-1',
-        threadId: 'thread-1',
         roundNumber: 1,
-        status: 'pending',
         searchData: null,
+        status: 'pending',
+        threadId: 'thread-1',
         userQuery: 'Test',
       });
 
@@ -175,7 +175,7 @@ describe('round Flow Race Conditions', () => {
 
       // Should still be blocked by changelog
       const blockedByChangelog = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(blockedByChangelog).toBe(true);
+      expect(blockedByChangelog).toBeTruthy();
 
       // Pre-search is complete
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
@@ -191,10 +191,10 @@ describe('round Flow Race Conditions', () => {
       store.getState().setIsWaitingForChangelog(true);
       store.getState().addPreSearch({
         id: 'pre-search-1',
-        threadId: 'thread-1',
         roundNumber: 1,
-        status: 'pending',
         searchData: null,
+        status: 'pending',
+        threadId: 'thread-1',
         userQuery: 'Test',
       });
 
@@ -204,7 +204,7 @@ describe('round Flow Race Conditions', () => {
 
       // Changelog unblocked
       const blockedByChangelog = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(blockedByChangelog).toBe(false);
+      expect(blockedByChangelog).toBeFalsy();
 
       // But pre-search still blocking
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
@@ -221,19 +221,19 @@ describe('round Flow Race Conditions', () => {
 
       // PATCH response triggers initializeThread
       const thread = {
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorm' as const,
-        status: 'active' as const,
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'brainstorm' as const,
+        slug: 'test',
+        status: 'active' as const,
+        title: 'Test',
+        updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       store.getState().initializeThread(thread, [], []);
@@ -241,40 +241,40 @@ describe('round Flow Race Conditions', () => {
       // Flags should be preserved because configChangeRoundNumber !== null
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should handle multiple rapid initializeThread calls', () => {
       const thread1 = {
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        userId: 'user-1',
-        title: 'Test 1',
-        slug: 'test-1',
-        mode: 'brainstorm' as const,
-        status: 'active' as const,
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'brainstorm' as const,
+        slug: 'test-1',
+        status: 'active' as const,
+        title: 'Test 1',
+        updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const thread2 = {
+        createdAt: new Date(),
+        enableWebSearch: true,
         id: 'thread-2',
-        userId: 'user-1',
-        title: 'Test 2',
-        slug: 'test-2',
-        mode: 'panel' as const,
-        status: 'active' as const,
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'panel' as const,
+        slug: 'test-2',
+        status: 'active' as const,
+        title: 'Test 2',
+        updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       // Rapid calls (can happen during navigation)
@@ -302,7 +302,7 @@ describe('round Flow Race Conditions', () => {
       // State should be consistent
       const state = store.getState();
       expect(state.screenMode).toBe(ScreenModes.THREAD);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('should handle THREAD to OVERVIEW transition during active streaming', () => {
@@ -317,7 +317,7 @@ describe('round Flow Race Conditions', () => {
       // Should reset streaming state
       const state = store.getState();
       expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.currentParticipantIndex).toBe(0);
     });
   });
@@ -326,8 +326,8 @@ describe('round Flow Race Conditions', () => {
     it('should block changelog during regeneration with config changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Original', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0', content: 'Response', roundNumber: 0, participantId: 'p1', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Original', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a0', participantId: 'p1', participantIndex: 0, roundNumber: 0 }),
       ]);
 
       // User changes config before regeneration
@@ -340,14 +340,14 @@ describe('round Flow Race Conditions', () => {
 
       // Should be blocked
       const isBlocked = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(store.getState().isRegenerating).toBeTruthy();
     });
 
     it('should handle cancel regeneration race with streaming start', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Original', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Original', id: 'u0', roundNumber: 0 }),
       ]);
 
       // Start regeneration
@@ -359,8 +359,8 @@ describe('round Flow Race Conditions', () => {
 
       // Regeneration flags should be cleared but streaming continues
       const state = store.getState();
-      expect(state.isRegenerating).toBe(false);
-      expect(state.isStreaming).toBe(true);
+      expect(state.isRegenerating).toBeFalsy();
+      expect(state.isStreaming).toBeTruthy();
       // Note: streaming continues - it's the responsibility of the streaming code
       // to check isRegenerating before proceeding
     });
@@ -378,8 +378,8 @@ describe('round Flow Race Conditions', () => {
       // Flags should persist - they're cleared by use-changelog-sync
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(true);
-      expect(state.isStreaming).toBe(false);
+      expect(state.isWaitingForChangelog).toBeTruthy();
+      expect(state.isStreaming).toBeFalsy();
     });
 
     it('should reset both currentParticipantIndex and nextParticipantToTrigger', () => {
@@ -407,8 +407,8 @@ describe('round Flow Race Conditions', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.configChangeRoundNumber).toBe(null);
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.configChangeRoundNumber).toBeNull();
     });
 
     it('should handle resumption timeout clearing waitingToStartStreaming', () => {
@@ -421,8 +421,8 @@ describe('round Flow Race Conditions', () => {
       store.getState().setNextParticipantToTrigger(null);
 
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.nextParticipantToTrigger).toBe(null);
+      expect(state.waitingToStartStreaming).toBeFalsy();
+      expect(state.nextParticipantToTrigger).toBeNull();
     });
   });
 });

@@ -23,18 +23,18 @@ import { createTestAssistantMessage, createTestChatStore, createTestUserMessage 
 function mockMessage(opts: { id: string; role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT; text: string; metadata?: UIMessage['metadata'] }): UIMessage {
   return {
     id: opts.id,
-    role: opts.role,
-    parts: [{ type: 'text' as const, text: opts.text }],
     metadata: opts.metadata,
+    parts: [{ text: opts.text, type: 'text' as const }],
+    role: opts.role,
   };
 }
 
 function mockModeratorMessage(opts: { id: string; text: string; roundNumber: number }): UIMessage {
   return {
     id: opts.id,
+    metadata: { isModerator: true, role: MessageRoles.ASSISTANT, roundNumber: opts.roundNumber },
+    parts: [{ text: opts.text, type: 'text' as const }],
     role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text' as const, text: opts.text }],
-    metadata: { role: MessageRoles.ASSISTANT, roundNumber: opts.roundNumber, isModerator: true },
   };
 }
 
@@ -66,23 +66,23 @@ describe('store Update Frequency', () => {
 
       const userMessage = mockMessage({
         id: 'user1',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
         role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: MessageRoles.USER, roundNumber: 0 },
       });
 
       const triggerMessage = mockMessage({
         id: 'trigger1',
+        metadata: { isParticipantTrigger: true, role: MessageRoles.USER, roundNumber: 0 },
         role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: MessageRoles.USER, roundNumber: 0, isParticipantTrigger: true },
       });
 
       const assistantMessage = mockMessage({
         id: 'asst1',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
         role: MessageRoles.ASSISTANT,
         text: 'Hi',
-        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
       });
 
       // Set messages including trigger
@@ -124,7 +124,7 @@ describe('store Update Frequency', () => {
       store.getState().setCurrentParticipantIndex(1);
 
       // Verify state
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().currentParticipantIndex).toBe(1);
 
       // Index should not reset while streaming
@@ -151,8 +151,8 @@ describe('store Update Frequency', () => {
       unsubscribe();
 
       // Verify lifecycle order
-      expect(stateChanges[0]).toBe(true);
-      expect(stateChanges[1]).toBe(false);
+      expect(stateChanges[0]).toBeTruthy();
+      expect(stateChanges[1]).toBeFalsy();
     });
 
     it('should not trigger moderator before participant streaming ends', () => {
@@ -162,15 +162,15 @@ describe('store Update Frequency', () => {
       store.getState().setIsStreaming(true);
 
       // Moderator should not start while participant streaming
-      expect(store.getState().isStreaming).toBe(true);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeTruthy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // After participant ends, moderator can start
       store.getState().setIsStreaming(false);
       store.getState().setIsModeratorStreaming(true);
 
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
     });
   });
 
@@ -197,22 +197,22 @@ describe('store Update Frequency', () => {
 
       const userMsg = mockMessage({
         id: 'user1',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
         role: MessageRoles.USER,
         text: 'Hello',
-        metadata: { role: MessageRoles.USER, roundNumber: 0 },
       });
 
       const assistantMsg = mockMessage({
         id: 'thread_r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
         role: MessageRoles.ASSISTANT,
         text: 'Hi there',
-        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantIndex: 0 },
       });
 
       const moderatorMsg = mockModeratorMessage({
         id: 'thread_r0_moderator',
-        text: 'Summary here',
         roundNumber: 0,
+        text: 'Summary here',
       });
 
       store.getState().setMessages([userMsg, assistantMsg, moderatorMsg]);
@@ -221,7 +221,7 @@ describe('store Update Frequency', () => {
       const messages = store.getState().messages;
       const moderator = messages.find(m => m.id === 'thread_r0_moderator');
       expect(moderator).toBeDefined();
-      expect(moderator?.parts?.some(p => p.type === 'text' && 'text' in p && p.text === 'Summary here')).toBe(true);
+      expect(moderator?.parts?.some(p => p.type === 'text' && 'text' in p && p.text === 'Summary here')).toBeTruthy();
     });
   });
 
@@ -233,8 +233,8 @@ describe('store Update Frequency', () => {
       // Capture all state transitions
       const unsubscribe = store.subscribe((state) => {
         stateSnapshots.push({
-          isStreaming: state.isStreaming,
           isModeratorStreaming: state.isModeratorStreaming,
+          isStreaming: state.isStreaming,
         });
       });
 
@@ -248,8 +248,8 @@ describe('store Update Frequency', () => {
 
       // Final state should be stable
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
-      expect(finalState.isModeratorStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
+      expect(finalState.isModeratorStreaming).toBeFalsy();
 
       // State transitions should be logical
       expect(stateSnapshots.length).toBeGreaterThan(0);
@@ -299,11 +299,11 @@ describe('store Update Frequency', () => {
       // Simulate 10 streaming chunks
       for (let i = 1; i <= 10; i++) {
         const message = createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'Hello '.repeat(i), // Growing content
-          roundNumber: 0,
+          id: 'thread_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 0,
         });
         store.getState().setMessages([message]);
       }
@@ -376,18 +376,18 @@ describe('store Update Frequency', () => {
 
       // Simulate streaming chunks
       const baseMessage = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: '',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       // Add chunks - each with growing content
       for (let i = 1; i <= 20; i++) {
         store.getState().setMessages([{
           ...baseMessage,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'word '.repeat(i) }],
+          parts: [{ text: 'word '.repeat(i), type: MessagePartTypes.TEXT }],
         }]);
       }
 
@@ -404,12 +404,15 @@ describe('store Update Frequency', () => {
       const unsubscribe = store.subscribe((state, prevState) => {
         // Track what changed
         const changes: string[] = [];
-        if (state.isStreaming !== prevState.isStreaming)
+        if (state.isStreaming !== prevState.isStreaming) {
           changes.push('isStreaming');
-        if (state.isModeratorStreaming !== prevState.isModeratorStreaming)
+        }
+        if (state.isModeratorStreaming !== prevState.isModeratorStreaming) {
           changes.push('isModeratorStreaming');
-        if (state.streamingRoundNumber !== prevState.streamingRoundNumber)
+        }
+        if (state.streamingRoundNumber !== prevState.streamingRoundNumber) {
           changes.push('streamingRoundNumber');
+        }
 
         if (changes.length > 0) {
           stateChanges.push(changes.join('+'));
@@ -453,8 +456,8 @@ describe('store Update Frequency', () => {
       // Set moderator message with content
       const moderatorWithContent = mockModeratorMessage({
         id: 'thread_r0_moderator',
-        text: 'Summary of the discussion...',
         roundNumber: 0,
+        text: 'Summary of the discussion...',
       });
 
       store.getState().setMessages([moderatorWithContent]);
@@ -475,26 +478,26 @@ describe('store Update Frequency', () => {
       // Round 0: Moderator complete
       const round0Moderator = mockModeratorMessage({
         id: 'thread_r0_moderator',
-        text: 'Round 0 summary',
         roundNumber: 0,
+        text: 'Round 0 summary',
       });
 
       store.getState().setMessages([round0Moderator]);
 
       // Round 1: Start participant streaming
       const round1User = createTestUserMessage({
-        id: 'user_r1',
         content: 'Round 1 question',
+        id: 'user_r1',
         roundNumber: 1,
       });
 
       const round1Participant = createTestAssistantMessage({
-        id: 'thread_r1_p0',
         content: 'Streaming...',
-        roundNumber: 1,
+        finishReason: FinishReasons.UNKNOWN,
+        id: 'thread_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.UNKNOWN,
+        roundNumber: 1,
       });
 
       store.getState().setMessages([round0Moderator, round1User, round1Participant]);
@@ -506,7 +509,7 @@ describe('store Update Frequency', () => {
       expect(preservedModerator).toBeDefined();
       expect(preservedModerator?.parts?.some(p =>
         p.type === MessagePartTypes.TEXT && 'text' in p && p.text === 'Round 0 summary',
-      )).toBe(true);
+      )).toBeTruthy();
     });
   });
 
@@ -520,7 +523,7 @@ describe('store Update Frequency', () => {
         const messages = store.getState().messages;
         const isStreaming = store.getState().isStreaming;
         const currentParticipantIndex = store.getState().currentParticipantIndex;
-        return { messages, isStreaming, currentParticipantIndex };
+        return { currentParticipantIndex, isStreaming, messages };
       };
 
       // ✅ GOOD: Single batched selector (with useShallow in component)
@@ -528,9 +531,9 @@ describe('store Update Frequency', () => {
       const goodPattern = () => {
         const state = store.getState();
         return {
-          messages: state.messages,
-          isStreaming: state.isStreaming,
           currentParticipantIndex: state.currentParticipantIndex,
+          isStreaming: state.isStreaming,
+          messages: state.messages,
         };
       };
 
@@ -552,8 +555,8 @@ describe('store Update Frequency', () => {
 
       // Without useShallow, object selector creates new reference every time
       const objectSelector = (state: ReturnType<typeof store.getState>) => ({
-        messages: state.messages,
         isStreaming: state.isStreaming,
+        messages: state.messages,
       });
 
       const unsubscribe = store.subscribe(

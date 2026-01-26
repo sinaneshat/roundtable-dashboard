@@ -19,8 +19,12 @@ import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { Price, Product } from '@/services/api/billing/products';
+import { getCheckoutUrl } from '@/services/api/billing/checkout';
+import { isCancelSuccess } from '@/services/api/billing/management';
+import { getPortalUrl } from '@/services/api/billing/portal';
+import { getProductsFromResponse, isProductsSuccess } from '@/services/api/billing/products';
 import type { Subscription } from '@/services/api/billing/subscriptions';
+import { getSubscriptionsFromResponse } from '@/services/api/billing/subscriptions';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -36,43 +40,38 @@ export function PublicPricingScreen() {
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
+  const { data: productsData, error: productsError, isLoading: isLoadingProducts } = useProductsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
 
-  // Type narrowing for API responses
-  type ApiResponse<T> = { success: boolean; data?: T };
-  type ProductsResponse = { items?: Product[] };
-  type SubscriptionsResponse = { items?: Subscription[] };
+  // Type-safe extraction using utility functions from service layer
+  const products = getProductsFromResponse(productsData);
+  const subscriptions = getSubscriptionsFromResponse(subscriptionsData);
 
-  const typedProductsData = productsData as ApiResponse<ProductsResponse> | undefined;
-  const typedSubscriptionsData = subscriptionsData as ApiResponse<SubscriptionsResponse> | undefined;
-
-  const subscriptions: Subscription[] = typedSubscriptionsData?.success ? typedSubscriptionsData.data?.items ?? [] : [];
-  const products = typedProductsData?.success ? typedProductsData.data?.items ?? [] : [];
-
-  const hasValidProductData = typedProductsData?.success && !!typedProductsData.data?.items;
+  const hasValidProductData = isProductsSuccess(productsData) && products.length > 0;
   // Trust SSR data - ensureQueryData in loader pre-populates cache before render
-  const shouldShowError = productsError || (typedProductsData && !typedProductsData.success);
+  const shouldShowError = productsError || (productsData && !productsData.success);
   // Show loading if: actively loading OR no valid data yet (and no error)
   // This ensures we never render empty state - always show loading, error, or content
   const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const monthlyProducts = products
     .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } => {
-      const prices = product.prices as NonNullable<typeof product.prices> | undefined;
+      // Type narrowing via runtime check - prices is validated to be a non-null array
+      const prices = product.prices;
       return prices !== undefined
         && prices !== null
+        && Array.isArray(prices)
         && prices.some(
-          (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+          price => price.interval === UIBillingIntervals.MONTH && price.unitAmount !== null,
         );
     })
     .map(product => ({
       ...product,
       prices: product.prices.filter(
-        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        price => price.interval === UIBillingIntervals.MONTH && price.unitAmount !== null,
       ),
     }))
     .sort((a, b) => (a.prices?.[0]?.unitAmount ?? 0) - (b.prices?.[0]?.unitAmount ?? 0));
@@ -81,14 +80,14 @@ export function PublicPricingScreen() {
     if (isAuthenticated) {
       setProcessingPriceId(priceId);
       try {
-        type CheckoutResponse = { url?: string };
         const result = await createCheckoutMutation.mutateAsync({
           json: { priceId },
-        }) as ApiResponse<CheckoutResponse> | undefined;
+        });
 
-        if (result?.success && result.data?.url) {
+        const checkoutUrl = getCheckoutUrl(result);
+        if (checkoutUrl) {
           // External redirect to Stripe checkout - window.location.href is appropriate here
-          window.location.href = result.data.url;
+          window.location.href = checkoutUrl;
         }
       } catch (error) {
         toastManager.error(t('billing.errors.subscribeFailed'), getApiErrorMessage(error));
@@ -96,25 +95,25 @@ export function PublicPricingScreen() {
         setProcessingPriceId(null);
       }
     } else {
-      // ✅ Use TanStack Router search option for type-safe query params
+      // Use TanStack Router search option for type-safe query params
       const returnUrl = `/chat/pricing?priceId=${priceId}`;
-      navigate({ to: '/auth/sign-in', search: { redirect: returnUrl } });
+      navigate({ search: { redirect: returnUrl }, to: '/auth/sign-in' });
     }
   };
 
   const handleManageBilling = async () => {
     setIsManagingBilling(true);
     try {
-      type PortalResponse = { url?: string };
       const result = await customerPortalMutation.mutateAsync({
         json: {
           // Reading current URL (not navigating) - window.location.href is appropriate
           returnUrl: window.location.href,
         },
-      }) as ApiResponse<PortalResponse> | undefined;
+      });
 
-      if (result?.success && result.data?.url) {
-        window.open(result.data.url, '_blank', 'noopener,noreferrer');
+      const portalUrl = getPortalUrl(result);
+      if (portalUrl) {
+        window.open(portalUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       toastManager.error(t('billing.errors.manageBillingFailed'), getApiErrorMessage(error));
@@ -143,11 +142,11 @@ export function PublicPricingScreen() {
     setCancelingSubscriptionId(subscriptionId);
     try {
       const result = await cancelSubscriptionMutation.mutateAsync({
-        param: { id: subscriptionId },
         json: { immediately: false },
-      }) as ApiResponse<unknown> | undefined;
+        param: { id: subscriptionId },
+      });
 
-      if (result?.success) {
+      if (isCancelSuccess(result)) {
         setShowCancelDialog(false);
         toastManager.success(t('billing.cancelSuccess'));
       }
@@ -186,7 +185,7 @@ export function PublicPricingScreen() {
   }
 
   const product = monthlyProducts[0];
-  const price: Price | undefined = product?.prices?.[0];
+  const price = product?.prices?.[0];
   const subscription: Subscription | undefined = price ? getSubscriptionForPrice(price.id) : undefined;
   const hasCurrentSubscription = !!subscription;
   const canCancel = isSubscriptionCancelable(subscription);
@@ -206,7 +205,7 @@ export function PublicPricingScreen() {
                   currency: price.currency ?? 'usd',
                   interval: UIBillingIntervals.MONTH,
                 }}
-                isMostPopular={true}
+                isMostPopular
                 isCurrentPlan={hasCurrentSubscription}
                 delay={0}
                 isProcessingSubscribe={processingPriceId === price.id}

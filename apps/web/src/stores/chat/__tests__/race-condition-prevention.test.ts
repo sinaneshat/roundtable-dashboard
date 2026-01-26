@@ -42,10 +42,10 @@ type EffectResult = {
 
 function createRefTracker(): RefTracker {
   return {
-    resumptionAttempted: new Map(),
     activeStreamCheck: new Map(),
-    preSearchResumptionAttempted: new Map(),
     moderatorResumptionAttempted: new Map(),
+    preSearchResumptionAttempted: new Map(),
+    resumptionAttempted: new Map(),
     staleStateChecked: new Map(),
   };
 }
@@ -61,8 +61,8 @@ function simulateEffect(
   if (refMap.has(key)) {
     return {
       effectName,
-      triggered: false,
       reason: `Already attempted for ${key}`,
+      triggered: false,
     };
   }
 
@@ -92,7 +92,7 @@ describe('ref-Based Guard: resumptionAttemptedRef', () => {
       'resumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 
   it('blocks second resumption attempt for same thread', () => {
@@ -104,7 +104,7 @@ describe('ref-Based Guard: resumptionAttemptedRef', () => {
       'resumptionAttempted',
     );
 
-    expect(result.triggered).toBe(false);
+    expect(result.triggered).toBeFalsy();
     expect(result.reason).toContain('Already attempted');
   });
 
@@ -117,7 +117,7 @@ describe('ref-Based Guard: resumptionAttemptedRef', () => {
       'resumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 
   it('resets ref when thread changes', () => {
@@ -133,7 +133,7 @@ describe('ref-Based Guard: resumptionAttemptedRef', () => {
       'resumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 });
 
@@ -153,7 +153,7 @@ describe('ref-Based Guard: preSearchPhaseResumptionAttemptedRef', () => {
       'preSearchResumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 
   it('blocks duplicate pre-search resumption', () => {
@@ -161,7 +161,7 @@ describe('ref-Based Guard: preSearchPhaseResumptionAttemptedRef', () => {
     simulateEffect('pre-search-resumption', refs, key, 'preSearchResumptionAttempted');
     const result = simulateEffect('pre-search-resumption', refs, key, 'preSearchResumptionAttempted');
 
-    expect(result.triggered).toBe(false);
+    expect(result.triggered).toBeFalsy();
   });
 
   it('allows pre-search resumption for different round', () => {
@@ -173,7 +173,7 @@ describe('ref-Based Guard: preSearchPhaseResumptionAttemptedRef', () => {
       'preSearchResumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 });
 
@@ -193,7 +193,7 @@ describe('ref-Based Guard: moderatorPhaseResumptionAttemptedRef', () => {
       'moderatorResumptionAttempted',
     );
 
-    expect(result.triggered).toBe(true);
+    expect(result.triggered).toBeTruthy();
   });
 
   it('blocks duplicate moderator resumption', () => {
@@ -201,7 +201,7 @@ describe('ref-Based Guard: moderatorPhaseResumptionAttemptedRef', () => {
     simulateEffect('moderator-resumption', refs, key, 'moderatorResumptionAttempted');
     const result = simulateEffect('moderator-resumption', refs, key, 'moderatorResumptionAttempted');
 
-    expect(result.triggered).toBe(false);
+    expect(result.triggered).toBeFalsy();
   });
 });
 
@@ -219,8 +219,8 @@ describe('concurrent Effect Prevention', () => {
     // Participant effect should NOT run when phase is pre_search
     const shouldRunParticipantEffect = currentPhase === RoundPhases.PARTICIPANTS;
 
-    expect(shouldRunPreSearchEffect).toBe(true);
-    expect(shouldRunParticipantEffect).toBe(false);
+    expect(shouldRunPreSearchEffect).toBeTruthy();
+    expect(shouldRunParticipantEffect).toBeFalsy();
   });
 
   it('prevents participant and moderator effects from running simultaneously', () => {
@@ -234,8 +234,8 @@ describe('concurrent Effect Prevention', () => {
     const shouldRunModeratorEffect = currentPhase === RoundPhases.MODERATOR
       || allParticipantsComplete;
 
-    expect(shouldRunParticipantEffect).toBe(true);
-    expect(shouldRunModeratorEffect).toBe(false);
+    expect(shouldRunParticipantEffect).toBeTruthy();
+    expect(shouldRunModeratorEffect).toBeFalsy();
   });
 
   it('ensures only one phase-specific effect runs at a time', () => {
@@ -305,7 +305,7 @@ describe('aI SDK Resume vs Custom Resumption Coordination', () => {
 
     const shouldIncompleteRoundResumptionRun = !isStreaming;
 
-    expect(shouldIncompleteRoundResumptionRun).toBe(false);
+    expect(shouldIncompleteRoundResumptionRun).toBeFalsy();
   });
 
   it('incomplete-round-resumption waits for activeStreamCheckComplete', () => {
@@ -313,7 +313,7 @@ describe('aI SDK Resume vs Custom Resumption Coordination', () => {
 
     const shouldProceedWithResumption = activeStreamCheckComplete;
 
-    expect(shouldProceedWithResumption).toBe(false);
+    expect(shouldProceedWithResumption).toBeFalsy();
   });
 });
 
@@ -334,8 +334,8 @@ describe('server Prefetch vs Client State Coordination', () => {
       resumptionEffectRan = true;
     }
 
-    expect(streamResumptionPrefilled).toBe(true);
-    expect(resumptionEffectRan).toBe(true);
+    expect(streamResumptionPrefilled).toBeTruthy();
+    expect(resumptionEffectRan).toBeTruthy();
   });
 
   it('stale state cleanup skips when prefilled', () => {
@@ -350,7 +350,7 @@ describe('server Prefetch vs Client State Coordination', () => {
       && !isStreaming
       && !streamResumptionPrefilled; // NEW: Skip if prefilled
 
-    expect(isStale).toBe(false);
+    expect(isStale).toBeFalsy();
   });
 
   it('stale state cleanup runs when NOT prefilled', () => {
@@ -364,7 +364,7 @@ describe('server Prefetch vs Client State Coordination', () => {
       && !isStreaming
       && !streamResumptionPrefilled;
 
-    expect(isStale).toBe(true);
+    expect(isStale).toBeTruthy();
   });
 });
 
@@ -376,17 +376,17 @@ describe('phase Transition Atomicity', () => {
   it('transitionToParticipantsPhase clears pre-search state atomically', () => {
     const state = {
       currentResumptionPhase: RoundPhases.PRE_SEARCH as RoundPhase | null,
+      nextParticipantToTrigger: null as number | null,
       preSearchResumption: { status: 'streaming', streamId: 'ps_123' },
       waitingToStartStreaming: true,
-      nextParticipantToTrigger: null as number | null,
     };
 
     // Simulate transitionToParticipantsPhase
     const newState = {
       ...state,
       currentResumptionPhase: RoundPhases.PARTICIPANTS,
-      preSearchResumption: null,
       nextParticipantToTrigger: 0,
+      preSearchResumption: null,
     };
 
     expect(newState.currentResumptionPhase).toBe(RoundPhases.PARTICIPANTS);
@@ -397,24 +397,24 @@ describe('phase Transition Atomicity', () => {
   it('clearStreamResumption resets all resumption state atomically', () => {
     const state = {
       currentResumptionPhase: RoundPhases.MODERATOR as RoundPhase | null,
-      streamResumptionPrefilled: true,
+      moderatorResumption: { moderatorMessageId: 'mod_123', status: 'complete' },
       preSearchResumption: null,
-      moderatorResumption: { status: 'complete', moderatorMessageId: 'mod_123' },
       resumptionRoundNumber: 0 as number | null,
+      streamResumptionPrefilled: true,
     };
 
     // Simulate clearStreamResumption
     const newState = {
       ...state,
       currentResumptionPhase: RoundPhases.IDLE,
-      streamResumptionPrefilled: false,
-      preSearchResumption: null,
       moderatorResumption: null,
+      preSearchResumption: null,
       resumptionRoundNumber: null,
+      streamResumptionPrefilled: false,
     };
 
     expect(newState.currentResumptionPhase).toBe(RoundPhases.IDLE);
-    expect(newState.streamResumptionPrefilled).toBe(false);
+    expect(newState.streamResumptionPrefilled).toBeFalsy();
     expect(newState.moderatorResumption).toBeNull();
     expect(newState.resumptionRoundNumber).toBeNull();
   });
@@ -441,11 +441,11 @@ describe('timeout-Based Stale State Cleanup', () => {
       isStreaming = false;
     }, STALE_TIMEOUT);
 
-    expect(isStreaming).toBe(true);
+    expect(isStreaming).toBeTruthy();
 
     vi.advanceTimersByTime(STALE_TIMEOUT);
 
-    expect(isStreaming).toBe(false);
+    expect(isStreaming).toBeFalsy();
 
     clearTimeout(timeoutId);
   });
@@ -465,8 +465,8 @@ describe('timeout-Based Stale State Cleanup', () => {
 
     vi.advanceTimersByTime(STALE_TIMEOUT);
 
-    expect(isStreaming).toBe(true); // NOT cleared because timeout was cancelled
-    expect(timeoutCleared).toBe(true);
+    expect(isStreaming).toBeTruthy(); // NOT cleared because timeout was cancelled
+    expect(timeoutCleared).toBeTruthy();
   });
 
   it('resets timeout on each activity', () => {
@@ -538,7 +538,7 @@ describe('signature-Based Re-check Detection', () => {
 describe('duplicate Message Prevention', () => {
   it('checks for existing message ID before triggering participant', () => {
     const messages = [
-      { id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT, content: 'Existing' },
+      { content: 'Existing', id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT },
     ];
 
     const expectedMessageId = 'thread-123_r0_p0';
@@ -546,12 +546,12 @@ describe('duplicate Message Prevention', () => {
 
     const shouldTriggerParticipant = !existingMessage;
 
-    expect(shouldTriggerParticipant).toBe(false);
+    expect(shouldTriggerParticipant).toBeFalsy();
   });
 
   it('allows triggering when message ID does not exist', () => {
     const messages = [
-      { id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT, content: 'P0' },
+      { content: 'P0', id: 'thread-123_r0_p0', role: MessageRoles.ASSISTANT },
     ];
 
     const expectedMessageId = 'thread-123_r0_p1';
@@ -559,16 +559,16 @@ describe('duplicate Message Prevention', () => {
 
     const shouldTriggerParticipant = !existingMessage;
 
-    expect(shouldTriggerParticipant).toBe(true);
+    expect(shouldTriggerParticipant).toBeTruthy();
   });
 
   it('allows re-triggering incomplete message (finishReason: unknown, no content)', () => {
     const messages = [
       {
         id: 'thread-123_r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [],
         metadata: { finishReason: FinishReasons.UNKNOWN },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
@@ -583,7 +583,7 @@ describe('duplicate Message Prevention', () => {
     // Should allow re-trigger because message is incomplete
     const shouldTriggerParticipant = !isComplete;
 
-    expect(shouldTriggerParticipant).toBe(true);
+    expect(shouldTriggerParticipant).toBeTruthy();
   });
 });
 
@@ -600,7 +600,7 @@ describe('submission In Progress Guard', () => {
     const isSubmissionInProgress = hasEarlyOptimisticMessage
       || (pendingMessage !== null && !hasSentPendingMessage);
 
-    expect(isSubmissionInProgress).toBe(true);
+    expect(isSubmissionInProgress).toBeTruthy();
   });
 
   it('blocks resumption during pendingMessage before sent', () => {
@@ -611,7 +611,7 @@ describe('submission In Progress Guard', () => {
     const isSubmissionInProgress = hasEarlyOptimisticMessage
       || (pendingMessage !== null && !hasSentPendingMessage);
 
-    expect(isSubmissionInProgress).toBe(true);
+    expect(isSubmissionInProgress).toBeTruthy();
   });
 
   it('allows resumption after pendingMessage is sent', () => {
@@ -622,22 +622,22 @@ describe('submission In Progress Guard', () => {
     const isSubmissionInProgress = hasEarlyOptimisticMessage
       || (pendingMessage !== null && !hasSentPendingMessage);
 
-    expect(isSubmissionInProgress).toBe(false);
+    expect(isSubmissionInProgress).toBeFalsy();
   });
 
   it('blocks resumption when last user message is optimistic', () => {
     const messages = [
       {
         id: 'optimistic-123',
-        role: MessageRoles.USER,
         metadata: { isOptimistic: true },
+        role: MessageRoles.USER,
       },
     ];
 
     const lastUserMessage = messages.findLast(m => m.role === MessageRoles.USER);
     const isOptimistic = lastUserMessage?.metadata?.isOptimistic === true;
 
-    expect(isOptimistic).toBe(true);
+    expect(isOptimistic).toBeTruthy();
   });
 });
 
@@ -708,15 +708,17 @@ describe('participant Status Tracking', () => {
     // Next to trigger should be 2, not 1 (because 1 is in-progress)
     let nextParticipantIndex: number | null = null;
     for (let i = 0; i < totalParticipants; i++) {
-      if (respondedParticipantIndices.has(i))
+      if (respondedParticipantIndices.has(i)) {
         continue;
-      if (inProgressParticipantIndices.has(i))
+      }
+      if (inProgressParticipantIndices.has(i)) {
         continue;
+      }
       nextParticipantIndex = i;
       break;
     }
 
-    expect(isIncomplete).toBe(true);
+    expect(isIncomplete).toBeTruthy();
     expect(nextParticipantIndex).toBe(2);
   });
 });
@@ -731,23 +733,26 @@ describe('kV Stream Buffer Coordination', () => {
     let pollCount = 0;
     const maxPolls = 3;
 
-    // Simulate polling
-    const poll = () => {
-      pollCount++;
-      if (pollCount === 1)
-        chunks.push('chunk1');
-      if (pollCount === 2)
-        chunks.push('chunk2');
-      if (pollCount === 3)
-        return 'DONE';
-      return 'CONTINUE';
+    // Simulate polling - returns chunk data and whether to continue
+    const poll = (): { chunk: string | null; done: boolean } => {
+      if (pollCount === 0) {
+        return { chunk: 'chunk1', done: false };
+      }
+      if (pollCount === 1) {
+        return { chunk: 'chunk2', done: false };
+      }
+      return { chunk: null, done: true };
     };
 
-    // eslint-disable-next-line no-unmodified-loop-condition -- pollCount modified inside poll()
     while (pollCount < maxPolls) {
       const result = poll();
-      if (result === 'DONE')
+      pollCount++;
+      if (result.chunk) {
+        chunks.push(result.chunk);
+      }
+      if (result.done) {
         break;
+      }
     }
 
     expect(chunks).toHaveLength(2);
@@ -756,8 +761,8 @@ describe('kV Stream Buffer Coordination', () => {
 
   it('detects stream completion via markStreamCompleted', () => {
     const streamStatus = {
-      status: 'active' as 'active' | 'completed',
       chunks: ['chunk1', 'chunk2'],
+      status: 'active' as 'active' | 'completed',
     };
 
     // Simulate markStreamCompleted
@@ -776,7 +781,7 @@ describe('kV Stream Buffer Coordination', () => {
 
     const isStale = Date.now() - streamCreatedAt > STALE_TIMEOUT;
 
-    expect(isStale).toBe(true);
+    expect(isStale).toBeTruthy();
 
     vi.useRealTimers();
   });
@@ -792,7 +797,7 @@ describe('error Recovery in Resumption', () => {
 
     const shouldSkipToParticipants = preSearchStatus === MessageStatuses.FAILED;
 
-    expect(shouldSkipToParticipants).toBe(true);
+    expect(shouldSkipToParticipants).toBeTruthy();
   });
 
   it('handles failed participant by marking as responded', () => {
@@ -804,7 +809,7 @@ describe('error Recovery in Resumption', () => {
       || finishReason === FinishReasons.STOP
       || finishReason === FinishReasons.LENGTH;
 
-    expect(shouldCountAsResponded).toBe(true);
+    expect(shouldCountAsResponded).toBeTruthy();
   });
 
   it('handles empty interrupted response by allowing retry', () => {
@@ -819,6 +824,6 @@ describe('error Recovery in Resumption', () => {
     // Should NOT count as responded - allow retry
     const shouldCountAsResponded = !isEmptyInterruptedResponse;
 
-    expect(shouldCountAsResponded).toBe(false);
+    expect(shouldCountAsResponded).toBeFalsy();
   });
 });

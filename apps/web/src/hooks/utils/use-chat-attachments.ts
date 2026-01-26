@@ -32,32 +32,45 @@ export type { PendingAttachment };
  * Upload state summary schema
  */
 const UploadStateSummarySchema = z.object({
-  /** Total number of uploads */
-  total: z.number().int().nonnegative(),
-  /** Number of pending uploads */
-  pending: z.number().int().nonnegative(),
-  /** Number of currently uploading files */
-  uploading: z.number().int().nonnegative(),
   /** Number of completed uploads */
   completed: z.number().int().nonnegative(),
   /** Number of failed uploads */
   failed: z.number().int().nonnegative(),
   /** Overall progress percentage (0-100) */
   overallProgress: z.number().min(0).max(100),
+  /** Number of pending uploads */
+  pending: z.number().int().nonnegative(),
+  /** Total number of uploads */
+  total: z.number().int().nonnegative(),
+  /** Number of currently uploading files */
+  uploading: z.number().int().nonnegative(),
 });
 
 /**
  * Return type schema for useChatAttachments hook
+ * Includes both state and function members
  */
 const _UseChatAttachmentsReturnSchema = z.object({
-  /** Current pending attachments with previews and upload state */
-  attachments: z.array(PendingAttachmentSchema),
-  /** Whether there are any attachments */
-  hasAttachments: z.boolean(),
+  /** Add files (validates and starts upload) */
+  addFiles: z.custom<(files: File[]) => void>(),
   /** Whether all attachments are uploaded and ready */
   allUploaded: z.boolean(),
+  /** Current pending attachments with previews and upload state */
+  attachments: z.array(PendingAttachmentSchema),
+  /** Cancel an in-progress upload */
+  cancelUpload: z.custom<(id: string) => Promise<void>>(),
+  /** Clear all attachments (call after successful submit) */
+  clearAttachments: z.custom<() => void>(),
+  /** Get completed upload IDs for message association */
+  getUploadIds: z.custom<() => string[]>(),
+  /** Whether there are any attachments */
+  hasAttachments: z.boolean(),
   /** Whether any upload is in progress */
   isUploading: z.boolean(),
+  /** Remove a specific attachment */
+  removeAttachment: z.custom<(id: string) => void>(),
+  /** Retry a failed upload */
+  retryUpload: z.custom<(id: string) => void>(),
   /** Upload state summary */
   uploadState: UploadStateSummarySchema,
 });
@@ -65,20 +78,7 @@ const _UseChatAttachmentsReturnSchema = z.object({
 /**
  * Return type for useChatAttachments hook - inferred from schema
  */
-export type UseChatAttachmentsReturn = z.infer<typeof _UseChatAttachmentsReturnSchema> & {
-  /** Get completed upload IDs for message association */
-  getUploadIds: () => string[];
-  /** Add files (validates and starts upload) */
-  addFiles: (files: File[]) => void;
-  /** Remove a specific attachment */
-  removeAttachment: (id: string) => void;
-  /** Clear all attachments (call after successful submit) */
-  clearAttachments: () => void;
-  /** Retry a failed upload */
-  retryUpload: (id: string) => void;
-  /** Cancel an in-progress upload */
-  cancelUpload: (id: string) => Promise<void>;
-};
+export type UseChatAttachmentsReturn = z.infer<typeof _UseChatAttachmentsReturnSchema>;
 
 /**
  * Hook for managing chat input file attachments with real uploads
@@ -118,13 +118,13 @@ export type UseChatAttachmentsReturn = z.infer<typeof _UseChatAttachmentsReturnS
  */
 export function useChatAttachments(): UseChatAttachmentsReturn {
   const {
+    addFiles: addUploadFiles,
+    cancelUpload: cancelUploadItem,
+    clearAll,
     items,
     previews,
-    addFiles: addUploadFiles,
     removeItem,
-    clearAll,
     retryUpload: retryUploadItem,
-    cancelUpload: cancelUploadItem,
     state,
     validation,
   } = useFileUpload({
@@ -137,19 +137,20 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     return items.map((item) => {
       const preview = previews.find(p => p.file === item.file);
       return {
-        id: item.id,
         file: item.file,
-        status: item.status,
-        uploadItem: item,
+        id: item.id,
         preview,
+        status: item.status,
         uploadId: item.uploadId,
+        uploadItem: item,
       };
     });
   }, [items, previews]);
 
   const allUploaded = useMemo(() => {
-    if (items.length === 0)
+    if (items.length === 0) {
       return true;
+    }
     return items.every(item => item.status === UploadStatuses.COMPLETED);
   }, [items]);
 
@@ -210,23 +211,23 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
   }, [cancelUploadItem]);
 
   return {
-    attachments,
-    hasAttachments: items.length > 0,
-    allUploaded,
-    isUploading: state.isUploading,
-    getUploadIds,
     addFiles,
-    removeAttachment,
-    clearAttachments,
-    retryUpload,
+    allUploaded,
+    attachments,
     cancelUpload,
+    clearAttachments,
+    getUploadIds,
+    hasAttachments: items.length > 0,
+    isUploading: state.isUploading,
+    removeAttachment,
+    retryUpload,
     uploadState: {
-      total: state.total,
-      pending: state.pending,
-      uploading: state.uploading,
       completed: state.completed,
       failed: state.failed,
       overallProgress: state.overallProgress,
+      pending: state.pending,
+      total: state.total,
+      uploading: state.uploading,
     },
   };
 }

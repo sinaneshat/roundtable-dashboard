@@ -36,8 +36,8 @@ export type UseCountdownRedirectReturn = {
 export function useCountdownRedirect({
   enabled,
   initialCount = 10,
-  redirectPath = '/chat',
   onComplete,
+  redirectPath = '/chat',
 }: UseCountdownRedirectOptions): UseCountdownRedirectReturn {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(initialCount);
@@ -46,14 +46,15 @@ export function useCountdownRedirect({
   // without causing the timer effect to re-run when these values change
   const handleRedirect = useEffectEvent(() => {
     onComplete?.();
-    navigate({ to: redirectPath, replace: true });
+    navigate({ replace: true, to: redirectPath });
   });
 
   // ✅ REACT 19: Timer effect only depends on `enabled`
   // handleRedirect from useEffectEvent is stable and non-reactive
   useEffect(() => {
-    if (!enabled)
+    if (!enabled) {
       return;
+    }
 
     const interval = setInterval(() => {
       setCountdown((prev) => {

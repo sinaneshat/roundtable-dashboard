@@ -36,15 +36,15 @@ export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 
 export const StreamChunkSchema = z.object({
   data: z.string(),
-  timestamp: z.number(),
   event: SSEEventTypeSchema.optional(),
+  timestamp: z.number(),
 });
 
 export type StreamChunk = z.infer<typeof StreamChunkSchema>;
 
 export const SSEChunkSchema = z.object({
-  event: z.string().optional(),
   data: z.string(),
+  event: z.string().optional(),
   timestamp: z.string(),
 });
 
@@ -57,30 +57,30 @@ export const SSEChunksArraySchema = z.array(SSEChunkSchema);
 // ============================================================================
 
 export const StreamBufferMetadataSchema = z.object({
+  chunkCount: z.number(),
+  completedAt: z.number().nullable(),
+  createdAt: z.number(),
+  errorMessage: z.string().nullable(),
+  participantIndex: z.number(),
+  roundNumber: z.number(),
+  status: StreamStatusSchema,
   streamId: z.string(),
   threadId: z.string(),
-  roundNumber: z.number(),
-  participantIndex: z.number(),
-  status: StreamStatusSchema,
-  chunkCount: z.number(),
-  createdAt: z.number(),
-  completedAt: z.number().nullable(),
-  errorMessage: z.string().nullable(),
 });
 
 export type StreamBufferMetadata = z.infer<typeof StreamBufferMetadataSchema>;
 
 export const StreamMetadataSchema = z.object({
+  chunkCount: z.number(),
+  completedAt: z.string().optional(),
+  createdAt: z.string(),
+  errorMessage: z.string().optional(),
+  participantIndex: z.number(),
+  roundNumber: z.number(),
+  status: StreamStatusSchema,
   streamId: z.string(),
   threadId: z.string(),
-  roundNumber: z.number(),
-  participantIndex: z.number(),
-  status: StreamStatusSchema,
-  createdAt: z.string(),
   updatedAt: z.string(),
-  completedAt: z.string().optional(),
-  errorMessage: z.string().optional(),
-  chunkCount: z.number(),
 });
 
 export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
@@ -90,14 +90,15 @@ export type StreamMetadata = z.infer<typeof StreamMetadataSchema>;
 // ============================================================================
 
 export const ResumableStreamContextOptionsSchema = z.object({
-  waitUntil: z.custom<(promise: Promise<unknown>) => void>(),
   env: z.custom<ApiEnv['Bindings']>(),
   executionCtx: z.custom<ExecutionContext>().optional(),
+  waitUntil: z.custom<(promise: Promise<unknown>) => void>(),
 }).describe('Options for ResumableStreamContext');
 
 export type ResumableStreamContextOptions = z.infer<typeof ResumableStreamContextOptionsSchema>;
 
 export const ResumableStreamContextSchema = z.object({
+  complete: z.custom<(streamId: string) => Promise<void>>(),
   createNewResumableStream: z.custom<(
     streamId: string,
     threadId: string,
@@ -105,12 +106,11 @@ export const ResumableStreamContextSchema = z.object({
     participantIndex: number,
     getStream: () => ReadableStream<string>,
   ) => Promise<void>>(),
-  resumeExistingStream: z.custom<(streamId: string) => Promise<ReadableStream<Uint8Array> | null>>(),
-  isStreamActive: z.custom<(streamId: string) => Promise<boolean>>(),
-  getMetadata: z.custom<(streamId: string) => Promise<StreamBufferMetadata | null>>(),
-  getChunks: z.custom<(streamId: string) => Promise<StreamChunk[] | null>>(),
-  complete: z.custom<(streamId: string) => Promise<void>>(),
   fail: z.custom<(streamId: string, error: string) => Promise<void>>(),
+  getChunks: z.custom<(streamId: string) => Promise<StreamChunk[] | null>>(),
+  getMetadata: z.custom<(streamId: string) => Promise<StreamBufferMetadata | null>>(),
+  isStreamActive: z.custom<(streamId: string) => Promise<boolean>>(),
+  resumeExistingStream: z.custom<(streamId: string) => Promise<ReadableStream<Uint8Array> | null>>(),
 });
 
 export type ResumableStreamContext = z.infer<typeof ResumableStreamContextSchema>;
@@ -120,46 +120,46 @@ export type ResumableStreamContext = z.infer<typeof ResumableStreamContextSchema
 // ============================================================================
 
 export const InitializeStreamBufferParamsSchema = z.object({
-  streamId: z.string(),
-  threadId: z.string(),
-  roundNumber: z.number(),
-  participantIndex: z.number(),
   env: z.custom<ApiEnv['Bindings']>(),
   logger: TypedLoggerSchema.optional(),
+  participantIndex: z.number(),
+  roundNumber: z.number(),
+  streamId: z.string(),
+  threadId: z.string(),
 });
 
 export type InitializeStreamBufferParams = z.infer<typeof InitializeStreamBufferParamsSchema>;
 
 export const AppendStreamChunkParamsSchema = z.object({
-  streamId: z.string(),
   chunk: StreamChunkSchema,
   env: z.custom<ApiEnv['Bindings']>(),
   logger: TypedLoggerSchema.optional(),
+  streamId: z.string(),
 });
 
 export type AppendStreamChunkParams = z.infer<typeof AppendStreamChunkParamsSchema>;
 
 export const CompleteStreamBufferParamsSchema = z.object({
-  streamId: z.string(),
   env: z.custom<ApiEnv['Bindings']>(),
   logger: TypedLoggerSchema.optional(),
+  streamId: z.string(),
 });
 
 export type CompleteStreamBufferParams = z.infer<typeof CompleteStreamBufferParamsSchema>;
 
 export const FailStreamBufferParamsSchema = z.object({
-  streamId: z.string(),
-  errorMessage: z.string(),
   env: z.custom<ApiEnv['Bindings']>(),
+  errorMessage: z.string(),
   logger: TypedLoggerSchema.optional(),
+  streamId: z.string(),
 });
 
 export type FailStreamBufferParams = z.infer<typeof FailStreamBufferParamsSchema>;
 
 export const StreamResumeResultSchema = z.object({
   chunks: z.array(StreamChunkSchema),
-  metadata: StreamBufferMetadataSchema.nullable(),
   isComplete: z.boolean(),
+  metadata: StreamBufferMetadataSchema.nullable(),
 });
 
 export type StreamResumeResult = z.infer<typeof StreamResumeResultSchema>;
@@ -192,15 +192,15 @@ export const ModeratorStreamChunkSchema = z.object({
 export type ModeratorStreamChunk = z.infer<typeof ModeratorStreamChunkSchema>;
 
 export const ModeratorStreamBufferMetadataSchema = z.object({
+  chunkCount: z.number(),
+  completedAt: z.number().nullable(),
+  createdAt: z.number(),
+  errorMessage: z.string().nullable(),
+  moderatorId: z.string(),
+  roundNumber: z.number(),
+  status: StreamStatusSchema,
   streamId: z.string(),
   threadId: z.string(),
-  roundNumber: z.number(),
-  moderatorId: z.string(),
-  status: StreamStatusSchema,
-  chunkCount: z.number(),
-  createdAt: z.number(),
-  completedAt: z.number().nullable(),
-  errorMessage: z.string().nullable(),
 });
 
 export type ModeratorStreamBufferMetadata = z.infer<typeof ModeratorStreamBufferMetadataSchema>;
@@ -218,24 +218,24 @@ export function isModeratorStreamBufferMetadata(value: unknown): value is Modera
 // ============================================================================
 
 export const PreSearchStreamChunkSchema = z.object({
-  index: z.number(),
-  event: z.string(),
   data: z.string(),
+  event: z.string(),
+  index: z.number(),
   timestamp: z.number(),
 });
 
 export type PreSearchStreamChunk = z.infer<typeof PreSearchStreamChunkSchema>;
 
 export const PreSearchStreamMetadataSchema = z.object({
+  chunkCount: z.number(),
+  completedAt: z.number().optional(),
+  createdAt: z.number(),
+  errorMessage: z.string().optional(),
+  preSearchId: z.string(),
+  roundNumber: z.number(),
+  status: StreamStatusSchema,
   streamId: z.string(),
   threadId: z.string(),
-  roundNumber: z.number(),
-  preSearchId: z.string(),
-  status: StreamStatusSchema,
-  chunkCount: z.number(),
-  createdAt: z.number(),
-  completedAt: z.number().optional(),
-  errorMessage: z.string().optional(),
 });
 
 export type PreSearchStreamMetadata = z.infer<typeof PreSearchStreamMetadataSchema>;
@@ -253,29 +253,29 @@ export function isPreSearchStreamMetadata(value: unknown): value is PreSearchStr
 // ============================================================================
 
 export const StreamStateSchema = z.object({
-  threadId: z.string(),
-  roundNumber: z.number(),
-  participantIndex: z.number(),
-  status: StreamStatusSchema,
-  messageId: z.string().nullable(),
-  createdAt: z.string(),
+  chunkCount: z.number(),
   completedAt: z.string().nullable(),
+  createdAt: z.string(),
   errorMessage: z.string().nullable(),
   lastHeartbeatAt: z.string().nullable(),
-  chunkCount: z.number(),
+  messageId: z.string().nullable(),
+  participantIndex: z.number(),
+  roundNumber: z.number(),
+  status: StreamStatusSchema,
+  threadId: z.string(),
 });
 
 export type StreamState = z.infer<typeof StreamStateSchema>;
 
 export const ThreadActiveStreamSchema = z.object({
-  streamId: z.string(),
-  roundNumber: z.number(),
-  participantIndex: z.number(),
-  createdAt: z.string(),
-  totalParticipants: z.number(),
-  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema),
   /** Attachment IDs from the original request - shared across all participants in the round */
   attachmentIds: z.array(z.string()).optional(),
+  createdAt: z.string(),
+  participantIndex: z.number(),
+  participantStatuses: z.record(z.string(), ParticipantStreamStatusSchema),
+  roundNumber: z.number(),
+  streamId: z.string(),
+  totalParticipants: z.number(),
 });
 
 export type ThreadActiveStream = z.infer<typeof ThreadActiveStreamSchema>;
@@ -298,23 +298,23 @@ export const StreamPhaseMetadata: Record<StreamPhase, {
   prefix: string;
   isParallel: boolean;
 }> = {
-  [StreamPhases.PRESEARCH]: {
-    label: 'Pre-Search',
-    order: 0,
-    prefix: 'presearch',
-    isParallel: false,
-  },
-  [StreamPhases.PARTICIPANT]: {
-    label: 'Participant',
-    order: 1,
-    prefix: 'participant',
-    isParallel: true,
-  },
   [StreamPhases.MODERATOR]: {
+    isParallel: false,
     label: 'Moderator',
     order: 2,
     prefix: 'moderator',
+  },
+  [StreamPhases.PARTICIPANT]: {
+    isParallel: true,
+    label: 'Participant',
+    order: 1,
+    prefix: 'participant',
+  },
+  [StreamPhases.PRESEARCH]: {
     isParallel: false,
+    label: 'Pre-Search',
+    order: 0,
+    prefix: 'presearch',
   },
 } as const;
 
@@ -339,28 +339,28 @@ export function parseStreamId(streamId: string): {
   const presearchMatch = streamId.match(/^(.+)_r(\d+)_presearch$/);
   if (presearchMatch?.[1] && presearchMatch[2]) {
     return {
-      threadId: presearchMatch[1],
-      roundNumber: Number.parseInt(presearchMatch[2], 10),
       phase: StreamPhases.PRESEARCH,
+      roundNumber: Number.parseInt(presearchMatch[2], 10),
+      threadId: presearchMatch[1],
     };
   }
 
   const participantMatch = streamId.match(/^(.+)_r(\d+)_participant_(\d+)$/);
   if (participantMatch?.[1] && participantMatch[2] && participantMatch[3]) {
     return {
-      threadId: participantMatch[1],
-      roundNumber: Number.parseInt(participantMatch[2], 10),
-      phase: StreamPhases.PARTICIPANT,
       participantIndex: Number.parseInt(participantMatch[3], 10),
+      phase: StreamPhases.PARTICIPANT,
+      roundNumber: Number.parseInt(participantMatch[2], 10),
+      threadId: participantMatch[1],
     };
   }
 
   const moderatorMatch = streamId.match(/^(.+)_r(\d+)_moderator$/);
   if (moderatorMatch?.[1] && moderatorMatch[2]) {
     return {
-      threadId: moderatorMatch[1],
-      roundNumber: Number.parseInt(moderatorMatch[2], 10),
       phase: StreamPhases.MODERATOR,
+      roundNumber: Number.parseInt(moderatorMatch[2], 10),
+      threadId: moderatorMatch[1],
     };
   }
 

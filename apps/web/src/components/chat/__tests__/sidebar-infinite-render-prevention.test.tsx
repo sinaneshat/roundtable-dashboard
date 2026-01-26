@@ -10,7 +10,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(chatListPath, 'utf-8');
 
       const usesSidebarMenuAction = /SidebarMenuAction/.test(content);
-      expect(usesSidebarMenuAction).toBe(true);
+      expect(usesSidebarMenuAction).toBeTruthy();
 
       // TanStack Router uses 'to' instead of 'href'
       expect(content).toMatch(/Link\s+to=/);
@@ -21,10 +21,10 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(navUserPath, 'utf-8');
 
       const hasAsChildOnDropdown = /DropdownMenuTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnDropdown).toBe(false);
+      expect(hasAsChildOnDropdown).toBeFalsy();
 
       const hasClassNameOnDropdown = /DropdownMenuTrigger[^>]*className=/.test(content);
-      expect(hasClassNameOnDropdown).toBe(true);
+      expect(hasClassNameOnDropdown).toBeTruthy();
     });
 
     it('should use asChild on DropdownMenuTrigger with Button in ChatThreadActions', () => {
@@ -32,7 +32,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(actionsPath, 'utf-8');
 
       const hasAsChildOnDropdown = /DropdownMenuTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnDropdown).toBe(true);
+      expect(hasAsChildOnDropdown).toBeTruthy();
 
       expect(content).toMatch(/Button/);
     });
@@ -42,7 +42,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(actionsPath, 'utf-8');
 
       const hasAsChildOnTooltip = /TooltipTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnTooltip).toBe(true);
+      expect(hasAsChildOnTooltip).toBeTruthy();
 
       expect(content).toMatch(/TooltipProvider/);
     });
@@ -52,7 +52,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(sharePath, 'utf-8');
 
       const hasAsChildOnTooltip = /TooltipTrigger\s+asChild/.test(content);
-      expect(hasAsChildOnTooltip).toBe(false);
+      expect(hasAsChildOnTooltip).toBeFalsy();
 
       expect(content).toMatch(/title=\{/);
     });
@@ -62,7 +62,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(chatListPath, 'utf-8');
 
       const importsSidebarMenuAction = /import\s+\{[^}]*SidebarMenuAction[^}]*\}\s+from\s+['"]@\/components\/ui\/sidebar['"]/.test(content);
-      expect(importsSidebarMenuAction).toBe(true);
+      expect(importsSidebarMenuAction).toBeTruthy();
     });
 
     it('should not import SidebarMenuButton in NavUser (styles applied directly)', () => {
@@ -70,7 +70,7 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const content = readFileSync(navUserPath, 'utf-8');
 
       const importsSidebarMenuButton = /import\s+\{[^}]*SidebarMenuButton[^}]*\}\s+from\s+['"]@\/components\/ui\/sidebar['"]/.test(content);
-      expect(importsSidebarMenuButton).toBe(false);
+      expect(importsSidebarMenuButton).toBeFalsy();
     });
   });
 
@@ -102,15 +102,15 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
 
   describe('performance baseline documentation', () => {
     it('documents expected render behavior for slug updates', () => {
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
 
     it('documents the root cause of the bug', () => {
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
 
     it('documents the polling scenario that triggers the bug', () => {
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -142,14 +142,14 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
 
 describe('documentation: Infinite Render Prevention Patterns', () => {
   it('documents pattern: useRef for dynamic values in stable callbacks', () => {
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents pattern: avoiding Radix asChild in frequently updating components', () => {
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents safe Radix usage patterns', () => {
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

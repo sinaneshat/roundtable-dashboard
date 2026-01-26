@@ -183,32 +183,30 @@ function getBetterAuthUrl(): string {
  */
 function createAuth() {
   return betterAuth({
-    secret: getAuthSecret(),
-    baseURL: getBetterAuthUrl(),
-    basePath: '/api/auth', // Explicit basePath to match Hono route
-    database: createAuthAdapter(),
-
-    // Email domain restriction for local and preview environments
-    // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
-    hooks: {
-      before: createAuthMiddleware(async (ctx) => {
-        try {
-          // Validate email domain using reusable utility
-          // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
-          validateEmailDomain(ctx);
-        } catch (error) {
-          // Log validation errors for debugging
-          console.error({
-            log_type: 'auth_hook_error',
-            timestamp: new Date().toISOString(),
-            path: ctx.path,
-            error_name: error instanceof Error ? error.name : 'Unknown',
-            error_message: error instanceof Error ? error.message : String(error),
-          });
-          throw error; // Re-throw to let Better Auth handle it
-        }
-      }),
+    // Security configuration
+    advanced: {
+      // Enable cross-subdomain cookies for preview/prod (app-preview.* and api-preview.* share cookies)
+      // Local dev uses separate ports on localhost, so no cross-subdomain needed
+      crossSubDomainCookies: isProductionMode()
+        ? { domain: '.roundtable.now', enabled: true }
+        : { enabled: false },
+      database: {
+        generateId: () => crypto.randomUUID(),
+      },
+      // Cookie configuration for OAuth flow
+      // SameSite=Lax allows OAuth redirects to work properly
+      // In prod/preview with HTTPS and cross-subdomain, use 'lax' for OAuth compatibility
+      defaultCookieAttributes: {
+        path: '/',
+        sameSite: 'lax', // 'lax' works better for OAuth redirects than 'none'
+        secure: isProductionMode(),
+      },
+      // Use secure cookies only in production (HTTPS)
+      useSecureCookies: isProductionMode(),
     },
+    basePath: '/api/auth', // Explicit basePath to match Hono route
+    baseURL: getBetterAuthUrl(),
+    database: createAuthAdapter(),
 
     // Database hooks to validate ALL user creation and session creation
     // This catches Google OAuth and any other social provider signups/signins
@@ -238,40 +236,123 @@ function createAuth() {
       // No need to re-validate on every session - users can't change their email
     },
 
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: false,
+    },
+
+    // Email domain restriction for local and preview environments
+    // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
+    hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        try {
+          // Validate email domain using reusable utility
+          // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
+          validateEmailDomain(ctx);
+        } catch (error) {
+          // Log validation errors for debugging
+          console.error({
+            error_message: error instanceof Error ? error.message : String(error),
+            error_name: error instanceof Error ? error.name : 'Unknown',
+            log_type: 'auth_hook_error',
+            path: ctx.path,
+            timestamp: new Date().toISOString(),
+          });
+          throw error; // Re-throw to let Better Auth handle it
+        }
+      }),
+    },
+
+    plugins: [
+      magicLink({
+        sendMagicLink: async ({ email, url }) => {
+          try {
+            const { emailService } = await import('@/lib/email/ses-service');
+            await emailService.sendMagicLink(email, url);
+          } catch (error) {
+            // Log detailed error for Cloudflare Workers Logs
+            console.error({
+              email_domain: email.split('@')[1],
+              error_message: error instanceof Error ? error.message : String(error),
+              error_name: error instanceof Error ? error.name : 'Unknown',
+              error_stack: error instanceof Error ? error.stack : undefined,
+              log_type: 'magic_link_email_error',
+              timestamp: new Date().toISOString(),
+            });
+            // Better Auth will show this error to the user
+            const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
+            throw new Error(`Unable to send login email: ${errorMessage}`);
+          }
+        },
+      }),
+      apiKey({
+        // API Key Headers - specify which headers to check for API keys
+        // Default is 'x-api-key', but can specify multiple headers
+        // @see https://www.better-auth.com/docs/plugins/api-key#configure-api-key-headers
+        apiKeyHeaders: 'x-api-key', // Can also be array: ['x-api-key', 'authorization']
+
+        // Key configuration
+        defaultKeyLength: 64,
+
+        // Custom prefix for API keys (e.g., rpnd_abc123...)
+        defaultPrefix: 'rpnd_',
+        // Metadata support - allows storing custom data with API keys
+        enableMetadata: true,
+
+        // Expiration settings
+        keyExpiration: {
+          defaultExpiresIn: null, // No expiration by default
+          disableCustomExpiresTime: false,
+          maxExpiresIn: 365, // Maximum 1 year
+          minExpiresIn: 1, // Minimum 1 day
+        },
+
+        // Rate limiting configuration
+        rateLimit: {
+          enabled: true,
+          maxRequests: 1000, // 1000 requests per day by default
+          timeWindow: 1000 * 60 * 60 * 24, // 24 hours
+        },
+
+        requireName: true,
+
+        // Sessions from API keys - enabled by default in Better Auth
+        // When a valid API key is found in the specified headers, Better Auth automatically
+        // creates a mock session for the user. This allows endpoints using getSession() to
+        // work seamlessly with both session cookies and API keys.
+        // To disable this behavior, set: disableSessionForAPIKeys: true
+        // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
+      }),
+      admin({
+        adminRole: 'admin',
+        allowImpersonatingAdmins: true, // Allow admins to impersonate other admins
+        defaultRole: 'user',
+        impersonationSessionDuration: 60 * 60, // 1 hour
+      }),
+    ],
+
+    secret: getAuthSecret(),
+
     // Session configuration
     session: {
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // 1 day
       cookieCache: {
         enabled: true,
         maxAge: 60 * 15, // 15 minutes cache
-        strategy: 'compact', // Base64url + HMAC-SHA256 - smallest, best perf
         refreshCache: true, // Stateless refresh without DB lookup
+        strategy: 'compact', // Base64url + HMAC-SHA256 - smallest, best perf
       },
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // 1 day
     },
 
-    // Security configuration
-    advanced: {
-      // Enable cross-subdomain cookies for preview/prod (app-preview.* and api-preview.* share cookies)
-      // Local dev uses separate ports on localhost, so no cross-subdomain needed
-      crossSubDomainCookies: {
-        enabled: isProductionMode(),
-        domain: isProductionMode() ? '.roundtable.now' : undefined,
-      },
-      // Use secure cookies only in production (HTTPS)
-      useSecureCookies: isProductionMode(),
-      // Cookie configuration for OAuth flow
-      // SameSite=Lax allows OAuth redirects to work properly
-      // In prod/preview with HTTPS and cross-subdomain, use 'lax' for OAuth compatibility
-      defaultCookieAttributes: {
-        sameSite: 'lax', // 'lax' works better for OAuth redirects than 'none'
-        secure: isProductionMode(),
-        path: '/',
-      },
-      database: {
-        generateId: () => crypto.randomUUID(),
-      },
-    },
+    // ✅ Only enable Google OAuth if credentials are configured
+    // If not configured, only magic link authentication will be available
+    socialProviders: (() => {
+      const googleCreds = getGoogleOAuthCredentials();
+      return googleCreds
+        ? { google: { clientId: googleCreds.clientId, clientSecret: googleCreds.clientSecret } }
+        : {};
+    })(),
 
     // Trusted origins (TanStack Start: web on 5173, API on 8787)
     trustedOrigins: [
@@ -297,97 +378,15 @@ function createAuth() {
         enabled: false, // Disabled for security
       },
       deleteUser: {
-        enabled: true,
         afterDelete: async (user) => {
           // Record deletion to prevent free round abuse
           if (user.email) {
             await recordAccountDeletion(user.email);
           }
         },
+        enabled: true,
       },
     },
-
-    emailAndPassword: {
-      enabled: true,
-      requireEmailVerification: false,
-    },
-
-    // ✅ Only enable Google OAuth if credentials are configured
-    // If not configured, only magic link authentication will be available
-    socialProviders: (() => {
-      const googleCreds = getGoogleOAuthCredentials();
-      return googleCreds
-        ? { google: { clientId: googleCreds.clientId, clientSecret: googleCreds.clientSecret } }
-        : {};
-    })(),
-
-    plugins: [
-      magicLink({
-        sendMagicLink: async ({ email, url }) => {
-          try {
-            const { emailService } = await import('@/lib/email/ses-service');
-            await emailService.sendMagicLink(email, url);
-          } catch (error) {
-            // Log detailed error for Cloudflare Workers Logs
-            console.error({
-              log_type: 'magic_link_email_error',
-              timestamp: new Date().toISOString(),
-              email_domain: email.split('@')[1],
-              error_name: error instanceof Error ? error.name : 'Unknown',
-              error_message: error instanceof Error ? error.message : String(error),
-              error_stack: error instanceof Error ? error.stack : undefined,
-            });
-            // Better Auth will show this error to the user
-            const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
-            throw new Error(`Unable to send login email: ${errorMessage}`);
-          }
-        },
-      }),
-      apiKey({
-        // API Key Headers - specify which headers to check for API keys
-        // Default is 'x-api-key', but can specify multiple headers
-        // @see https://www.better-auth.com/docs/plugins/api-key#configure-api-key-headers
-        apiKeyHeaders: 'x-api-key', // Can also be array: ['x-api-key', 'authorization']
-
-        // Custom prefix for API keys (e.g., rpnd_abc123...)
-        defaultPrefix: 'rpnd_',
-
-        // Key configuration
-        defaultKeyLength: 64,
-        requireName: true,
-
-        // Metadata support - allows storing custom data with API keys
-        enableMetadata: true,
-
-        // Expiration settings
-        keyExpiration: {
-          defaultExpiresIn: null, // No expiration by default
-          disableCustomExpiresTime: false,
-          minExpiresIn: 1, // Minimum 1 day
-          maxExpiresIn: 365, // Maximum 1 year
-        },
-
-        // Rate limiting configuration
-        rateLimit: {
-          enabled: true,
-          timeWindow: 1000 * 60 * 60 * 24, // 24 hours
-          maxRequests: 1000, // 1000 requests per day by default
-        },
-
-        // Sessions from API keys - enabled by default in Better Auth
-        // When a valid API key is found in the specified headers, Better Auth automatically
-        // creates a mock session for the user. This allows endpoints using getSession() to
-        // work seamlessly with both session cookies and API keys.
-        // To disable this behavior, set: disableSessionForAPIKeys: true
-        // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
-      }),
-      admin({
-        defaultRole: 'user',
-        adminRole: 'admin',
-        impersonationSessionDuration: 60 * 60, // 1 hour
-        allowImpersonatingAdmins: true, // Allow admins to impersonate other admins
-      }),
-    ],
   });
 }
 
@@ -418,8 +417,8 @@ function getAuth() {
  * This ensures Cloudflare context is available when reading secrets.
  */
 export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
-  get(_target, prop) {
-    return getAuth()[prop as keyof ReturnType<typeof createAuth>];
+  async get(_target, prop) {
+    return await getAuth()[prop as keyof ReturnType<typeof createAuth>];
   },
 });
 

@@ -73,20 +73,20 @@ function SeeMoreProjectsPopover({
 }
 
 function ProjectListComponent({
-  projects,
-  onDeleteProject,
-  onCreateProject,
   isCreateDisabled,
+  onCreateProject,
+  onDeleteProject,
+  projects,
 }: ProjectListProps) {
   const t = useTranslations();
 
-  const { visibleProjects, overflowProjects } = useMemo(() => {
+  const { overflowProjects, visibleProjects } = useMemo(() => {
     if (projects.length <= MAX_VISIBLE_PROJECTS) {
-      return { visibleProjects: projects, overflowProjects: [] };
+      return { overflowProjects: [], visibleProjects: projects };
     }
     return {
-      visibleProjects: projects.slice(0, MAX_VISIBLE_PROJECTS),
       overflowProjects: projects.slice(MAX_VISIBLE_PROJECTS),
+      visibleProjects: projects.slice(0, MAX_VISIBLE_PROJECTS),
     };
   }, [projects]);
 

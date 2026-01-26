@@ -44,15 +44,15 @@ function createMockParticipant(
 ): ChatParticipant {
   const ulidId = `01KCC7P3${String.fromCharCode(77 + index)}N5NZ5XVC9YEH08W${index}${index}`;
   return {
-    id: ulidId,
-    threadId,
-    modelId,
-    role: null,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: ulidId,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: new Date(),
   };
 }
@@ -67,11 +67,11 @@ function createNewParticipantConfig(
   role?: string,
 ): ParticipantConfig {
   return {
+    customRoleId: undefined,
     id: modelId,
     modelId,
-    role: role ?? null,
-    customRoleId: undefined,
     priority: index,
+    role: role ?? null,
   };
 }
 
@@ -82,11 +82,11 @@ function createExistingParticipantConfig(
   participant: ChatParticipant,
 ): ParticipantConfig {
   return {
+    customRoleId: participant.customRoleId ?? undefined,
     id: participant.id,
     modelId: participant.modelId,
-    role: participant.role,
-    customRoleId: participant.customRoleId ?? undefined,
     priority: participant.priority,
+    role: participant.role,
   };
 }
 
@@ -99,15 +99,15 @@ function createPlaceholderPreSearch(
   userQuery: string,
 ): StoredPreSearch {
   return {
-    id: `placeholder-presearch-${threadId}-${roundNumber}`,
-    threadId,
-    roundNumber,
-    userQuery,
-    status: MessageStatuses.PENDING,
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `placeholder-presearch-${threadId}-${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status: MessageStatuses.PENDING,
+    threadId,
+    userQuery,
   } as StoredPreSearch;
 }
 
@@ -130,9 +130,9 @@ describe('participant ID handling between rounds', () => {
 
       const result = detectParticipantChanges(currentParticipants, selectedParticipants);
 
-      expect(result.hasChanges).toBe(true);
-      expect(result.hasTemporaryIds).toBe(true);
-      expect(result.participantsChanged).toBe(true);
+      expect(result.hasChanges).toBeTruthy();
+      expect(result.hasTemporaryIds).toBeTruthy();
+      expect(result.participantsChanged).toBeTruthy();
     });
 
     it('should NOT detect temporary IDs when using database IDs', () => {
@@ -145,8 +145,8 @@ describe('participant ID handling between rounds', () => {
 
       const result = detectParticipantChanges(currentParticipants, selectedParticipants);
 
-      expect(result.hasChanges).toBe(false);
-      expect(result.hasTemporaryIds).toBe(false);
+      expect(result.hasChanges).toBeFalsy();
+      expect(result.hasTemporaryIds).toBeFalsy();
     });
 
     it('should detect mixed new and existing participants', () => {
@@ -156,8 +156,9 @@ describe('participant ID handling between rounds', () => {
       ];
 
       const firstParticipant = currentParticipants[0];
-      if (!firstParticipant)
+      if (!firstParticipant) {
         throw new Error('expected first participant');
+      }
 
       const selectedParticipants = [
         createExistingParticipantConfig(firstParticipant),
@@ -166,8 +167,8 @@ describe('participant ID handling between rounds', () => {
 
       const result = detectParticipantChanges(currentParticipants, selectedParticipants);
 
-      expect(result.hasChanges).toBe(true);
-      expect(result.hasTemporaryIds).toBe(true);
+      expect(result.hasChanges).toBeTruthy();
+      expect(result.hasTemporaryIds).toBeTruthy();
     });
   });
 
@@ -208,7 +209,7 @@ describe('participant ID handling between rounds', () => {
         'thread-123',
       );
 
-      expect(result.updateResult.hasTemporaryIds).toBe(true);
+      expect(result.updateResult.hasTemporaryIds).toBeTruthy();
       expect(result.updatePayloads[0]?.id).toBe('');
       expect(result.updatePayloads[1]?.id).toBe('');
       expect(result.optimisticParticipants[0]?.id).toBe(ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5);
@@ -237,27 +238,27 @@ describe('store state during participant change', () => {
 
       const optimisticParticipants: ChatParticipant[] = [
         {
-          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          threadId: 'thread-123',
-          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          role: 'The Practical Evaluator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          isEnabled: true,
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          priority: 0,
+          role: 'The Practical Evaluator',
+          settings: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
         {
-          id: ModelIds.OPENAI_GPT_4_1,
-          threadId: 'thread-123',
-          modelId: ModelIds.OPENAI_GPT_4_1,
-          role: 'Implementation Strategist',
-          customRoleId: null,
-          priority: 1,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: ModelIds.OPENAI_GPT_4_1,
+          isEnabled: true,
+          modelId: ModelIds.OPENAI_GPT_4_1,
+          priority: 1,
+          role: 'Implementation Strategist',
+          settings: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -273,15 +274,15 @@ describe('store state during participant change', () => {
 
       const optimisticParticipants: ChatParticipant[] = [
         {
-          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          threadId: 'thread-123',
-          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          role: 'The Practical Evaluator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          isEnabled: true,
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          priority: 0,
+          role: 'The Practical Evaluator',
+          settings: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -291,15 +292,15 @@ describe('store state during participant change', () => {
 
       const realParticipants: ChatParticipant[] = [
         {
-          id: '01KCC7R18HCEYWNPA56VBZVG6F',
-          threadId: 'thread-123',
-          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          role: 'The Practical Evaluator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: '01KCC7R18HCEYWNPA56VBZVG6F',
+          isEnabled: true,
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          priority: 0,
+          role: 'The Practical Evaluator',
+          settings: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -324,43 +325,45 @@ describe('store state during participant change', () => {
       const messages = [
         {
           id: `${threadId}_r0_user`,
-          role: MessageRoles.USER as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER as const,
         },
         {
           id: `${threadId}_r0_p0`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Response from grok' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            model: ModelIds.X_AI_GROK_4_FAST,
             participantId: initialParticipants[0].id,
             participantIndex: 0,
-            model: ModelIds.X_AI_GROK_4_FAST,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Response from grok', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
         {
           id: `${threadId}_r0_p1`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Response from gemini' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            model: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
             participantId: initialParticipants[1].id,
             participantIndex: 1,
-            model: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Response from gemini', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       const participant0 = initialParticipants[0];
-      if (!participant0)
+      if (!participant0) {
         throw new Error('expected participant 0');
+      }
 
       const participant1 = initialParticipants[1];
-      if (!participant1)
+      if (!participant1) {
         throw new Error('expected participant 1');
+      }
 
       store.getState().setMessages(messages);
 
@@ -389,41 +392,42 @@ describe('store state during participant change', () => {
       const messages = [
         {
           id: `${threadId}_r0_user`,
-          role: MessageRoles.USER as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER as const,
         },
         {
           id: `${threadId}_r0_p0`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Response from grok' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            model: ModelIds.X_AI_GROK_4_FAST,
             participantId: round0Participants[0].id,
             participantIndex: 0,
-            model: ModelIds.X_AI_GROK_4_FAST,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Response from grok', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       const firstRound0Participant = round0Participants[0];
-      if (!firstRound0Participant)
+      if (!firstRound0Participant) {
         throw new Error('expected first round 0 participant');
+      }
 
       store.getState().setMessages(messages);
 
       const newParticipants: ChatParticipant[] = [
         {
-          id: '01KCC7R18HCEYWNPA56VBZVG6F',
-          threadId,
-          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          role: 'The Practical Evaluator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: '01KCC7R18HCEYWNPA56VBZVG6F',
+          isEnabled: true,
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          priority: 0,
+          role: 'The Practical Evaluator',
+          settings: null,
+          threadId,
           updatedAt: new Date(),
         },
       ];
@@ -455,23 +459,23 @@ describe('pre-search timing with participant changes', () => {
       ];
       store.getState().initializeThread(
         {
-          id: threadId,
-          userId: 'user-123',
-          title: 'Test Thread',
-          slug: 'test-thread',
-          previousSlug: null,
-          projectId: null,
-          mode: ChatModes.ANALYZING,
-          status: 'active' as const,
+          createdAt: new Date(),
           enableWebSearch: true,
+          id: threadId,
+          isAiGeneratedTitle: false,
           isFavorite: false,
           isPublic: false,
-          isAiGeneratedTitle: false,
-          metadata: null,
-          version: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
           lastMessageAt: new Date(),
+          metadata: null,
+          mode: ChatModes.ANALYZING,
+          previousSlug: null,
+          projectId: null,
+          slug: 'test-thread',
+          status: 'active' as const,
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-123',
+          version: 1,
         },
         initialParticipants,
         [],
@@ -491,25 +495,25 @@ describe('pre-search timing with participant changes', () => {
       store.getState().addPreSearch(createPlaceholderPreSearch(threadId, 1, 'Round 1 query'));
 
       store.getState().markPreSearchTriggered(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       const newParticipants: ChatParticipant[] = [
         {
-          id: '01KCC7R18HCEYWNPA56VBZVG6F',
-          threadId,
-          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-          role: 'The Practical Evaluator',
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
-          settings: null,
           createdAt: new Date(),
+          customRoleId: null,
+          id: '01KCC7R18HCEYWNPA56VBZVG6F',
+          isEnabled: true,
+          modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+          priority: 0,
+          role: 'The Practical Evaluator',
+          settings: null,
+          threadId,
           updatedAt: new Date(),
         },
       ];
       store.getState().updateParticipants(newParticipants);
 
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
     });
   });
 });
@@ -526,20 +530,20 @@ describe('round number calculation', () => {
     const messages = [
       {
         id: `${threadId}_r0_user`,
-        role: MessageRoles.USER as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Round 0' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Round 0', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER as const,
       },
       {
         id: `${threadId}_r0_p0`,
-        role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
           participantId: 'p0',
           participantIndex: 0,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Response', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.ASSISTANT as const,
       },
     ];
     store.getState().setMessages(messages);
@@ -551,8 +555,8 @@ describe('round number calculation', () => {
       }),
     );
 
-    expect(existingRounds.has(0)).toBe(true);
-    expect(existingRounds.has(1)).toBe(false);
+    expect(existingRounds.has(0)).toBeTruthy();
+    expect(existingRounds.has(1)).toBeFalsy();
   });
 
   it('should handle multiple rounds correctly', () => {
@@ -562,27 +566,27 @@ describe('round number calculation', () => {
     const messages = [
       {
         id: `${threadId}_r0_user`,
-        role: MessageRoles.USER as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Round 0' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Round 0', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER as const,
       },
       {
         id: `${threadId}_r0_p0`,
+        metadata: { participantId: 'p0', participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response 0', type: MessagePartTypes.TEXT }],
         role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response 0' }],
-        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0, participantId: 'p0', participantIndex: 0 },
       },
       {
         id: `${threadId}_r1_user`,
-        role: MessageRoles.USER as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Round 1' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Round 1', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER as const,
       },
       {
         id: `${threadId}_r1_p0`,
+        metadata: { participantId: 'p1', participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 1 },
+        parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }],
         role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }],
-        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1, participantId: 'p1', participantIndex: 0 },
       },
     ];
     store.getState().setMessages(messages);
@@ -616,37 +620,37 @@ describe('selectedParticipants Sync After Update', () => {
 
     const dbParticipants: ChatParticipant[] = [
       {
-        id: '01KCC7R18HCEYWNPA56VBZVG6F',
-        threadId,
-        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-        role: 'The Practical Evaluator',
-        customRoleId: null,
-        priority: 0,
-        isEnabled: true,
-        settings: null,
         createdAt: new Date(),
+        customRoleId: null,
+        id: '01KCC7R18HCEYWNPA56VBZVG6F',
+        isEnabled: true,
+        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+        priority: 0,
+        role: 'The Practical Evaluator',
+        settings: null,
+        threadId,
         updatedAt: new Date(),
       },
       {
-        id: '01KCC7R18H8E40CW730K19Q0TD',
-        threadId,
-        modelId: ModelIds.OPENAI_GPT_4_1,
-        role: 'Implementation Strategist',
-        customRoleId: null,
-        priority: 1,
-        isEnabled: true,
-        settings: null,
         createdAt: new Date(),
+        customRoleId: null,
+        id: '01KCC7R18H8E40CW730K19Q0TD',
+        isEnabled: true,
+        modelId: ModelIds.OPENAI_GPT_4_1,
+        priority: 1,
+        role: 'Implementation Strategist',
+        settings: null,
+        threadId,
         updatedAt: new Date(),
       },
     ];
 
     const syncedConfigs = dbParticipants.map((p, index) => ({
+      customRoleId: p.customRoleId ?? undefined,
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
-      customRoleId: p.customRoleId ?? undefined,
       priority: index,
+      role: p.role,
     }));
     store.getState().setSelectedParticipants(syncedConfigs);
 
@@ -660,31 +664,31 @@ describe('selectedParticipants Sync After Update', () => {
 
     const dbParticipants: ChatParticipant[] = [
       {
-        id: '01KCC7R18HCEYWNPA56VBZVG6F',
-        threadId,
-        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-        role: 'The Practical Evaluator',
-        customRoleId: null,
-        priority: 0,
-        isEnabled: true,
-        settings: null,
         createdAt: new Date(),
+        customRoleId: null,
+        id: '01KCC7R18HCEYWNPA56VBZVG6F',
+        isEnabled: true,
+        modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
+        priority: 0,
+        role: 'The Practical Evaluator',
+        settings: null,
+        threadId,
         updatedAt: new Date(),
       },
     ];
 
     const syncedConfig: ParticipantConfig = {
+      customRoleId: undefined,
       id: '01KCC7R18HCEYWNPA56VBZVG6F',
       modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5,
-      role: 'The Practical Evaluator',
-      customRoleId: undefined,
       priority: 0,
+      role: 'The Practical Evaluator',
     };
 
     const result = detectParticipantChanges(dbParticipants, [syncedConfig]);
 
-    expect(result.hasTemporaryIds).toBe(false);
-    expect(result.participantsChanged).toBe(false);
-    expect(result.hasChanges).toBe(false);
+    expect(result.hasTemporaryIds).toBeFalsy();
+    expect(result.participantsChanged).toBeFalsy();
+    expect(result.hasChanges).toBeFalsy();
   });
 });

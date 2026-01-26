@@ -30,21 +30,6 @@ import { GC_TIMES } from './stale-times';
 export function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
-      queries: {
-        // With SSR, we usually want to set some default staleTime
-        // above 0 to avoid refetching immediately on the client
-        staleTime: GC_TIMES.SHORT, // 60 seconds - official recommended value
-
-        // ✅ CACHE RETENTION: Keep inactive queries in cache for 10 minutes
-        // Default is 5 minutes - extending for faster sidebar navigation
-        gcTime: GC_TIMES.LONG, // 10 minutes - prevents garbage collection on nav
-
-        // ✅ STREAMING PROTECTION: Disable aggressive refetch behaviors globally
-        // These can be overridden per-query if needed
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        refetchOnMount: false,
-      },
       // ✅ SSG/SSR: Configure dehydration for proper serialization
       dehydrate: {
         // Include pending queries in dehydration for streaming support
@@ -54,6 +39,21 @@ export function makeQueryClient() {
         // Don't redact errors - let TanStack Start handle error serialization
         // This prevents hydration mismatches with error states
         shouldRedactErrors: () => false,
+      },
+      queries: {
+        // ✅ CACHE RETENTION: Keep inactive queries in cache for 10 minutes
+        // Default is 5 minutes - extending for faster sidebar navigation
+        gcTime: GC_TIMES.LONG, // 10 minutes - prevents garbage collection on nav
+
+        refetchOnMount: false,
+
+        refetchOnReconnect: false,
+        // ✅ STREAMING PROTECTION: Disable aggressive refetch behaviors globally
+        // These can be overridden per-query if needed
+        refetchOnWindowFocus: false,
+        // With SSR, we usually want to set some default staleTime
+        // above 0 to avoid refetching immediately on the client
+        staleTime: GC_TIMES.SHORT, // 60 seconds - official recommended value
       },
     },
   });
@@ -77,7 +77,8 @@ export function getQueryClient() {
   // This is very important, so we don't re-make a new client if React
   // suspends during the initial render. This may not be needed if we
   // have a suspense boundary BELOW the creation of the query client
-  if (!browserQueryClient)
+  if (!browserQueryClient) {
     browserQueryClient = makeQueryClient();
+  }
   return browserQueryClient;
 }

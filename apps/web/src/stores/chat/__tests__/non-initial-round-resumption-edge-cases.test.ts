@@ -44,11 +44,11 @@ const mockStore = vi.hoisted(() => {
 
   return {
     getState: () => storeState,
-    setState: (newState: Partial<ChatStore>) => {
-      storeState = { ...storeState, ...newState };
-    },
     reset: () => {
       storeState = {};
+    },
+    setState: (newState: Partial<ChatStore>) => {
+      storeState = { ...storeState, ...newState };
     },
     subscribe: vi.fn(),
   };
@@ -71,13 +71,13 @@ vi.mock('@/components/providers/chat-store-provider', () => ({
 function createOptimisticUserMessage(roundNumber: number, content: string): UIMessage {
   return {
     id: `optimistic-user-${Date.now()}-r${roundNumber}`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: 'text' as const, text: content }],
     metadata: {
+      isOptimistic: true, // Key flag indicating this is stale
       role: MessageRoles.USER,
       roundNumber,
-      isOptimistic: true, // Key flag indicating this is stale
     },
+    parts: [{ text: content, type: 'text' as const }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -87,8 +87,8 @@ function createCompleteRoundMessages(
 ): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -96,12 +96,12 @@ function createCompleteRoundMessages(
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Assistant ${i} response for round ${roundNumber}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -111,33 +111,33 @@ function createCompleteRoundMessages(
 
 function setupMockStore(overrides?: Partial<ChatStore>): void {
   const defaultActions = {
+    prepareForNewMessage: vi.fn(),
+    setCurrentParticipantIndex: vi.fn(),
+    setExpectedParticipantIds: vi.fn(),
+    setIsStreaming: vi.fn(),
+    setIsWaitingForChangelog: vi.fn(),
+    setMessages: vi.fn(),
     setNextParticipantToTrigger: vi.fn(),
     setStreamingRoundNumber: vi.fn(),
-    setCurrentParticipantIndex: vi.fn(),
     setWaitingToStartStreaming: vi.fn(),
-    setIsStreaming: vi.fn(),
-    prepareForNewMessage: vi.fn(),
-    setExpectedParticipantIds: vi.fn(),
-    setMessages: vi.fn(),
-    setIsWaitingForChangelog: vi.fn(),
   };
 
   mockStore.setState({
-    messages: [],
-    participants: createMockParticipants(4),
-    preSearches: [],
-    isStreaming: false,
-    waitingToStartStreaming: false,
-    pendingMessage: null,
-    hasSentPendingMessage: false,
-    hasEarlyOptimisticMessage: false,
-    enableWebSearch: true,
-    thread: createMockThread({ enableWebSearch: true }),
-    streamResumptionPrefilled: false,
     currentResumptionPhase: null,
-    resumptionRoundNumber: null,
-    prefilledForThreadId: null,
+    enableWebSearch: true,
+    hasEarlyOptimisticMessage: false,
+    hasSentPendingMessage: false,
+    isStreaming: false,
+    messages: [],
     nextParticipantToTrigger: null,
+    participants: createMockParticipants(4),
+    pendingMessage: null,
+    prefilledForThreadId: null,
+    preSearches: [],
+    resumptionRoundNumber: null,
+    streamResumptionPrefilled: false,
+    thread: createMockThread({ enableWebSearch: true }),
+    waitingToStartStreaming: false,
     ...defaultActions,
     ...overrides,
   });
@@ -169,13 +169,13 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const round2UserMessage = createOptimisticUserMessage(2, 'Round 2 query');
 
       setupMockStore({
+        currentResumptionPhase: 'participants',
         messages: [...round0Messages, ...round1Messages, round2UserMessage],
         participants: createMockParticipants(4),
-        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         pendingMessage: 'Round 2 query', // Stale from Zustand persist
-        streamResumptionPrefilled: true, // Prefill ran - this is resumption
-        currentResumptionPhase: 'participants',
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         resumptionRoundNumber: 2,
+        streamResumptionPrefilled: true, // Prefill ran - this is resumption
       });
 
       const state = mockStore.getState();
@@ -187,7 +187,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const isFormActionsSubmission = state.pendingMessage !== null
         && !state.streamResumptionPrefilled;
 
-      expect(isFormActionsSubmission).toBe(false);
+      expect(isFormActionsSubmission).toBeFalsy();
     });
 
     it('should skip initialization when pendingMessage indicates active form submission', () => {
@@ -195,11 +195,11 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       // pendingMessage is set and streamResumptionPrefilled is false
 
       setupMockStore({
+        hasSentPendingMessage: false,
         messages: createCompleteRoundMessages(0, 4),
         participants: createMockParticipants(4),
         pendingMessage: 'New active submission',
         streamResumptionPrefilled: false, // No prefill - active submission
-        hasSentPendingMessage: false,
       });
 
       const state = mockStore.getState();
@@ -207,7 +207,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const isFormActionsSubmission = state.pendingMessage !== null
         && !state.streamResumptionPrefilled;
 
-      expect(isFormActionsSubmission).toBe(true);
+      expect(isFormActionsSubmission).toBeTruthy();
     });
   });
 
@@ -243,8 +243,8 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const blockOnOptimistic = lastUserMessageIsOptimistic
         && !state.streamResumptionPrefilled;
 
-      expect(lastUserMessageIsOptimistic).toBe(true);
-      expect(blockOnOptimistic).toBe(false); // Should NOT block
+      expect(lastUserMessageIsOptimistic).toBeTruthy();
+      expect(blockOnOptimistic).toBeFalsy(); // Should NOT block
     });
 
     it('should allow resumption when pre-search evidence exists even without prefill', () => {
@@ -287,9 +287,9 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         && !state.streamResumptionPrefilled
         && !preSearchIndicatesSubmissionReceived;
 
-      expect(lastUserMessageIsOptimistic).toBe(true);
-      expect(preSearchIndicatesSubmissionReceived).toBe(true);
-      expect(blockOnOptimistic).toBe(false); // Should NOT block
+      expect(lastUserMessageIsOptimistic).toBeTruthy();
+      expect(preSearchIndicatesSubmissionReceived).toBeTruthy();
+      expect(blockOnOptimistic).toBeFalsy(); // Should NOT block
     });
 
     it('should block resumption for active optimistic submission (no prefill, no pre-search)', () => {
@@ -324,9 +324,9 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         && !state.streamResumptionPrefilled
         && !preSearchIndicatesSubmissionReceived;
 
-      expect(lastUserMessageIsOptimistic).toBe(true);
-      expect(preSearchIndicatesSubmissionReceived).toBe(false);
-      expect(blockOnOptimistic).toBe(true); // SHOULD block - active submission
+      expect(lastUserMessageIsOptimistic).toBeTruthy();
+      expect(preSearchIndicatesSubmissionReceived).toBeFalsy();
+      expect(blockOnOptimistic).toBeTruthy(); // SHOULD block - active submission
     });
   });
 
@@ -338,26 +338,26 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       const round0Messages = createCompleteRoundMessages(0, 4);
       const round1Messages = createCompleteRoundMessages(1, 4);
       const round2UserMessage = createTestUserMessage({
-        id: 'thread-123_r2_user',
         content: 'Round 2 query',
+        id: 'thread-123_r2_user',
         roundNumber: 2,
       });
       // Only first participant responded in round 2
       const round2Participant0 = createTestAssistantMessage({
-        id: 'thread-123_r2_p0',
         content: 'First response',
-        roundNumber: 2,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r2_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 2,
       });
 
       setupMockStore({
+        currentResumptionPhase: 'participants',
         messages: [...round0Messages, ...round1Messages, round2UserMessage, round2Participant0],
         participants: createMockParticipants(4),
         preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         streamResumptionPrefilled: true,
-        currentResumptionPhase: 'participants',
       });
 
       const state = mockStore.getState();
@@ -372,33 +372,33 @@ describe('non-Initial Round Resumption Edge Cases', () => {
 
       expect(enabledParticipants).toHaveLength(4);
       expect(round2Responses).toHaveLength(1); // Only 1 of 4 responded
-      expect(round2Responses.length < enabledParticipants.length).toBe(true);
+      expect(round2Responses.length).toBeLessThan(enabledParticipants.length);
     });
 
     it('should correctly calculate next participant index for round 2', () => {
       const round0Messages = createCompleteRoundMessages(0, 4);
       const round1Messages = createCompleteRoundMessages(1, 4);
       const round2UserMessage = createTestUserMessage({
-        id: 'thread-123_r2_user',
         content: 'Round 2 query',
+        id: 'thread-123_r2_user',
         roundNumber: 2,
       });
       // Participants 0 and 1 responded
       const round2Participant0 = createTestAssistantMessage({
-        id: 'thread-123_r2_p0',
         content: 'Response 0',
-        roundNumber: 2,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r2_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 2,
       });
       const round2Participant1 = createTestAssistantMessage({
-        id: 'thread-123_r2_p1',
         content: 'Response 1',
-        roundNumber: 2,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r2_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 2,
       });
 
       setupMockStore({
@@ -466,7 +466,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       // The fix: if status is ready and isExplicitlyStreaming is true, clear stale state
       const shouldClearStaleState = aiSdkStatus === AiSdkStatuses.READY && isExplicitlyStreaming;
 
-      expect(shouldClearStaleState).toBe(true);
+      expect(shouldClearStaleState).toBeTruthy();
     });
 
     it('should not clear streaming state when AI SDK is actually streaming', () => {
@@ -475,7 +475,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
 
       const shouldClearStaleState = aiSdkStatus === AiSdkStatuses.READY && isExplicitlyStreaming;
 
-      expect(shouldClearStaleState).toBe(false);
+      expect(shouldClearStaleState).toBeFalsy();
     });
 
     it('should proceed with continueFromParticipant after clearing stale state', () => {
@@ -483,8 +483,8 @@ describe('non-Initial Round Resumption Edge Cases', () => {
 
       const messages: UIMessage[] = createCompleteRoundMessages(0, 4);
       messages.push(createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Round 1 query',
+        id: 'thread-123_r1_user',
         roundNumber: 1,
       }));
 
@@ -495,7 +495,7 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       // isExplicitlyStreaming is no longer in the guard after the fix
       const guardPasses = messagesLength > 0 && aiSdkStatus === AiSdkStatuses.READY;
 
-      expect(guardPasses).toBe(true);
+      expect(guardPasses).toBeTruthy();
     });
   });
 
@@ -506,40 +506,40 @@ describe('non-Initial Round Resumption Edge Cases', () => {
     it('should handle resumption at any point in round 2 with 4 participants', () => {
       // Simulate various resumption points in round 2
       const resumptionPoints = [
-        { respondedCount: 0, description: 'before any participant' },
-        { respondedCount: 1, description: 'after 1 participant' },
-        { respondedCount: 2, description: 'after 2 participants' },
-        { respondedCount: 3, description: 'after 3 participants' },
+        { description: 'before any participant', respondedCount: 0 },
+        { description: 'after 1 participant', respondedCount: 1 },
+        { description: 'after 2 participants', respondedCount: 2 },
+        { description: 'after 3 participants', respondedCount: 3 },
       ];
 
-      for (const { respondedCount, description } of resumptionPoints) {
+      for (const { respondedCount } of resumptionPoints) {
         const round0Messages = createCompleteRoundMessages(0, 4);
         const round1Messages = createCompleteRoundMessages(1, 4);
         const round2UserMessage = createTestUserMessage({
-          id: 'thread-123_r2_user',
           content: 'Round 2 query',
+          id: 'thread-123_r2_user',
           roundNumber: 2,
         });
 
         const round2Responses: UIMessage[] = [];
         for (let i = 0; i < respondedCount; i++) {
           round2Responses.push(createTestAssistantMessage({
-            id: `thread-123_r2_p${i}`,
             content: `Response ${i}`,
-            roundNumber: 2,
+            finishReason: FinishReasons.STOP,
+            id: `thread-123_r2_p${i}`,
             participantId: `participant-${i}`,
             participantIndex: i,
-            finishReason: FinishReasons.STOP,
+            roundNumber: 2,
           }));
         }
 
         mockStore.reset();
         setupMockStore({
+          currentResumptionPhase: 'participants',
           messages: [...round0Messages, ...round1Messages, round2UserMessage, ...round2Responses],
           participants: createMockParticipants(4),
           preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
           streamResumptionPrefilled: true,
-          currentResumptionPhase: 'participants',
         });
 
         const state = mockStore.getState();
@@ -565,10 +565,8 @@ describe('non-Initial Round Resumption Edge Cases', () => {
         }
 
         expect(expectedNextParticipant).toBe(respondedCount);
-        expect(
-          respondedCount < enabledParticipants.length,
-          `${description}: should be incomplete`,
-        ).toBe(true);
+        // NOTE: description context - should be incomplete
+        expect(respondedCount).toBeLessThan(enabledParticipants.length);
       }
     });
   });
@@ -594,19 +592,19 @@ describe('non-Initial Round Resumption Edge Cases', () => {
       let isFormActionsSubmission = state.pendingMessage !== null
         && !state.streamResumptionPrefilled;
 
-      expect(isFormActionsSubmission).toBe(true); // Initially blocks
+      expect(isFormActionsSubmission).toBeTruthy(); // Initially blocks
 
       // After prefill effect runs
       mockStore.setState({
-        streamResumptionPrefilled: true,
         currentResumptionPhase: 'participants',
+        streamResumptionPrefilled: true,
       });
 
       state = mockStore.getState();
       isFormActionsSubmission = state.pendingMessage !== null
         && !state.streamResumptionPrefilled;
 
-      expect(isFormActionsSubmission).toBe(false); // Now allows initialization
+      expect(isFormActionsSubmission).toBeFalsy(); // Now allows initialization
     });
   });
 });

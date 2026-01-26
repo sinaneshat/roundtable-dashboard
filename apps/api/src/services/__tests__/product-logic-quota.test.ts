@@ -303,17 +303,17 @@ describe('product Logic - Quota and Tier Configuration', () => {
   describe('model Pricing and Tier Access', () => {
     // Free tier max pricing is $0.10/1M tokens
     const mockFreeModel = {
-      id: 'free-model',
-      pricing: { prompt: '0.00000005', completion: '0.0000001' }, // $0.05/1M input
-      pricing_display: { input: '$0.05', output: '$0.10' },
       context_length: 4096,
+      id: 'free-model',
+      pricing: { completion: '0.0000001', prompt: '0.00000005' }, // $0.05/1M input
+      pricing_display: { input: '$0.05', output: '$0.10' },
     };
 
     const mockProModel = {
-      id: 'pro-model',
-      pricing: { prompt: '0.00015', completion: '0.0003' }, // $150/1M input
-      pricing_display: { input: '$150.00', output: '$300.00' },
       context_length: 128000,
+      id: 'pro-model',
+      pricing: { completion: '0.0003', prompt: '0.00015' }, // $150/1M input
+      pricing_display: { input: '$150.00', output: '$300.00' },
     };
 
     describe('parsePrice', () => {
@@ -366,7 +366,7 @@ describe('product Logic - Quota and Tier Configuration', () => {
       it('categorizes low-cost models ($0.35-$1.00)', () => {
         const lowCostModel = {
           ...mockFreeModel,
-          pricing: { prompt: '0.0000005', completion: '0.000001' }, // $0.50/1M
+          pricing: { completion: '0.000001', prompt: '0.0000005' }, // $0.50/1M
           pricing_display: { input: '$0.50', output: '$1.00' },
         };
         expect(getModelCostCategory(lowCostModel)).toBe('low');
@@ -375,7 +375,7 @@ describe('product Logic - Quota and Tier Configuration', () => {
       it('categorizes medium-cost models ($1.00-$10.00)', () => {
         const mediumCostModel = {
           ...mockFreeModel,
-          pricing: { prompt: '0.000005', completion: '0.00001' }, // $5/1M
+          pricing: { completion: '0.00001', prompt: '0.000005' }, // $5/1M
           pricing_display: { input: '$5.00', output: '$10.00' },
         };
         expect(getModelCostCategory(mediumCostModel)).toBe('medium');
@@ -488,18 +488,18 @@ describe('product Logic - Quota and Tier Configuration', () => {
     const mockModelLookup = (id: string) => {
       if (id === 'budget-model') {
         return {
-          id: 'budget-model',
-          pricing: { prompt: '0.00000005', completion: '0.0000001' }, // $0.05/1M - Budget tier
-          pricing_display: { input: '$0.05', output: '$0.10' },
           context_length: 4096,
+          id: 'budget-model',
+          pricing: { completion: '0.0000001', prompt: '0.00000005' }, // $0.05/1M - Budget tier
+          pricing_display: { input: '$0.05', output: '$0.10' },
         };
       }
       if (id === 'premium-model') {
         return {
-          id: 'premium-model',
-          pricing: { prompt: '0.00015', completion: '0.0003' }, // $150/1M - Ultimate tier
-          pricing_display: { input: '$150.00', output: '$300.00' },
           context_length: 128000,
+          id: 'premium-model',
+          pricing: { completion: '0.0003', prompt: '0.00015' }, // $150/1M - Ultimate tier
+          pricing_display: { input: '$150.00', output: '$300.00' },
         };
       }
       return undefined;

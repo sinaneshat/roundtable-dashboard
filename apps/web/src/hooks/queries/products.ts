@@ -36,12 +36,12 @@ export function useProductsQuery() {
  */
 export function useProductQuery(productId: string) {
   return useQuery({
-    queryKey: queryKeys.products.detail(productId),
-    queryFn: async () => getProductService({ param: { id: productId } }),
-    staleTime: STALE_TIMES.products,
-    gcTime: GC_TIMES.INFINITE,
     enabled: !!productId,
+    gcTime: GC_TIMES.INFINITE,
+    queryFn: async () => getProductService({ param: { id: productId } }),
+    queryKey: queryKeys.products.detail(productId),
     retry: false,
+    staleTime: STALE_TIMES.products,
     throwOnError: false,
   });
 }

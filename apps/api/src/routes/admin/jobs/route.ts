@@ -18,36 +18,34 @@ import {
  * Admin: List automated jobs
  */
 export const listJobsRoute = createRoute({
+  description: 'List all automated jobs with optional status filter. Ordered by createdAt desc.',
   method: 'get',
   path: '/admin/jobs',
-  tags: ['admin-jobs'],
-  summary: 'List automated jobs (admin only)',
-  description: 'List all automated jobs with optional status filter. Ordered by createdAt desc.',
   request: {
     query: JobListQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Jobs retrieved successfully',
       content: {
         'application/json': {
           schema: createApiResponseSchema(JobListResponseSchema),
         },
       },
+      description: 'Jobs retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'List automated jobs (admin only)',
+  tags: ['admin-jobs'],
 });
 
 /**
  * Admin: Create automated job
  */
 export const createJobRoute = createRoute({
+  description: 'Create a new automated multi-round AI conversation. Job will be queued for background processing.',
   method: 'post',
   path: '/admin/jobs',
-  tags: ['admin-jobs'],
-  summary: 'Create automated job (admin only)',
-  description: 'Create a new automated multi-round AI conversation. Job will be queued for background processing.',
   request: {
     body: {
       content: {
@@ -59,53 +57,52 @@ export const createJobRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
-      description: 'Job created and queued',
       content: {
         'application/json': {
           schema: createApiResponseSchema(JobCreatedResponseSchema),
         },
       },
+      description: 'Job created and queued',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Create automated job (admin only)',
+  tags: ['admin-jobs'],
 });
 
 /**
  * Admin: Get job by ID
  */
 export const getJobRoute = createRoute({
+  description: 'Get details of a specific automated job including thread slug.',
   method: 'get',
   path: '/admin/jobs/:id',
-  tags: ['admin-jobs'],
-  summary: 'Get automated job details (admin only)',
-  description: 'Get details of a specific automated job including thread slug.',
   request: {
     params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Job details retrieved',
       content: {
         'application/json': {
           schema: createApiResponseSchema(JobResponseSchema),
         },
       },
+      description: 'Job details retrieved',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get automated job details (admin only)',
+  tags: ['admin-jobs'],
 });
 
 /**
  * Admin: Update job (cancel, toggle public)
  */
 export const updateJobRoute = createRoute({
+  description: 'Update job settings - cancel a running job or toggle thread visibility.',
   method: 'patch',
   path: '/admin/jobs/:id',
-  tags: ['admin-jobs'],
-  summary: 'Update automated job (admin only)',
-  description: 'Update job settings - cancel a running job or toggle thread visibility.',
   request: {
-    params: IdParamSchema,
     body: {
       content: {
         'application/json': {
@@ -113,42 +110,45 @@ export const updateJobRoute = createRoute({
         },
       },
     },
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Job updated',
       content: {
         'application/json': {
           schema: createApiResponseSchema(JobResponseSchema),
         },
       },
+      description: 'Job updated',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Update automated job (admin only)',
+  tags: ['admin-jobs'],
 });
 
 /**
  * Admin: Delete job
  */
 export const deleteJobRoute = createRoute({
+  description: 'Delete an automated job. Optionally delete the associated thread with deleteThread=true.',
   method: 'delete',
   path: '/admin/jobs/:id',
-  tags: ['admin-jobs'],
-  summary: 'Delete automated job (admin only)',
-  description: 'Delete an automated job. Optionally delete the associated thread with deleteThread=true.',
   request: {
     params: IdParamSchema,
     query: DeleteJobQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Job deleted',
       content: {
         'application/json': {
           schema: createApiResponseSchema(DeleteJobResponseSchema),
         },
       },
+      description: 'Job deleted',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Delete automated job (admin only)',
+  tags: ['admin-jobs'],
 });

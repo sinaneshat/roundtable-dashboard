@@ -60,19 +60,19 @@ const cookieStorage = {
     return null;
   },
 
+  removeItem: (name: string): void => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.cookie = `${name}=; path=/; max-age=0`;
+  },
+
   setItem: (name: string, value: string): void => {
     if (typeof document === 'undefined') {
       return;
     }
     const encodedValue = encodeURIComponent(value);
     document.cookie = `${name}=${encodedValue}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
-  },
-
-  removeItem: (name: string): void => {
-    if (typeof document === 'undefined') {
-      return;
-    }
-    document.cookie = `${name}=; path=/; max-age=0`;
   },
 };
 
@@ -86,16 +86,16 @@ const cookieStorage = {
  * Source: nextjs.md - "CounterState" pattern + Zod-first
  */
 const ModelPreferencesStateSchema = z.object({
-  /** Selected model IDs (user's selection) */
-  selectedModelIds: z.array(z.string()),
+  /** Hydration tracking for SSR */
+  _hasHydrated: z.boolean(),
+  /** Web search enabled preference */
+  enableWebSearch: z.boolean(),
   /** Model order for display (drag-and-drop order) */
   modelOrder: z.array(z.string()),
   /** Selected chat mode (analyzing/brainstorming/etc) */
   selectedMode: z.string().nullable(),
-  /** Web search enabled preference */
-  enableWebSearch: z.boolean(),
-  /** Hydration tracking for SSR */
-  _hasHydrated: z.boolean(),
+  /** Selected model IDs (user's selection) */
+  selectedModelIds: z.array(z.string()),
 });
 
 /**
@@ -103,14 +103,14 @@ const ModelPreferencesStateSchema = z.object({
  * Source: nextjs.md - "CounterActions" pattern + Zod-first
  */
 const ModelPreferencesActionsSchema = z.object({
-  setSelectedModelIds: z.custom<(ids: string[]) => void>(),
-  toggleModel: z.custom<(modelId: string) => boolean>(),
+  getInitialModelIds: z.custom<(accessibleModelIds: string[]) => string[]>(),
+  setEnableWebSearch: z.custom<(enabled: boolean) => void>(),
+  setHasHydrated: z.custom<(state: boolean) => void>(),
   setModelOrder: z.custom<(order: string[]) => void>(),
   setSelectedMode: z.custom<(mode: string | null) => void>(),
-  setEnableWebSearch: z.custom<(enabled: boolean) => void>(),
-  getInitialModelIds: z.custom<(accessibleModelIds: string[]) => string[]>(),
+  setSelectedModelIds: z.custom<(ids: string[]) => void>(),
   syncWithAccessibleModels: z.custom<(accessibleModelIds: string[]) => void>(),
-  setHasHydrated: z.custom<(state: boolean) => void>(),
+  toggleModel: z.custom<(modelId: string) => boolean>(),
 });
 
 /**
@@ -136,10 +136,10 @@ export type ModelPreferencesStore = z.infer<typeof _ModelPreferencesStoreSchema>
  * Zod-first pattern: Schema defines the type, z.infer extracts it
  */
 const PersistedModelPreferencesSchema = z.object({
-  selectedModelIds: z.array(z.string()),
+  enableWebSearch: z.boolean(),
   modelOrder: z.array(z.string()),
   selectedMode: z.string().nullable(),
-  enableWebSearch: z.boolean(),
+  selectedModelIds: z.array(z.string()),
 });
 
 export type PersistedModelPreferences = z.infer<typeof PersistedModelPreferencesSchema>;
@@ -150,11 +150,11 @@ export type PersistedModelPreferences = z.infer<typeof PersistedModelPreferences
 // ============================================================================
 
 export const defaultInitState: ModelPreferencesState = {
-  selectedModelIds: [],
+  _hasHydrated: false,
+  enableWebSearch: false,
   modelOrder: [],
   selectedMode: null, // null = use default mode
-  enableWebSearch: false,
-  _hasHydrated: false,
+  selectedModelIds: [],
 };
 
 // ============================================================================
@@ -192,10 +192,10 @@ export function initPreferencesStore(
  */
 const CookieDataSchema = z.object({
   state: z.object({
-    selectedModelIds: z.array(z.string()).optional(),
+    enableWebSearch: z.boolean().optional(),
     modelOrder: z.array(z.string()).optional(),
     selectedMode: z.string().nullable().optional(),
-    enableWebSearch: z.boolean().optional(),
+    selectedModelIds: z.array(z.string()).optional(),
   }).optional(),
   version: z.number().optional(),
 });
@@ -240,11 +240,11 @@ export function parsePreferencesCookie(
     // Zustand persist wraps state in { state: {...}, version: number }
     if (data?.state) {
       return {
-        selectedModelIds: data.state.selectedModelIds ?? [],
+        _hasHydrated: true,
+        enableWebSearch: data.state.enableWebSearch ?? false,
         modelOrder: data.state.modelOrder ?? [],
         selectedMode: data.state.selectedMode ?? null,
-        enableWebSearch: data.state.enableWebSearch ?? false,
-        _hasHydrated: true,
+        selectedModelIds: data.state.selectedModelIds ?? [],
       };
     }
 
@@ -279,75 +279,6 @@ export function createModelPreferencesStore(
       persist(
         immer((set, get) => ({
           ...initState,
-
-          setSelectedModelIds: (ids: string[]) => {
-            // Don't persist empty selection
-            if (ids.length === 0) {
-              return;
-            }
-            set(
-              (draft: Draft<ModelPreferencesState>) => {
-                draft.selectedModelIds = ids;
-              },
-              false,
-              'preferences/setSelectedModelIds',
-            );
-          },
-
-          toggleModel: (modelId: string): boolean => {
-            const state = get();
-            const idx = state.selectedModelIds.indexOf(modelId);
-
-            if (idx !== -1) {
-              // Don't allow removing if it would leave 0 models
-              if (state.selectedModelIds.length <= 1) {
-                return false;
-              }
-              set(
-                (draft: Draft<ModelPreferencesState>) => {
-                  draft.selectedModelIds.splice(idx, 1);
-                },
-                false,
-                'preferences/toggleModel/remove',
-              );
-            } else {
-              set(
-                (draft: Draft<ModelPreferencesState>) => {
-                  draft.selectedModelIds.push(modelId);
-                },
-                false,
-                'preferences/toggleModel/add',
-              );
-            }
-            return true;
-          },
-
-          setModelOrder: (order: string[]) =>
-            set(
-              (draft: Draft<ModelPreferencesState>) => {
-                draft.modelOrder = order;
-              },
-              false,
-              'preferences/setModelOrder',
-            ),
-
-          setSelectedMode: (mode: string | null) =>
-            set(
-              (draft: Draft<ModelPreferencesState>) => {
-                draft.selectedMode = mode;
-              },
-              false,
-              'preferences/setSelectedMode',
-            ),
-
-          setEnableWebSearch: (enabled: boolean) =>
-            set(
-              (draft: Draft<ModelPreferencesState>) => {
-                draft.enableWebSearch = enabled;
-              },
-              false,
-              'preferences/setEnableWebSearch',
-            ),
 
           getInitialModelIds: (accessibleModelIds: string[]): string[] => {
             const state = get();
@@ -385,6 +316,56 @@ export function createModelPreferencesStore(
               );
             }
             return defaultIds;
+          },
+
+          setEnableWebSearch: (enabled: boolean) =>
+            set(
+              (draft: Draft<ModelPreferencesState>) => {
+                draft.enableWebSearch = enabled;
+              },
+              false,
+              'preferences/setEnableWebSearch',
+            ),
+
+          setHasHydrated: (hydrated: boolean) =>
+            set(
+              (draft: Draft<ModelPreferencesState>) => {
+                draft._hasHydrated = hydrated;
+              },
+              false,
+              'preferences/setHasHydrated',
+            ),
+
+          setModelOrder: (order: string[]) =>
+            set(
+              (draft: Draft<ModelPreferencesState>) => {
+                draft.modelOrder = order;
+              },
+              false,
+              'preferences/setModelOrder',
+            ),
+
+          setSelectedMode: (mode: string | null) =>
+            set(
+              (draft: Draft<ModelPreferencesState>) => {
+                draft.selectedMode = mode;
+              },
+              false,
+              'preferences/setSelectedMode',
+            ),
+
+          setSelectedModelIds: (ids: string[]) => {
+            // Don't persist empty selection
+            if (ids.length === 0) {
+              return;
+            }
+            set(
+              (draft: Draft<ModelPreferencesState>) => {
+                draft.selectedModelIds = ids;
+              },
+              false,
+              'preferences/setSelectedModelIds',
+            );
           },
 
           syncWithAccessibleModels: (accessibleModelIds: string[]): void => {
@@ -429,54 +410,35 @@ export function createModelPreferencesStore(
             }
           },
 
-          setHasHydrated: (hydrated: boolean) =>
-            set(
-              (draft: Draft<ModelPreferencesState>) => {
-                draft._hasHydrated = hydrated;
-              },
-              false,
-              'preferences/setHasHydrated',
-            ),
+          toggleModel: (modelId: string): boolean => {
+            const state = get();
+            const idx = state.selectedModelIds.indexOf(modelId);
+
+            if (idx !== -1) {
+              // Don't allow removing if it would leave 0 models
+              if (state.selectedModelIds.length <= 1) {
+                return false;
+              }
+              set(
+                (draft: Draft<ModelPreferencesState>) => {
+                  draft.selectedModelIds.splice(idx, 1);
+                },
+                false,
+                'preferences/toggleModel/remove',
+              );
+            } else {
+              set(
+                (draft: Draft<ModelPreferencesState>) => {
+                  draft.selectedModelIds.push(modelId);
+                },
+                false,
+                'preferences/toggleModel/add',
+              );
+            }
+            return true;
+          },
         })),
         {
-          name: PREFERENCES_COOKIE_NAME,
-          storage: {
-            getItem: (name) => {
-              const value = cookieStorage.getItem(name);
-              if (!value)
-                return null;
-              // Zod-based validation: parse and validate persisted state
-              const parsed = JSON.parse(value);
-              const result = PersistedModelPreferencesSchema.safeParse(parsed?.state);
-              if (!result.success) {
-                console.error('[preferences/storage] Invalid persisted state:', result.error);
-                return null;
-              }
-              return { state: result.data, version: parsed?.version ?? 0 };
-            },
-            setItem: (name, value) => {
-              cookieStorage.setItem(name, JSON.stringify(value));
-            },
-            removeItem: (name) => {
-              cookieStorage.removeItem(name);
-            },
-          },
-          // Partialize: Only persist user preferences (subset of state)
-          // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#partialize
-          partialize: (state): PersistedModelPreferences => ({
-            selectedModelIds: state.selectedModelIds,
-            modelOrder: state.modelOrder,
-            selectedMode: state.selectedMode,
-            enableWebSearch: state.enableWebSearch,
-          }),
-          // ✅ OFFICIAL PATTERN: skipHydration for SSR
-          // Source: persist.md - prevents automatic hydration
-          skipHydration: true,
-          // ✅ OFFICIAL PATTERN: onRehydrateStorage callback
-          // Source: persist.md - tracks hydration completion
-          onRehydrateStorage: () => (state) => {
-            state?.setHasHydrated(true);
-          },
           // Merge persisted partial state with full state
           // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#merge
           merge: (persistedState, currentState) => {
@@ -490,9 +452,48 @@ export function createModelPreferencesStore(
               ...result.data,
             };
           },
+          name: PREFERENCES_COOKIE_NAME,
+          // ✅ OFFICIAL PATTERN: onRehydrateStorage callback
+          // Source: persist.md - tracks hydration completion
+          onRehydrateStorage: () => (state) => {
+            state?.setHasHydrated(true);
+          },
+          // Partialize: Only persist user preferences (subset of state)
+          // @see https://docs.pmnd.rs/zustand/integrations/persisting-store-data#partialize
+          partialize: (state): PersistedModelPreferences => ({
+            enableWebSearch: state.enableWebSearch,
+            modelOrder: state.modelOrder,
+            selectedMode: state.selectedMode,
+            selectedModelIds: state.selectedModelIds,
+          }),
+          // ✅ OFFICIAL PATTERN: skipHydration for SSR
+          // Source: persist.md - prevents automatic hydration
+          skipHydration: true,
+          storage: {
+            getItem: (name) => {
+              const value = cookieStorage.getItem(name);
+              if (!value) {
+                return null;
+              }
+              // Zod-based validation: parse and validate persisted state
+              const parsed = JSON.parse(value);
+              const result = PersistedModelPreferencesSchema.safeParse(parsed?.state);
+              if (!result.success) {
+                console.error('[preferences/storage] Invalid persisted state:', result.error);
+                return null;
+              }
+              return { state: result.data, version: parsed?.version ?? 0 };
+            },
+            removeItem: (name) => {
+              cookieStorage.removeItem(name);
+            },
+            setItem: (name, value) => {
+              cookieStorage.setItem(name, JSON.stringify(value));
+            },
+          },
         },
       ),
-      { name: 'ModelPreferencesStore', enabled: import.meta.env.MODE === 'development' },
+      { enabled: import.meta.env.MODE === 'development', name: 'ModelPreferencesStore' },
     ),
   );
 }

@@ -18,6 +18,30 @@
  * Use these instead of hardcoded values for consistency
  */
 export const ANIMATION_TIMINGS = {
+  /** Long delay (0.3s) */
+  DELAY_LONG: 0.3,
+  /** Medium delay (0.2s) */
+  DELAY_MEDIUM: 0.2,
+  // ========================================
+  // Initial delays (before animation starts)
+  // ========================================
+  /** No delay */
+  DELAY_NONE: 0,
+  /** Short delay (0.1s) */
+  DELAY_SHORT: 0.1,
+
+  /** Quick transitions (0.2s) */
+  DURATION_FAST: 0.2,
+  // ========================================
+  // Detailed durations (more granular control)
+  // ========================================
+  /** Almost instant (0.15s) - Same as FAST */
+  DURATION_INSTANT: 0.15,
+  /** Standard transitions (0.3s) - Same as NORMAL */
+  DURATION_NORMAL: 0.3,
+  /** Slow, emphasized transitions (0.4s) */
+  DURATION_SLOW: 0.4,
+
   // ========================================
   // Simple durations (use for most cases)
   // ========================================
@@ -27,44 +51,20 @@ export const ANIMATION_TIMINGS = {
   NORMAL: 0.3,
   /** Slower, more noticeable animations (0.5s) */
   SLOW: 0.5,
-  /** Very slow, deliberate animations (1s) */
-  VERY_SLOW: 1.0,
-
-  // ========================================
-  // Detailed durations (more granular control)
-  // ========================================
-  /** Almost instant (0.15s) - Same as FAST */
-  DURATION_INSTANT: 0.15,
-  /** Quick transitions (0.2s) */
-  DURATION_FAST: 0.2,
-  /** Standard transitions (0.3s) - Same as NORMAL */
-  DURATION_NORMAL: 0.3,
-  /** Slow, emphasized transitions (0.4s) */
-  DURATION_SLOW: 0.4,
-
   // ========================================
   // Stagger delays (time between each child animation)
   // ========================================
   /** For small items (badges, icons) */
   STAGGER_FAST: 0.05,
+
   /** For medium items (list items, text lines) */
   STAGGER_NORMAL: 0.08,
   /** For large sections (cards, major components) */
   STAGGER_SLOW: 0.12,
   /** For very large sections (full accordions) */
   STAGGER_VERY_SLOW: 0.15,
-
-  // ========================================
-  // Initial delays (before animation starts)
-  // ========================================
-  /** No delay */
-  DELAY_NONE: 0,
-  /** Short delay (0.1s) */
-  DELAY_SHORT: 0.1,
-  /** Medium delay (0.2s) */
-  DELAY_MEDIUM: 0.2,
-  /** Long delay (0.3s) */
-  DELAY_LONG: 0.3,
+  /** Very slow, deliberate animations (1s) */
+  VERY_SLOW: 1.0,
 } as const;
 
 // ============================================================================
@@ -76,38 +76,19 @@ export const ANIMATION_TIMINGS = {
  * Use these for consistent motion feel
  */
 export const ANIMATION_EASING = {
+  /** Snappy, bouncy entrance [0.68, -0.55, 0.265, 1.55] */
+  BOUNCE: [0.68, -0.55, 0.265, 1.55] as const,
   // ========================================
   // Cubic bezier curves
   // ========================================
   /** Custom smooth, natural motion [0.32, 0.72, 0, 1] */
   DEFAULT: [0.32, 0.72, 0, 1] as const,
-  /** Linear interpolation [0, 0, 1, 1] */
-  LINEAR: [0, 0, 1, 1] as const,
   /** Smooth ease in and out [0.4, 0, 0.2, 1] */
   EASE: [0.4, 0, 0.2, 1] as const,
   /** Ease in - slow start [0.4, 0, 1, 1] */
   EASE_IN: [0.4, 0, 1, 1] as const,
   /** Ease out - slow end [0, 0, 0.2, 1] */
   EASE_OUT: [0, 0, 0.2, 1] as const,
-  /** Snappy, bouncy entrance [0.68, -0.55, 0.265, 1.55] */
-  BOUNCE: [0.68, -0.55, 0.265, 1.55] as const,
-
-  // ========================================
-  // Spring physics (use SPRING_CONFIGS for more control)
-  // ========================================
-  /** Standard spring for bouncy, natural feel */
-  SPRING: {
-    type: 'spring' as const,
-    stiffness: 300,
-    damping: 24,
-  },
-  /** Gentle spring for subtle motion */
-  SPRING_GENTLE: {
-    type: 'spring' as const,
-    stiffness: 200,
-    damping: 20,
-  },
-
   // ========================================
   // Specialized configs
   // ========================================
@@ -115,6 +96,25 @@ export const ANIMATION_EASING = {
   LAYOUT: {
     duration: ANIMATION_TIMINGS.DURATION_FAST,
     ease: [0.32, 0.72, 0, 1] as const,
+  },
+
+  /** Linear interpolation [0, 0, 1, 1] */
+  LINEAR: [0, 0, 1, 1] as const,
+  // ========================================
+  // Spring physics (use SPRING_CONFIGS for more control)
+  // ========================================
+  /** Standard spring for bouncy, natural feel */
+  SPRING: {
+    damping: 24,
+    stiffness: 300,
+    type: 'spring' as const,
+  },
+
+  /** Gentle spring for subtle motion */
+  SPRING_GENTLE: {
+    damping: 20,
+    stiffness: 200,
+    type: 'spring' as const,
   },
 } as const;
 
@@ -127,29 +127,29 @@ export const ANIMATION_EASING = {
  * Use these for physics-based animations with spring characteristics
  */
 export const SPRING_CONFIGS = {
-  /** Gentle spring (default) - stiffness: 300, damping: 24 */
-  GENTLE: {
-    type: 'spring' as const,
-    stiffness: 300,
-    damping: 24,
-  },
   /** Bouncy spring - stiffness: 400, damping: 17 */
   BOUNCY: {
-    type: 'spring' as const,
-    stiffness: 400,
     damping: 17,
+    stiffness: 400,
+    type: 'spring' as const,
+  },
+  /** Gentle spring (default) - stiffness: 300, damping: 24 */
+  GENTLE: {
+    damping: 24,
+    stiffness: 300,
+    type: 'spring' as const,
   },
   /** Stiff, immediate response - stiffness: 500, damping: 30 */
   STIFF: {
-    type: 'spring' as const,
-    stiffness: 500,
     damping: 30,
+    stiffness: 500,
+    type: 'spring' as const,
   },
   /** Subtle, gentle spring - stiffness: 200, damping: 20 */
   SUBTLE: {
-    type: 'spring' as const,
-    stiffness: 200,
     damping: 20,
+    stiffness: 200,
+    type: 'spring' as const,
   },
 } as const;
 
@@ -162,38 +162,6 @@ export const SPRING_CONFIGS = {
  * Reusable variants for consistent animations across components
  */
 export const ANIMATION_VARIANTS = {
-  /**
-   * Fade in from bottom
-   * Usage: <motion.div variants={ANIMATION_VARIANTS.fadeInUp} initial="hidden" animate="show" />
-   */
-  fadeInUp: {
-    hidden: { opacity: 0, y: 20 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: ANIMATION_TIMINGS.DURATION_NORMAL,
-        ease: ANIMATION_EASING.DEFAULT,
-      },
-    },
-  },
-
-  /**
-   * Fade in from top
-   * Usage: <motion.div variants={ANIMATION_VARIANTS.fadeInDown} initial="hidden" animate="show" />
-   */
-  fadeInDown: {
-    hidden: { opacity: 0, y: -10 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: ANIMATION_TIMINGS.DURATION_FAST,
-        ease: ANIMATION_EASING.DEFAULT,
-      },
-    },
-  },
-
   /**
    * Simple fade
    * Usage: <motion.div variants={ANIMATION_VARIANTS.fade} initial="hidden" animate="show" />
@@ -210,6 +178,38 @@ export const ANIMATION_VARIANTS = {
   },
 
   /**
+   * Fade in from top
+   * Usage: <motion.div variants={ANIMATION_VARIANTS.fadeInDown} initial="hidden" animate="show" />
+   */
+  fadeInDown: {
+    hidden: { opacity: 0, y: -10 },
+    show: {
+      opacity: 1,
+      transition: {
+        duration: ANIMATION_TIMINGS.DURATION_FAST,
+        ease: ANIMATION_EASING.DEFAULT,
+      },
+      y: 0,
+    },
+  },
+
+  /**
+   * Fade in from bottom
+   * Usage: <motion.div variants={ANIMATION_VARIANTS.fadeInUp} initial="hidden" animate="show" />
+   */
+  fadeInUp: {
+    hidden: { opacity: 0, y: 20 },
+    show: {
+      opacity: 1,
+      transition: {
+        duration: ANIMATION_TIMINGS.DURATION_NORMAL,
+        ease: ANIMATION_EASING.DEFAULT,
+      },
+      y: 0,
+    },
+  },
+
+  /**
    * Container for staggered children (normal speed)
    * Usage: <motion.div variants={ANIMATION_VARIANTS.staggerContainer}>
    *          <motion.div variants={ANIMATION_VARIANTS.staggerItem} />
@@ -220,8 +220,8 @@ export const ANIMATION_VARIANTS = {
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: ANIMATION_TIMINGS.STAGGER_NORMAL,
         delayChildren: ANIMATION_TIMINGS.DELAY_SHORT,
+        staggerChildren: ANIMATION_TIMINGS.STAGGER_NORMAL,
         when: 'beforeChildren' as const,
       },
     },
@@ -235,8 +235,8 @@ export const ANIMATION_VARIANTS = {
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: ANIMATION_TIMINGS.STAGGER_SLOW,
         delayChildren: ANIMATION_TIMINGS.DELAY_MEDIUM,
+        staggerChildren: ANIMATION_TIMINGS.STAGGER_SLOW,
         when: 'beforeChildren' as const,
       },
     },
@@ -250,8 +250,8 @@ export const ANIMATION_VARIANTS = {
     hidden: { opacity: 0, y: 10 },
     show: {
       opacity: 1,
-      y: 0,
       transition: ANIMATION_EASING.SPRING,
+      y: 0,
     },
   },
 } as const;
@@ -284,8 +284,8 @@ export function createStaggerContainer(
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: staggerDelay,
         delayChildren: initialDelay,
+        staggerChildren: staggerDelay,
         when: 'beforeChildren' as const,
       },
     },

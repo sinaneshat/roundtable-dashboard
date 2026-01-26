@@ -26,10 +26,10 @@ export type UseDragEdgeScrollReturn = {
  * Uses RAF for 60fps animation with quadratic easing (closer to edge = faster).
  */
 export function useDragEdgeScroll({
-  scrollContainerRef,
   edgeThreshold = 60,
-  maxScrollSpeed = 3,
   enabled = true,
+  maxScrollSpeed = 3,
+  scrollContainerRef,
 }: UseDragEdgeScrollOptions): UseDragEdgeScrollReturn {
   const isDraggingRef = useRef(false);
   const rafIdRef = useRef<number | null>(null);
@@ -155,9 +155,9 @@ export function useDragEdgeScroll({
   }, []);
 
   return {
-    onDrag,
-    onDragStart,
-    onDragEnd,
     isInScrollZone: isInScrollZoneRef.current,
+    onDrag,
+    onDragEnd,
+    onDragStart,
   };
 }

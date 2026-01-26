@@ -34,44 +34,44 @@ const ERROR_CODES = ErrorCodes;
  * This ensures complete type safety without any casting for ALL status codes
  */
 const STOKER_TO_HONO_STATUS_MAP = {
+  [HttpStatusCodes.BAD_GATEWAY]: 502 as const,
   // 4xx Client Error Status Codes
   [HttpStatusCodes.BAD_REQUEST]: 400 as const,
-  [HttpStatusCodes.UNAUTHORIZED]: 401 as const,
-  [HttpStatusCodes.FORBIDDEN]: 403 as const,
-  [HttpStatusCodes.NOT_FOUND]: 404 as const,
-  [HttpStatusCodes.METHOD_NOT_ALLOWED]: 405 as const,
-  [HttpStatusCodes.NOT_ACCEPTABLE]: 406 as const,
-  [HttpStatusCodes.PROXY_AUTHENTICATION_REQUIRED]: 407 as const,
-  [HttpStatusCodes.REQUEST_TIMEOUT]: 408 as const,
   [HttpStatusCodes.CONFLICT]: 409 as const,
-  [HttpStatusCodes.GONE]: 410 as const,
-  [HttpStatusCodes.LENGTH_REQUIRED]: 411 as const,
-  [HttpStatusCodes.PRECONDITION_FAILED]: 412 as const,
-  [HttpStatusCodes.REQUEST_TOO_LONG]: 413 as const,
-  [HttpStatusCodes.REQUEST_URI_TOO_LONG]: 414 as const,
-  [HttpStatusCodes.UNSUPPORTED_MEDIA_TYPE]: 415 as const,
-  [HttpStatusCodes.REQUESTED_RANGE_NOT_SATISFIABLE]: 416 as const,
   [HttpStatusCodes.EXPECTATION_FAILED]: 417 as const,
-  [HttpStatusCodes.IM_A_TEAPOT]: 418 as const,
-  [HttpStatusCodes.MISDIRECTED_REQUEST]: 421 as const,
-  [HttpStatusCodes.UNPROCESSABLE_ENTITY]: 422 as const,
-  [HttpStatusCodes.LOCKED]: 423 as const,
   [HttpStatusCodes.FAILED_DEPENDENCY]: 424 as const,
-  [HttpStatusCodes.UPGRADE_REQUIRED]: 426 as const,
-  [HttpStatusCodes.PRECONDITION_REQUIRED]: 428 as const,
-  [HttpStatusCodes.TOO_MANY_REQUESTS]: 429 as const,
-  [HttpStatusCodes.REQUEST_HEADER_FIELDS_TOO_LARGE]: 431 as const,
-  [HttpStatusCodes.UNAVAILABLE_FOR_LEGAL_REASONS]: 451 as const,
-
+  [HttpStatusCodes.FORBIDDEN]: 403 as const,
+  [HttpStatusCodes.GATEWAY_TIMEOUT]: 504 as const,
+  [HttpStatusCodes.GONE]: 410 as const,
+  [HttpStatusCodes.HTTP_VERSION_NOT_SUPPORTED]: 505 as const,
+  [HttpStatusCodes.IM_A_TEAPOT]: 418 as const,
+  [HttpStatusCodes.INSUFFICIENT_STORAGE]: 507 as const,
   // 5xx Server Error Status Codes
   [HttpStatusCodes.INTERNAL_SERVER_ERROR]: 500 as const,
-  [HttpStatusCodes.NOT_IMPLEMENTED]: 501 as const,
-  [HttpStatusCodes.BAD_GATEWAY]: 502 as const,
-  [HttpStatusCodes.SERVICE_UNAVAILABLE]: 503 as const,
-  [HttpStatusCodes.GATEWAY_TIMEOUT]: 504 as const,
-  [HttpStatusCodes.HTTP_VERSION_NOT_SUPPORTED]: 505 as const,
-  [HttpStatusCodes.INSUFFICIENT_STORAGE]: 507 as const,
+  [HttpStatusCodes.LENGTH_REQUIRED]: 411 as const,
+  [HttpStatusCodes.LOCKED]: 423 as const,
+  [HttpStatusCodes.METHOD_NOT_ALLOWED]: 405 as const,
+  [HttpStatusCodes.MISDIRECTED_REQUEST]: 421 as const,
   [HttpStatusCodes.NETWORK_AUTHENTICATION_REQUIRED]: 511 as const,
+  [HttpStatusCodes.NOT_ACCEPTABLE]: 406 as const,
+  [HttpStatusCodes.NOT_FOUND]: 404 as const,
+  [HttpStatusCodes.NOT_IMPLEMENTED]: 501 as const,
+  [HttpStatusCodes.PRECONDITION_FAILED]: 412 as const,
+  [HttpStatusCodes.PRECONDITION_REQUIRED]: 428 as const,
+  [HttpStatusCodes.PROXY_AUTHENTICATION_REQUIRED]: 407 as const,
+  [HttpStatusCodes.REQUEST_HEADER_FIELDS_TOO_LARGE]: 431 as const,
+  [HttpStatusCodes.REQUEST_TIMEOUT]: 408 as const,
+  [HttpStatusCodes.REQUEST_TOO_LONG]: 413 as const,
+  [HttpStatusCodes.REQUEST_URI_TOO_LONG]: 414 as const,
+
+  [HttpStatusCodes.REQUESTED_RANGE_NOT_SATISFIABLE]: 416 as const,
+  [HttpStatusCodes.SERVICE_UNAVAILABLE]: 503 as const,
+  [HttpStatusCodes.TOO_MANY_REQUESTS]: 429 as const,
+  [HttpStatusCodes.UNAUTHORIZED]: 401 as const,
+  [HttpStatusCodes.UNAVAILABLE_FOR_LEGAL_REASONS]: 451 as const,
+  [HttpStatusCodes.UNPROCESSABLE_ENTITY]: 422 as const,
+  [HttpStatusCodes.UNSUPPORTED_MEDIA_TYPE]: 415 as const,
+  [HttpStatusCodes.UPGRADE_REQUIRED]: 426 as const,
 } as const;
 
 /**
@@ -86,7 +86,7 @@ function mapStatusCode(stokerStatus: number): ContentfulStatusCode {
 
   // Enhanced fallback logic with validation
   if (isValidContentfulStatusCode(stokerStatus)) {
-    return stokerStatus as ContentfulStatusCode;
+    return stokerStatus;
   }
 
   // Default fallback for unmapped status codes
@@ -127,7 +127,7 @@ function isContentfulStatusCode(status: number): status is ContentfulStatusCode 
 export type ExceptionDetails
   = {
     detailType: 'validation';
-    validationErrors: Array<{ field: string; message: string; code?: string }>;
+    validationErrors: { field: string; message: string; code?: string | undefined }[];
   }
   | {
     detailType: 'batch';
@@ -202,15 +202,26 @@ export class EnhancedHTTPException extends HTTPException {
     options: HTTPExceptionFactoryOptions,
   ) {
     super(status, {
-      message: options.message,
       cause: options.cause,
+      message: options.message,
     });
 
-    this.errorCode = options.code;
-    this.severity = options.severity;
-    this.context = options.context;
-    this.correlationId = options.correlationId;
-    this.details = options.details;
+    // Filter undefined values to satisfy exactOptionalPropertyTypes
+    if (options.code !== undefined) {
+      this.errorCode = options.code;
+    }
+    if (options.severity !== undefined) {
+      this.severity = options.severity;
+    }
+    if (options.context !== undefined) {
+      this.context = options.context;
+    }
+    if (options.correlationId !== undefined) {
+      this.correlationId = options.correlationId;
+    }
+    if (options.details !== undefined) {
+      this.details = options.details;
+    }
     this.timestamp = new Date();
   }
 
@@ -219,14 +230,14 @@ export class EnhancedHTTPException extends HTTPException {
    */
   toJSON() {
     return {
-      name: this.name,
-      message: this.message,
-      status: this.status,
-      errorCode: this.errorCode,
-      severity: this.severity,
       context: this.context,
       correlationId: this.correlationId,
       details: this.details,
+      errorCode: this.errorCode,
+      message: this.message,
+      name: this.name,
+      severity: this.severity,
+      status: this.status,
       timestamp: this.timestamp.toISOString(),
     };
   }
@@ -275,8 +286,8 @@ export class HTTPExceptionFactory {
       ...options,
       details: {
         detailType: 'status_mapping',
-        originalStatus: status,
         mappedStatus: mapped,
+        originalStatus: status,
       },
     });
   }
@@ -429,8 +440,8 @@ export class HTTPExceptionFactory {
     options: { message: string; cause?: unknown } = { message: 'An error occurred' },
   ): EnhancedHTTPException {
     return HTTPExceptionFactory.fromStatusCode(stokerStatus, {
-      message: options.message,
       cause: options.cause,
+      message: options.message,
     });
   }
 
@@ -443,37 +454,44 @@ export class HTTPExceptionFactory {
     context?: ErrorContext,
   ): EnhancedHTTPException {
     const errorCodeMap: Record<number, ErrorCode> = {
-      [HttpStatusCodes.BAD_REQUEST]: ERROR_CODES.INVALID_INPUT,
-      [HttpStatusCodes.UNAUTHORIZED]: ERROR_CODES.UNAUTHENTICATED,
-      [HttpStatusCodes.FORBIDDEN]: ERROR_CODES.UNAUTHORIZED,
-      [HttpStatusCodes.NOT_FOUND]: ERROR_CODES.RESOURCE_NOT_FOUND,
-      [HttpStatusCodes.CONFLICT]: ERROR_CODES.RESOURCE_CONFLICT,
-      [HttpStatusCodes.UNPROCESSABLE_ENTITY]: ERROR_CODES.VALIDATION_ERROR,
-      [HttpStatusCodes.TOO_MANY_REQUESTS]: ERROR_CODES.RATE_LIMIT_EXCEEDED,
-      [HttpStatusCodes.INTERNAL_SERVER_ERROR]: ERROR_CODES.INTERNAL_SERVER_ERROR,
       [HttpStatusCodes.BAD_GATEWAY]: ERROR_CODES.EXTERNAL_SERVICE_ERROR,
+      [HttpStatusCodes.BAD_REQUEST]: ERROR_CODES.INVALID_INPUT,
+      [HttpStatusCodes.CONFLICT]: ERROR_CODES.RESOURCE_CONFLICT,
+      [HttpStatusCodes.FORBIDDEN]: ERROR_CODES.UNAUTHORIZED,
+      [HttpStatusCodes.INTERNAL_SERVER_ERROR]: ERROR_CODES.INTERNAL_SERVER_ERROR,
+      [HttpStatusCodes.NOT_FOUND]: ERROR_CODES.RESOURCE_NOT_FOUND,
       [HttpStatusCodes.SERVICE_UNAVAILABLE]: ERROR_CODES.SERVICE_UNAVAILABLE,
+      [HttpStatusCodes.TOO_MANY_REQUESTS]: ERROR_CODES.RATE_LIMIT_EXCEEDED,
+      [HttpStatusCodes.UNAUTHORIZED]: ERROR_CODES.UNAUTHENTICATED,
+      [HttpStatusCodes.UNPROCESSABLE_ENTITY]: ERROR_CODES.VALIDATION_ERROR,
     };
 
     const severityMap: Record<number, ApiErrorSeverity> = {
-      [HttpStatusCodes.BAD_REQUEST]: ERROR_SEVERITY.LOW,
-      [HttpStatusCodes.UNAUTHORIZED]: ERROR_SEVERITY.MEDIUM,
-      [HttpStatusCodes.FORBIDDEN]: ERROR_SEVERITY.MEDIUM,
-      [HttpStatusCodes.NOT_FOUND]: ERROR_SEVERITY.LOW,
-      [HttpStatusCodes.CONFLICT]: ERROR_SEVERITY.MEDIUM,
-      [HttpStatusCodes.UNPROCESSABLE_ENTITY]: ERROR_SEVERITY.LOW,
-      [HttpStatusCodes.TOO_MANY_REQUESTS]: ERROR_SEVERITY.MEDIUM,
-      [HttpStatusCodes.INTERNAL_SERVER_ERROR]: ERROR_SEVERITY.CRITICAL,
       [HttpStatusCodes.BAD_GATEWAY]: ERROR_SEVERITY.HIGH,
+      [HttpStatusCodes.BAD_REQUEST]: ERROR_SEVERITY.LOW,
+      [HttpStatusCodes.CONFLICT]: ERROR_SEVERITY.MEDIUM,
+      [HttpStatusCodes.FORBIDDEN]: ERROR_SEVERITY.MEDIUM,
+      [HttpStatusCodes.INTERNAL_SERVER_ERROR]: ERROR_SEVERITY.CRITICAL,
+      [HttpStatusCodes.NOT_FOUND]: ERROR_SEVERITY.LOW,
       [HttpStatusCodes.SERVICE_UNAVAILABLE]: ERROR_SEVERITY.HIGH,
+      [HttpStatusCodes.TOO_MANY_REQUESTS]: ERROR_SEVERITY.MEDIUM,
+      [HttpStatusCodes.UNAUTHORIZED]: ERROR_SEVERITY.MEDIUM,
+      [HttpStatusCodes.UNPROCESSABLE_ENTITY]: ERROR_SEVERITY.LOW,
     };
 
-    return HTTPExceptionFactory.fromStatusCode(stokerStatus, {
+    // Build options with only defined properties (satisfies exactOptionalPropertyTypes)
+    const options: HTTPExceptionFactoryOptions = {
       message,
-      context,
-      code: errorCodeMap[stokerStatus],
       severity: severityMap[stokerStatus] || ERROR_SEVERITY.MEDIUM,
-    });
+    };
+    const code = errorCodeMap[stokerStatus];
+    if (code !== undefined) {
+      options.code = code;
+    }
+    if (context !== undefined) {
+      options.context = context;
+    }
+    return HTTPExceptionFactory.fromStatusCode(stokerStatus, options);
   }
 
   /**
@@ -495,7 +513,7 @@ export class HTTPExceptionFactory {
       }
     }
 
-    return { valid, invalid, mapped };
+    return { invalid, mapped, valid };
   }
 }
 

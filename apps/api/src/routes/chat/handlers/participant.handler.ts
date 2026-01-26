@@ -34,9 +34,9 @@ import {
 export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: AddParticipantRequestSchema,
     operationName: 'addParticipant',
+    validateBody: AddParticipantRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c, batch) => {
     const { user } = c.auth();
@@ -70,29 +70,29 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
     // ✅ ATOMIC: Insert participant + changelog in single batch
     const results = await executeBatch(db, [
       db.insert(tables.chatParticipant).values({
-        id: participantId,
-        threadId: id,
-        modelId: body.modelId,
-        role,
-        priority: body.priority ?? 0,
-        isEnabled: true,
-        settings: body.settings ?? null,
         createdAt: now,
+        id: participantId,
+        isEnabled: true,
+        modelId: body.modelId,
+        priority: body.priority ?? 0,
+        role,
+        settings: body.settings ?? null,
+        threadId: id,
         updatedAt: now,
       }).returning(),
       db.insert(tables.chatThreadChangelog).values({
-        id: changelogId,
-        threadId: id,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.ADDED,
-        changeSummary: summary,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT,
-          participantId,
           modelId: body.modelId,
+          participantId,
           role,
+          type: ChangelogChangeTypes.PARTICIPANT,
         },
+        changeSummary: summary,
+        changeType: ChangelogTypes.ADDED,
         createdAt: now,
+        id: changelogId,
+        roundNumber: nextRoundNumber,
+        threadId: id,
       }),
       db.update(tables.chatThread).set({ updatedAt: now }).where(eq(tables.chatThread.id, id)),
     ]);
@@ -111,9 +111,9 @@ export const addParticipantHandler: RouteHandler<typeof addParticipantRoute, Api
 export const updateParticipantHandler: RouteHandler<typeof updateParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateParticipantRequestSchema,
     operationName: 'updateParticipant',
+    validateBody: UpdateParticipantRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -167,9 +167,9 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
     // Build operations array based on changelog decision
     const ops: BatchItem<'sqlite'>[] = [
       db.update(tables.chatParticipant).set({
-        role: newRole,
-        priority: body.priority,
         isEnabled: body.isEnabled,
+        priority: body.priority,
+        role: newRole,
         settings: body.settings ?? undefined,
         updatedAt: now,
       }).where(eq(tables.chatParticipant.id, id)).returning(),
@@ -179,31 +179,31 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
       ops.push(db.delete(tables.chatThreadChangelog).where(eq(tables.chatThreadChangelog.id, existingRoleChange.id)));
     } else if (changelogOp === ChangelogOperations.UPDATE && existingRoleChange) {
       ops.push(db.update(tables.chatThreadChangelog).set({
-        changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT_ROLE,
-          participantId: id,
           modelId: participant.modelId,
-          oldRole: baselineRole,
           newRole,
+          oldRole: baselineRole,
+          participantId: id,
+          type: ChangelogChangeTypes.PARTICIPANT_ROLE,
         },
+        changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
         createdAt: now,
       }).where(eq(tables.chatThreadChangelog.id, existingRoleChange.id)));
     } else if (changelogOp === ChangelogOperations.INSERT) {
       ops.push(db.insert(tables.chatThreadChangelog).values({
-        id: ulid(),
-        threadId: participant.threadId,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.MODIFIED,
-        changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT_ROLE,
-          participantId: id,
           modelId: participant.modelId,
-          oldRole: baselineRole,
           newRole,
+          oldRole: baselineRole,
+          participantId: id,
+          type: ChangelogChangeTypes.PARTICIPANT_ROLE,
         },
+        changeSummary: `Updated ${modelName} role from ${baselineRole || 'none'} to ${newRole || 'none'}`,
+        changeType: ChangelogTypes.MODIFIED,
         createdAt: now,
+        id: ulid(),
+        roundNumber: nextRoundNumber,
+        threadId: participant.threadId,
       }));
       ops.push(db.update(tables.chatThread).set({ updatedAt: now }).where(eq(tables.chatThread.id, participant.threadId)));
     }
@@ -223,8 +223,8 @@ export const updateParticipantHandler: RouteHandler<typeof updateParticipantRout
 export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteParticipant',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -247,18 +247,18 @@ export const deleteParticipantHandler: RouteHandler<typeof deleteParticipantRout
     await executeBatch(db, [
       db.delete(tables.chatParticipant).where(eq(tables.chatParticipant.id, id)),
       db.insert(tables.chatThreadChangelog).values({
-        id: changelogId,
-        threadId: participant.threadId,
-        roundNumber: nextRoundNumber,
-        changeType: ChangelogTypes.REMOVED,
-        changeSummary: summary,
         changeData: {
-          type: ChangelogChangeTypes.PARTICIPANT,
-          participantId: id,
           modelId: participant.modelId,
+          participantId: id,
           role: participant.role,
+          type: ChangelogChangeTypes.PARTICIPANT,
         },
+        changeSummary: summary,
+        changeType: ChangelogTypes.REMOVED,
         createdAt: now,
+        id: changelogId,
+        roundNumber: nextRoundNumber,
+        threadId: participant.threadId,
       }),
       db.update(tables.chatThread).set({ updatedAt: now }).where(eq(tables.chatThread.id, participant.threadId)),
     ]);

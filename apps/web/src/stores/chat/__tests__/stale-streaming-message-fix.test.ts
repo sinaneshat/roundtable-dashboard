@@ -40,26 +40,26 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Setup: Store has messages with stale streaming parts (from interrupted session)
       const storeUserMessage = createTestUserMessage({
-        id: 'user-msg-1',
         content: 'Hello',
+        id: 'user-msg-1',
         roundNumber: 0,
       });
 
       // Create assistant message with streaming parts (stale state)
       const staleAssistantMessage = {
         ...createTestAssistantMessage({
-          id: 'assistant-msg-1',
           content: 'Partial response...',
-          roundNumber: 0,
+          id: 'assistant-msg-1',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         // Override parts to have streaming state
         parts: [
           {
-            type: MessagePartTypes.TEXT as const,
-            text: 'Partial response...',
             state: TextPartStates.STREAMING, // Stale streaming state
+            text: 'Partial response...',
+            type: MessagePartTypes.TEXT as const,
           },
         ],
       };
@@ -70,18 +70,18 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Fresh DB messages have complete data
       const dbUserMessage = createTestUserMessage({
-        id: 'user-msg-1',
         content: 'Hello',
+        id: 'user-msg-1',
         roundNumber: 0,
       });
 
       const dbAssistantMessage = createTestAssistantMessage({
-        id: 'assistant-msg-1',
         content: 'Complete response from participant 1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP, // Complete
+        id: 'assistant-msg-1',
         participantId: 'p1',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP, // Complete
+        roundNumber: 0,
       });
 
       // Act: Initialize thread with fresh DB messages
@@ -98,7 +98,7 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
       const hasStreamingParts = assistantMsg?.parts?.some(
         p => 'state' in p && p.state === TextPartStates.STREAMING,
       );
-      expect(hasStreamingParts).toBe(false);
+      expect(hasStreamingParts).toBeFalsy();
 
       // Verify content is from DB (complete response)
       const textPart = assistantMsg?.parts?.find(p => p.type === MessagePartTypes.TEXT);
@@ -115,29 +115,29 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Setup: Store has round 0 complete and round 1 with stale streaming
       const storeMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'Complete round 0',
-          roundNumber: 0,
+          id: 'assistant-0',
           participantId: 'p1',
           participantIndex: 0,
-        }),
-        createTestModeratorMessage({
-          id: 'moderator-0',
-          content: 'Moderator round 0',
           roundNumber: 0,
         }),
-        createTestUserMessage({ id: 'user-1', content: 'Round 1', roundNumber: 1 }),
+        createTestModeratorMessage({
+          content: 'Moderator round 0',
+          id: 'moderator-0',
+          roundNumber: 0,
+        }),
+        createTestUserMessage({ content: 'Round 1', id: 'user-1', roundNumber: 1 }),
         {
           ...createTestAssistantMessage({
-            id: 'assistant-1',
             content: 'Partial...',
-            roundNumber: 1,
+            id: 'assistant-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 1,
           }),
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Partial...', state: TextPartStates.STREAMING }],
+          parts: [{ state: TextPartStates.STREAMING, text: 'Partial...', type: MessagePartTypes.TEXT as const }],
         },
       ];
 
@@ -146,31 +146,31 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Fresh DB has both rounds complete
       const dbMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'Complete round 0',
-          roundNumber: 0,
+          id: 'assistant-0',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestModeratorMessage({
-          id: 'moderator-0',
           content: 'Moderator round 0',
+          id: 'moderator-0',
           roundNumber: 0,
         }),
-        createTestUserMessage({ id: 'user-1', content: 'Round 1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Round 1', id: 'user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'assistant-1',
           content: 'Complete round 1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'assistant-1',
           participantId: 'p1',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestModeratorMessage({
-          id: 'moderator-1',
           content: 'Moderator round 1',
+          id: 'moderator-1',
           roundNumber: 1,
         }),
       ];
@@ -187,7 +187,7 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
       const hasStreaming = round1Assistant?.parts?.some(
         p => 'state' in p && p.state === TextPartStates.STREAMING,
       );
-      expect(hasStreaming).toBe(false);
+      expect(hasStreaming).toBeFalsy();
     });
   });
 
@@ -199,21 +199,21 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Store has round 0 and round 1 (no streaming parts)
       const storeMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'Complete round 0',
+          id: 'assistant-0',
+          participantId: 'p1',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p1',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'user-1', content: 'Round 1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Round 1', id: 'user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'assistant-1',
           content: 'Complete round 1',
-          roundNumber: 1,
+          id: 'assistant-1',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
 
@@ -222,13 +222,13 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // DB only has round 0 (stale)
       const dbMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'Complete round 0',
-          roundNumber: 0,
+          id: 'assistant-0',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
@@ -246,13 +246,13 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Store only has round 0
       const storeMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'Store round 0',
-          roundNumber: 0,
+          id: 'assistant-0',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
@@ -261,21 +261,21 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // DB has round 0 and round 1
       const dbMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'assistant-0',
           content: 'DB round 0',
+          id: 'assistant-0',
+          participantId: 'p1',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p1',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'user-1', content: 'Round 1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Round 1', id: 'user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'assistant-1',
           content: 'DB round 1',
-          roundNumber: 1,
+          id: 'assistant-1',
           participantId: 'p1',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
 
@@ -295,16 +295,16 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Store has messages (even with streaming)
       const storeMessages = [
-        createTestUserMessage({ id: 'user-0', content: 'Hello', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Hello', id: 'user-0', roundNumber: 0 }),
         {
           ...createTestAssistantMessage({
-            id: 'assistant-0',
             content: 'Partial',
-            roundNumber: 0,
+            id: 'assistant-0',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Partial', state: TextPartStates.STREAMING }],
+          parts: [{ state: TextPartStates.STREAMING, text: 'Partial', type: MessagePartTypes.TEXT as const }],
         },
       ];
 
@@ -326,7 +326,7 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // Store has messages for old thread
       const storeMessages = [
-        createTestUserMessage({ id: 'user-old', content: 'Old thread', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Old thread', id: 'user-old', roundNumber: 0 }),
       ];
 
       store.getState().setMessages(storeMessages);
@@ -334,7 +334,7 @@ describe('initializeThread - Stale Streaming Message Fix', () => {
 
       // DB has messages for new thread
       const dbMessages = [
-        createTestUserMessage({ id: 'user-new', content: 'New thread', roundNumber: 0 }),
+        createTestUserMessage({ content: 'New thread', id: 'user-new', roundNumber: 0 }),
       ];
 
       // Act: Initialize with different thread

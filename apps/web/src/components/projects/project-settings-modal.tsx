@@ -47,10 +47,10 @@ type ProjectSettingsModalProps = {
 };
 
 export function ProjectSettingsModal({
-  open,
-  onOpenChange,
-  project,
   onDelete,
+  onOpenChange,
+  open,
+  project,
 }: ProjectSettingsModalProps) {
   const t = useTranslations();
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
@@ -64,8 +64,9 @@ export function ProjectSettingsModal({
   const { data: attachmentsData, isFetching: isAttachmentsFetching } = useProjectAttachmentsQuery(project.id);
 
   const attachments = useMemo(() => {
-    if (!attachmentsData?.pages)
+    if (!attachmentsData?.pages) {
       return [];
+    }
     return attachmentsData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
@@ -75,19 +76,20 @@ export function ProjectSettingsModal({
   const { data: memoriesData, isLoading: isMemoriesLoading } = useProjectMemoriesQuery(project.id);
 
   const memories = useMemo(() => {
-    if (!memoriesData?.pages)
+    if (!memoriesData?.pages) {
       return [];
+    }
     return memoriesData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
   }, [memoriesData]);
 
   const {
-    attachments: pendingAttachments,
     addFiles,
-    removeAttachment: removePendingAttachment,
-    isUploading,
+    attachments: pendingAttachments,
     cancelUpload,
+    isUploading,
+    removeAttachment: removePendingAttachment,
   } = useChatAttachments();
 
   // Track which upload IDs we've already added to project
@@ -105,8 +107,8 @@ export function ProjectSettingsModal({
       ) {
         addedUploadIdsRef.current.add(attachment.uploadId);
         addToProjectMutation.mutate({
-          param: { id: project.id },
           json: { uploadId: attachment.uploadId },
+          param: { id: project.id },
         });
       }
     }
@@ -125,20 +127,20 @@ export function ProjectSettingsModal({
     [pendingAttachments, existingUploadIds],
   );
 
-  const { isDragging, dragHandlers } = useDragDrop(addFiles);
+  const { dragHandlers, isDragging } = useDragDrop(addFiles);
 
   const form = useForm<ProjectFormValues>({
-    resolver: zodResolver(ProjectFormSchema),
     defaultValues: getProjectFormDefaults(project),
     mode: 'onChange',
+    resolver: zodResolver(ProjectFormSchema),
   });
 
   const {
+    formState: { isSubmitting, isValid },
     handleSubmit,
     reset,
     setValue,
     watch,
-    formState: { isValid, isSubmitting },
   } = form;
 
   const currentIcon = watch('icon');
@@ -157,13 +159,13 @@ export function ProjectSettingsModal({
     async (values: ProjectFormValues) => {
       try {
         await updateMutation.mutateAsync({
-          param: { id: project.id },
           json: {
-            name: values.name.trim(),
             color: values.color,
-            icon: values.icon,
             customInstructions: values.customInstructions?.trim() || undefined,
+            icon: values.icon,
+            name: values.name.trim(),
           },
+          param: { id: project.id },
         });
         onOpenChange(false);
       } catch {
@@ -174,8 +176,9 @@ export function ProjectSettingsModal({
   );
 
   const handleClose = useCallback(() => {
-    if (updateMutation.isPending)
+    if (updateMutation.isPending) {
       return;
+    }
     onOpenChange(false);
   }, [updateMutation.isPending, onOpenChange]);
 
@@ -442,8 +445,9 @@ export function ProjectSettingsModal({
       <MemoryDeleteDialog
         open={!!memoryToDelete}
         onOpenChange={(open) => {
-          if (!open)
+          if (!open) {
             setMemoryToDelete(null);
+          }
         }}
         projectId={project.id}
         memoryId={memoryToDelete}
@@ -455,14 +459,14 @@ export function ProjectSettingsModal({
 type ProjectAttachment = NonNullable<ListProjectAttachmentsResponse['data']>['items'][number];
 
 function SettingsFileItem({
-  projectId,
   attachment,
+  projectId,
 }: {
   projectId: string;
   attachment: ProjectAttachment;
 }) {
   const t = useTranslations();
-  const { upload, ragMetadata } = attachment;
+  const { ragMetadata, upload } = attachment;
   const isImage = upload.mimeType?.startsWith('image/');
   const isFromThread = isAttachmentFromThread(ragMetadata);
 
@@ -473,7 +477,7 @@ function SettingsFileItem({
 
   const handleDelete = useCallback(() => {
     deleteMutation.mutate({
-      param: { id: projectId, attachmentId: attachment.id },
+      param: { attachmentId: attachment.id, id: projectId },
     });
   }, [deleteMutation, projectId, attachment.id]);
 

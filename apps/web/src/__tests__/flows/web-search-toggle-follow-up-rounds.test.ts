@@ -38,35 +38,35 @@ import { createChatStore, getEffectiveWebSearchEnabled, shouldWaitForPreSearch }
 
 function setupCompletedRound0(store: ChatStoreApi, webSearchEnabled = false) {
   const thread = createMockThread({
-    id: 'thread-test',
     enableWebSearch: webSearchEnabled,
+    id: 'thread-test',
   });
 
   const participantConfigs = createParticipantConfigs(2);
 
   const messages = [
     createTestUserMessage({
-      id: 'user-r0',
       content: 'First question',
+      id: 'user-r0',
       roundNumber: 0,
     }),
     createTestAssistantMessage({
-      id: 'asst-r0-p0',
       content: 'First response',
-      roundNumber: 0,
+      id: 'asst-r0-p0',
       participantId: participantConfigs[0].id,
       participantIndex: 0,
+      roundNumber: 0,
     }),
     createTestAssistantMessage({
-      id: 'asst-r0-p1',
       content: 'Second response',
-      roundNumber: 0,
+      id: 'asst-r0-p1',
       participantId: participantConfigs[1].id,
       participantIndex: 1,
+      roundNumber: 0,
     }),
     createTestModeratorMessage({
-      id: 'mod-r0',
       content: 'Moderator summary',
+      id: 'mod-r0',
       roundNumber: 0,
     }),
   ];
@@ -82,7 +82,7 @@ function setupCompletedRound0(store: ChatStoreApi, webSearchEnabled = false) {
     }));
   }
 
-  return { thread, participantConfigs };
+  return { participantConfigs, thread };
 }
 
 // ============================================================================
@@ -108,11 +108,11 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
       store.getState().thread,
       store.getState().enableWebSearch,
     );
-    expect(webSearchEnabled).toBe(true);
+    expect(webSearchEnabled).toBeTruthy();
 
     // Form state takes precedence over thread state
-    expect(store.getState().enableWebSearch).toBe(true);
-    expect(store.getState().thread?.enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeTruthy();
+    expect(store.getState().thread?.enableWebSearch).toBeFalsy();
   });
 
   it('should create PENDING pre-search placeholder when web search enabled', () => {
@@ -121,23 +121,23 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
 
     // Add user message for Round 1
     const userMessage = createTestUserMessage({
-      id: 'user-r1',
       content: 'Second question with web search',
+      id: 'user-r1',
       roundNumber: 1,
     });
     store.getState().setMessages([...store.getState().messages, userMessage]);
 
     // Create PENDING pre-search (as provider would)
     const preSearch: StoredPreSearch = {
-      id: 'presearch-r1',
-      threadId: 'thread-test',
-      roundNumber: 1,
-      userQuery: userMessage.parts[0].text,
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-test',
+      userQuery: userMessage.parts[0].text,
     };
     store.getState().addPreSearch(preSearch);
 
@@ -147,7 +147,7 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
     expect(preSearchR1?.status).toBe(MessageStatuses.PENDING);
 
     // Verify it shows placeholder (blocks participants)
-    expect(shouldWaitForPreSearch(true, preSearchR1)).toBe(true);
+    expect(shouldWaitForPreSearch(true, preSearchR1)).toBeTruthy();
   });
 
   it('should show STREAMING status placeholder during web search execution', () => {
@@ -166,7 +166,7 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
     expect(preSearchR1?.status).toBe(MessageStatuses.STREAMING);
 
     // Should still block (show placeholder)
-    expect(shouldWaitForPreSearch(true, preSearchR1)).toBe(true);
+    expect(shouldWaitForPreSearch(true, preSearchR1)).toBeTruthy();
   });
 
   it('should remove placeholder when web search completes', () => {
@@ -180,11 +180,11 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
     // Complete the pre-search
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
     store.getState().updatePreSearchData(1, {
-      queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-      results: [],
-      summary: 'Search complete',
-      successCount: 1,
       failureCount: 0,
+      queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+      results: [],
+      successCount: 1,
+      summary: 'Search complete',
       totalResults: 5,
       totalTime: 1200,
     });
@@ -193,7 +193,7 @@ describe('scenario 1: Web Search Enabled Shows Proper Placeholder', () => {
     expect(preSearchR1?.status).toBe(MessageStatuses.COMPLETE);
 
     // Placeholder should be removed (no longer blocking)
-    expect(shouldWaitForPreSearch(true, preSearchR1)).toBe(false);
+    expect(shouldWaitForPreSearch(true, preSearchR1)).toBeFalsy();
   });
 });
 
@@ -217,8 +217,8 @@ describe('scenario 2: Web Search Disabled Removes Placeholder', () => {
 
     // Add user message
     const userMessage = createTestUserMessage({
-      id: 'user-r1',
       content: 'Second question without web search',
+      id: 'user-r1',
       roundNumber: 1,
     });
     store.getState().setMessages([...store.getState().messages, userMessage]);
@@ -228,7 +228,7 @@ describe('scenario 2: Web Search Disabled Removes Placeholder', () => {
     expect(preSearchR1).toBeUndefined();
 
     // Verify no blocking
-    expect(shouldWaitForPreSearch(false, undefined)).toBe(false);
+    expect(shouldWaitForPreSearch(false, undefined)).toBeFalsy();
   });
 
   it('should allow immediate participant streaming when disabled', () => {
@@ -239,8 +239,8 @@ describe('scenario 2: Web Search Disabled Removes Placeholder', () => {
     store.getState().setMessages([
       ...store.getState().messages,
       createTestUserMessage({
-        id: 'user-r1',
         content: 'Question without web search',
+        id: 'user-r1',
         roundNumber: 1,
       }),
     ]);
@@ -251,8 +251,8 @@ describe('scenario 2: Web Search Disabled Removes Placeholder', () => {
     store.getState().setIsStreaming(true);
 
     // Participants should start immediately
-    expect(store.getState().isStreaming).toBe(true);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeTruthy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 
   it('should remove placeholder when toggling from enabled to disabled', () => {
@@ -260,11 +260,11 @@ describe('scenario 2: Web Search Disabled Removes Placeholder', () => {
 
     // Initially enable web search
     store.getState().setEnableWebSearch(true);
-    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBe(true);
+    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBeTruthy();
 
     // Then disable before submitting
     store.getState().setEnableWebSearch(false);
-    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBe(false);
+    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBeFalsy();
 
     // No pre-search should be created
     const preSearchCount = store.getState().preSearches.filter(ps => ps.roundNumber === 1).length;
@@ -287,8 +287,8 @@ describe('scenario 3: Toggle Changes Trigger Changelog', () => {
     setupCompletedRound0(store, false);
 
     // Initial state: disabled
-    expect(store.getState().thread?.enableWebSearch).toBe(false);
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().thread?.enableWebSearch).toBeFalsy();
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     // Enable web search
     store.getState().setEnableWebSearch(true);
@@ -296,37 +296,37 @@ describe('scenario 3: Toggle Changes Trigger Changelog', () => {
     // Should mark as having pending config changes
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 
   it('should detect web search state change from enabled to disabled', () => {
     setupCompletedRound0(store, true);
 
     // Initial state: enabled
-    expect(store.getState().thread?.enableWebSearch).toBe(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().thread?.enableWebSearch).toBeTruthy();
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     // Disable web search
     store.getState().setEnableWebSearch(false);
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
+    expect(store.getState().enableWebSearch).toBeFalsy();
   });
 
   it('should NOT mark as changed if web search state stays the same', () => {
     setupCompletedRound0(store, true);
 
     // Keep web search enabled (no change)
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     // No pending changes initially
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
     // Toggling to same state should not trigger change
     store.getState().setEnableWebSearch(true);
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
   });
 
   it('should create changelog entry for web search toggle', () => {
@@ -339,9 +339,9 @@ describe('scenario 3: Toggle Changes Trigger Changelog', () => {
     store.getState().setHasPendingConfigChanges(true);
 
     // Verify the change is detected
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
-    expect(store.getState().enableWebSearch).toBe(true);
-    expect(store.getState().thread?.enableWebSearch).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
+    expect(store.getState().enableWebSearch).toBeTruthy();
+    expect(store.getState().thread?.enableWebSearch).toBeFalsy();
 
     // Note: Actual changelog entries are created by the backend when submitting
     // the message, not by the store directly
@@ -367,8 +367,8 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
 
     // Add user message
     const userMessage = createTestUserMessage({
-      id: 'user-r1',
       content: 'Second question',
+      id: 'user-r1',
       roundNumber: 1,
     });
     store.getState().setMessages([...store.getState().messages, userMessage]);
@@ -382,28 +382,28 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
 
     // Verify pre-search complete
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-    expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+    expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
 
     // Add participant responses
     store.getState().setMessages([
       ...store.getState().messages,
       createTestAssistantMessage({
-        id: 'asst-r1-p0',
         content: 'Response with context',
-        roundNumber: 1,
+        id: 'asst-r1-p0',
         participantId: participantConfigs[0].id,
         participantIndex: 0,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'asst-r1-p1',
         content: 'Another response',
-        roundNumber: 1,
+        id: 'asst-r1-p1',
         participantId: participantConfigs[1].id,
         participantIndex: 1,
+        roundNumber: 1,
       }),
       createTestModeratorMessage({
-        id: 'mod-r1',
         content: 'Round 1 summary',
+        id: 'mod-r1',
         roundNumber: 1,
       }),
     ]);
@@ -423,8 +423,8 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
 
     // Add user message
     const userMessage = createTestUserMessage({
-      id: 'user-r1',
       content: 'Second question',
+      id: 'user-r1',
       roundNumber: 1,
     });
     store.getState().setMessages([...store.getState().messages, userMessage]);
@@ -436,22 +436,22 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
     store.getState().setMessages([
       ...store.getState().messages,
       createTestAssistantMessage({
-        id: 'asst-r1-p0',
         content: 'Response without context',
-        roundNumber: 1,
+        id: 'asst-r1-p0',
         participantId: participantConfigs[0].id,
         participantIndex: 0,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'asst-r1-p1',
         content: 'Another response',
-        roundNumber: 1,
+        id: 'asst-r1-p1',
         participantId: participantConfigs[1].id,
         participantIndex: 1,
+        roundNumber: 1,
       }),
       createTestModeratorMessage({
-        id: 'mod-r1',
         content: 'Round 1 summary',
+        id: 'mod-r1',
         roundNumber: 1,
       }),
     ]);
@@ -475,15 +475,15 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
     // Add Round 1 messages
     store.getState().setMessages([
       ...store.getState().messages,
-      createTestUserMessage({ id: 'user-r1', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'user-r1', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'asst-r1-p0',
         content: 'A1',
-        roundNumber: 1,
+        id: 'asst-r1-p0',
         participantId: participantConfigs[0].id,
         participantIndex: 0,
+        roundNumber: 1,
       }),
-      createTestModeratorMessage({ id: 'mod-r1', content: 'M1', roundNumber: 1 }),
+      createTestModeratorMessage({ content: 'M1', id: 'mod-r1', roundNumber: 1 }),
     ]);
 
     // Round 2: Disable web search
@@ -491,15 +491,15 @@ describe('scenario 4: Flow Continues Correctly with Web Search Changes', () => {
 
     store.getState().setMessages([
       ...store.getState().messages,
-      createTestUserMessage({ id: 'user-r2', content: 'Q2', roundNumber: 2 }),
+      createTestUserMessage({ content: 'Q2', id: 'user-r2', roundNumber: 2 }),
       createTestAssistantMessage({
-        id: 'asst-r2-p0',
         content: 'A2',
-        roundNumber: 2,
+        id: 'asst-r2-p0',
         participantId: participantConfigs[0].id,
         participantIndex: 0,
+        roundNumber: 2,
       }),
-      createTestModeratorMessage({ id: 'mod-r2', content: 'M2', roundNumber: 2 }),
+      createTestModeratorMessage({ content: 'M2', id: 'mod-r2', roundNumber: 2 }),
     ]);
 
     // Verify state
@@ -527,9 +527,9 @@ describe('scenario 5: Web Search Combined with Other Configuration Changes', () 
     store.getState().setSelectedMode('analyzing');
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().selectedMode).toBe('analyzing');
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
   });
 
   it('should handle web search toggle + participant addition', () => {
@@ -552,7 +552,7 @@ describe('scenario 5: Web Search Combined with Other Configuration Changes', () 
 
     // Should have one more participant than before
     expect(store.getState().selectedParticipants).toHaveLength(initialCount + 1);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 
   it('should handle web search toggle + participant removal', () => {
@@ -569,7 +569,7 @@ describe('scenario 5: Web Search Combined with Other Configuration Changes', () 
     store.getState().setHasPendingConfigChanges(true);
 
     expect(store.getState().selectedParticipants).toHaveLength(1);
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
   });
 
   it('should handle web search toggle + participant reordering', () => {
@@ -588,7 +588,7 @@ describe('scenario 5: Web Search Combined with Other Configuration Changes', () 
     expect(store.getState().selectedParticipants).toHaveLength(2);
     expect(store.getState().selectedParticipants[0].priority).toBe(0);
     expect(store.getState().selectedParticipants[1].priority).toBe(1);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 
   it('should process multiple config changes with web search in single round', () => {
@@ -607,12 +607,12 @@ describe('scenario 5: Web Search Combined with Other Configuration Changes', () 
     store.getState().setHasPendingConfigChanges(true);
 
     // Verify all changes applied
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().selectedMode).toBe('problem_solving');
     // Note: selectedParticipants is form state - contains only newly added participants
     // initializeThread sets thread.participants (stored participants from DB)
     expect(store.getState().selectedParticipants.length).toBeGreaterThanOrEqual(1);
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
   });
 
   it('should maintain independent pre-search state when participants change', () => {
@@ -661,22 +661,22 @@ describe('edge Cases & Error Scenarios', () => {
 
     // Add FAILED pre-search
     store.getState().addPreSearch({
-      id: 'presearch-r1',
-      threadId: 'thread-test',
-      roundNumber: 1,
-      userQuery: 'test',
-      status: MessageStatuses.FAILED,
-      searchData: null,
-      errorMessage: 'Search service unavailable',
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: 'Search service unavailable',
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.FAILED,
+      threadId: 'thread-test',
+      userQuery: 'test',
     });
 
     const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
     expect(preSearch?.status).toBe(MessageStatuses.FAILED);
 
     // Should NOT block participants (graceful degradation)
-    expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+    expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
   });
 
   it('should handle rapid web search toggle (enabled → disabled → enabled)', () => {
@@ -684,16 +684,16 @@ describe('edge Cases & Error Scenarios', () => {
 
     // Rapid toggles before submitting
     store.getState().setEnableWebSearch(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     store.getState().setEnableWebSearch(false);
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     store.getState().setEnableWebSearch(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     // Final state should be enabled
-    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBe(true);
+    expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch)).toBeTruthy();
   });
 
   it('should handle missing thread gracefully', () => {
@@ -702,11 +702,11 @@ describe('edge Cases & Error Scenarios', () => {
 
     // Form state should still work
     store.getState().setEnableWebSearch(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     // getEffectiveWebSearchEnabled should use form state
     const effective = getEffectiveWebSearchEnabled(null, true);
-    expect(effective).toBe(true);
+    expect(effective).toBeTruthy();
   });
 
   it('should handle web search toggle during active streaming', () => {
@@ -720,10 +720,10 @@ describe('edge Cases & Error Scenarios', () => {
     store.getState().setEnableWebSearch(true);
 
     // Streaming continues
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
     expect(store.getState().streamingRoundNumber).toBe(1);
 
     // Change will apply to Round 2
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 });

@@ -13,8 +13,8 @@ type EmailHeaderProps = {
 export function EmailHeader({
   children,
   className = 'mt-[32px]',
-  showLogo = true,
   logoSize = 80,
+  showLogo = true,
 }: EmailHeaderProps) {
   return (
     <Section className={className}>

@@ -72,8 +72,9 @@ export function NavUser({ initialSession }: NavUserProps) {
   const user = clientSession?.user ?? initialSession?.user;
 
   const userInitials = useMemo(() => {
-    if (!user?.name && !user?.email)
+    if (!user?.name && !user?.email) {
       return 'U';
+    }
     return user.name
       ? user.name
           .split(' ')
@@ -117,8 +118,9 @@ export function NavUser({ initialSession }: NavUserProps) {
           returnUrl: window.location.href,
         },
       });
-      if (!result || !result.success)
+      if (!result || !result.success) {
         return;
+      }
       if (result.data?.url) {
         window.open(result.data.url, '_blank', 'noopener,noreferrer');
       }
@@ -127,12 +129,13 @@ export function NavUser({ initialSession }: NavUserProps) {
     }
   };
   const handleConfirmCancellation = async () => {
-    if (!activeSubscription)
+    if (!activeSubscription) {
       return;
+    }
     try {
       const result = await cancelSubscriptionMutation.mutateAsync({
-        param: { id: activeSubscription.id },
         json: { immediately: false },
+        param: { id: activeSubscription.id },
       });
       if (result?.success) {
         showCancelDialog.onFalse();
@@ -169,8 +172,9 @@ export function NavUser({ initialSession }: NavUserProps) {
   };
 
   const handleStopImpersonating = async () => {
-    if (!clientSession?.session?.impersonatedBy)
+    if (!clientSession?.session?.impersonatedBy) {
       return;
+    }
 
     isStoppingImpersonation.onTrue();
     const baseUrl = getAppBaseUrl();
@@ -179,14 +183,14 @@ export function NavUser({ initialSession }: NavUserProps) {
     // No need to clear server cache - just invalidate client state
     authClient.admin.stopImpersonating({
       fetchOptions: {
+        onError: (ctx) => {
+          showApiErrorToast('Failed to Stop Impersonation', ctx.error);
+          isStoppingImpersonation.onFalse();
+        },
         onSuccess: () => {
           invalidateUserQueries(queryClient);
           clearServiceWorkerCache();
           window.location.href = `${baseUrl}/admin/impersonate`;
-        },
-        onError: (ctx) => {
-          showApiErrorToast('Failed to Stop Impersonation', ctx.error);
-          isStoppingImpersonation.onFalse();
         },
       },
     });

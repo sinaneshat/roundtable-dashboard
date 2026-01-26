@@ -27,33 +27,33 @@ import type { ChatParticipant, ChatThread } from '@/services/api';
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date('2025-01-01T00:00:00Z'),
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: 'brainstorming',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-01T00:00:00Z'),
     lastMessageAt: new Date('2025-01-01T00:00:00Z'),
+    mode: 'brainstorming',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date('2025-01-01T00:00:00Z'),
+    userId: 'user-1',
     ...overrides,
   };
 }
 
 function createMockParticipant(overrides?: Partial<ChatParticipant>): ChatParticipant {
   return {
+    createdAt: new Date('2025-01-01T00:00:00Z'),
+    customRoleId: null,
     id: 'participant-1',
-    threadId: 'thread-123',
+    isEnabled: true,
     modelId: 'gpt-4',
     priority: 0,
     role: null,
-    customRoleId: null,
-    isEnabled: true,
-    createdAt: new Date('2025-01-01T00:00:00Z'),
+    threadId: 'thread-123',
     updatedAt: new Date('2025-01-01T00:00:00Z'),
     ...overrides,
   };
@@ -68,13 +68,13 @@ function createMockUIMessage(opts: {
 }): UIMessage {
   return {
     id: opts.id,
-    role: opts.role,
-    parts: [{ type: MessagePartTypes.TEXT, text: opts.text }],
     metadata: {
       role: opts.role,
       roundNumber: opts.roundNumber,
       ...(opts.participantIndex !== undefined && { participantIndex: opts.participantIndex }),
     },
+    parts: [{ text: opts.text, type: MessagePartTypes.TEXT }],
+    role: opts.role,
   };
 }
 
@@ -99,8 +99,8 @@ describe('handleUpdateThreadAndSend Action Call Counts', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test message',
       roundNumber: 1,
+      text: 'Test message',
     });
 
     store.getState().setMessages(prev => [...prev, optimisticMessage]);
@@ -214,8 +214,8 @@ describe('handleUpdateThreadAndSend Action Call Counts', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages(prev => [...prev, optimisticMessage]);
@@ -273,7 +273,7 @@ describe('pATCH Response Processing Action Counts', () => {
     // Simulate PATCH response updating participants
     const updatedParticipants = [
       createMockParticipant({ id: 'participant-1', priority: 0 }),
-      createMockParticipant({ id: 'participant-2', priority: 1, modelId: 'claude-3' }),
+      createMockParticipant({ id: 'participant-2', modelId: 'claude-3', priority: 1 }),
     ];
 
     store.getState().updateParticipants(updatedParticipants);
@@ -293,8 +293,8 @@ describe('pATCH Response Processing Action Counts', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages([optimisticMessage]);
@@ -305,8 +305,8 @@ describe('pATCH Response Processing Action Counts', () => {
     const persistedMessage = createMockUIMessage({
       id: 'thread-123_r1_user',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages(prev =>
@@ -327,8 +327,8 @@ describe('pATCH Response Processing Action Counts', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages([optimisticMessage]);
@@ -339,8 +339,8 @@ describe('pATCH Response Processing Action Counts', () => {
     const persistedMessage = createMockUIMessage({
       id: 'thread-123_r1_user',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages(prev =>
@@ -463,24 +463,24 @@ describe('setMessages Call Frequency', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     const participant1Message = createMockUIMessage({
       id: 'thread-123_r1_p0',
-      role: MessageRoles.ASSISTANT,
-      text: 'Response 1',
-      roundNumber: 1,
       participantIndex: 0,
+      role: MessageRoles.ASSISTANT,
+      roundNumber: 1,
+      text: 'Response 1',
     });
 
     const participant2Message = createMockUIMessage({
       id: 'thread-123_r1_p1',
-      role: MessageRoles.ASSISTANT,
-      text: 'Response 2',
-      roundNumber: 1,
       participantIndex: 1,
+      role: MessageRoles.ASSISTANT,
+      roundNumber: 1,
+      text: 'Response 2',
     });
 
     // Expected sequence:
@@ -501,8 +501,8 @@ describe('setMessages Call Frequency', () => {
     const message = createMockUIMessage({
       id: 'msg-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 0,
+      text: 'Test',
     });
 
     // First call
@@ -523,8 +523,8 @@ describe('setMessages Call Frequency', () => {
     const messageWithContent = createMockUIMessage({
       id: 'msg-1',
       role: MessageRoles.ASSISTANT,
-      text: 'Existing content',
       roundNumber: 0,
+      text: 'Existing content',
     });
 
     store.getState().setMessages([messageWithContent]);
@@ -532,9 +532,9 @@ describe('setMessages Call Frequency', () => {
     // Simulate update with empty content
     const messageWithoutContent: UIMessage = {
       id: 'msg-1',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
     store.getState().setMessages([messageWithoutContent]);
@@ -542,7 +542,7 @@ describe('setMessages Call Frequency', () => {
     // Should preserve existing content
     const finalMessage = store.getState().messages[0];
     expect(finalMessage?.parts).toHaveLength(1);
-    expect(finalMessage?.parts[0]).toEqual({ type: MessagePartTypes.TEXT, text: 'Existing content' });
+    expect(finalMessage?.parts[0]).toEqual({ text: 'Existing content', type: MessagePartTypes.TEXT });
   });
 });
 
@@ -581,11 +581,11 @@ describe('completeStreaming Call Frequency', () => {
     store.getState().completeStreaming();
 
     // Verify all reset
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
     expect(store.getState().currentParticipantIndex).toBe(0);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
     expect(store.getState().streamingRoundNumber).toBeNull();
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 
   it('should not be called multiple times for same round', () => {
@@ -613,17 +613,17 @@ describe('atomic State Updates', () => {
   it('should update streaming state atomically (no partial states)', () => {
     const store = createTestChatStore();
 
-    const stateSnapshots: Array<{
+    const stateSnapshots: {
       isStreaming: boolean;
       currentParticipantIndex: number;
       waitingToStartStreaming: boolean;
-    }> = [];
+    }[] = [];
 
     // Subscribe to state changes
     const unsubscribe = store.subscribe((state) => {
       stateSnapshots.push({
-        isStreaming: state.isStreaming,
         currentParticipantIndex: state.currentParticipantIndex,
+        isStreaming: state.isStreaming,
         waitingToStartStreaming: state.waitingToStartStreaming,
       });
     });
@@ -638,18 +638,18 @@ describe('atomic State Updates', () => {
     // Verify each update is atomic (no intermediate states)
     expect(stateSnapshots).toHaveLength(3);
     expect(stateSnapshots[0]).toEqual({
-      isStreaming: false,
       currentParticipantIndex: 0,
+      isStreaming: false,
       waitingToStartStreaming: true,
     });
     expect(stateSnapshots[1]).toEqual({
-      isStreaming: true,
       currentParticipantIndex: 0,
+      isStreaming: true,
       waitingToStartStreaming: true,
     });
     expect(stateSnapshots[2]).toEqual({
-      isStreaming: true,
       currentParticipantIndex: 0,
+      isStreaming: true,
       waitingToStartStreaming: true,
     });
   });
@@ -679,17 +679,17 @@ describe('atomic State Updates', () => {
   it('should update config change state atomically', () => {
     const store = createTestChatStore();
 
-    const configSnapshots: Array<{
+    const configSnapshots: {
       configChangeRoundNumber: number | null;
       isWaitingForChangelog: boolean;
       hasPendingConfigChanges: boolean;
-    }> = [];
+    }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       configSnapshots.push({
         configChangeRoundNumber: state.configChangeRoundNumber,
-        isWaitingForChangelog: state.isWaitingForChangelog,
         hasPendingConfigChanges: state.hasPendingConfigChanges,
+        isWaitingForChangelog: state.isWaitingForChangelog,
       });
     });
 
@@ -704,8 +704,8 @@ describe('atomic State Updates', () => {
     expect(configSnapshots).toHaveLength(3);
     expect(configSnapshots[2]).toEqual({
       configChangeRoundNumber: 1,
-      isWaitingForChangelog: true,
       hasPendingConfigChanges: true,
+      isWaitingForChangelog: true,
     });
   });
 });
@@ -726,15 +726,15 @@ describe('pre-Search Action Call Counts', () => {
 
     // Simulate adding pre-search
     store.getState().addPreSearch({
-      id: 'presearch-1',
-      threadId: thread.id,
-      roundNumber: 1,
-      userQuery: 'Test query',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: thread.id,
       updatedAt: new Date(),
+      userQuery: 'Test query',
     });
 
     expect(spy).toHaveBeenCalledTimes(1);
@@ -745,15 +745,15 @@ describe('pre-Search Action Call Counts', () => {
 
     // Add pre-search
     store.getState().addPreSearch({
-      id: 'presearch-1',
-      threadId: 'thread-123',
-      roundNumber: 1,
-      userQuery: 'Test',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
       updatedAt: new Date(),
+      userQuery: 'Test',
     });
 
     const spy = vi.spyOn(store.getState(), 'updatePreSearchStatus');
@@ -769,15 +769,15 @@ describe('pre-Search Action Call Counts', () => {
     const store = createTestChatStore();
 
     const preSearch = {
-      id: 'presearch-1',
-      threadId: 'thread-123',
-      roundNumber: 1,
-      userQuery: 'Test',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
       updatedAt: new Date(),
+      userQuery: 'Test',
     };
 
     // Add first time
@@ -826,7 +826,7 @@ describe('moderator Action Call Counts', () => {
     store.getState().markModeratorCreated(1);
 
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
   });
 
   it('should not create moderator multiple times for same round', () => {
@@ -838,8 +838,8 @@ describe('moderator Action Call Counts', () => {
     // Second attempt (should fail)
     const secondAttempt = store.getState().tryMarkModeratorCreated(1);
 
-    expect(firstAttempt).toBe(true);
-    expect(secondAttempt).toBe(false);
+    expect(firstAttempt).toBeTruthy();
+    expect(secondAttempt).toBeFalsy();
   });
 });
 
@@ -877,8 +877,8 @@ describe('action Sequencing', () => {
     const optimisticMessage = createMockUIMessage({
       id: 'optimistic-1',
       role: MessageRoles.USER,
-      text: 'Test',
       roundNumber: 1,
+      text: 'Test',
     });
 
     store.getState().setMessages([optimisticMessage]);
@@ -902,15 +902,15 @@ describe('action Sequencing', () => {
 
     // Simulate pre-search flow
     store.getState().addPreSearch({
-      id: 'presearch-1',
-      threadId: 'thread-123',
-      roundNumber: 1,
-      userQuery: 'Test',
-      status: MessageStatuses.PENDING,
-      searchData: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      id: 'presearch-1',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-123',
       updatedAt: new Date(),
+      userQuery: 'Test',
     });
 
     store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);

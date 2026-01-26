@@ -1,84 +1,84 @@
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const user = sqliteTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
+  banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
+  banned: integer('banned', { mode: 'boolean' }).default(false),
+  banReason: text('ban_reason'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
   email: text('email').notNull().unique(),
   emailVerified: integer('email_verified', { mode: 'boolean' })
     .default(false)
     .notNull(),
+  id: text('id').primaryKey(),
   image: text('image'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
+  name: text('name').notNull(),
+  role: text('role'),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-  role: text('role'),
-  banned: integer('banned', { mode: 'boolean' }).default(false),
-  banReason: text('ban_reason'),
-  banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
 });
 
 export const session = sqliteTable('session', {
-  id: text('id').primaryKey(),
-  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
-  token: text('token').notNull().unique(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  id: text('id').primaryKey(),
+  impersonatedBy: text('impersonated_by'),
+  ipAddress: text('ip_address'),
+  token: text('token').notNull().unique(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-  ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
-  impersonatedBy: text('impersonated_by'),
 });
 
 export const account = sqliteTable('account', {
-  id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  providerId: text('provider_id').notNull(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
   accessToken: text('access_token'),
-  refreshToken: text('refresh_token'),
-  idToken: text('id_token'),
   accessTokenExpiresAt: integer('access_token_expires_at', {
     mode: 'timestamp_ms',
   }),
+  accountId: text('account_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+  id: text('id').primaryKey(),
+  idToken: text('id_token'),
+  password: text('password'),
+  providerId: text('provider_id').notNull(),
+  refreshToken: text('refresh_token'),
   refreshTokenExpiresAt: integer('refresh_token_expires_at', {
     mode: 'timestamp_ms',
   }),
   scope: text('scope'),
-  password: text('password'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 });
 
 export const verification = sqliteTable('verification', {
-  id: text('id').primaryKey(),
-  identifier: text('identifier').notNull(),
-  value: text('value').notNull(),
-  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  value: text('value').notNull(),
 });
 
 /**
@@ -87,46 +87,46 @@ export const verification = sqliteTable('verification', {
  * Allows users to create and manage API keys for programmatic access
  */
 export const apiKey = sqliteTable('api_key', {
-  id: text('id').primaryKey(),
-  name: text('name'),
-  start: text('start'), // First few characters of key for display
-  prefix: text('prefix'), // API key prefix (e.g., "rpnd_")
-  key: text('key').notNull(), // Hashed API key
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-
-  // Refill configuration
-  refillInterval: integer('refill_interval'), // Interval to refill in milliseconds
-  refillAmount: integer('refill_amount'), // Amount to refill
-  lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }), // Last refill timestamp
-
-  // Status and limits
-  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
-  remaining: integer('remaining'), // Remaining API calls (null = unlimited)
-
-  // Rate limiting
-  rateLimitEnabled: integer('rate_limit_enabled', { mode: 'boolean' }).default(true).notNull(),
-  rateLimitTimeWindow: integer('rate_limit_time_window'), // Time window in ms
-  rateLimitMax: integer('rate_limit_max'), // Max requests in window
-  requestCount: integer('request_count').default(0).notNull(),
-  lastRequest: integer('last_request', { mode: 'timestamp_ms' }),
-
-  // Expiration
-  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
-
   // Timestamps
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+  // Status and limits
+  enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
+  // Expiration
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
+  id: text('id').primaryKey(),
+  key: text('key').notNull(), // Hashed API key
+  lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }), // Last refill timestamp
+
+  lastRequest: integer('last_request', { mode: 'timestamp_ms' }),
+  // Metadata (stored as JSON string)
+  metadata: text('metadata'),
+  name: text('name'),
+
+  // Permissions (stored as JSON string)
+  permissions: text('permissions'),
+  prefix: text('prefix'), // API key prefix (e.g., "rpnd_")
+
+  // Rate limiting
+  rateLimitEnabled: integer('rate_limit_enabled', { mode: 'boolean' }).default(true).notNull(),
+  rateLimitMax: integer('rate_limit_max'), // Max requests in window
+  rateLimitTimeWindow: integer('rate_limit_time_window'), // Time window in ms
+  refillAmount: integer('refill_amount'), // Amount to refill
+  // Refill configuration
+  refillInterval: integer('refill_interval'), // Interval to refill in milliseconds
+
+  remaining: integer('remaining'), // Remaining API calls (null = unlimited)
+
+  requestCount: integer('request_count').default(0).notNull(),
+  start: text('start'), // First few characters of key for display
+
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 
-  // Permissions (stored as JSON string)
-  permissions: text('permissions'),
-
-  // Metadata (stored as JSON string)
-  metadata: text('metadata'),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 });

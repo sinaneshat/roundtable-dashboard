@@ -23,15 +23,15 @@ import { createChatStore } from '../store';
 
 // Track function calls for debugging
 const callTracker = {
-  setWaitingToStartStreaming: 0,
-  setNextParticipantToTrigger: 0,
-  prepareForNewMessage: 0,
-  setStreamingRoundNumber: 0,
-  setIsStreaming: 0,
-  setCurrentParticipantIndex: 0,
   initializeThread: 0,
-  setMessages: 0,
+  prepareForNewMessage: 0,
+  setCurrentParticipantIndex: 0,
   setHasSentPendingMessage: 0,
+  setIsStreaming: 0,
+  setMessages: 0,
+  setNextParticipantToTrigger: 0,
+  setStreamingRoundNumber: 0,
+  setWaitingToStartStreaming: 0,
 };
 
 function resetTracker() {
@@ -62,38 +62,38 @@ function _createTrackedStore() {
 // Helper to create mock thread data
 function createMockThread(id: string, slug: string) {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id,
-    userId: 'user-1',
-    projectId: null,
-    title: 'Test Thread',
-    slug,
-    previousSlug: null,
-    mode: ChatModes.DEBATING,
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.DEBATING,
+    previousSlug: null,
+    projectId: null,
+    slug,
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
+    version: 1,
   };
 }
 
 // Helper to create mock participants
 function createMockParticipants(threadId: string, count: number) {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId,
-    modelId: `model-${i}`,
-    customRoleId: null,
-    role: null,
-    priority: i,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `model-${i}`,
+    priority: i,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: new Date(),
   }));
 }
@@ -102,13 +102,13 @@ function createMockParticipants(threadId: string, count: number) {
 function createMockUserMessage(roundNumber: number, text: string) {
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER as const,
-    parts: [{ type: 'text' as const, text }],
     metadata: {
+      createdAt: new Date().toISOString(),
       role: MessageRoles.USER as const,
       roundNumber,
-      createdAt: new Date().toISOString(),
     },
+    parts: [{ text, type: 'text' as const }],
+    role: MessageRoles.USER as const,
   };
 }
 
@@ -121,20 +121,20 @@ function createMockAssistantMessage(
 ) {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [
-      { type: 'step-start' as const },
-      { type: 'text' as const, text: `Response from ${modelId}`, state: 'done' as const },
-    ],
     metadata: {
-      role: MessageRoles.ASSISTANT as const,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
-      model: modelId,
       finishReason: 'stop',
       hasError: false,
+      model: modelId,
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT as const,
+      roundNumber,
     },
+    parts: [
+      { type: 'step-start' as const },
+      { state: 'done' as const, text: `Response from ${modelId}`, type: 'text' as const },
+    ],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -142,16 +142,16 @@ function createMockAssistantMessage(
 function createMockModeratorMessage(threadId: string, roundNumber: number) {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: 'Summary...', state: 'done' as const }],
     metadata: {
-      role: MessageRoles.ASSISTANT as const,
-      isModerator: true,
-      roundNumber,
-      participantIndex: -99,
-      model: 'Council Moderator',
       finishReason: 'stop',
+      isModerator: true,
+      model: 'Council Moderator',
+      participantIndex: -99,
+      role: MessageRoles.ASSISTANT as const,
+      roundNumber,
     },
+    parts: [{ state: 'done' as const, text: 'Summary...', type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -170,19 +170,19 @@ describe('multi-Round Flow Debugging', () => {
       // Log initial state
       const initialState = store.getState();
       console.error('[STATE] Initial:', {
-        screenMode: initialState.screenMode,
-        waitingToStartStreaming: initialState.waitingToStartStreaming,
-        isStreaming: initialState.isStreaming,
-        streamingRoundNumber: initialState.streamingRoundNumber,
-        nextParticipantToTrigger: initialState.nextParticipantToTrigger,
         currentParticipantIndex: initialState.currentParticipantIndex,
+        isStreaming: initialState.isStreaming,
         messagesCount: initialState.messages.length,
+        nextParticipantToTrigger: initialState.nextParticipantToTrigger,
+        screenMode: initialState.screenMode,
+        streamingRoundNumber: initialState.streamingRoundNumber,
+        waitingToStartStreaming: initialState.waitingToStartStreaming,
       });
 
       // Step 1: Initialize for new chat (overview screen)
       // Store defaults to OVERVIEW mode (not null)
       expect(initialState.screenMode).toBe(ScreenModes.OVERVIEW);
-      expect(initialState.showInitialUI).toBe(true);
+      expect(initialState.showInitialUI).toBeTruthy();
 
       // Step 2: User submits first message - handleCreateThread flow
       // This simulates what form-actions.ts does
@@ -197,12 +197,12 @@ describe('multi-Round Flow Debugging', () => {
 
       const afterInit = store.getState();
       console.error('[STATE] After initializeThread:', {
-        screenMode: afterInit.screenMode,
-        waitingToStartStreaming: afterInit.waitingToStartStreaming,
-        streamingRoundNumber: afterInit.streamingRoundNumber,
-        nextParticipantToTrigger: afterInit.nextParticipantToTrigger,
-        messagesCount: afterInit.messages.length,
         createdThreadId: afterInit.createdThreadId,
+        messagesCount: afterInit.messages.length,
+        nextParticipantToTrigger: afterInit.nextParticipantToTrigger,
+        screenMode: afterInit.screenMode,
+        streamingRoundNumber: afterInit.streamingRoundNumber,
+        waitingToStartStreaming: afterInit.waitingToStartStreaming,
       });
 
       // Step 3: Prepare for streaming (what handleCreateThread does after initializeThread)
@@ -213,15 +213,15 @@ describe('multi-Round Flow Debugging', () => {
 
       const afterPrepare = store.getState();
       console.error('[STATE] After prepareForNewMessage + triggers:', {
-        waitingToStartStreaming: afterPrepare.waitingToStartStreaming,
-        streamingRoundNumber: afterPrepare.streamingRoundNumber,
+        hasSentPendingMessage: afterPrepare.hasSentPendingMessage,
         nextParticipantToTrigger: afterPrepare.nextParticipantToTrigger,
         pendingMessage: afterPrepare.pendingMessage,
-        hasSentPendingMessage: afterPrepare.hasSentPendingMessage,
+        streamingRoundNumber: afterPrepare.streamingRoundNumber,
+        waitingToStartStreaming: afterPrepare.waitingToStartStreaming,
       });
 
       // Verify streaming preparation state
-      expect(afterPrepare.waitingToStartStreaming).toBe(true);
+      expect(afterPrepare.waitingToStartStreaming).toBeTruthy();
       expect(afterPrepare.streamingRoundNumber).toBe(0);
       expect(afterPrepare.nextParticipantToTrigger).toBe(0);
     });
@@ -248,9 +248,9 @@ describe('multi-Round Flow Debugging', () => {
 
       // Still on overview screen (screenMode not set to THREAD yet)
       console.error('[STATE] After round 0 complete:', {
-        screenMode: store.getState().screenMode,
-        messagesCount: store.getState().messages.length,
         isStreaming: store.getState().isStreaming,
+        messagesCount: store.getState().messages.length,
+        screenMode: store.getState().screenMode,
       });
 
       // Step 1: User submits round 1 message (still on overview screen!)
@@ -297,10 +297,10 @@ describe('multi-Round Flow Debugging', () => {
 
       const afterPrepare = store.getState();
       console.error('[STATE] After prepareForNewMessage (CRITICAL):', {
-        waitingToStartStreaming: afterPrepare.waitingToStartStreaming, // Should be false!
-        streamingRoundNumber: afterPrepare.streamingRoundNumber,
         nextParticipantToTrigger: afterPrepare.nextParticipantToTrigger, // Should be null!
         pendingMessage: afterPrepare.pendingMessage,
+        streamingRoundNumber: afterPrepare.streamingRoundNumber,
+        waitingToStartStreaming: afterPrepare.waitingToStartStreaming, // Should be false!
       });
 
       // BUG CHECK: prepareForNewMessage resets waitingToStartStreaming and nextParticipantToTrigger
@@ -312,13 +312,13 @@ describe('multi-Round Flow Debugging', () => {
 
       const afterFix = store.getState();
       console.error('[STATE] After fix (set triggers AFTER prepareForNewMessage):', {
-        waitingToStartStreaming: afterFix.waitingToStartStreaming,
         nextParticipantToTrigger: afterFix.nextParticipantToTrigger,
         streamingRoundNumber: afterFix.streamingRoundNumber,
+        waitingToStartStreaming: afterFix.waitingToStartStreaming,
       });
 
       // Verify the fix worked
-      expect(afterFix.waitingToStartStreaming).toBe(true);
+      expect(afterFix.waitingToStartStreaming).toBeTruthy();
       expect(afterFix.nextParticipantToTrigger).toBe(0);
       expect(afterFix.streamingRoundNumber).toBe(1);
     });
@@ -339,9 +339,9 @@ describe('multi-Round Flow Debugging', () => {
 
       const beforePrepare = store.getState();
       console.error('[STATE] Before prepareForNewMessage:', {
-        waitingToStartStreaming: beforePrepare.waitingToStartStreaming,
-        nextParticipantToTrigger: beforePrepare.nextParticipantToTrigger,
         isStreaming: beforePrepare.isStreaming,
+        nextParticipantToTrigger: beforePrepare.nextParticipantToTrigger,
+        waitingToStartStreaming: beforePrepare.waitingToStartStreaming,
       });
 
       // Call prepareForNewMessage
@@ -349,15 +349,15 @@ describe('multi-Round Flow Debugging', () => {
 
       const afterPrepare = store.getState();
       console.error('[STATE] After prepareForNewMessage:', {
-        waitingToStartStreaming: afterPrepare.waitingToStartStreaming,
-        nextParticipantToTrigger: afterPrepare.nextParticipantToTrigger,
         isStreaming: afterPrepare.isStreaming,
+        nextParticipantToTrigger: afterPrepare.nextParticipantToTrigger,
+        waitingToStartStreaming: afterPrepare.waitingToStartStreaming,
       });
 
       // Document what prepareForNewMessage resets
-      expect(afterPrepare.waitingToStartStreaming).toBe(false);
-      expect(afterPrepare.nextParticipantToTrigger).toBe(null);
-      expect(afterPrepare.isStreaming).toBe(false);
+      expect(afterPrepare.waitingToStartStreaming).toBeFalsy();
+      expect(afterPrepare.nextParticipantToTrigger).toBeNull();
+      expect(afterPrepare.isStreaming).toBeFalsy();
     });
   });
 
@@ -380,8 +380,9 @@ describe('multi-Round Flow Debugging', () => {
       function getCurrentRound(): number {
         const messages = store.getState().messages;
         const assistantMessages = messages.filter(m => m.role === MessageRoles.ASSISTANT);
-        if (assistantMessages.length === 0)
+        if (assistantMessages.length === 0) {
           return 0;
+        }
 
         const lastAssistant = assistantMessages[assistantMessages.length - 1];
         const metadata = lastAssistant?.metadata;
@@ -433,19 +434,19 @@ describe('multi-Round Flow Debugging', () => {
       const phantomMessageId = `${threadId}_r0_p1`;
       const idMatch = phantomMessageId.match(/_r(\d+)_p(\d+)/);
       const roundStr = idMatch?.[1];
-      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr) : currentRoundRef;
+      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr, 10) : currentRoundRef;
 
       console.error('[PHANTOM] Phantom call:', {
+        currentRoundRef,
         messageId: phantomMessageId,
         msgRoundNumber,
-        currentRoundRef,
         shouldSkip: msgRoundNumber < currentRoundRef,
       });
 
       // Guard should skip
       expect(msgRoundNumber).toBe(0);
       expect(currentRoundRef).toBe(1);
-      expect(msgRoundNumber < currentRoundRef).toBe(true);
+      expect(msgRoundNumber).toBeLessThan(currentRoundRef);
     });
 
     it('should NOT skip valid round 1 messages', () => {
@@ -455,19 +456,19 @@ describe('multi-Round Flow Debugging', () => {
       const validMessageId = 'thread_r1_p0';
       const idMatch = validMessageId.match(/_r(\d+)_p(\d+)/);
       const roundStr = idMatch?.[1];
-      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr) : currentRoundRef;
+      const msgRoundNumber = idMatch && roundStr ? Number.parseInt(roundStr, 10) : currentRoundRef;
 
       console.error('[PHANTOM] Valid round 1 message:', {
+        currentRoundRef,
         messageId: validMessageId,
         msgRoundNumber,
-        currentRoundRef,
         shouldSkip: msgRoundNumber < currentRoundRef,
       });
 
       // Should NOT skip
       expect(msgRoundNumber).toBe(1);
       expect(currentRoundRef).toBe(1);
-      expect(msgRoundNumber < currentRoundRef).toBe(false);
+      expect(msgRoundNumber).toBeGreaterThanOrEqual(currentRoundRef);
     });
   });
 
@@ -505,15 +506,15 @@ describe('multi-Round Flow Debugging', () => {
       const overviewHandlers = {
         hook: 'useStreamingTrigger',
         method: 'startRound()',
-        triggeredBy: 'waitingToStartStreaming + participants + messages',
         note: 'For round 0 on overview screen',
+        triggeredBy: 'waitingToStartStreaming + participants + messages',
       };
 
       const threadHandlers = {
         hook: 'useRoundResumption',
         method: 'continueFromParticipant()',
-        triggeredBy: 'nextParticipantToTrigger + waitingToStartStreaming',
         note: 'For resumption on thread screen',
+        triggeredBy: 'nextParticipantToTrigger + waitingToStartStreaming',
       };
 
       console.error('[HANDLERS] Overview screen:', overviewHandlers);
@@ -527,7 +528,7 @@ describe('multi-Round Flow Debugging', () => {
       // Fix: useStreamingTrigger should also handle round 1+ on overview
       // OR: Transition to thread screen should happen before round 1 submit
 
-      expect(true).toBe(true); // Documentation test
+      expect(true).toBeTruthy(); // Documentation test
     });
   });
 
@@ -547,26 +548,26 @@ describe('multi-Round Flow Debugging', () => {
         currentParticipantIndex: number;
       };
 
-      const stateLog: Array<{
+      const stateLog: {
         step: string;
         state: StateSnapshot;
-      }> = [];
+      }[] = [];
 
       function logState(step: string) {
         const s = store.getState();
         stateLog.push({
-          step,
           state: {
-            screenMode: s.screenMode,
-            waitingToStartStreaming: s.waitingToStartStreaming,
-            isStreaming: s.isStreaming,
-            streamingRoundNumber: s.streamingRoundNumber,
-            nextParticipantToTrigger: s.nextParticipantToTrigger,
             currentParticipantIndex: s.currentParticipantIndex,
-            messagesCount: s.messages.length,
-            pendingMessage: s.pendingMessage?.substring(0, 20),
             hasSentPendingMessage: s.hasSentPendingMessage,
+            isStreaming: s.isStreaming,
+            messagesCount: s.messages.length,
+            nextParticipantToTrigger: s.nextParticipantToTrigger,
+            pendingMessage: s.pendingMessage?.substring(0, 20),
+            screenMode: s.screenMode,
+            streamingRoundNumber: s.streamingRoundNumber,
+            waitingToStartStreaming: s.waitingToStartStreaming,
           },
+          step,
         });
       }
 
@@ -640,13 +641,13 @@ describe('multi-Round Flow Debugging', () => {
 
       // Print all logged states
       console.error('\n=== FULL JOURNEY STATE LOG ===\n');
-      stateLog.forEach(({ step, state }) => {
+      stateLog.forEach(({ state, step }) => {
         console.error(`[${step}]`, state);
       });
 
       // Verify final state is ready for streaming
       const finalState = store.getState();
-      expect(finalState.waitingToStartStreaming).toBe(true);
+      expect(finalState.waitingToStartStreaming).toBeTruthy();
       expect(finalState.nextParticipantToTrigger).toBe(0);
       expect(finalState.streamingRoundNumber).toBe(1);
     });

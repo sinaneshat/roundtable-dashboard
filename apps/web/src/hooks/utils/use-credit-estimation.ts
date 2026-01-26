@@ -118,11 +118,11 @@ export function useCreditEstimation(options: UseCreditEstimationOptions): Credit
 
   const estimatedCredits = useMemo(() => {
     const {
-      TOKENS_PER_CREDIT,
-      DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE,
-      DEFAULT_ESTIMATED_INPUT_TOKENS,
-      RESERVATION_MULTIPLIER,
       ACTION_COSTS,
+      DEFAULT_ESTIMATED_INPUT_TOKENS,
+      DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE,
+      RESERVATION_MULTIPLIER,
+      TOKENS_PER_CREDIT,
     } = CREDIT_CONFIG;
 
     let total = 0;
@@ -167,11 +167,11 @@ export function useCreditEstimation(options: UseCreditEstimationOptions): Credit
   }, [canAfford, creditsAfterSubmit, availableCredits]);
 
   return {
-    estimatedCredits,
     availableCredits,
-    creditsAfterSubmit,
     canAfford,
-    status,
+    creditsAfterSubmit,
+    estimatedCredits,
     isLoading,
+    status,
   };
 }

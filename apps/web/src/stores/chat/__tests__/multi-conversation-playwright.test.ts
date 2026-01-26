@@ -34,7 +34,7 @@ type StreamingState = {
   currentParticipantIndex: number;
   isStreaming: boolean;
   isTriggeringRef: boolean;
-  messages: Array<TestUserMessage | TestAssistantMessage>;
+  messages: (TestUserMessage | TestAssistantMessage)[];
   participants: ReturnType<typeof createMockParticipant>[];
   // Simulates triggeredNextForRef from use-multi-participant-chat.ts
   triggeredNextFor: Set<string>;
@@ -49,18 +49,18 @@ type StreamingState = {
 
 function createInitialState(): StreamingState {
   return {
-    threadId: null,
-    currentRound: 0,
     currentParticipantIndex: 0,
+    currentRound: 0,
     isStreaming: false,
     isTriggeringRef: false,
     messages: [],
     participants: [],
-    triggeredNextFor: new Set(),
-    queuedParticipants: new Set(),
     processedMessageIds: new Set(),
+    queuedParticipants: new Set(),
     roundParticipants: [],
     screenMode: ScreenModes.OVERVIEW,
+    threadId: null,
+    triggeredNextFor: new Set(),
   };
 }
 
@@ -75,18 +75,18 @@ function createInitialState(): StreamingState {
 function simulateNavigationReset(state: StreamingState): StreamingState {
   return {
     ...state,
-    threadId: null,
-    currentRound: 0,
     currentParticipantIndex: 0,
+    currentRound: 0,
     isStreaming: false,
     isTriggeringRef: false,
     messages: [],
-    roundParticipants: [],
+    processedMessageIds: new Set(),
     queuedParticipants: new Set(),
+    roundParticipants: [],
+    screenMode: ScreenModes.OVERVIEW,
+    threadId: null,
     // ✅ FIX: These are now cleared in the actual code
     triggeredNextFor: new Set(),
-    processedMessageIds: new Set(),
-    screenMode: ScreenModes.OVERVIEW,
   };
 }
 
@@ -104,25 +104,25 @@ function simulateStartRound(
 
   // Create user message
   const userMsg = createTestUserMessage({
-    id: `${threadId}_r${roundNumber}_user`,
     content: userMessage,
+    id: `${threadId}_r${roundNumber}_user`,
     roundNumber,
   });
 
   return {
     ...state,
-    threadId,
-    currentRound: roundNumber,
     currentParticipantIndex: 0,
+    currentRound: roundNumber,
     isStreaming: true,
     isTriggeringRef: true,
     messages: [...state.messages, userMsg],
     participants,
-    roundParticipants: participants.filter(p => p.isEnabled !== false),
     queuedParticipants: new Set([0]),
+    roundParticipants: participants.filter(p => p.isEnabled !== false),
+    screenMode: state.screenMode,
+    threadId,
     // ✅ FIX: Clear at start of each round
     triggeredNextFor: new Set(),
-    screenMode: state.screenMode,
   };
 }
 
@@ -139,9 +139,9 @@ function simulateParticipantComplete(
   // PHANTOM GUARD check (line 1360)
   if (state.triggeredNextFor.has(triggerKey)) {
     return {
-      state,
-      nextTriggered: false,
       blockedByPhantomGuard: true,
+      nextTriggered: false,
+      state,
     };
   }
 
@@ -152,12 +152,12 @@ function simulateParticipantComplete(
   // Create assistant message
   const participant = state.roundParticipants[participantIndex];
   const assistantMsg = createTestAssistantMessage({
-    id: `${state.threadId}_r${state.currentRound}_p${participantIndex}`,
     content: `Response from participant ${participantIndex}`,
-    roundNumber: state.currentRound,
+    finishReason: FinishReasons.STOP,
+    id: `${state.threadId}_r${state.currentRound}_p${participantIndex}`,
     participantId: participant?.id || `participant-${participantIndex}`,
     participantIndex,
-    finishReason: FinishReasons.STOP,
+    roundNumber: state.currentRound,
   });
 
   const nextIndex = participantIndex + 1;
@@ -166,16 +166,16 @@ function simulateParticipantComplete(
   // Round complete?
   if (nextIndex >= totalParticipants) {
     return {
+      blockedByPhantomGuard: false,
+      nextTriggered: true,
       state: {
         ...state,
-        messages: [...state.messages, assistantMsg],
         currentParticipantIndex: 0,
         isStreaming: false,
         isTriggeringRef: false,
+        messages: [...state.messages, assistantMsg],
         triggeredNextFor: newTriggeredNextFor,
       },
-      nextTriggered: true,
-      blockedByPhantomGuard: false,
     };
   }
 
@@ -184,15 +184,15 @@ function simulateParticipantComplete(
   newQueuedParticipants.add(nextIndex);
 
   return {
+    blockedByPhantomGuard: false,
+    nextTriggered: true,
     state: {
       ...state,
-      messages: [...state.messages, assistantMsg],
       currentParticipantIndex: nextIndex,
-      triggeredNextFor: newTriggeredNextFor,
+      messages: [...state.messages, assistantMsg],
       queuedParticipants: newQueuedParticipants,
+      triggeredNextFor: newTriggeredNextFor,
     },
-    nextTriggered: true,
-    blockedByPhantomGuard: false,
   };
 }
 
@@ -215,17 +215,17 @@ function simulateCompleteRound(
 
     if (result.blockedByPhantomGuard) {
       return {
-        state: currentState,
         allParticipantsCompleted: false,
         blockedAt: i,
+        state: currentState,
       };
     }
   }
 
   return {
-    state: currentState,
     allParticipantsCompleted: true,
     blockedAt: null,
+    state: currentState,
   };
 }
 
@@ -241,7 +241,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Conversation 1
       let result = simulateCompleteRound(state, participants, 'Question 1', 'thread-1');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
       expect(result.blockedAt).toBeNull();
       expect(result.state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
 
@@ -251,7 +251,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Conversation 2
       result = simulateCompleteRound(state, participants, 'Question 2', 'thread-2');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
       expect(result.blockedAt).toBeNull();
       expect(result.state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
 
@@ -260,7 +260,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Conversation 3
       result = simulateCompleteRound(state, participants, 'Question 3', 'thread-3');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
       expect(result.blockedAt).toBeNull();
       expect(result.state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
     });
@@ -287,7 +287,7 @@ describe('multi-Conversation E2E Tests', () => {
           config.threadId,
         );
 
-        expect(result.allParticipantsCompleted).toBe(true);
+        expect(result.allParticipantsCompleted).toBeTruthy();
         expect(result.blockedAt).toBeNull();
         expect(result.state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(
           config.participants,
@@ -313,15 +313,15 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Only complete first participant
       const result = simulateParticipantComplete(state, 0);
-      expect(result.nextTriggered).toBe(true);
-      expect(result.blockedByPhantomGuard).toBe(false);
+      expect(result.nextTriggered).toBeTruthy();
+      expect(result.blockedByPhantomGuard).toBeFalsy();
 
       // User interrupts and navigates to new chat
       state = simulateNavigationReset(result.state);
 
       // Start second conversation - should work without blocking
       const fullResult = simulateCompleteRound(state, participants, 'Question 2', 'thread-2');
-      expect(fullResult.allParticipantsCompleted).toBe(true);
+      expect(fullResult.allParticipantsCompleted).toBeTruthy();
       expect(fullResult.blockedAt).toBeNull();
     });
 
@@ -347,7 +347,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Second conversation - all participants should complete
       const fullResult = simulateCompleteRound(state, participants, 'Question 2', 'thread-2');
-      expect(fullResult.allParticipantsCompleted).toBe(true);
+      expect(fullResult.allParticipantsCompleted).toBeTruthy();
       expect(fullResult.blockedAt).toBeNull();
     });
   });
@@ -366,7 +366,7 @@ describe('multi-Conversation E2E Tests', () => {
       // Now start and complete a conversation
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       const result = simulateCompleteRound(state, participants, 'Finally asking', 'thread-1');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
     });
 
     it('should handle rapid start-reset-start cycles', () => {
@@ -376,17 +376,17 @@ describe('multi-Conversation E2E Tests', () => {
       for (let i = 0; i < 3; i++) {
         // Start a round
         state = simulateStartRound(state, participants, `Question ${i}`, `thread-${i}`);
-        expect(state.isStreaming).toBe(true);
+        expect(state.isStreaming).toBeTruthy();
 
         // Immediately reset before any participant completes
         state = simulateNavigationReset(state);
-        expect(state.isStreaming).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
         expect(state.triggeredNextFor.size).toBe(0);
       }
 
       // Final conversation should work
       const result = simulateCompleteRound(state, participants, 'Final question', 'thread-final');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
     });
   });
 
@@ -397,7 +397,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Round 0
       let result = simulateCompleteRound(state, participants, 'Round 0 question', 'thread-1');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
       state = result.state;
 
       // Round 1 (same thread - don't reset)
@@ -408,14 +408,14 @@ describe('multi-Conversation E2E Tests', () => {
         triggeredNextFor: new Set(), // Cleared by startRound
       };
       result = simulateCompleteRound(state, participants, 'Round 1 question', 'thread-1');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
 
       // Now navigate to new chat
       state = simulateNavigationReset(result.state);
 
       // New thread - should work
       result = simulateCompleteRound(state, participants, 'New thread question', 'thread-2');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
     });
   });
 
@@ -432,7 +432,7 @@ describe('multi-Conversation E2E Tests', () => {
           `Question ${i}`,
           `thread-${i}`,
         );
-        expect(result.allParticipantsCompleted).toBe(true);
+        expect(result.allParticipantsCompleted).toBeTruthy();
         expect(result.state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(1);
         state = simulateNavigationReset(result.state);
       }
@@ -444,7 +444,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // Conversation with 10 participants
       let result = simulateCompleteRound(state, maxParticipants, 'Max participants', 'thread-1');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
       expect(result.state.triggeredNextFor.size).toBe(10);
 
       // Navigate and start new conversation
@@ -453,7 +453,7 @@ describe('multi-Conversation E2E Tests', () => {
 
       // New conversation with 10 participants
       result = simulateCompleteRound(state, maxParticipants, 'Another max', 'thread-2');
-      expect(result.allParticipantsCompleted).toBe(true);
+      expect(result.allParticipantsCompleted).toBeTruthy();
     });
 
     it('should maintain correct phantom guard keys format', () => {
@@ -464,8 +464,8 @@ describe('multi-Conversation E2E Tests', () => {
       const result = simulateCompleteRound(state, participants, 'Test question', 'thread-1');
 
       // Verify key format
-      expect(result.state.triggeredNextFor.has('r0_p0')).toBe(true);
-      expect(result.state.triggeredNextFor.has('r0_p1')).toBe(true);
+      expect(result.state.triggeredNextFor.has('r0_p0')).toBeTruthy();
+      expect(result.state.triggeredNextFor.has('r0_p1')).toBeTruthy();
       expect(result.state.triggeredNextFor.size).toBe(2);
     });
   });
@@ -481,12 +481,12 @@ describe('phantom Guard Isolation Tests', () => {
     guard1.add('r0_p1');
 
     // Conversation 2 should be independent
-    expect(guard2.has('r0_p0')).toBe(false);
-    expect(guard2.has('r0_p1')).toBe(false);
+    expect(guard2.has('r0_p0')).toBeFalsy();
+    expect(guard2.has('r0_p1')).toBeFalsy();
 
     // After navigation reset, guard1 is replaced with new Set
     const guard1AfterReset = new Set<string>();
-    expect(guard1AfterReset.has('r0_p0')).toBe(false);
+    expect(guard1AfterReset.has('r0_p0')).toBeFalsy();
   });
 
   it('should verify Set clearing vs replacement behavior', () => {
@@ -517,14 +517,14 @@ describe('regression Tests', () => {
 
     // WITHOUT FIX: This would be true and block the participant
     const wouldBeBlockedWithoutFix = buggyState.triggeredNextFor.has(triggerKey);
-    expect(wouldBeBlockedWithoutFix).toBe(true);
+    expect(wouldBeBlockedWithoutFix).toBeTruthy();
 
     // WITH FIX: triggeredNextFor is cleared, so this is false
     const fixedState = {
       triggeredNextFor: new Set<string>(), // Cleared by navigation reset
     };
     const isBlockedWithFix = fixedState.triggeredNextFor.has(triggerKey);
-    expect(isBlockedWithFix).toBe(false);
+    expect(isBlockedWithFix).toBeFalsy();
   });
 
   it('should verify fix locations are hit during simulation', () => {

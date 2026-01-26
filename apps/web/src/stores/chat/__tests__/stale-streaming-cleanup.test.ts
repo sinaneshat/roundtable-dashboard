@@ -35,12 +35,12 @@ import {
 function createUserMessage(roundNumber: number, text = 'Test message'): UIMessage {
   return {
     id: `user_r${roundNumber}`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -56,26 +56,26 @@ function createParticipantMessage(
 ): UIMessage {
   const {
     finishReason = FinishReasons.STOP,
-    text = 'Participant response',
     isStreaming = false,
     participantId = `participant_${participantIndex}`,
+    text = 'Participant response',
   } = options;
 
   return {
     id: `thread_r${roundNumber}_p${participantIndex}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{
-      type: MessagePartTypes.TEXT,
-      text,
-      ...(isStreaming ? { state: TextPartStates.STREAMING } : { state: TextPartStates.DONE }),
-    }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason,
       participantId,
       participantIndex,
-      finishReason,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{
+      text,
+      type: MessagePartTypes.TEXT,
+      ...(isStreaming ? { state: TextPartStates.STREAMING } : { state: TextPartStates.DONE }),
+    }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -89,42 +89,42 @@ function createModeratorMessage(
 ): UIMessage {
   const {
     finishReason = FinishReasons.STOP,
-    text = 'Moderator summary',
     isStreaming = false,
+    text = 'Moderator summary',
   } = options;
 
   return {
     id: `thread_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{
-      type: MessagePartTypes.TEXT,
-      text,
-      ...(isStreaming ? { state: TextPartStates.STREAMING } : { state: TextPartStates.DONE }),
-    }],
     metadata: {
+      finishReason,
+      isModerator: true,
+      model: 'test/moderator-model', // Required by DbModeratorMessageMetadataSchema
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      isModerator: true,
-      finishReason,
-      model: 'test/moderator-model', // Required by DbModeratorMessageMetadataSchema
     },
+    parts: [{
+      text,
+      type: MessagePartTypes.TEXT,
+      ...(isStreaming ? { state: TextPartStates.STREAMING } : { state: TextPartStates.DONE }),
+    }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
 function createParticipant(id: string, priority: number, isEnabled = true) {
   return {
-    id,
-    threadId: 'thread_1',
-    modelId: `model_${priority}`,
-    customRoleId: null,
-    role: null,
-    priority,
-    isEnabled,
-    settings: null,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    customRoleId: null,
+    id,
     is_accessible_to_user: true,
+    isEnabled,
+    modelId: `model_${priority}`,
+    priority,
     required_tier_name: 'Free' as const,
+    role: null,
+    settings: null,
+    threadId: 'thread_1',
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -135,41 +135,41 @@ function createParticipant(id: string, priority: number, isEnabled = true) {
 describe('isMessageComplete', () => {
   it('returns true for message with finishReason and content', () => {
     const msg = createParticipantMessage(0, 0, { finishReason: FinishReasons.STOP });
-    expect(isMessageComplete(msg)).toBe(true);
+    expect(isMessageComplete(msg)).toBeTruthy();
   });
 
   it('returns false for message with streaming parts', () => {
     const msg = createParticipantMessage(0, 0, { isStreaming: true });
-    expect(isMessageComplete(msg)).toBe(false);
+    expect(isMessageComplete(msg)).toBeFalsy();
   });
 
   it('returns true for message with content but no finishReason', () => {
     const msg: UIMessage = {
       id: 'test',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Content', state: TextPartStates.DONE }],
       metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
+      parts: [{ state: TextPartStates.DONE, text: 'Content', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.ASSISTANT,
     };
-    expect(isMessageComplete(msg)).toBe(true);
+    expect(isMessageComplete(msg)).toBeTruthy();
   });
 
   it('returns false for message with finishReason unknown and no content', () => {
     const msg: UIMessage = {
       id: 'test',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [],
       metadata: {
+        finishReason: FinishReasons.UNKNOWN,
         role: MessageRoles.ASSISTANT,
         roundNumber: 0,
-        finishReason: FinishReasons.UNKNOWN,
       },
+      parts: [],
+      role: UIMessageRoles.ASSISTANT,
     };
-    expect(isMessageComplete(msg)).toBe(false);
+    expect(isMessageComplete(msg)).toBeFalsy();
   });
 
   it('returns true for moderator with finishReason stop', () => {
     const msg = createModeratorMessage(0, { finishReason: FinishReasons.STOP });
-    expect(isMessageComplete(msg)).toBe(true);
+    expect(isMessageComplete(msg)).toBeTruthy();
   });
 });
 
@@ -230,7 +230,7 @@ describe('isRoundComplete', () => {
         createParticipantMessage(0, 0, { participantId: p1Id }),
         createModeratorMessage(0),
       ];
-      expect(isRoundComplete(messages, singleParticipant, 0)).toBe(true);
+      expect(isRoundComplete(messages, singleParticipant, 0)).toBeTruthy();
     });
 
     it('returns true for multi-participant round with all complete', () => {
@@ -240,7 +240,7 @@ describe('isRoundComplete', () => {
         createParticipantMessage(0, 1, { participantId: p2Id }),
         createModeratorMessage(0),
       ];
-      expect(isRoundComplete(messages, twoParticipants, 0)).toBe(true);
+      expect(isRoundComplete(messages, twoParticipants, 0)).toBeTruthy();
     });
   });
 
@@ -251,7 +251,7 @@ describe('isRoundComplete', () => {
         createParticipantMessage(0, 0, { participantId: p1Id }),
         // No moderator
       ];
-      expect(isRoundComplete(messages, singleParticipant, 0)).toBe(false);
+      expect(isRoundComplete(messages, singleParticipant, 0)).toBeFalsy();
     });
 
     it('returns false when moderator is still streaming', () => {
@@ -260,7 +260,7 @@ describe('isRoundComplete', () => {
         createParticipantMessage(0, 0, { participantId: p1Id }),
         createModeratorMessage(0, { isStreaming: true }),
       ];
-      expect(isRoundComplete(messages, singleParticipant, 0)).toBe(false);
+      expect(isRoundComplete(messages, singleParticipant, 0)).toBeFalsy();
     });
   });
 
@@ -270,7 +270,7 @@ describe('isRoundComplete', () => {
         createUserMessage(0),
         // No participant messages
       ];
-      expect(isRoundComplete(messages, singleParticipant, 0)).toBe(false);
+      expect(isRoundComplete(messages, singleParticipant, 0)).toBeFalsy();
     });
 
     it('returns false when some participants are missing', () => {
@@ -280,15 +280,15 @@ describe('isRoundComplete', () => {
         // Missing p2
         createModeratorMessage(0),
       ];
-      expect(isRoundComplete(messages, twoParticipants, 0)).toBe(false);
+      expect(isRoundComplete(messages, twoParticipants, 0)).toBeFalsy();
     });
 
     it('returns false when participant is still streaming', () => {
       const messages = [
         createUserMessage(0),
-        createParticipantMessage(0, 0, { participantId: p1Id, isStreaming: true }),
+        createParticipantMessage(0, 0, { isStreaming: true, participantId: p1Id }),
       ];
-      expect(isRoundComplete(messages, singleParticipant, 0)).toBe(false);
+      expect(isRoundComplete(messages, singleParticipant, 0)).toBeFalsy();
     });
   });
 
@@ -301,15 +301,15 @@ describe('isRoundComplete', () => {
       const messages = [
         createUserMessage(2),
         createParticipantMessage(2, 0, {
-          participantId,
           finishReason: FinishReasons.STOP,
+          participantId,
         }),
         createModeratorMessage(2, {
           finishReason: FinishReasons.STOP,
         }),
       ];
       // Round IS complete - this would allow stale streaming cleanup
-      expect(isRoundComplete(messages, [participant], 2)).toBe(true);
+      expect(isRoundComplete(messages, [participant], 2)).toBeTruthy();
     });
 
     it('correctly identifies incomplete round during moderator streaming', () => {
@@ -318,15 +318,15 @@ describe('isRoundComplete', () => {
       const messages = [
         createUserMessage(2),
         createParticipantMessage(2, 0, {
-          participantId,
           finishReason: FinishReasons.STOP,
+          participantId,
         }),
         createModeratorMessage(2, {
           isStreaming: true, // Still streaming
         }),
       ];
       // Round is NOT complete - should not trigger cleanup
-      expect(isRoundComplete(messages, [participant], 2)).toBe(false);
+      expect(isRoundComplete(messages, [participant], 2)).toBeFalsy();
     });
   });
 });
@@ -347,7 +347,7 @@ describe('getParticipantCompletionStatus', () => {
       createParticipantMessage(0, 1, { participantId: 'p2' }),
     ];
     const status = getParticipantCompletionStatus(messages, participants, 0);
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.completedCount).toBe(2);
     expect(status.streamingCount).toBe(0);
   });
@@ -358,7 +358,7 @@ describe('getParticipantCompletionStatus', () => {
       // Missing p2
     ];
     const status = getParticipantCompletionStatus(messages, participants, 0);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.completedCount).toBe(1);
     expect(status.streamingCount).toBe(1);
     expect(status.streamingParticipantIds).toContain('p2');
@@ -367,10 +367,10 @@ describe('getParticipantCompletionStatus', () => {
   it('returns allComplete=false when participant is streaming', () => {
     const messages = [
       createParticipantMessage(0, 0, { participantId: 'p1' }),
-      createParticipantMessage(0, 1, { participantId: 'p2', isStreaming: true }),
+      createParticipantMessage(0, 1, { isStreaming: true, participantId: 'p2' }),
     ];
     const status = getParticipantCompletionStatus(messages, participants, 0);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingCount).toBe(1);
   });
 
@@ -383,7 +383,7 @@ describe('getParticipantCompletionStatus', () => {
       createParticipantMessage(0, 0, { participantId: 'p1' }),
     ];
     const status = getParticipantCompletionStatus(messages, mixedParticipants, 0);
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.expectedCount).toBe(1); // Only enabled participants
   });
 });
@@ -408,7 +408,7 @@ describe('early return cleanup scenarios', () => {
 
       // This is what the early return logic should check
       const roundComplete = isRoundComplete(messages, participants, 2);
-      expect(roundComplete).toBe(true);
+      expect(roundComplete).toBeTruthy();
 
       // If round is complete, completeStreaming() should be called
     });
@@ -424,7 +424,7 @@ describe('early return cleanup scenarios', () => {
       const participants = [createParticipant(participantId, 0)];
 
       const roundComplete = isRoundComplete(messages, participants, 2);
-      expect(roundComplete).toBe(false);
+      expect(roundComplete).toBeFalsy();
 
       // Should NOT call completeStreaming() - would interrupt active stream
     });
@@ -443,9 +443,9 @@ describe('early return cleanup scenarios', () => {
       const participants = [createParticipant(participantId, 0)];
 
       const storeState = {
-        streamingRoundNumber: 2,
-        isStreaming: false,
         isModeratorStreaming: false,
+        isStreaming: false,
+        streamingRoundNumber: 2,
         waitingToStartStreaming: false,
       };
 
@@ -454,19 +454,19 @@ describe('early return cleanup scenarios', () => {
         && !storeState.isStreaming
         && !storeState.isModeratorStreaming
         && !storeState.waitingToStartStreaming;
-      expect(isStale).toBe(true);
+      expect(isStale).toBeTruthy();
 
       // And round is actually complete
-      expect(isRoundComplete(messages, participants, 2)).toBe(true);
+      expect(isRoundComplete(messages, participants, 2)).toBeTruthy();
 
       // So completeStreaming() should be called
     });
 
     it('should NOT trigger cleanup when actively streaming', () => {
       const storeState = {
-        streamingRoundNumber: 2,
-        isStreaming: true, // Actively streaming
         isModeratorStreaming: false,
+        isStreaming: true, // Actively streaming
+        streamingRoundNumber: 2,
         waitingToStartStreaming: false,
       };
 
@@ -474,14 +474,14 @@ describe('early return cleanup scenarios', () => {
         && !storeState.isStreaming
         && !storeState.isModeratorStreaming
         && !storeState.waitingToStartStreaming;
-      expect(isStale).toBe(false);
+      expect(isStale).toBeFalsy();
     });
 
     it('should NOT trigger cleanup when waiting to start', () => {
       const storeState = {
-        streamingRoundNumber: 2,
-        isStreaming: false,
         isModeratorStreaming: false,
+        isStreaming: false,
+        streamingRoundNumber: 2,
         waitingToStartStreaming: true, // About to start
       };
 
@@ -489,7 +489,7 @@ describe('early return cleanup scenarios', () => {
         && !storeState.isStreaming
         && !storeState.isModeratorStreaming
         && !storeState.waitingToStartStreaming;
-      expect(isStale).toBe(false);
+      expect(isStale).toBeFalsy();
     });
   });
 });

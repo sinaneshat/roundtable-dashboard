@@ -37,15 +37,15 @@ export type RateLimitPreset = z.infer<typeof RateLimitPresetSchema>;
 
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const RateLimitPresets = {
-  UPLOAD: 'upload' as const,
-  DOWNLOAD: 'download' as const,
-  PUBLIC_DOWNLOAD: 'publicDownload' as const,
-  READ: 'read' as const,
-  DELETE: 'delete' as const,
   API: 'api' as const,
   AUTH: 'auth' as const,
-  ORGANIZATION: 'organization' as const,
+  DELETE: 'delete' as const,
+  DOWNLOAD: 'download' as const,
   IP: 'ip' as const,
+  ORGANIZATION: 'organization' as const,
+  PUBLIC_DOWNLOAD: 'publicDownload' as const,
+  READ: 'read' as const,
+  UPLOAD: 'upload' as const,
 } as const;
 
 export function isRateLimitPreset(value: unknown): value is RateLimitPreset {

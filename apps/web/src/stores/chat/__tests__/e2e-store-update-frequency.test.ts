@@ -33,18 +33,18 @@ function createStreamingMessage(opts: {
 }): UIMessage {
   return {
     id: opts.id,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: opts.content }],
     metadata: {
+      finishReason: opts.finishReason ?? FinishReasons.UNKNOWN,
+      hasError: false,
+      model: 'gpt-4',
+      participantId: `participant-${opts.participantIndex}`,
+      participantIndex: opts.participantIndex,
       role: UIMessageRoles.ASSISTANT,
       roundNumber: opts.roundNumber,
-      participantIndex: opts.participantIndex,
-      participantId: `participant-${opts.participantIndex}`,
-      model: 'gpt-4',
-      finishReason: opts.finishReason ?? FinishReasons.UNKNOWN,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      hasError: false,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text: opts.content, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -77,10 +77,10 @@ describe('e2e Store Update Frequency - Message Append Batching', () => {
 
     for (const chunk of chunks) {
       const message = createStreamingMessage({
-        id: 'thread-1_r0_p0',
-        roundNumber: 0,
-        participantIndex: 0,
         content: chunk,
+        id: 'thread-1_r0_p0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([message]);
     }
@@ -101,10 +101,10 @@ describe('e2e Store Update Frequency - Message Append Batching', () => {
     // Simulate rapid AI SDK streaming chunks
     for (let i = 1; i <= 20; i++) {
       const message = createStreamingMessage({
-        id: 'thread-1_r0_p0',
-        roundNumber: 0,
-        participantIndex: 0,
         content: `Chunk ${i} `,
+        id: 'thread-1_r0_p0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().upsertStreamingMessage({ message });
     }
@@ -116,8 +116,8 @@ describe('e2e Store Update Frequency - Message Append Batching', () => {
     const messages = store.getState().messages;
     const finalMessage = messages.find(m => m.id === 'thread-1_r0_p0');
     expect(finalMessage?.parts?.[0]).toMatchObject({
-      type: MessagePartTypes.TEXT,
       text: 'Chunk 20 ',
+      type: MessagePartTypes.TEXT,
     });
   });
 
@@ -126,11 +126,11 @@ describe('e2e Store Update Frequency - Message Append Batching', () => {
     const setMessagesSpy = vi.spyOn(store.getState(), 'setMessages');
 
     const message = createStreamingMessage({
-      id: 'thread-1_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
       content: 'Same content',
       finishReason: FinishReasons.STOP,
+      id: 'thread-1_r0_p0',
+      participantIndex: 0,
+      roundNumber: 0,
     });
 
     // First call
@@ -152,7 +152,7 @@ describe('e2e Store Update Frequency - Message Append Batching', () => {
 describe('e2e Store Update Frequency - Participant Completion', () => {
   it('should update participant state exactly once on completion', () => {
     const store = createTestChatStore();
-    const stateChanges: Array<{ participantIndex: number; isStreaming: boolean }> = [];
+    const stateChanges: { participantIndex: number; isStreaming: boolean }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (
@@ -160,8 +160,8 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
         || state.isStreaming !== prevState.isStreaming
       ) {
         stateChanges.push({
-          participantIndex: state.currentParticipantIndex,
           isStreaming: state.isStreaming,
+          participantIndex: state.currentParticipantIndex,
         });
       }
     });
@@ -176,11 +176,11 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
 
     // Complete participant 0
     const p0Complete = createStreamingMessage({
-      id: 'thread-1_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
       content: 'Participant 0 complete',
       finishReason: FinishReasons.STOP,
+      id: 'thread-1_r0_p0',
+      participantIndex: 0,
+      roundNumber: 0,
     });
     store.getState().setMessages([p0Complete]);
 
@@ -192,8 +192,8 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
     // Should have exactly 1 state change (participant index change)
     expect(stateChanges).toHaveLength(1);
     expect(stateChanges[0]).toMatchObject({
-      participantIndex: 1,
       isStreaming: true,
+      participantIndex: 1,
     });
   });
 
@@ -216,10 +216,10 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
     // Stream 10 chunks - participant index should NOT change
     for (let i = 1; i <= 10; i++) {
       const message = createStreamingMessage({
-        id: 'thread-1_r0_p0',
-        roundNumber: 0,
-        participantIndex: 0,
         content: `Chunk ${i}`,
+        id: 'thread-1_r0_p0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([message]);
     }
@@ -232,7 +232,7 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
 
   it('tracks participant transitions across multiple participants', () => {
     const store = createTestChatStore();
-    const participantTransitions: Array<{ from: number; to: number }> = [];
+    const participantTransitions: { from: number; to: number }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (state.currentParticipantIndex !== prevState.currentParticipantIndex) {
@@ -276,7 +276,7 @@ describe('e2e Store Update Frequency - Participant Completion', () => {
 describe('e2e Store Update Frequency - Flow State Transitions', () => {
   it('should not have redundant IDLE→IDLE transitions', () => {
     const store = createTestChatStore();
-    const phaseChanges: Array<string | null> = [];
+    const phaseChanges: (string | null)[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (state.currentResumptionPhase !== prevState.currentResumptionPhase) {
@@ -299,7 +299,7 @@ describe('e2e Store Update Frequency - Flow State Transitions', () => {
 
   it('should transition through phases exactly once each', () => {
     const store = createTestChatStore();
-    const phaseChanges: Array<string | null> = [];
+    const phaseChanges: (string | null)[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (state.currentResumptionPhase !== prevState.currentResumptionPhase) {
@@ -309,15 +309,15 @@ describe('e2e Store Update Frequency - Flow State Transitions', () => {
 
     // Phase transitions for resumption
     store.getState().prefillStreamResumptionState('thread-1', {
-      roundNumber: 0,
-      roundComplete: false,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'pre-search-1',
         status: MessageStatuses.PENDING,
         streamId: 'stream-1',
-        preSearchId: 'pre-search-1',
       },
+      roundComplete: false,
+      roundNumber: 0,
     });
 
     // Transition to participants
@@ -343,7 +343,7 @@ describe('e2e Store Update Frequency - Flow State Transitions', () => {
 
   it('should not duplicate phase transitions', () => {
     const store = createTestChatStore();
-    const phaseChanges: Array<string | null> = [];
+    const phaseChanges: (string | null)[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (state.currentResumptionPhase !== prevState.currentResumptionPhase) {
@@ -372,29 +372,29 @@ describe('e2e Store Update Frequency - Flow State Transitions', () => {
 describe('e2e Store Update Frequency - Thread Metadata', () => {
   it('should update thread title atomically', () => {
     const store = createTestChatStore();
-    const threadChanges: Array<{ title: string | null; slug: string | null }> = [];
+    const threadChanges: { title: string | null; slug: string | null }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       if (state.thread !== prevState.thread) {
         threadChanges.push({
-          title: state.thread?.title ?? null,
           slug: state.thread?.slug ?? null,
+          title: state.thread?.title ?? null,
         });
       }
     });
 
     // Set thread with title and slug
     store.getState().setThread({
-      id: 'thread-1',
-      userId: 'user-1',
-      mode: 'council',
+      createdAt: new Date(),
       enableWebSearch: false,
-      title: 'Test Thread',
-      slug: 'test-thread',
+      id: 'thread-1',
+      mode: 'council',
       participantsCount: 3,
       roundsCount: 1,
-      createdAt: new Date(),
+      slug: 'test-thread',
+      title: 'Test Thread',
       updatedAt: new Date(),
+      userId: 'user-1',
     });
 
     unsubscribe();
@@ -402,8 +402,8 @@ describe('e2e Store Update Frequency - Thread Metadata', () => {
     // Should have exactly 1 change (atomic update)
     expect(threadChanges).toHaveLength(1);
     expect(threadChanges[0]).toMatchObject({
-      title: 'Test Thread',
       slug: 'test-thread',
+      title: 'Test Thread',
     });
   });
 
@@ -412,16 +412,16 @@ describe('e2e Store Update Frequency - Thread Metadata', () => {
     const threadChanges: number[] = [];
 
     const thread = {
-      id: 'thread-1',
-      userId: 'user-1',
-      mode: 'council' as const,
+      createdAt: new Date(),
       enableWebSearch: false,
-      title: 'Same Thread',
-      slug: 'same-thread',
+      id: 'thread-1',
+      mode: 'council' as const,
       participantsCount: 3,
       roundsCount: 1,
-      createdAt: new Date(),
+      slug: 'same-thread',
+      title: 'Same Thread',
       updatedAt: new Date(),
+      userId: 'user-1',
     };
 
     // Set thread
@@ -451,7 +451,7 @@ describe('e2e Store Update Frequency - Thread Metadata', () => {
 describe('e2e Store Update Frequency - Pre-Search Status', () => {
   it('should transition pre-search status exactly once per phase', () => {
     const store = createTestChatStore();
-    const statusChanges: Array<{ status: string; timestamp: number }> = [];
+    const statusChanges: { status: string; timestamp: number }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       const currentPreSearch = state.preSearches.find(ps => ps.roundNumber === 0);
@@ -467,10 +467,10 @@ describe('e2e Store Update Frequency - Pre-Search Status', () => {
 
     // Add pre-search PENDING
     store.getState().addPreSearch({
-      threadId: 'thread-1',
+      createdAt: new Date(),
       roundNumber: 0,
       status: MessageStatuses.PENDING,
-      createdAt: new Date(),
+      threadId: 'thread-1',
     });
 
     // Transition to STREAMING
@@ -478,11 +478,11 @@ describe('e2e Store Update Frequency - Pre-Search Status', () => {
 
     // Transition to COMPLETE
     store.getState().updatePreSearchData(0, {
+      failureCount: 0,
       queries: ['test query'],
       results: [],
-      summary: 'Test summary',
       successCount: 1,
-      failureCount: 0,
+      summary: 'Test summary',
       totalResults: 0,
       totalTime: 100,
     });
@@ -503,10 +503,10 @@ describe('e2e Store Update Frequency - Pre-Search Status', () => {
     const statusChanges: string[] = [];
 
     store.getState().addPreSearch({
-      threadId: 'thread-1',
+      createdAt: new Date(),
       roundNumber: 0,
       status: MessageStatuses.PENDING,
-      createdAt: new Date(),
+      threadId: 'thread-1',
     });
 
     const unsubscribe = store.subscribe((state, prevState) => {
@@ -536,19 +536,19 @@ describe('e2e Store Update Frequency - Pre-Search Status', () => {
 
     // Add pre-search with PENDING (orchestrator)
     store.getState().addPreSearch({
-      threadId: 'thread-1',
+      createdAt: new Date(),
       roundNumber: 0,
       status: MessageStatuses.PENDING,
-      createdAt: new Date(),
+      threadId: 'thread-1',
     });
 
     // Provider tries to add with STREAMING (race condition)
     store.getState().addPreSearch({
-      threadId: 'thread-1',
+      createdAt: new Date(),
       roundNumber: 0,
       status: MessageStatuses.STREAMING,
       streamId: 'stream-1',
-      createdAt: new Date(),
+      threadId: 'thread-1',
     });
 
     // Should have exactly 1 pre-search (STREAMING wins over PENDING)
@@ -565,7 +565,7 @@ describe('e2e Store Update Frequency - Pre-Search Status', () => {
 describe('e2e Store Update Frequency - Animation State', () => {
   it('should register and complete animations efficiently', () => {
     const store = createTestChatStore();
-    const animationChanges: Array<{ action: string; participantIndex: number }> = [];
+    const animationChanges: { action: string; participantIndex: number }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       // Track when pendingAnimations Set changes
@@ -631,7 +631,7 @@ describe('e2e Store Update Frequency - Animation State', () => {
 
   it('verifies clearAnimations resets state atomically', () => {
     const store = createTestChatStore();
-    const stateChanges: Array<{ pendingSize: number; resolversSize: number }> = [];
+    const stateChanges: { pendingSize: number; resolversSize: number }[] = [];
 
     // Register some animations
     store.getState().registerAnimation(0);
@@ -671,31 +671,36 @@ describe('e2e Store Update Frequency - Complete Round Audit', () => {
   it('audits total store updates during complete round streaming', () => {
     const store = createTestChatStore();
     let totalUpdates = 0;
-    const updateLog: Array<{ timestamp: number; updatedKeys: string[] }> = [];
+    const updateLog: { timestamp: number; updatedKeys: string[] }[] = [];
 
     const unsubscribe = store.subscribe((state, prevState) => {
       totalUpdates++;
 
       // Track which keys changed
       const updatedKeys: string[] = [];
-      if (state.messages !== prevState.messages)
+      if (state.messages !== prevState.messages) {
         updatedKeys.push('messages');
-      if (state.isStreaming !== prevState.isStreaming)
+      }
+      if (state.isStreaming !== prevState.isStreaming) {
         updatedKeys.push('isStreaming');
-      if (state.currentParticipantIndex !== prevState.currentParticipantIndex)
+      }
+      if (state.currentParticipantIndex !== prevState.currentParticipantIndex) {
         updatedKeys.push('currentParticipantIndex');
-      if (state.streamingRoundNumber !== prevState.streamingRoundNumber)
+      }
+      if (state.streamingRoundNumber !== prevState.streamingRoundNumber) {
         updatedKeys.push('streamingRoundNumber');
-      if (state.isModeratorStreaming !== prevState.isModeratorStreaming)
+      }
+      if (state.isModeratorStreaming !== prevState.isModeratorStreaming) {
         updatedKeys.push('isModeratorStreaming');
+      }
 
       updateLog.push({ timestamp: Date.now(), updatedKeys });
     });
 
     // Complete round: User message + 2 participants (5 chunks each) + moderator (3 chunks)
     const userMessage = createTestUserMessage({
-      id: 'user-r0',
       content: 'Test question',
+      id: 'user-r0',
       roundNumber: 0,
     });
 
@@ -710,21 +715,21 @@ describe('e2e Store Update Frequency - Complete Round Audit', () => {
     // Participant 0: 5 streaming chunks
     for (let i = 1; i <= 5; i++) {
       const p0 = createStreamingMessage({
-        id: 'thread-1_r0_p0',
-        roundNumber: 0,
-        participantIndex: 0,
         content: `P0 chunk ${i}`,
+        id: 'thread-1_r0_p0',
+        participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0]);
     }
 
     // Complete participant 0
     const p0Final = createStreamingMessage({
-      id: 'thread-1_r0_p0',
-      roundNumber: 0,
-      participantIndex: 0,
       content: 'P0 chunk 5',
       finishReason: FinishReasons.STOP,
+      id: 'thread-1_r0_p0',
+      participantIndex: 0,
+      roundNumber: 0,
     });
     store.getState().setMessages([userMessage, p0Final]);
 
@@ -734,21 +739,21 @@ describe('e2e Store Update Frequency - Complete Round Audit', () => {
     // Participant 1: 5 streaming chunks
     for (let i = 1; i <= 5; i++) {
       const p1 = createStreamingMessage({
-        id: 'thread-1_r0_p1',
-        roundNumber: 0,
-        participantIndex: 1,
         content: `P1 chunk ${i}`,
+        id: 'thread-1_r0_p1',
+        participantIndex: 1,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Final, p1]);
     }
 
     // Complete participant 1
     const p1Final = createStreamingMessage({
-      id: 'thread-1_r0_p1',
-      roundNumber: 0,
-      participantIndex: 1,
       content: 'P1 chunk 5',
       finishReason: FinishReasons.STOP,
+      id: 'thread-1_r0_p1',
+      participantIndex: 1,
+      roundNumber: 0,
     });
     store.getState().setMessages([userMessage, p0Final, p1Final]);
 
@@ -761,8 +766,8 @@ describe('e2e Store Update Frequency - Complete Round Audit', () => {
     // Moderator: 3 streaming chunks
     for (let i = 1; i <= 3; i++) {
       const moderator = createTestModeratorMessage({
-        id: 'thread-1_r0_moderator',
         content: `Moderator chunk ${i}`,
+        id: 'thread-1_r0_moderator',
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Final, p1Final, moderator]);
@@ -783,7 +788,7 @@ describe('e2e Store Update Frequency - Complete Round Audit', () => {
         keyFrequency[key] = (keyFrequency[key] ?? 0) + 1;
       }
     }
-    // eslint-disable-next-line no-console -- Test audit output
+
     console.log('Complete Round Update Audit:\nTotal store updates: %d\nUpdates breakdown:\n%O', totalUpdates, keyFrequency);
 
     // Expected breakdown:

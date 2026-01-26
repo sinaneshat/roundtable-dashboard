@@ -51,16 +51,16 @@ type RequestLogEntry = {
   path: string;
   status: number;
   duration_ms: number;
-  request_id?: string;
-  cf_colo?: string;
-  cf_country?: string;
+  request_id?: string | undefined;
+  cf_colo?: string | undefined;
+  cf_country?: string | undefined;
   // Optional verbose fields
   query?: Record<string, string | string[]>;
-  content_type?: string;
-  content_length?: string;
-  user_agent?: string;
-  origin?: string;
-  referer?: string;
+  content_type?: string | undefined;
+  content_length?: string | undefined;
+  user_agent?: string | undefined;
+  origin?: string | undefined;
+  referer?: string | undefined;
 };
 
 // ============================================================================
@@ -90,15 +90,15 @@ export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
 
   // Build log entry with type-safe Cloudflare property extraction
   const logEntry: RequestLogEntry = {
-    log_type: 'api_request',
-    timestamp: new Date().toISOString(),
-    method: c.req.method,
-    path: c.req.path,
-    status: c.res?.status || 0,
-    duration_ms: duration,
-    request_id: cfRay,
     cf_colo: cf && 'colo' in cf && typeof cf.colo === 'string' ? cf.colo : undefined,
     cf_country: cf && 'country' in cf && typeof cf.country === 'string' ? cf.country : undefined,
+    duration_ms: duration,
+    log_type: 'api_request',
+    method: c.req.method,
+    path: c.req.path,
+    request_id: cfRay,
+    status: c.res?.status || 0,
+    timestamp: new Date().toISOString(),
   };
 
   // Add verbose fields in non-prod environments
@@ -116,11 +116,10 @@ export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
   // Log as structured JSON for Cloudflare Workers Logs
   // Using console.log for normal requests, console.warn for slow requests
   if (duration > 5000) {
-    // eslint-disable-next-line no-console
     console.warn({ ...logEntry, slow_request: true });
   } else if (c.res?.status && c.res.status >= 400) {
     // Error responses logged at warn level
-    // eslint-disable-next-line no-console
+
     console.warn(logEntry);
   } else {
     // Normal requests

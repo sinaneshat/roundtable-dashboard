@@ -33,15 +33,15 @@ import { getParticipantCompletionStatus } from '../utils/participant-completion-
 
 function createParticipant(id: string, index: number): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date('2024-01-01'),
+    customRoleId: null,
+    id,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date('2024-01-01'),
   };
 }
@@ -49,9 +49,9 @@ function createParticipant(id: string, index: number): ChatParticipant {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'Question' }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: 'Question', type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -61,22 +61,22 @@ function createAssistantMessage(
   participantIndex: number,
   options: { streaming?: boolean; hasContent?: boolean; finishReason?: string } = {},
 ): UIMessage {
-  const { streaming = false, hasContent = true, finishReason = 'stop' } = options;
+  const { finishReason = 'stop', hasContent = true, streaming = false } = options;
 
   return {
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: hasContent
-      ? [{ type: 'text', text: 'Response', state: streaming ? 'streaming' as const : 'done' as const }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: streaming ? undefined : finishReason,
+      model: `model-${participantIndex}`,
       participantId,
       participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: streaming ? undefined : finishReason,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: hasContent
+      ? [{ state: streaming ? 'streaming' as const : 'done' as const, text: 'Response', type: 'text' }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -85,24 +85,24 @@ function createPreSearch(
   status: typeof MessageStatuses.PENDING | typeof MessageStatuses.STREAMING | typeof MessageStatuses.COMPLETE,
 ): StoredPreSearch {
   return {
+    completedAt: status === MessageStatuses.COMPLETE ? new Date('2024-01-01') : null,
+    createdAt: new Date('2024-01-01'),
     id: `ps-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    status,
-    userQuery: 'Question',
     searchData: status === MessageStatuses.COMPLETE
       ? {
+          failureCount: 0,
           queries: ['query'],
           results: [],
-          summary: 'Summary',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Summary',
           totalResults: 0,
           totalTime: 100,
         }
       : null,
-    createdAt: new Date('2024-01-01'),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date('2024-01-01') : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Question',
   };
 }
 
@@ -130,7 +130,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.completedCount).toBe(2);
       expect(status.streamingCount).toBe(0);
     });
@@ -144,7 +144,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('p2');
@@ -159,7 +159,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('p2');
@@ -182,14 +182,14 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants are complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // But pre-search is still streaming - moderator should NOT trigger
       expect(preSearchForRound?.status).toBe(MessageStatuses.STREAMING);
 
       // This simulates the check in provider.tsx handleComplete
       const shouldBlockModerator = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlockModerator).toBe(true);
+      expect(shouldBlockModerator).toBeTruthy();
     });
 
     it('should block moderator if pre-search is PENDING', () => {
@@ -207,13 +207,13 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants are complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // But pre-search is pending - moderator should NOT trigger
       expect(preSearchForRound?.status).toBe(MessageStatuses.PENDING);
 
       const shouldBlockModerator = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlockModerator).toBe(true);
+      expect(shouldBlockModerator).toBeTruthy();
     });
 
     it('should allow moderator if pre-search is COMPLETE', () => {
@@ -231,14 +231,14 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants are complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search is complete
       expect(preSearchForRound?.status).toBe(MessageStatuses.COMPLETE);
 
       // Moderator CAN trigger (if animations also complete)
       const shouldBlockModerator = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(shouldBlockModerator).toBe(false);
+      expect(shouldBlockModerator).toBeFalsy();
     });
   });
 
@@ -249,21 +249,21 @@ describe('pre-Search and Moderator Race Conditions', () => {
       // Even if participants are complete, moderator should NOT trigger
       // while pre-search animation is running
       expect(pendingAnimations.size).toBeGreaterThan(0);
-      expect(pendingAnimations.has(AnimationIndices.PRE_SEARCH)).toBe(true);
+      expect(pendingAnimations.has(AnimationIndices.PRE_SEARCH)).toBeTruthy();
 
       // This simulates the check in flow-state-machine.ts
       const shouldBlockModerator = pendingAnimations.size > 0;
-      expect(shouldBlockModerator).toBe(true);
+      expect(shouldBlockModerator).toBeTruthy();
     });
 
     it('should block moderator if participant animation is pending', () => {
       const pendingAnimations = new Set<number>([AnimationIndices.PARTICIPANT_0]);
 
       expect(pendingAnimations.size).toBeGreaterThan(0);
-      expect(pendingAnimations.has(AnimationIndices.PARTICIPANT_0)).toBe(true);
+      expect(pendingAnimations.has(AnimationIndices.PARTICIPANT_0)).toBeTruthy();
 
       const shouldBlockModerator = pendingAnimations.size > 0;
-      expect(shouldBlockModerator).toBe(true);
+      expect(shouldBlockModerator).toBeTruthy();
     });
 
     it('should block moderator if ANY animation is pending', () => {
@@ -275,7 +275,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
       expect(pendingAnimations.size).toBeGreaterThan(1);
 
       const shouldBlockModerator = pendingAnimations.size > 0;
-      expect(shouldBlockModerator).toBe(true);
+      expect(shouldBlockModerator).toBeTruthy();
     });
 
     it('should allow moderator if NO animations are pending', () => {
@@ -284,7 +284,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
       expect(pendingAnimations.size).toBe(0);
 
       const shouldBlockModerator = pendingAnimations.size > 0;
-      expect(shouldBlockModerator).toBe(false);
+      expect(shouldBlockModerator).toBeFalsy();
     });
   });
 
@@ -306,18 +306,18 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search BLOCKING
       const preSearchBlocking = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(preSearchBlocking).toBe(true);
+      expect(preSearchBlocking).toBeTruthy();
 
       // Final decision: BLOCK moderator
       const shouldTriggerModerator = participantStatus.allComplete
         && !preSearchBlocking
         && pendingAnimations.size === 0;
 
-      expect(shouldTriggerModerator).toBe(false);
+      expect(shouldTriggerModerator).toBeFalsy();
     });
 
     it('sCENARIO 2: Pre-search complete, animation running → NO moderator', () => {
@@ -337,11 +337,11 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search NOT blocking
       const preSearchBlocking = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(preSearchBlocking).toBe(false);
+      expect(preSearchBlocking).toBeFalsy();
 
       // Animations BLOCKING
       expect(pendingAnimations.size).toBeGreaterThan(0);
@@ -351,7 +351,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
         && !preSearchBlocking
         && pendingAnimations.size === 0;
 
-      expect(shouldTriggerModerator).toBe(false);
+      expect(shouldTriggerModerator).toBeFalsy();
     });
 
     it('sCENARIO 3: Pre-search complete, participant animation running → NO moderator', () => {
@@ -371,21 +371,21 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search NOT blocking
       const preSearchBlocking = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(preSearchBlocking).toBe(false);
+      expect(preSearchBlocking).toBeFalsy();
 
       // Participant animation BLOCKING
-      expect(pendingAnimations.has(AnimationIndices.PARTICIPANT_1)).toBe(true);
+      expect(pendingAnimations.has(AnimationIndices.PARTICIPANT_1)).toBeTruthy();
 
       // Final decision: BLOCK moderator
       const shouldTriggerModerator = participantStatus.allComplete
         && !preSearchBlocking
         && pendingAnimations.size === 0;
 
-      expect(shouldTriggerModerator).toBe(false);
+      expect(shouldTriggerModerator).toBeFalsy();
     });
 
     it('sCENARIO 4: Pre-search complete, all animations done → TRIGGER moderator', () => {
@@ -405,11 +405,11 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // Pre-search NOT blocking
       const preSearchBlocking = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
-      expect(preSearchBlocking).toBe(false);
+      expect(preSearchBlocking).toBeFalsy();
 
       // No animations BLOCKING
       expect(pendingAnimations.size).toBe(0);
@@ -419,7 +419,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
         && !preSearchBlocking
         && pendingAnimations.size === 0;
 
-      expect(shouldTriggerModerator).toBe(true);
+      expect(shouldTriggerModerator).toBeTruthy();
     });
 
     it('sCENARIO 5: No pre-search, participants complete, animations done → TRIGGER moderator', () => {
@@ -436,7 +436,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
       const preSearchForRound = preSearches.find(ps => ps.roundNumber === 0);
 
       // Participants complete
-      expect(participantStatus.allComplete).toBe(true);
+      expect(participantStatus.allComplete).toBeTruthy();
 
       // No pre-search - NOT blocking
       const preSearchBlocking = preSearchForRound && preSearchForRound.status !== MessageStatuses.COMPLETE;
@@ -450,7 +450,7 @@ describe('pre-Search and Moderator Race Conditions', () => {
         && !preSearchBlocking
         && pendingAnimations.size === 0;
 
-      expect(shouldTriggerModerator).toBe(true);
+      expect(shouldTriggerModerator).toBeTruthy();
     });
   });
 });

@@ -34,9 +34,9 @@ function createTestUIMessage(options: {
 }): UIMessage {
   return {
     id: options.id || `msg-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-    role: options.role,
-    parts: [{ type: 'text', text: options.content || 'test message' }],
     metadata: options.metadata,
+    parts: [{ text: options.content || 'test message', type: 'text' }],
+    role: options.role,
   } as UIMessage;
 }
 
@@ -56,29 +56,29 @@ function setupFollowUpRoundState(store: ChatStoreApi, options: {
 
   // Round 0 messages (completed)
   const round0UserMessage = createTestUIMessage({
-    role: MessageRoles.USER,
     metadata: { roundNumber: 0 },
+    role: MessageRoles.USER,
   });
   const round0AssistantMessage = createTestUIMessage({
+    metadata: { participantIndex: 0, roundNumber: 0 },
     role: MessageRoles.ASSISTANT,
-    metadata: { roundNumber: 0, participantIndex: 0 },
   });
 
   // Round 1 user message (follow-up)
   const round1UserMessage = createTestUIMessage({
-    role: MessageRoles.USER,
     metadata: { roundNumber: 1 },
+    role: MessageRoles.USER,
   });
 
   store.setState({
-    thread,
-    participants,
-    messages: [round0UserMessage, round0AssistantMessage, round1UserMessage],
     enableWebSearch,
+    messages: [round0UserMessage, round0AssistantMessage, round1UserMessage],
+    participants,
     screenMode: ScreenModes.OVERVIEW,
+    thread,
   });
 
-  return { thread, participants };
+  return { participants, thread };
 }
 
 // ============================================================================
@@ -105,7 +105,7 @@ describe('changelog Must Complete Before Pre-Search', () => {
       // Streaming trigger should check this and return early
       const isBlockedByConfigChange = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
 
-      expect(isBlockedByConfigChange).toBe(true);
+      expect(isBlockedByConfigChange).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(1);
     });
 
@@ -122,8 +122,8 @@ describe('changelog Must Complete Before Pre-Search', () => {
       // Both flags should block streaming
       const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
 
-      expect(isBlocked).toBe(true);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(isBlocked).toBeTruthy();
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('pre-search placeholder is NOT executed while changelog flags are set', () => {
@@ -144,7 +144,7 @@ describe('changelog Must Complete Before Pre-Search', () => {
 
       // The blocking check that streaming trigger performs
       const isBlockedByChangelog = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(isBlockedByChangelog).toBe(true);
+      expect(isBlockedByChangelog).toBeTruthy();
     });
   });
 
@@ -163,7 +163,7 @@ describe('changelog Must Complete Before Pre-Search', () => {
 
       // Check: still blocked
       let state = store.getState();
-      expect(state.configChangeRoundNumber !== null || state.isWaitingForChangelog).toBe(true);
+      expect(state.configChangeRoundNumber !== null || state.isWaitingForChangelog).toBeTruthy();
 
       // Simulate changelog sync completing
       store.getState().setIsWaitingForChangelog(false);
@@ -171,8 +171,8 @@ describe('changelog Must Complete Before Pre-Search', () => {
 
       // Now pre-search CAN execute
       state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search is still PENDING but now eligible for execution
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.PENDING);
@@ -192,14 +192,14 @@ describe('changelog Must Complete Before Pre-Search', () => {
       // Verify: blocked by configChangeRoundNumber
       let state = store.getState();
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // STEP 2: PATCH completes - changelog fetch starts
       store.getState().setIsWaitingForChangelog(true);
 
       // Verify: still blocked
       state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // STEP 3: Changelog synced - flags cleared
       store.getState().setIsWaitingForChangelog(false);
@@ -207,8 +207,8 @@ describe('changelog Must Complete Before Pre-Search', () => {
 
       // Verify: unblocked for pre-search
       state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // STEP 4: Pre-search executes and completes
       store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);
@@ -220,7 +220,7 @@ describe('changelog Must Complete Before Pre-Search', () => {
       expect(state.preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
 
       // STEP 5: Participants can now stream (once chat.isReady is true)
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
   });
 });
@@ -251,7 +251,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const isBlocked = currentPreSearch?.status === MessageStatuses.PENDING
         || currentPreSearch?.status === MessageStatuses.STREAMING;
 
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('sTREAMING pre-search blocks participant streaming', () => {
@@ -267,7 +267,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const isBlocked = currentPreSearch?.status === MessageStatuses.PENDING
         || currentPreSearch?.status === MessageStatuses.STREAMING;
 
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('cOMPLETE pre-search allows participant streaming', () => {
@@ -283,7 +283,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const isBlocked = currentPreSearch?.status === MessageStatuses.PENDING
         || currentPreSearch?.status === MessageStatuses.STREAMING;
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
 
     it('fAILED pre-search allows participant streaming', () => {
@@ -300,7 +300,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const isBlocked = currentPreSearch?.status === MessageStatuses.PENDING
         || currentPreSearch?.status === MessageStatuses.STREAMING;
 
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 
@@ -318,7 +318,7 @@ describe('participants Must Start After Pre-Search Completes', () => {
       const state = store.getState();
       const isAnimating = state.pendingAnimations.has(0);
 
-      expect(isAnimating).toBe(true);
+      expect(isAnimating).toBeTruthy();
     });
 
     it('50ms timing guard after pre-search completion', () => {
@@ -338,14 +338,16 @@ describe('participants Must Start After Pre-Search Completes', () => {
 
       // Verify pre-search exists
       expect(currentPreSearch).toBeDefined();
-      if (!currentPreSearch)
+      if (!currentPreSearch) {
         throw new Error('expected currentPreSearch');
+      }
 
       // Pre-search is complete, verify timing is reasonable
       const completedAt = currentPreSearch.completedAt;
       expect(completedAt).toBeDefined();
-      if (!completedAt)
+      if (!completedAt) {
         throw new Error('expected completedAt');
+      }
 
       const timestamp = completedAt instanceof Date
         ? completedAt.getTime()
@@ -392,7 +394,7 @@ describe('race Condition Prevention', () => {
         secondAttemptBlocked = true;
       }
 
-      expect(secondAttemptBlocked).toBe(true);
+      expect(secondAttemptBlocked).toBeTruthy();
     });
   });
 
@@ -402,11 +404,11 @@ describe('race Condition Prevention', () => {
 
       // First component tries to trigger
       const didMark1 = store.getState().tryMarkPreSearchTriggered(1);
-      expect(didMark1).toBe(true);
+      expect(didMark1).toBeTruthy();
 
       // Second component tries to trigger same round
       const didMark2 = store.getState().tryMarkPreSearchTriggered(1);
-      expect(didMark2).toBe(false);
+      expect(didMark2).toBeFalsy();
     });
   });
 });
@@ -434,12 +436,12 @@ describe('web Search State Source of Truth', () => {
     const state = store.getState();
 
     // Form state should be source of truth
-    expect(state.enableWebSearch).toBe(true);
-    expect(state.thread?.enableWebSearch).toBe(false);
+    expect(state.enableWebSearch).toBeTruthy();
+    expect(state.thread?.enableWebSearch).toBeFalsy();
 
     // During submission, form state (true) should be used, not thread state (false)
     const shouldWaitForPreSearch = state.enableWebSearch; // Form state
-    expect(shouldWaitForPreSearch).toBe(true);
+    expect(shouldWaitForPreSearch).toBeTruthy();
   });
 
   it('uses thread state after submission completes', () => {
@@ -451,8 +453,8 @@ describe('web Search State Source of Truth', () => {
     const state = store.getState();
 
     // Both should match after submission
-    expect(state.enableWebSearch).toBe(true);
-    expect(state.thread?.enableWebSearch).toBe(true);
+    expect(state.enableWebSearch).toBeTruthy();
+    expect(state.thread?.enableWebSearch).toBeTruthy();
   });
 });
 
@@ -476,7 +478,7 @@ describe('edge Cases', () => {
 
       // No pre-search should exist
       expect(state.preSearches).toHaveLength(0);
-      expect(state.enableWebSearch).toBe(false);
+      expect(state.enableWebSearch).toBeFalsy();
 
       // Should proceed directly to participant streaming (after changelog if needed)
     });
@@ -491,12 +493,12 @@ describe('edge Cases', () => {
 
       const state = store.getState();
 
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search can execute immediately
       const isBlockedByChangelog = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(isBlockedByChangelog).toBe(false);
+      expect(isBlockedByChangelog).toBeFalsy();
     });
   });
 
@@ -519,7 +521,7 @@ describe('edge Cases', () => {
       const needsResumption = state.preSearches[0]?.status === MessageStatuses.STREAMING
         && !state.hasPreSearchBeenTriggered(1);
 
-      expect(needsResumption).toBe(true);
+      expect(needsResumption).toBeTruthy();
     });
   });
 });

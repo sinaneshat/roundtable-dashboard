@@ -29,6 +29,7 @@ import {
   UIMessageRoles,
 } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
+import { z } from 'zod';
 
 import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
 import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
@@ -61,6 +62,26 @@ import {
  */
 export type MessageInputType = ApiMessage;
 
+// ============================================================================
+// TYPE GUARD SCHEMAS - For narrowed UIMessage types
+// ============================================================================
+
+/**
+ * Schema for UIMessage with pre-search metadata
+ */
+const _UIMessageWithPreSearchMetadataSchema = z.custom<UIMessage>().and(
+  z.object({ metadata: z.custom<DbPreSearchMessageMetadata>() }),
+);
+type UIMessageWithPreSearchMetadata = z.infer<typeof _UIMessageWithPreSearchMetadataSchema>;
+
+/**
+ * Schema for UIMessage with participant metadata
+ */
+const _UIMessageWithParticipantMetadataSchema = z.custom<UIMessage>().and(
+  z.object({ metadata: z.custom<DbAssistantMessageMetadata>() }),
+);
+type UIMessageWithParticipantMetadata = z.infer<typeof _UIMessageWithParticipantMetadataSchema>;
+
 const UNKNOWN_FALLBACK = 'unknown' as const;
 
 // ============================================================================
@@ -91,7 +112,7 @@ function isUIMessageRole(
  */
 export function isPreSearchMessage(
   message: UIMessage,
-): message is UIMessage & { metadata: DbPreSearchMessageMetadata } {
+): message is UIMessageWithPreSearchMetadata {
   const metadata = getPreSearchMetadata(message.metadata);
   return metadata !== null;
 }
@@ -104,9 +125,10 @@ export function isPreSearchMessage(
  */
 export function isParticipantMessage(
   message: UIMessage,
-): message is UIMessage & { metadata: DbAssistantMessageMetadata } {
-  if (!message.metadata || message.role !== MessageRoles.ASSISTANT)
+): message is UIMessageWithParticipantMetadata {
+  if (!message.metadata || message.role !== MessageRoles.ASSISTANT) {
     return false;
+  }
   const metadata = getParticipantMetadata(message.metadata);
   return metadata !== null;
 }
@@ -156,9 +178,9 @@ export function chatMessageToUIMessage(
     : message.roundNumber !== null && message.roundNumber !== undefined
       ? {
           ...(message.metadata || {}),
-          role: message.role,
-          participantId: message.participantId || undefined,
           createdAt,
+          participantId: message.participantId || undefined,
+          role: message.role,
           roundNumber: message.roundNumber,
         }
       : null;
@@ -171,9 +193,9 @@ export function chatMessageToUIMessage(
 
   return {
     id: message.id,
-    role: message.role,
-    parts: normalizedParts,
     metadata,
+    parts: normalizedParts,
+    role: message.role,
   };
 }
 
@@ -230,11 +252,11 @@ export function chatMessagesToUIMessages(
             const metadataForEnrichment = buildAssistantMetadata(
               getAssistantMetadata(message.metadata) || {},
               {
-                roundNumber: explicitRound,
-                participantId: participant.id,
                 model: participant.modelId,
-                participantRole: participant.role,
+                participantId: participant.id,
                 participantIndex: 0,
+                participantRole: participant.role,
+                roundNumber: explicitRound,
               },
             );
 
@@ -244,9 +266,9 @@ export function chatMessagesToUIMessages(
                 metadataForEnrichment,
                 {
                   id: participant.id,
+                  index: 0,
                   modelId: participant.modelId,
                   role: participant.role ?? null,
-                  index: 0,
                 },
               ),
             };
@@ -298,10 +320,10 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = buildAssistantMetadata(
             getAssistantMetadata(message.metadata) || {},
             {
-              roundNumber: currentRound ?? 0,
-              participantId: participant.id,
               model: participant.modelId,
+              participantId: participant.id,
               participantRole: participant.role,
+              roundNumber: currentRound ?? 0,
             },
           );
         } else {
@@ -374,8 +396,9 @@ export function filterByRound(
 
 export function filterNonEmptyMessages(messages: UIMessage[]): UIMessage[] {
   return messages.filter((message) => {
-    if (message.role === MessageRoles.ASSISTANT)
+    if (message.role === MessageRoles.ASSISTANT) {
       return true;
+    }
 
     if (message.role === MessageRoles.USER) {
       const textParts = message.parts?.filter(
@@ -422,7 +445,7 @@ export function getParticipantMessagesForRound(
       return false;
     }
 
-    if (getParticipantId(m.metadata) == null) {
+    if (getParticipantId(m.metadata) === null) {
       return false;
     }
 
@@ -441,7 +464,7 @@ export function getParticipantMessageIds(messages: UIMessage[]): string[] {
   return Array.from(
     new Set(
       messages
-        .filter(m => getParticipantId(m.metadata) != null)
+        .filter(m => getParticipantId(m.metadata) !== null)
         .map(m => m.id),
     ),
   );
@@ -496,7 +519,7 @@ export function createErrorUIMessage(
 ): UIMessage {
   const validatedMetadata = errorMetadata
     ? ErrorMetadataSchema.safeParse(errorMetadata)
-    : { success: false as const, data: undefined };
+    : { data: undefined, success: false as const };
 
   const metadata = validatedMetadata.success ? validatedMetadata.data : errorMetadata;
 
@@ -506,31 +529,31 @@ export function createErrorUIMessage(
   const errorMeta = buildAssistantMetadata(
     {},
     {
+      errorCategory: metadata?.errorCategory || errorType,
+      errorMessage,
+      errorType,
+      hasError: true,
+      model: participant.modelId,
+      openRouterCode: metadata?.openRouterCode,
+      openRouterError,
       participantId: participant.id,
       participantIndex: currentIndex,
       participantRole: participant.role,
-      model: participant.modelId,
-      roundNumber,
-      hasError: true,
-      errorType,
-      errorMessage,
-      errorCategory: metadata?.errorCategory || errorType,
-      statusCode: metadata?.statusCode,
-      rawErrorMessage: metadata?.rawErrorMessage,
       providerMessage:
         metadata?.providerMessage
         || metadata?.rawErrorMessage
         || errorMessage,
-      openRouterError,
-      openRouterCode: metadata?.openRouterCode,
+      rawErrorMessage: metadata?.rawErrorMessage,
+      roundNumber,
+      statusCode: metadata?.statusCode,
     },
   );
 
   return {
     id: `error-${crypto.randomUUID()}-${currentIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: '' }],
     metadata: errorMeta,
+    parts: [{ text: '', type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -576,8 +599,8 @@ export function mergeParticipantMetadata(
 
   const usageResult = UsageSchema.partial().safeParse(validatedMetadata?.usage);
   const usage = {
-    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
     completionTokens: usageResult.success ? (usageResult.data.completionTokens ?? 0) : 0,
+    promptTokens: usageResult.success ? (usageResult.data.promptTokens ?? 0) : 0,
     totalTokens: usageResult.success ? (usageResult.data.totalTokens ?? 0) : 0,
   };
 
@@ -602,9 +625,9 @@ export function mergeParticipantMetadata(
   return buildAssistantMetadata(
     {
       finishReason: safeFinishReason,
-      usage,
-      isTransient: validatedMetadata?.isTransient === true,
       isPartialResponse: validatedMetadata?.isPartialResponse === true,
+      isTransient: validatedMetadata?.isTransient === true,
+      usage,
       ...(validatedMetadata?.createdAt && typeof validatedMetadata.createdAt === 'string' && {
         createdAt: validatedMetadata.createdAt,
       }),
@@ -620,13 +643,13 @@ export function mergeParticipantMetadata(
       }),
     },
     {
+      hasError,
+      model: participant.modelId,
       participantId: effectiveParticipantId,
       participantIndex: currentIndex,
       participantRole: participant.role,
-      model: participant.modelId,
       roundNumber,
-      hasError,
-      ...(hasError && { errorType: safeErrorType, errorMessage }),
+      ...(hasError && { errorMessage, errorType: safeErrorType }),
     },
   );
 }

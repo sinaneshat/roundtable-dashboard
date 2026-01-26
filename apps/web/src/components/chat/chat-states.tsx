@@ -41,12 +41,12 @@ type LoadingStateProps = {
   size?: ComponentSize;
 };
 
-const DEFAULT_SIZE_CONFIG = { spinner: 'size-6', title: 'text-base', container: 'py-8 gap-3' } as const;
+const DEFAULT_SIZE_CONFIG = { container: 'py-8 gap-3', spinner: 'size-6', title: 'text-base' } as const;
 
 const sizeConfig: Partial<Record<ComponentSize, { spinner: string; title: string; container: string }>> = {
-  [ComponentSizes.SM]: { spinner: 'size-4', title: 'text-sm', container: 'py-4 gap-2' },
+  [ComponentSizes.LG]: { container: 'py-12 gap-4', spinner: 'size-8', title: 'text-lg' },
   [ComponentSizes.MD]: DEFAULT_SIZE_CONFIG,
-  [ComponentSizes.LG]: { spinner: 'size-8', title: 'text-lg', container: 'py-12 gap-4' },
+  [ComponentSizes.SM]: { container: 'py-4 gap-2', spinner: 'size-4', title: 'text-sm' },
 };
 
 /**
@@ -58,11 +58,11 @@ const sizeConfig: Partial<Record<ComponentSize, { spinner: string; title: string
  * - card: Loading state in a card container
  */
 export function LoadingState({
-  title,
-  message,
-  variant = LoadingStateVariants.CENTERED,
   className,
+  message,
   size = ComponentSizes.MD,
+  title,
+  variant = LoadingStateVariants.CENTERED,
 }: LoadingStateProps) {
   const t = useTranslations();
   const defaultTitle = title || t('states.loading.default');
@@ -124,15 +124,15 @@ type ErrorStateProps = {
   icon?: React.ComponentType<{ className?: string }>;
 };
 export function ErrorState({
-  title,
+  className,
   description,
+  icon,
+  networkType = NetworkErrorTypes.CONNECTION,
   onRetry,
   retryLabel,
-  variant = ErrorStateVariants.CARD,
   severity = ErrorSeverities.FAILED,
-  networkType = NetworkErrorTypes.CONNECTION,
-  className,
-  icon,
+  title,
+  variant = ErrorStateVariants.CARD,
 }: ErrorStateProps) {
   const t = useTranslations();
   const defaultRetryLabel = retryLabel || t('actions.tryAgain');
@@ -144,26 +144,26 @@ export function ErrorState({
     badgeVariant: 'destructive' | 'secondary';
   };
   const networkConfig: Record<NetworkErrorType, NetworkConfigItem> = {
-    [NetworkErrorTypes.OFFLINE]: {
-      icon: Icons.wifiOff,
-      title: t('states.error.offline'),
-      description: t('states.error.offlineDescription'),
-      badge: t('networkStatus.offline'),
-      badgeVariant: 'destructive',
-    },
-    [NetworkErrorTypes.TIMEOUT]: {
-      icon: Icons.clock,
-      title: t('states.error.timeout'),
-      description: t('states.error.timeoutDescription'),
-      badge: t('networkStatus.timeout'),
-      badgeVariant: 'secondary',
-    },
     [NetworkErrorTypes.CONNECTION]: {
-      icon: Icons.wifi,
-      title: t('states.error.network'),
-      description: t('states.error.networkDescription'),
       badge: t('networkStatus.connectionError'),
       badgeVariant: 'destructive',
+      description: t('states.error.networkDescription'),
+      icon: Icons.wifi,
+      title: t('states.error.network'),
+    },
+    [NetworkErrorTypes.OFFLINE]: {
+      badge: t('networkStatus.offline'),
+      badgeVariant: 'destructive',
+      description: t('states.error.offlineDescription'),
+      icon: Icons.wifiOff,
+      title: t('states.error.offline'),
+    },
+    [NetworkErrorTypes.TIMEOUT]: {
+      badge: t('networkStatus.timeout'),
+      badgeVariant: 'secondary',
+      description: t('states.error.timeoutDescription'),
+      icon: Icons.clock,
+      title: t('states.error.timeout'),
     },
   };
   type SeverityConfigItem = {
@@ -175,25 +175,25 @@ export function ErrorState({
   };
   const severityConfig: Record<ErrorSeverity, SeverityConfigItem> = {
     [ErrorSeverities.FAILED]: {
-      icon: Icons.xCircle,
-      title: t('states.error.default'),
-      description: t('states.error.description'),
       alertVariant: 'destructive',
-      iconColor: 'text-destructive',
-    },
-    [ErrorSeverities.WARNING]: {
-      icon: Icons.alertTriangle,
-      title: t('status.warning'),
       description: t('states.error.description'),
-      alertVariant: 'default',
-      iconColor: 'text-chart-2',
+      icon: Icons.xCircle,
+      iconColor: 'text-destructive',
+      title: t('states.error.default'),
     },
     [ErrorSeverities.INFO]: {
-      icon: Icons.info,
-      title: t('status.info'),
-      description: t('states.error.description'),
       alertVariant: 'default',
+      description: t('states.error.description'),
+      icon: Icons.info,
       iconColor: 'text-primary',
+      title: t('status.info'),
+    },
+    [ErrorSeverities.WARNING]: {
+      alertVariant: 'default',
+      description: t('states.error.description'),
+      icon: Icons.alertTriangle,
+      iconColor: 'text-chart-2',
+      title: t('status.warning'),
     },
   };
   if (variant === ErrorStateVariants.NETWORK) {
@@ -312,56 +312,56 @@ type EmptyStateProps = {
   icon?: ReactNode;
 };
 export function EmptyState({
-  title,
-  description,
   action,
-  variant = EmptyStateVariants.GENERAL,
+  className,
+  description,
+  icon,
   size = 'md',
   style = EmptyStateStyles.DEFAULT,
-  className,
-  icon,
+  title,
+  variant = EmptyStateVariants.GENERAL,
 }: EmptyStateProps) {
   const t = useTranslations();
   const emptyStateConfig = {
-    [EmptyStateVariants.GENERAL]: {
-      icon: Icons.package,
-      title: t('states.empty.default'),
-      description: t('states.empty.description'),
-    },
     [EmptyStateVariants.CUSTOM]: {
+      description: t('states.empty.description'),
       icon: Icons.alertCircle,
       title: t('states.empty.default'),
+    },
+    [EmptyStateVariants.GENERAL]: {
       description: t('states.empty.description'),
+      icon: Icons.package,
+      title: t('states.empty.default'),
     },
   };
   const config = emptyStateConfig[variant] || emptyStateConfig[EmptyStateVariants.GENERAL];
   const Icon = icon || config.icon;
   const sizeConfig = {
-    sm: {
-      container: 'py-6',
-      iconContainer: 'w-12 h-12',
-      iconSize: 'h-6 w-6',
-      title: 'text-base font-semibold',
-      description: 'text-sm',
-    },
-    md: {
-      container: 'py-8',
-      iconContainer: 'w-16 h-16',
-      iconSize: 'h-8 w-8',
-      title: 'text-lg font-semibold',
-      description: 'text-sm',
-    },
     lg: {
       container: 'py-12',
+      description: 'text-base',
       iconContainer: 'w-24 h-24',
       iconSize: 'h-12 w-12',
       title: 'text-2xl font-bold',
-      description: 'text-base',
+    },
+    md: {
+      container: 'py-8',
+      description: 'text-sm',
+      iconContainer: 'w-16 h-16',
+      iconSize: 'h-8 w-8',
+      title: 'text-lg font-semibold',
+    },
+    sm: {
+      container: 'py-6',
+      description: 'text-sm',
+      iconContainer: 'w-12 h-12',
+      iconSize: 'h-6 w-6',
+      title: 'text-base font-semibold',
     },
   };
   const styleConfig = {
-    [EmptyStateStyles.DEFAULT]: 'border bg-card',
     [EmptyStateStyles.DASHED]: 'border-2 border-dashed border-border/50 bg-gradient-to-br from-muted/30 to-background',
+    [EmptyStateStyles.DEFAULT]: 'border bg-card',
     [EmptyStateStyles.GRADIENT]: 'border bg-gradient-to-br from-card to-card/50 shadow-lg',
   };
   const sizeSettings = sizeConfig[size];
@@ -418,11 +418,11 @@ type SuccessStateProps = {
   className?: string;
 };
 export function SuccessState({
-  title,
-  description,
   action,
-  variant = SuccessStateVariants.ALERT,
   className,
+  description,
+  title,
+  variant = SuccessStateVariants.ALERT,
 }: SuccessStateProps) {
   if (variant === SuccessStateVariants.CARD) {
     return (
@@ -476,14 +476,14 @@ type ChatSectionProps = {
 };
 export function ChatSection({
   children,
+  className,
   delay = 0.05,
   spacing = SpacingVariants.DEFAULT,
-  className,
 }: ChatSectionProps) {
   const spacingConfig = {
-    [SpacingVariants.TIGHT]: 'space-y-4',
     [SpacingVariants.DEFAULT]: 'space-y-6',
     [SpacingVariants.LOOSE]: 'space-y-8',
+    [SpacingVariants.TIGHT]: 'space-y-4',
   };
   return (
     <FadeIn delay={delay} className={cn(spacingConfig[spacing], className)}>

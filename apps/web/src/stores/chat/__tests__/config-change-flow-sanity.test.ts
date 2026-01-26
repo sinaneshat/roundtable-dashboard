@@ -37,32 +37,32 @@ import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../util
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: ChatModes.DEBATING,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.DEBATING,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
 
 function createMockParticipant(index: number, overrides?: Partial<ChatParticipant>): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    role: `Role ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: `Role ${index}`,
+    threadId: 'thread-123',
     updatedAt: new Date(),
     ...overrides,
   };
@@ -81,14 +81,14 @@ function simulateSubmission(
     participants: ChatParticipant[];
   },
 ): void {
-  const { roundNumber, message, hasConfigChanges, enableWebSearch, participants } = options;
+  const { enableWebSearch, hasConfigChanges, message, participants, roundNumber } = options;
   const state = store.getState();
 
   // 1. Create and add optimistic user message
   const optimisticMessage = createOptimisticUserMessage({
+    fileParts: [],
     roundNumber,
     text: message,
-    fileParts: [],
   });
   state.setMessages(currentMessages => [...currentMessages, optimisticMessage]);
 
@@ -102,8 +102,8 @@ function simulateSubmission(
   // 4. Create pre-search placeholder if web search enabled
   if (enableWebSearch) {
     state.addPreSearch(createPlaceholderPreSearch({
-      threadId: 'thread-123',
       roundNumber,
+      threadId: 'thread-123',
       userQuery: message,
     }));
   }
@@ -129,7 +129,7 @@ function simulatePatchCompletion(
     participants: ChatParticipant[];
   },
 ): void {
-  const { hasAnyChanges, thread, participants } = options;
+  const { hasAnyChanges, participants, thread } = options;
   const state = store.getState();
 
   // Update thread and participants (this can trigger screen initialization)
@@ -198,18 +198,18 @@ describe('config Change Flow Sanity Check', () => {
       // STEP 2: User submits message
       // ============================================================================
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Second message with config changes',
-        hasConfigChanges: true,
         enableWebSearch: true,
+        hasConfigChanges: true,
+        message: 'Second message with config changes',
         participants: round1Participants,
+        roundNumber: 1,
       });
 
       // Verify submission state
       let currentState = store.getState();
       expect(currentState.streamingRoundNumber).toBe(1);
       expect(currentState.configChangeRoundNumber).toBe(1); // Set BEFORE PATCH
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
       expect(currentState.expectedParticipantIds).toEqual(['gpt-4', 'claude-3', 'gemini-pro']);
 
       // Pre-search placeholder created
@@ -232,18 +232,18 @@ describe('config Change Flow Sanity Check', () => {
 
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: updatedThread,
         participants: round1Participants,
+        thread: updatedThread,
       });
 
       // Verify PATCH completion state
       currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(true); // Set after PATCH
+      expect(currentState.isWaitingForChangelog).toBeTruthy(); // Set after PATCH
       expect(currentState.configChangeRoundNumber).toBe(1); // Still blocking
 
       // CRITICAL: Placeholders should NOT be cleared
       expect(currentState.streamingRoundNumber).toBe(1);
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
       expect(currentState.expectedParticipantIds).toEqual(['gpt-4', 'claude-3', 'gemini-pro']);
 
       // Pre-search placeholder should still exist
@@ -262,12 +262,12 @@ describe('config Change Flow Sanity Check', () => {
 
       // Verify changelog completion state
       currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false); // Cleared
-      expect(currentState.configChangeRoundNumber).toBe(null); // Cleared
+      expect(currentState.isWaitingForChangelog).toBeFalsy(); // Cleared
+      expect(currentState.configChangeRoundNumber).toBeNull(); // Cleared
 
       // Placeholders should STILL exist
       expect(currentState.streamingRoundNumber).toBe(1);
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
       expect(currentState.expectedParticipantIds).toEqual(['gpt-4', 'claude-3', 'gemini-pro']);
 
       // ============================================================================
@@ -276,11 +276,11 @@ describe('config Change Flow Sanity Check', () => {
       const isBlockedByChangelog = currentState.isWaitingForChangelog;
       const isBlockedByConfigChange = currentState.configChangeRoundNumber !== null;
 
-      expect(isBlockedByChangelog).toBe(false);
-      expect(isBlockedByConfigChange).toBe(false);
+      expect(isBlockedByChangelog).toBeFalsy();
+      expect(isBlockedByConfigChange).toBeFalsy();
 
       // Streaming trigger should be ready
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
       expect(currentState.nextParticipantToTrigger).toBe(0);
     });
 
@@ -291,18 +291,18 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Second message without config changes',
-        hasConfigChanges: false,
         enableWebSearch: false,
+        hasConfigChanges: false,
+        message: 'Second message without config changes',
         participants,
+        roundNumber: 1,
       });
 
       // Verify submission state
       let currentState = store.getState();
       expect(currentState.streamingRoundNumber).toBe(1);
-      expect(currentState.configChangeRoundNumber).toBe(null); // Not set (no changes)
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.configChangeRoundNumber).toBeNull(); // Not set (no changes)
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
 
       // ============================================================================
       // STEP 2: PATCH completes (no changes)
@@ -311,18 +311,18 @@ describe('config Change Flow Sanity Check', () => {
 
       simulatePatchCompletion(store, {
         hasAnyChanges: false,
-        thread: updatedThread,
         participants,
+        thread: updatedThread,
       });
 
       // Verify PATCH completion state
       currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false); // NOT set (no changes)
-      expect(currentState.configChangeRoundNumber).toBe(null); // Cleared immediately
+      expect(currentState.isWaitingForChangelog).toBeFalsy(); // NOT set (no changes)
+      expect(currentState.configChangeRoundNumber).toBeNull(); // Cleared immediately
 
       // Placeholders should exist
       expect(currentState.streamingRoundNumber).toBe(1);
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
 
       // ============================================================================
       // STEP 3: Verify streaming can start immediately (no changelog fetch)
@@ -330,11 +330,11 @@ describe('config Change Flow Sanity Check', () => {
       const isBlockedByChangelog = currentState.isWaitingForChangelog;
       const isBlockedByConfigChange = currentState.configChangeRoundNumber !== null;
 
-      expect(isBlockedByChangelog).toBe(false);
-      expect(isBlockedByConfigChange).toBe(false);
+      expect(isBlockedByChangelog).toBeFalsy();
+      expect(isBlockedByConfigChange).toBeFalsy();
 
       // Streaming should be ready
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
     });
 
     it('verifies streaming is blocked while waiting for changelog', () => {
@@ -349,18 +349,18 @@ describe('config Change Flow Sanity Check', () => {
       state.setParticipants(participants);
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Test message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Test message',
         participants,
+        roundNumber: 1,
       });
 
       // PATCH completes
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ updatedAt: new Date() }),
         participants,
+        thread: createMockThread({ updatedAt: new Date() }),
       });
 
       // Verify streaming is blocked
@@ -368,8 +368,8 @@ describe('config Change Flow Sanity Check', () => {
       const shouldBlockStreaming = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
 
-      expect(shouldBlockStreaming).toBe(true);
-      expect(currentState.isWaitingForChangelog).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
+      expect(currentState.isWaitingForChangelog).toBeTruthy();
       expect(currentState.configChangeRoundNumber).toBe(1);
 
       // Changelog completes
@@ -380,7 +380,7 @@ describe('config Change Flow Sanity Check', () => {
       const stillBlocked = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
 
-      expect(stillBlocked).toBe(false);
+      expect(stillBlocked).toBeFalsy();
     });
 
     it('verifies pre-search can start after changelog completes', () => {
@@ -391,18 +391,18 @@ describe('config Change Flow Sanity Check', () => {
       state.setEnableWebSearch(true);
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Search query',
-        hasConfigChanges: true,
         enableWebSearch: true,
+        hasConfigChanges: true,
+        message: 'Search query',
         participants,
+        roundNumber: 1,
       });
 
       // PATCH completes
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ enableWebSearch: true, updatedAt: new Date() }),
         participants,
+        thread: createMockThread({ enableWebSearch: true, updatedAt: new Date() }),
       });
 
       // Pre-search should exist but be blocked
@@ -413,18 +413,18 @@ describe('config Change Flow Sanity Check', () => {
 
       // Pre-search should not start yet (blocked by changelog)
       const isBlocked = currentState.isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
 
       // Changelog completes
       simulateChangelogCompletion(store);
 
       // Pre-search can now start
       currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
 
       // Simulate pre-search starting
       const didMark = state.tryMarkPreSearchTriggered(1);
-      expect(didMark).toBe(true);
+      expect(didMark).toBeTruthy();
     });
   });
 
@@ -442,17 +442,17 @@ describe('config Change Flow Sanity Check', () => {
       state.setParticipants(participants);
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Round 1 message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Round 1 message',
         participants,
+        roundNumber: 1,
       });
 
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ updatedAt: new Date() }),
         participants,
+        thread: createMockThread({ updatedAt: new Date() }),
       });
 
       simulateChangelogCompletion(store);
@@ -466,17 +466,17 @@ describe('config Change Flow Sanity Check', () => {
       state.setSelectedMode(ChatModes.SOLVING);
 
       simulateSubmission(store, {
-        roundNumber: 2,
-        message: 'Round 2 message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Round 2 message',
         participants,
+        roundNumber: 2,
       });
 
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ mode: ChatModes.SOLVING, updatedAt: new Date() }),
         participants,
+        thread: createMockThread({ mode: ChatModes.SOLVING, updatedAt: new Date() }),
       });
 
       simulateChangelogCompletion(store);
@@ -490,21 +490,21 @@ describe('config Change Flow Sanity Check', () => {
       state.setEnableWebSearch(true);
 
       simulateSubmission(store, {
-        roundNumber: 3,
-        message: 'Round 3 message',
-        hasConfigChanges: true,
         enableWebSearch: true,
+        hasConfigChanges: true,
+        message: 'Round 3 message',
         participants,
+        roundNumber: 3,
       });
 
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
+        participants,
         thread: createMockThread({
-          mode: ChatModes.SOLVING,
           enableWebSearch: true,
+          mode: ChatModes.SOLVING,
           updatedAt: new Date(),
         }),
-        participants,
       });
 
       simulateChangelogCompletion(store);
@@ -512,7 +512,7 @@ describe('config Change Flow Sanity Check', () => {
       // Verify final state
       const currentState = store.getState();
       expect(currentState.selectedMode).toBe(ChatModes.SOLVING);
-      expect(currentState.enableWebSearch).toBe(true);
+      expect(currentState.enableWebSearch).toBeTruthy();
       expect(currentState.participants).toHaveLength(3);
     });
   });
@@ -529,11 +529,11 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'New message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'New message',
         participants,
+        roundNumber: 1,
       });
 
       // Flags should be updated to new round
@@ -546,17 +546,17 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Test message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Test message',
         participants,
+        roundNumber: 1,
       });
 
       // PATCH fails - flags should remain set
       const currentState = store.getState();
       expect(currentState.configChangeRoundNumber).toBe(1);
-      expect(currentState.waitingToStartStreaming).toBe(true);
+      expect(currentState.waitingToStartStreaming).toBeTruthy();
 
       // Placeholders should still exist
       expect(currentState.streamingRoundNumber).toBe(1);
@@ -569,18 +569,18 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Test message',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Test message',
         participants,
+        roundNumber: 1,
       });
 
       // PATCH completes
       simulatePatchCompletion(store, {
         hasAnyChanges: true,
-        thread: createMockThread({ updatedAt: new Date() }),
         participants,
+        thread: createMockThread({ updatedAt: new Date() }),
       });
 
       // Changelog timeout - clear flags
@@ -589,13 +589,13 @@ describe('config Change Flow Sanity Check', () => {
 
       // Verify flags cleared
       const currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
-      expect(currentState.configChangeRoundNumber).toBe(null);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
+      expect(currentState.configChangeRoundNumber).toBeNull();
 
       // Streaming should be unblocked
       const isBlocked = currentState.isWaitingForChangelog
         || currentState.configChangeRoundNumber !== null;
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
 
     it('handles rapid config changes before submission', () => {
@@ -613,16 +613,16 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Final message',
-        hasConfigChanges: true,
         enableWebSearch: true,
+        hasConfigChanges: true,
+        message: 'Final message',
         participants,
+        roundNumber: 1,
       });
 
       // Should use final state
       const currentState = store.getState();
-      expect(currentState.enableWebSearch).toBe(true);
+      expect(currentState.enableWebSearch).toBeTruthy();
       expect(currentState.selectedMode).toBe(ChatModes.SOLVING);
     });
   });
@@ -640,11 +640,11 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Message from overview',
-        hasConfigChanges: true,
         enableWebSearch: true,
+        hasConfigChanges: true,
+        message: 'Message from overview',
         participants,
+        roundNumber: 1,
       });
 
       // Verify config changes work in overview mode
@@ -665,11 +665,11 @@ describe('config Change Flow Sanity Check', () => {
       const participants = store.getState().participants;
 
       simulateSubmission(store, {
-        roundNumber: 1,
-        message: 'Message from thread',
-        hasConfigChanges: true,
         enableWebSearch: false,
+        hasConfigChanges: true,
+        message: 'Message from thread',
         participants,
+        roundNumber: 1,
       });
 
       // Verify config changes work in thread mode
@@ -688,7 +688,7 @@ describe('config Change Flow Sanity Check', () => {
       state.setConfigChangeRoundNumber(1);
 
       let currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(true);
+      expect(currentState.isWaitingForChangelog).toBeTruthy();
       expect(currentState.configChangeRoundNumber).toBe(1);
 
       // Clear both flags atomically
@@ -696,8 +696,8 @@ describe('config Change Flow Sanity Check', () => {
 
       // Verify both cleared
       currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
-      expect(currentState.configChangeRoundNumber).toBe(null);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
+      expect(currentState.configChangeRoundNumber).toBeNull();
     });
 
     it('verifies flags cleared together not separately', () => {
@@ -717,8 +717,8 @@ describe('config Change Flow Sanity Check', () => {
 
       // Verify both cleared
       const currentState = store.getState();
-      expect(currentState.isWaitingForChangelog).toBe(false);
-      expect(currentState.configChangeRoundNumber).toBe(null);
+      expect(currentState.isWaitingForChangelog).toBeFalsy();
+      expect(currentState.configChangeRoundNumber).toBeNull();
     });
   });
 });

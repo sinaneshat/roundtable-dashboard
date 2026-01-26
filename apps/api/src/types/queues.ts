@@ -29,16 +29,16 @@ import {
  * @see src/api/services/title-generation-queue.service.ts - Producer
  */
 export const TitleGenerationQueueMessageSchema = z.object({
+  /** First message content for title generation */
+  firstMessage: z.string(),
   /** Unique message ID for idempotency */
   messageId: z.string(),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
   /** Thread ID to update */
   threadId: z.string(),
   /** User ID who owns the thread */
   userId: z.string(),
-  /** First message content for title generation */
-  firstMessage: z.string(),
-  /** ISO timestamp when message was queued */
-  queuedAt: z.string(),
 });
 
 export type TitleGenerationQueueMessage = z.infer<typeof TitleGenerationQueueMessageSchema>;
@@ -55,24 +55,24 @@ export type TitleGenerationQueueMessage = z.infer<typeof TitleGenerationQueueMes
  * @see src/api/routes/chat/handlers/streaming.handler.ts - Producer
  */
 export const TriggerParticipantQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT),
-  /** Unique message ID for idempotency: trigger-{threadId}-r{round}-p{index} */
-  messageId: z.string(),
-  /** Thread ID */
-  threadId: z.string(),
-  /** Round number */
-  roundNumber: z.number(),
-  /** Index of participant to trigger (0-based) */
-  participantIndex: z.number(),
-  /** User ID who owns the thread */
-  userId: z.string(),
-  /** User's session token for auth - queue consumer uses this as Cookie header */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** Optional attachment IDs to pass to next participant */
   attachmentIds: z.array(z.string()).optional(),
+  /** Unique message ID for idempotency: trigger-{threadId}-r{round}-p{index} */
+  messageId: z.string(),
+  /** Index of participant to trigger (0-based) */
+  participantIndex: z.number(),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** Round number */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT),
+  /** User ID who owns the thread */
+  userId: z.string(),
 });
 
 export type TriggerParticipantQueueMessage = z.infer<typeof TriggerParticipantQueueMessageSchema>;
@@ -85,20 +85,20 @@ export type TriggerParticipantQueueMessage = z.infer<typeof TriggerParticipantQu
  * @see src/api/routes/chat/handlers/streaming.handler.ts - Producer
  */
 export const TriggerModeratorQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_MODERATOR),
   /** Unique message ID for idempotency: trigger-{threadId}-r{round}-moderator */
   messageId: z.string(),
-  /** Thread ID */
-  threadId: z.string(),
-  /** Round number */
-  roundNumber: z.number(),
-  /** User ID who owns the thread */
-  userId: z.string(),
-  /** User's session token for auth - queue consumer uses this as Cookie header */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** Round number */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_MODERATOR),
+  /** User ID who owns the thread */
+  userId: z.string(),
 });
 
 export type TriggerModeratorQueueMessage = z.infer<typeof TriggerModeratorQueueMessageSchema>;
@@ -121,22 +121,22 @@ export type TriggerModeratorQueueMessage = z.infer<typeof TriggerModeratorQueueM
  * @see src/api/routes/chat/handlers/streaming.handler.ts - Producer (on error)
  */
 export const CheckRoundCompletionQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION),
   /** Unique message ID for idempotency */
   messageId: z.string(),
-  /** Thread ID to check */
-  threadId: z.string(),
-  /** Round number to check */
-  roundNumber: z.number(),
-  /** User ID who owns the thread */
-  userId: z.string(),
-  /** User's session token for auth - queue consumer uses this as Cookie header */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
-  /** Reason for the check */
-  reason: CheckRoundCompletionReasonSchema,
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** Reason for the check */
+  reason: CheckRoundCompletionReasonSchema,
+  /** Round number to check */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID to check */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION),
+  /** User ID who owns the thread */
+  userId: z.string(),
 });
 
 export type CheckRoundCompletionQueueMessage = z.infer<typeof CheckRoundCompletionQueueMessageSchema>;
@@ -153,24 +153,24 @@ export type CheckRoundCompletionQueueMessage = z.infer<typeof CheckRoundCompleti
  * @see src/api/routes/chat/handlers/stream-resume.handler.ts - Producer (on recovery)
  */
 export const TriggerPreSearchQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH),
-  /** Unique message ID for idempotency: trigger-{threadId}-r{round}-presearch */
-  messageId: z.string(),
-  /** Thread ID */
-  threadId: z.string(),
-  /** Round number */
-  roundNumber: z.number(),
-  /** User ID who owns the thread */
-  userId: z.string(),
-  /** User's session token for auth - queue consumer uses this as Cookie header */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
-  /** User query for web search */
-  userQuery: z.string(),
   /** Optional attachment IDs */
   attachmentIds: z.array(z.string()).optional(),
+  /** Unique message ID for idempotency: trigger-{threadId}-r{round}-presearch */
+  messageId: z.string(),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** Round number */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH),
+  /** User ID who owns the thread */
+  userId: z.string(),
+  /** User query for web search */
+  userQuery: z.string(),
 });
 
 export type TriggerPreSearchQueueMessage = z.infer<typeof TriggerPreSearchQueueMessageSchema>;
@@ -187,18 +187,18 @@ export type TriggerPreSearchQueueMessage = z.infer<typeof TriggerPreSearchQueueM
  * @see src/routes/admin/jobs/handler.ts - Producer
  */
 export const StartAutomatedJobQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.START_AUTOMATED_JOB),
-  /** Unique message ID for idempotency */
-  messageId: z.string(),
   /** Job ID to start */
   jobId: z.string(),
-  /** User ID who owns the job */
-  userId: z.string(),
-  /** User's session token for auth */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** User's session token for auth */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.START_AUTOMATED_JOB),
+  /** User ID who owns the job */
+  userId: z.string(),
 });
 
 export type StartAutomatedJobQueueMessage = z.infer<typeof StartAutomatedJobQueueMessageSchema>;
@@ -210,22 +210,22 @@ export type StartAutomatedJobQueueMessage = z.infer<typeof StartAutomatedJobQueu
  * @see src/workers/round-orchestration-queue.ts - Consumer
  */
 export const ContinueAutomatedJobQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB),
-  /** Unique message ID for idempotency */
-  messageId: z.string(),
-  /** Job ID to continue */
-  jobId: z.string(),
-  /** Thread ID for the conversation */
-  threadId: z.string(),
   /** Current round number (0-based) */
   currentRound: z.number(),
-  /** User ID who owns the job */
-  userId: z.string(),
-  /** User's session token for auth */
-  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Job ID to continue */
+  jobId: z.string(),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** User's session token for auth */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID for the conversation */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB),
+  /** User ID who owns the job */
+  userId: z.string(),
 });
 
 export type ContinueAutomatedJobQueueMessage = z.infer<typeof ContinueAutomatedJobQueueMessageSchema>;
@@ -237,18 +237,18 @@ export type ContinueAutomatedJobQueueMessage = z.infer<typeof ContinueAutomatedJ
  * @see src/workers/round-orchestration-queue.ts - Consumer
  */
 export const CompleteAutomatedJobQueueMessageSchema = z.object({
-  /** Message type discriminator */
-  type: z.literal(RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB),
-  /** Unique message ID for idempotency */
-  messageId: z.string(),
-  /** Job ID to complete */
-  jobId: z.string(),
-  /** Thread ID for the conversation */
-  threadId: z.string(),
   /** Whether to auto-publish the thread */
   autoPublish: z.boolean(),
+  /** Job ID to complete */
+  jobId: z.string(),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
   /** ISO timestamp when message was queued */
   queuedAt: z.string(),
+  /** Thread ID for the conversation */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB),
 });
 
 export type CompleteAutomatedJobQueueMessage = z.infer<typeof CompleteAutomatedJobQueueMessageSchema>;

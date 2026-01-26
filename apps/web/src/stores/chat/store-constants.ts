@@ -24,10 +24,10 @@ import type { StoredPreSearch } from '@/services/api';
  * always override client-side optimistic "complete" status.
  */
 export const MESSAGE_STATUS_PRIORITY = {
-  failed: 4,
   complete: 3,
-  streaming: 2,
+  failed: 4,
   pending: 1,
+  streaming: 2,
 } as const satisfies Record<MessageStatus, number>;
 
 /**
@@ -53,7 +53,7 @@ export const PRE_SEARCH_COMPARE_KEYS = [
   'userQuery',
   'errorMessage',
   'completedAt',
-] as const satisfies ReadonlyArray<keyof StoredPreSearch>;
+] as const satisfies readonly (keyof StoredPreSearch)[];
 
 // ============================================================================
 // ANIMATION INDICES - Type-safe animation tracking indices
@@ -85,14 +85,14 @@ export const AnimationIndices = {
  */
 export const ModeratorTimeouts = {
   /**
-   * Maximum time (ms) a moderator can be in streaming state before considered stuck
-   * Default: 45 seconds (reduced from 90s for faster recovery from truncated streams)
-   */
-  STUCK_THRESHOLD_MS: 45_000,
-
-  /**
    * Interval (ms) between stuck moderator checks
    * Default: 10 seconds
    */
   CHECK_INTERVAL_MS: 10_000,
+
+  /**
+   * Maximum time (ms) a moderator can be in streaming state before considered stuck
+   * Default: 45 seconds (reduced from 90s for faster recovery from truncated streams)
+   */
+  STUCK_THRESHOLD_MS: 45_000,
 } as const;

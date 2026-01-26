@@ -28,14 +28,14 @@ export function useStaleStreamingCleanup({
   const handoffResetCountRef = useRef(0);
 
   const {
-    streamingRoundNumber,
-    isStreaming,
     isModeratorStreaming,
+    isStreaming,
+    streamingRoundNumber,
     waitingToStartStreaming,
   } = useStore(store, useShallow(s => ({
-    streamingRoundNumber: s.streamingRoundNumber,
-    isStreaming: s.isStreaming,
     isModeratorStreaming: s.isModeratorStreaming,
+    isStreaming: s.isStreaming,
+    streamingRoundNumber: s.streamingRoundNumber,
     waitingToStartStreaming: s.waitingToStartStreaming,
   })));
 

@@ -19,17 +19,14 @@ import { OgChatQuerySchema } from './schema';
  * Public endpoint - no authentication required.
  */
 export const ogChatRoute = createRoute({
+  description: 'Generates a dynamic Open Graph image for a publicly shared thread. Returns PNG image directly.',
   method: 'get',
   path: '/og/chat',
-  tags: ['og'],
-  summary: 'Generate OG image for public thread',
-  description: 'Generates a dynamic Open Graph image for a publicly shared thread. Returns PNG image directly.',
   request: {
     query: OgChatQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'OG image generated successfully (returns fallback for missing/private threads)',
       content: {
         'image/png': {
           // ✅ JUSTIFIED: Binary responses cannot be validated by Zod at runtime.
@@ -40,12 +37,15 @@ export const ogChatRoute = createRoute({
           }),
         },
       },
+      description: 'OG image generated successfully (returns fallback for missing/private threads)',
       headers: z.object({
-        'Content-Type': z.literal('image/png'),
         'Cache-Control': z.string(),
+        'Content-Type': z.literal('image/png'),
         'X-OG-Cache': z.enum(['HIT', 'MISS']),
       }),
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'Generate OG image for public thread',
+  tags: ['og'],
 });

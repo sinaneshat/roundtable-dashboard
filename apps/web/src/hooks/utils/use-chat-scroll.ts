@@ -59,9 +59,9 @@ type UseChatScrollResult = {
 };
 
 export function useChatScroll({
-  messages,
-  enableNearBottomDetection = true,
   autoScrollThreshold = 100,
+  enableNearBottomDetection = true,
+  messages,
 }: UseChatScrollParams): UseChatScrollResult {
   // Track if user is at bottom (for scroll button visibility)
   const isAtBottomRef = useRef(true);
@@ -102,7 +102,7 @@ export function useChatScroll({
         document.body.scrollHeight,
         document.documentElement.scrollHeight,
       );
-      window.scrollTo({ top: scrollHeight, behavior });
+      window.scrollTo({ behavior, top: scrollHeight });
     };
 
     // For 'instant' behavior, scroll synchronously for immediate positioning
@@ -127,8 +127,9 @@ export function useChatScroll({
   // Track user scroll intent (sticky/unsticky state)
   // ============================================================================
   const onScroll = useEffectEvent(() => {
-    if (isProgrammaticScrollRef.current)
+    if (isProgrammaticScrollRef.current) {
       return;
+    }
 
     const scrollTop = window.scrollY || document.documentElement.scrollTop;
     const scrollHeight = document.documentElement.scrollHeight;
@@ -155,8 +156,9 @@ export function useChatScroll({
     let ticking = false;
 
     const handleScroll = () => {
-      if (ticking)
+      if (ticking) {
         return;
+      }
 
       ticking = true;
       requestAnimationFrame(() => {
@@ -175,7 +177,7 @@ export function useChatScroll({
 
   return {
     isAtBottomRef,
-    scrollToBottom,
     resetScrollState,
+    scrollToBottom,
   };
 }

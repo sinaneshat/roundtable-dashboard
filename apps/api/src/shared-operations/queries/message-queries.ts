@@ -25,17 +25,17 @@ export async function getLatestUserMessage(
   threadId: string,
   db: DbInstance,
 ) {
-  return db.query.chatMessage.findFirst({
-    where: and(
-      eq(tables.chatMessage.threadId, threadId),
-      eq(tables.chatMessage.role, MessageRoles.USER),
-    ),
-    orderBy: [desc(tables.chatMessage.roundNumber), desc(tables.chatMessage.createdAt)],
+  return await db.query.chatMessage.findFirst({
     columns: {
       id: true,
       parts: true,
       roundNumber: true,
     },
+    orderBy: [desc(tables.chatMessage.roundNumber), desc(tables.chatMessage.createdAt)],
+    where: and(
+      eq(tables.chatMessage.threadId, threadId),
+      eq(tables.chatMessage.role, MessageRoles.USER),
+    ),
   });
 }
 
@@ -47,19 +47,19 @@ export async function getMessagesByRound(
   roundNumber: number,
   db: DbInstance,
 ) {
-  return db.query.chatMessage.findMany({
+  return await db.query.chatMessage.findMany({
+    columns: {
+      id: true,
+      metadata: true,
+      participantId: true,
+      parts: true,
+      role: true,
+    },
+    orderBy: [desc(tables.chatMessage.createdAt)],
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
     ),
-    orderBy: [desc(tables.chatMessage.createdAt)],
-    columns: {
-      id: true,
-      role: true,
-      parts: true,
-      participantId: true,
-      metadata: true,
-    },
   });
 }
 
@@ -72,18 +72,19 @@ export async function getUserMessageTextForRound(
   db: DbInstance,
 ): Promise<string | null> {
   const message = await db.query.chatMessage.findFirst({
+    columns: {
+      parts: true,
+    },
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
       eq(tables.chatMessage.role, MessageRoles.USER),
     ),
-    columns: {
-      parts: true,
-    },
   });
 
-  if (!message)
+  if (!message) {
     return null;
+  }
 
   return extractTextFromParts(message.parts);
 }
@@ -96,18 +97,18 @@ export async function getAssistantMessagesForRound(
   roundNumber: number,
   db: DbInstance,
 ) {
-  return db.query.chatMessage.findMany({
+  return await db.query.chatMessage.findMany({
+    columns: {
+      id: true,
+      metadata: true,
+      participantId: true,
+      parts: true,
+    },
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    columns: {
-      id: true,
-      participantId: true,
-      parts: true,
-      metadata: true,
-    },
   });
 }
 
@@ -121,12 +122,12 @@ export async function getModeratorMessage(
 ) {
   const moderatorMessageId = `${threadId}_r${roundNumber}_moderator`;
 
-  return db.query.chatMessage.findFirst({
-    where: eq(tables.chatMessage.id, moderatorMessageId),
+  return await db.query.chatMessage.findFirst({
     columns: {
       id: true,
-      parts: true,
       metadata: true,
+      parts: true,
     },
+    where: eq(tables.chatMessage.id, moderatorMessageId),
   });
 }

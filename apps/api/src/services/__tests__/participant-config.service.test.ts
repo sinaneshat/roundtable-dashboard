@@ -27,15 +27,15 @@ function createMockDbParticipant(
   priority = 0,
 ): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId,
-    role,
-    customRoleId: null,
-    priority,
-    isEnabled,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id,
+    isEnabled,
+    modelId,
+    priority,
+    role,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   };
 }
@@ -48,12 +48,12 @@ function createParticipantConfig(
   isEnabled = true,
 ): ParticipantConfigInput {
   return {
-    id,
-    modelId,
-    role: role ?? null,
     customRoleId: undefined,
-    priority,
+    id,
     isEnabled,
+    modelId,
+    priority,
+    role: role ?? null,
   };
 }
 

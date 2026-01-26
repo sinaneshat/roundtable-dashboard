@@ -6,8 +6,8 @@ type SwContextValue = {
 };
 
 const DEFAULT_SW_CONTEXT: SwContextValue = {
-  updateAvailable: false,
   applyUpdate: () => {},
+  updateAvailable: false,
 };
 
 export const SwContext = createContext<SwContextValue>(DEFAULT_SW_CONTEXT);

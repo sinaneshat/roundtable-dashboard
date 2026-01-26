@@ -41,8 +41,8 @@ function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false,
         gcTime: 0,
+        retry: false,
       },
     },
   });
@@ -85,14 +85,14 @@ describe('useProductsQuery', () => {
       });
 
       // Initial state - loading
-      expect(result.current.isPending).toBe(true);
+      expect(result.current.isPending).toBeTruthy();
       expect(result.current.data).toBeUndefined();
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.success).toBe(true);
+      expect(result.current.data?.success).toBeTruthy();
       expect(result.current.data?.data?.items).toHaveLength(3);
       expect(result.current.data?.data?.items).toEqual(mockProducts);
     });
@@ -108,7 +108,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       const product = result.current.data?.data?.items?.[0];
@@ -127,11 +127,11 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(result.current.data?.data?.items).toHaveLength(0);
-      expect(result.current.data?.success).toBe(true);
+      expect(result.current.data?.success).toBeTruthy();
     });
   });
 
@@ -142,12 +142,12 @@ describe('useProductsQuery', () => {
 
       const serviceSpy = vi.spyOn(serverFunctions, 'getProducts').mockResolvedValue(mockResponse);
 
-      const { result, rerender } = renderHook(() => useProductsQuery(), {
+      const { rerender, result } = renderHook(() => useProductsQuery(), {
         wrapper: createWrapper(queryClient),
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -156,7 +156,9 @@ describe('useProductsQuery', () => {
       rerender();
 
       // Wait a bit to ensure no additional calls
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
       expect(result.current.data?.data?.items).toHaveLength(2);
@@ -173,7 +175,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -186,7 +188,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result2.current.isSuccess).toBe(true);
+        expect(result2.current.isSuccess).toBeTruthy();
       });
 
       // Should still be 1 call (refetchOnMount: false)
@@ -204,7 +206,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -212,7 +214,9 @@ describe('useProductsQuery', () => {
       // Simulate window focus event
       window.dispatchEvent(new Event('focus'));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
 
       // Should not refetch
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -229,7 +233,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -237,7 +241,9 @@ describe('useProductsQuery', () => {
       // Simulate reconnect
       window.dispatchEvent(new Event('online'));
 
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 100);
+      });
 
       // Should not refetch
       expect(serviceSpy).toHaveBeenCalledTimes(1);
@@ -261,18 +267,18 @@ describe('useProductsQuery', () => {
       });
 
       // Should be in loading state initially
-      expect(result.current.isPending).toBe(true);
-      expect(result.current.isLoading).toBe(true);
-      expect(result.current.isFetching).toBe(true);
+      expect(result.current.isPending).toBeTruthy();
+      expect(result.current.isLoading).toBeTruthy();
+      expect(result.current.isFetching).toBeTruthy();
       expect(result.current.data).toBeUndefined();
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.isPending).toBe(false);
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.isFetching).toBe(false);
+      expect(result.current.isPending).toBeFalsy();
+      expect(result.current.isLoading).toBeFalsy();
+      expect(result.current.isFetching).toBeFalsy();
     });
 
     it('should show fetching state during background refetch', async () => {
@@ -286,7 +292,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       // Manual refetch
@@ -294,11 +300,11 @@ describe('useProductsQuery', () => {
 
       // Wait for refetch to complete - fetching state is transient
       await waitFor(() => {
-        expect(result.current.isFetching).toBe(false);
+        expect(result.current.isFetching).toBeFalsy();
       });
 
       // After refetch completes, should still have data
-      expect(result.current.isPending).toBe(false);
+      expect(result.current.isPending).toBeFalsy();
       expect(result.current.data).toBeDefined();
     });
   });
@@ -314,10 +320,10 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.success).toBe(false);
+      expect(result.current.data?.success).toBeFalsy();
       expect(result.current.data?.error?.message).toBe('Failed to fetch products');
       expect(result.current.data?.error?.code).toBe('INTERNAL_SERVER_ERROR');
     });
@@ -332,10 +338,10 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
-      expect(result.current.data?.success).toBe(false);
+      expect(result.current.data?.success).toBeFalsy();
       expect(result.current.data?.error?.message).toBe('Service temporarily unavailable');
     });
   });
@@ -355,7 +361,7 @@ describe('useProductsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isSuccess).toBe(true);
+        expect(result.current.isSuccess).toBeTruthy();
       });
 
       expect(result.current.data?.data?.items).toHaveLength(1);

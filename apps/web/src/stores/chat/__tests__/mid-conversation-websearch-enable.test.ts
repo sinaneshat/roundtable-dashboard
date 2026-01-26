@@ -27,36 +27,36 @@ import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../utils/p
 function createUserMessage(roundNumber: number, text = 'Test message') {
   return {
     id: `user-msg-r${roundNumber}`,
+    metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' as const }],
     role: MessageRoles.USER as const,
-    parts: [{ type: 'text' as const, text }],
-    metadata: { roundNumber, role: MessageRoles.USER },
   };
 }
 
 function createAssistantMessage(roundNumber: number, participantIndex: number) {
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: `Response from participant ${participantIndex}` }],
     metadata: {
-      roundNumber,
+      modelId: `model-${participantIndex}`,
       participantIndex,
       role: MessageRoles.ASSISTANT,
-      modelId: `model-${participantIndex}`,
+      roundNumber,
     },
+    parts: [{ text: `Response from participant ${participantIndex}`, type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
 function createModeratorMessage(roundNumber: number) {
   return {
     id: `moderator-msg-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: 'Moderator summary' }],
     metadata: {
-      roundNumber,
-      role: MessageRoles.ASSISTANT,
       isModerator: true,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{ text: 'Moderator summary', type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -65,42 +65,42 @@ function createMockThread(options: {
   mode?: string;
 } = {}) {
   return {
+    createdAt: new Date(),
+    enableWebSearch: options.enableWebSearch ?? false,
     id: 'thread-123',
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: options.mode || 'brainstorm',
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: options.enableWebSearch ?? false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: options.mode || 'brainstorm',
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
   };
 }
 
 function createMockParticipants() {
   return [
     {
-      id: 'participant-1',
-      threadId: 'thread-123',
-      modelId: 'model-a',
-      role: null,
-      priority: 0,
-      isEnabled: true,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'model-a',
+      priority: 0,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'thread-123',
-      modelId: 'model-b',
-      role: null,
-      priority: 1,
-      isEnabled: true,
       createdAt: new Date(),
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'model-b',
+      priority: 1,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -125,44 +125,44 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       // getEffectiveWebSearchEnabled should return form state (user intent)
       const effective = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
 
-      expect(effective).toBe(true);
-      expect(thread.enableWebSearch).toBe(false); // Thread still has old value
+      expect(effective).toBeTruthy();
+      expect(thread.enableWebSearch).toBeFalsy(); // Thread still has old value
     });
 
     it('should wait for PENDING pre-search when web search enabled', () => {
       const webSearchEnabled = true;
       const pendingPreSearch = {
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       };
 
       // Should wait for PENDING pre-search
-      expect(shouldWaitForPreSearch(webSearchEnabled, pendingPreSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(webSearchEnabled, pendingPreSearch)).toBeTruthy();
     });
 
     it('should NOT wait for COMPLETE pre-search', () => {
       const webSearchEnabled = true;
       const completePreSearch = {
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test query',
-        status: MessageStatuses.COMPLETE,
-        searchData: { queries: [], results: [], summary: '', successCount: 0, failureCount: 0, totalResults: 0, totalTime: 0 },
-        createdAt: new Date(),
         completedAt: new Date(),
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: { failureCount: 0, queries: [], results: [], successCount: 0, summary: '', totalResults: 0, totalTime: 0 },
+        status: MessageStatuses.COMPLETE,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       };
 
       // Should NOT wait for COMPLETE pre-search
-      expect(shouldWaitForPreSearch(webSearchEnabled, completePreSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(webSearchEnabled, completePreSearch)).toBeFalsy();
     });
 
     it('should simulate the full bug scenario flow', () => {
@@ -184,8 +184,8 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Verify initial state
-      expect(store.getState().thread?.enableWebSearch).toBe(false);
-      expect(store.getState().enableWebSearch).toBe(false);
+      expect(store.getState().thread?.enableWebSearch).toBeFalsy();
+      expect(store.getState().enableWebSearch).toBeFalsy();
       expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
       expect(store.getState().messages).toHaveLength(4);
 
@@ -196,8 +196,8 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       store.getState().setHasPendingConfigChanges(true);
 
       // Verify form state updated but thread state unchanged
-      expect(store.getState().enableWebSearch).toBe(true);
-      expect(store.getState().thread?.enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeTruthy();
+      expect(store.getState().thread?.enableWebSearch).toBeFalsy();
 
       // =====================================================
       // USER ACTION: Submit message (simulates handleUpdateThreadAndSend)
@@ -217,15 +217,15 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       // Create PENDING pre-search (as handleUpdateThreadAndSend does)
       // This is called AFTER setConfigChangeRoundNumber to ensure effects see the blocking flag
       store.getState().addPreSearch({
-        id: `placeholder-presearch-thread-123-${nextRoundNumber}`,
-        threadId: 'thread-123',
-        roundNumber: nextRoundNumber,
-        userQuery: 'Second question',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: `placeholder-presearch-thread-123-${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'Second question',
       });
 
       // Set streaming state
@@ -248,14 +248,14 @@ describe('mid-Conversation Web Search Enable Bug', () => {
         store.getState().thread,
         store.getState().enableWebSearch,
       );
-      expect(webSearchEnabled).toBe(true);
+      expect(webSearchEnabled).toBeTruthy();
 
       // Should wait for pre-search (it's PENDING)
-      expect(shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)).toBe(true);
+      expect(shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)).toBeTruthy();
 
       // State check: System is stuck waiting
-      expect(store.getState().waitingToStartStreaming).toBe(true);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
 
       // =====================================================
@@ -269,26 +269,26 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       const blockingState = {
         configChangeRoundNumberSet: store.getState().configChangeRoundNumber === nextRoundNumber,
         isWaitingForChangelogFalse: store.getState().isWaitingForChangelog === false, // PATCH not done
+        notStreaming: store.getState().isStreaming === false,
         preSearchIsPending: preSearchForRound?.status === MessageStatuses.PENDING,
         screenModeIsThread: store.getState().screenMode === ScreenModes.THREAD,
-        webSearchEnabledInForm: store.getState().enableWebSearch === true,
         waitingToStartStreaming: store.getState().waitingToStartStreaming === true,
-        notStreaming: store.getState().isStreaming === false,
+        webSearchEnabledInForm: store.getState().enableWebSearch === true,
       };
 
       // Verify blocking is correctly enforced
-      expect(blockingState.configChangeRoundNumberSet).toBe(true);
-      expect(blockingState.isWaitingForChangelogFalse).toBe(true);
-      expect(blockingState.preSearchIsPending).toBe(true);
-      expect(blockingState.screenModeIsThread).toBe(true);
-      expect(blockingState.webSearchEnabledInForm).toBe(true);
-      expect(blockingState.waitingToStartStreaming).toBe(true);
-      expect(blockingState.notStreaming).toBe(true);
+      expect(blockingState.configChangeRoundNumberSet).toBeTruthy();
+      expect(blockingState.isWaitingForChangelogFalse).toBeTruthy();
+      expect(blockingState.preSearchIsPending).toBeTruthy();
+      expect(blockingState.screenModeIsThread).toBeTruthy();
+      expect(blockingState.webSearchEnabledInForm).toBeTruthy();
+      expect(blockingState.waitingToStartStreaming).toBeTruthy();
+      expect(blockingState.notStreaming).toBeTruthy();
 
       // The blocking condition: configChangeRoundNumber !== null OR isWaitingForChangelog
       const isBlocked = store.getState().configChangeRoundNumber !== null
         || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
     });
 
     it('should detect PENDING pre-search needs execution on THREAD screen', () => {
@@ -306,32 +306,35 @@ describe('mid-Conversation Web Search Enable Bug', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // Function to check if pre-search needs execution
       // This is the logic that should be added to usePendingMessage
       function needsPreSearchExecution(state: ReturnType<typeof store.getState>) {
         // Only on THREAD screen
-        if (state.screenMode !== ScreenModes.THREAD)
+        if (state.screenMode !== ScreenModes.THREAD) {
           return false;
+        }
 
         // Web search must be enabled
         const webSearchEnabled = getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch);
-        if (!webSearchEnabled)
+        if (!webSearchEnabled) {
           return false;
+        }
 
         // Must have messages to determine round
-        if (state.messages.length === 0)
+        if (state.messages.length === 0) {
           return false;
+        }
 
         // Find current round's pre-search
         // Use the latest round number from messages
@@ -343,13 +346,14 @@ describe('mid-Conversation Web Search Enable Bug', () => {
 
         // Check if there's a PENDING pre-search for next round that needs execution
         const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === nextRound);
-        if (!preSearchForRound)
+        if (!preSearchForRound) {
           return false;
+        }
 
         return preSearchForRound.status === MessageStatuses.PENDING;
       }
 
-      expect(needsPreSearchExecution(store.getState())).toBe(true);
+      expect(needsPreSearchExecution(store.getState())).toBeTruthy();
     });
   });
 
@@ -367,81 +371,81 @@ describe('mid-Conversation Web Search Enable Bug', () => {
         store.getState().enableWebSearch,
       );
 
-      expect(webSearchEnabled).toBe(false);
+      expect(webSearchEnabled).toBeFalsy();
     });
 
     it('should NOT wait when pre-search is COMPLETE', () => {
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.COMPLETE,
-        searchData: { queries: [], results: [], summary: '', successCount: 0, failureCount: 0, totalResults: 0, totalTime: 0 },
-        createdAt: new Date(),
         completedAt: new Date(),
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: { failureCount: 0, queries: [], results: [], successCount: 0, summary: '', totalResults: 0, totalTime: 0 },
+        status: MessageStatuses.COMPLETE,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const preSearch = store.getState().preSearches[0];
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('should NOT wait when pre-search is FAILED', () => {
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.FAILED,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: 'Search failed',
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.FAILED,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const preSearch = store.getState().preSearches[0];
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('should wait when pre-search is STREAMING', () => {
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.STREAMING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const preSearch = store.getState().preSearches[0];
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
   });
 
   describe('pre-Search Tracking State', () => {
     it('should track pre-search as triggered to prevent duplicates', () => {
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
 
       // Mark as triggered
       store.getState().markPreSearchTriggered(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       // Clear tracking
       store.getState().clearPreSearchTracking(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('should use tryMarkPreSearchTriggered for atomic check-and-mark', () => {
       // First call should succeed
-      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       // Second call should fail (already triggered)
-      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(false);
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBeFalsy();
     });
   });
 
@@ -454,7 +458,7 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       const formEnableWebSearch = true;
 
       // getEffectiveWebSearchEnabled should return form state (not thread state)
-      expect(getEffectiveWebSearchEnabled(thread, formEnableWebSearch)).toBe(true);
+      expect(getEffectiveWebSearchEnabled(thread, formEnableWebSearch)).toBeTruthy();
     });
 
     it('should use form state even when thread has web search enabled', () => {
@@ -465,7 +469,7 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       const formEnableWebSearch = false;
 
       // getEffectiveWebSearchEnabled should return form state (not thread state)
-      expect(getEffectiveWebSearchEnabled(thread, formEnableWebSearch)).toBe(false);
+      expect(getEffectiveWebSearchEnabled(thread, formEnableWebSearch)).toBeFalsy();
     });
   });
 
@@ -488,7 +492,7 @@ describe('mid-Conversation Web Search Enable Bug', () => {
       // Condition that would block useStreamingTrigger
       const wouldBlockStreamingTrigger = store.getState().screenMode !== ScreenModes.OVERVIEW;
 
-      expect(wouldBlockStreamingTrigger).toBe(true);
+      expect(wouldBlockStreamingTrigger).toBeTruthy();
     });
   });
 
@@ -509,15 +513,15 @@ describe('mid-Conversation Web Search Enable Bug', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // Simulate pre-search execution completing
@@ -530,11 +534,11 @@ describe('mid-Conversation Web Search Enable Bug', () => {
         store.getState().enableWebSearch,
       );
 
-      expect(shouldWaitForPreSearch(webSearchEnabled, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(webSearchEnabled, preSearch)).toBeFalsy();
 
       // Participant streaming can now proceed
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
   });
 });
@@ -560,15 +564,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // Set pending message state (as form-actions does)
@@ -579,21 +583,21 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       // Conditions for pre-search execution
       const state = store.getState();
       const conditions = {
-        onThreadScreen: state.screenMode === ScreenModes.THREAD,
-        webSearchEnabled: getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch),
         hasPendingMessage: !!state.pendingMessage,
+        notAlreadyTriggered: !state.hasPreSearchBeenTriggered(1),
+        onThreadScreen: state.screenMode === ScreenModes.THREAD,
         preSearchIsPending: state.preSearches.some(
           ps => ps.status === MessageStatuses.PENDING,
         ),
-        notAlreadyTriggered: !state.hasPreSearchBeenTriggered(1),
+        webSearchEnabled: getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch),
       };
 
       // All conditions should be met
-      expect(conditions.onThreadScreen).toBe(true);
-      expect(conditions.webSearchEnabled).toBe(true);
-      expect(conditions.hasPendingMessage).toBe(true);
-      expect(conditions.preSearchIsPending).toBe(true);
-      expect(conditions.notAlreadyTriggered).toBe(true);
+      expect(conditions.onThreadScreen).toBeTruthy();
+      expect(conditions.webSearchEnabled).toBeTruthy();
+      expect(conditions.hasPendingMessage).toBeTruthy();
+      expect(conditions.preSearchIsPending).toBeTruthy();
+      expect(conditions.notAlreadyTriggered).toBeTruthy();
     });
   });
 
@@ -634,15 +638,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add PENDING pre-search (as handleUpdateThreadAndSend does)
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'Follow-up with web search',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'Follow-up with web search',
       });
 
       // Set streaming state (as handleUpdateThreadAndSend does)
@@ -659,8 +663,8 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // All other conditions for pre-search execution
       expect(state.screenMode).toBe(ScreenModes.THREAD);
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBeTruthy();
 
       const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearchForRound).toBeDefined();
@@ -698,12 +702,12 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       const participantsChanged = false; // Same participants
 
       // Web search change should be detected even without other changes
-      expect(webSearchChanged).toBe(true);
-      expect(modeChanged).toBe(false);
-      expect(participantsChanged).toBe(false);
+      expect(webSearchChanged).toBeTruthy();
+      expect(modeChanged).toBeFalsy();
+      expect(participantsChanged).toBeFalsy();
 
       // Form state should be the source of truth
-      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBe(true);
+      expect(getEffectiveWebSearchEnabled(state.thread, state.enableWebSearch)).toBeTruthy();
     });
 
     it('should have user message available in messages for pre-search execution', () => {
@@ -726,15 +730,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add pre-search placeholder
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'Query for web search',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'Query for web search',
       });
 
       store.getState().setStreamingRoundNumber(1);
@@ -751,7 +755,7 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       );
 
       expect(round1UserMessages).toHaveLength(1);
-      expect(round1UserMessages[0]?.parts[0]).toEqual({ type: 'text', text: 'Query for web search' });
+      expect(round1UserMessages[0]?.parts[0]).toEqual({ text: 'Query for web search', type: 'text' });
     });
 
     it('should handle pre-search status transition PENDING → STREAMING → COMPLETE', () => {
@@ -766,33 +770,33 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       });
 
       // Verify PENDING status
       let preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearch?.status).toBe(MessageStatuses.PENDING);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       // Transition to STREAMING
       store.getState().updatePreSearchStatus(1, MessageStatuses.STREAMING);
       preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearch?.status).toBe(MessageStatuses.STREAMING);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       // Transition to COMPLETE
       store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
       preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('should handle pre-search failure gracefully', () => {
@@ -807,15 +811,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test query',
       });
 
       // Simulate failure
@@ -825,7 +829,7 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       expect(preSearch?.status).toBe(MessageStatuses.FAILED);
 
       // Should NOT wait for failed pre-search - streaming can proceed
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('should prevent duplicate execution with atomic tryMarkPreSearchTriggered', () => {
@@ -833,19 +837,19 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // First attempt should succeed
       const firstAttempt = store.getState().tryMarkPreSearchTriggered(1);
-      expect(firstAttempt).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(firstAttempt).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       // Second attempt should fail (already marked)
       const secondAttempt = store.getState().tryMarkPreSearchTriggered(1);
-      expect(secondAttempt).toBe(false);
+      expect(secondAttempt).toBeFalsy();
 
       // Third attempt should also fail
       const thirdAttempt = store.getState().tryMarkPreSearchTriggered(1);
-      expect(thirdAttempt).toBe(false);
+      expect(thirdAttempt).toBeFalsy();
 
       // Verify only one trigger happened
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
     });
 
     it('should handle multiple rounds with web search enabled', () => {
@@ -857,15 +861,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       // Add pre-searches for multiple rounds
       [1, 2, 3].forEach((roundNumber) => {
         store.getState().addPreSearch({
-          id: `presearch-r${roundNumber}`,
-          threadId: 'thread-123',
-          roundNumber,
-          userQuery: `Query for round ${roundNumber}`,
-          status: MessageStatuses.PENDING,
-          searchData: null,
-          createdAt: new Date(),
           completedAt: null,
+          createdAt: new Date(),
           errorMessage: null,
+          id: `presearch-r${roundNumber}`,
+          roundNumber,
+          searchData: null,
+          status: MessageStatuses.PENDING,
+          threadId: 'thread-123',
+          userQuery: `Query for round ${roundNumber}`,
         });
       });
 
@@ -901,42 +905,42 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       // Enable web search
       store.getState().setEnableWebSearch(true);
       expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
-        .toBe(true);
+        .toBeTruthy();
 
       // Add pre-search for round 1
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // Disable web search before pre-search completes
       store.getState().setEnableWebSearch(false);
       expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
-        .toBe(false);
+        .toBeFalsy();
 
       // When web search disabled, should NOT wait for pre-search
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
 
     it('should reset pre-search tracking on thread change', () => {
       // Track pre-search for round 1 on first thread
       store.getState().tryMarkPreSearchTriggered(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       // Initialize new thread (simulates navigation)
       const newThread = { ...createMockThread(), id: 'thread-456' };
       store.getState().initializeThread(newThread, createMockParticipants(), []);
 
       // Tracking should be reset
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('should handle pre-search when thread already has enableWebSearch true', () => {
@@ -951,81 +955,81 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
       store.getState().setEnableWebSearch(true); // Form state matches thread
 
       // Verify both thread and form have web search enabled
-      expect(store.getState().thread?.enableWebSearch).toBe(true);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().thread?.enableWebSearch).toBeTruthy();
+      expect(store.getState().enableWebSearch).toBeTruthy();
 
       // getEffectiveWebSearchEnabled should return true
       expect(getEffectiveWebSearchEnabled(store.getState().thread, store.getState().enableWebSearch))
-        .toBe(true);
+        .toBeTruthy();
 
       // Pre-search should work normally
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
   });
 
   describe('pre-search activity tracking', () => {
     it('should track and clear pre-search activity', () => {
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // Update activity
       store.getState().updatePreSearchActivity(1);
-      expect(store.getState().preSearchActivityTimes.has(1)).toBe(true);
+      expect(store.getState().preSearchActivityTimes.has(1)).toBeTruthy();
 
       // Clear activity
       store.getState().clearPreSearchActivity(1);
-      expect(store.getState().preSearchActivityTimes.has(1)).toBe(false);
+      expect(store.getState().preSearchActivityTimes.has(1)).toBeFalsy();
     });
 
     it('should update partial pre-search data during streaming', () => {
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.STREAMING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const partialData = {
+        failureCount: 0,
         queries: [
           {
+            index: 0,
             query: 'partial query',
             rationale: 'test rationale',
             searchDepth: 'basic' as const,
-            index: 0,
             total: 1,
           },
         ],
         results: [],
-        summary: '',
         successCount: 0,
-        failureCount: 0,
+        summary: '',
         totalResults: 0,
         totalTime: 0,
       };
@@ -1038,23 +1042,23 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
     it('should finalize pre-search data on completion', () => {
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.STREAMING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       const finalData = {
-        queries: ['test query'],
-        results: [{ url: 'https://example.com', title: 'Result', snippet: 'Content' }],
-        summary: 'Search summary',
-        successCount: 1,
         failureCount: 0,
+        queries: ['test query'],
+        results: [{ snippet: 'Content', title: 'Result', url: 'https://example.com' }],
+        successCount: 1,
+        summary: 'Search summary',
         totalResults: 1,
         totalTime: 500,
       };
@@ -1096,20 +1100,20 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add PENDING pre-search
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'test',
       });
 
       // With waitingToStart=false, the non-initial round effect won't execute
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
     });
 
     it('should handle OVERVIEW screen with non-initial round', () => {
@@ -1161,15 +1165,15 @@ describe('usePendingMessage Pre-Search Execution Logic', () => {
 
       // Add pre-search with userQuery but no matching user message for round 1
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-123',
-        roundNumber: 1,
-        userQuery: 'Pre-search query from placeholder',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'Pre-search query from placeholder',
       });
 
       // No round 1 user message in messages array

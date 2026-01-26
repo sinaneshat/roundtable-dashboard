@@ -38,35 +38,35 @@ import { user } from './auth';
  * Relationships to threads, messages, and projects are handled via junction tables.
  */
 export const upload = sqliteTable('upload', {
-  id: text('id').primaryKey(),
-
-  // Owner - user who uploaded the file
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-
-  // File details
-  filename: text('filename').notNull(), // Original filename: "report.pdf"
-  r2Key: text('r2_key').notNull().unique(), // R2 storage key: "uploads/{userId}/{id}_{filename}"
-
-  // File metadata
-  fileSize: integer('file_size').notNull(), // Size in bytes
-  mimeType: text('mime_type').notNull(), // MIME type: "application/pdf", "image/png"
-  status: text('status', { enum: CHAT_ATTACHMENT_STATUSES })
-    .notNull()
-    .default(DEFAULT_CHAT_ATTACHMENT_STATUS),
-
-  // Processing metadata (for AI/extraction)
-  metadata: text('metadata', { mode: 'json' }).$type<UploadMetadata>(),
-
   // Timestamps
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+
+  // File details
+  filename: text('filename').notNull(), // Original filename: "report.pdf"
+
+  // File metadata
+  fileSize: integer('file_size').notNull(), // Size in bytes
+  id: text('id').primaryKey(),
+
+  // Processing metadata (for AI/extraction)
+  metadata: text('metadata', { mode: 'json' }).$type<UploadMetadata>(),
+  mimeType: text('mime_type').notNull(), // MIME type: "application/pdf", "image/png"
+  r2Key: text('r2_key').notNull().unique(), // R2 storage key: "uploads/{userId}/{id}_{filename}"
+
+  status: text('status', { enum: CHAT_ATTACHMENT_STATUSES })
+    .notNull()
+    .default(DEFAULT_CHAT_ATTACHMENT_STATUS),
+
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  // Owner - user who uploaded the file
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 }, table => [
   // Indexes for efficient queries
   index('upload_user_idx').on(table.userId),
@@ -81,6 +81,14 @@ export const upload = sqliteTable('upload', {
  * Links uploads to threads for file attachments in chat conversations
  */
 export const threadUpload = sqliteTable('thread_upload', {
+  // Context for this attachment in the thread
+  context: text('context'), // Optional description of how this file is used
+
+  // Timestamps
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+
   id: text('id').primaryKey(),
 
   // FK to chat_thread.id enforced at DB level (avoids circular import)
@@ -91,14 +99,6 @@ export const threadUpload = sqliteTable('thread_upload', {
   uploadId: text('upload_id')
     .notNull()
     .references(() => upload.id, { onDelete: 'cascade' }),
-
-  // Context for this attachment in the thread
-  context: text('context'), // Optional description of how this file is used
-
-  // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
 }, table => [
   index('thread_upload_thread_idx').on(table.threadId),
   index('thread_upload_upload_idx').on(table.uploadId),
@@ -112,6 +112,14 @@ export const threadUpload = sqliteTable('thread_upload', {
  * Links uploads to specific messages for inline attachments
  */
 export const messageUpload = sqliteTable('message_upload', {
+  // Timestamps
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+
+  // Order of attachment in message (for multiple attachments)
+  displayOrder: integer('display_order').notNull().default(0),
+
   id: text('id').primaryKey(),
 
   // FK to chat_message.id enforced at DB level (avoids circular import)
@@ -122,14 +130,6 @@ export const messageUpload = sqliteTable('message_upload', {
   uploadId: text('upload_id')
     .notNull()
     .references(() => upload.id, { onDelete: 'cascade' }),
-
-  // Order of attachment in message (for multiple attachments)
-  displayOrder: integer('display_order').notNull().default(0),
-
-  // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
 }, table => [
   index('message_upload_message_idx').on(table.messageId),
   index('message_upload_upload_idx').on(table.uploadId),

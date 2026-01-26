@@ -80,24 +80,24 @@ export async function initializeParticipantStreamBuffer(
 ): Promise<void> {
   if (!env?.KV) {
     logger?.warn('KV not available - skipping stream buffer initialization', LogHelpers.operation({
+      edgeCase: 'kv_not_available',
       operationName: 'initializeParticipantStreamBuffer',
       streamId,
-      edgeCase: 'kv_not_available',
     }));
     return;
   }
 
   try {
     const metadata: StreamBufferMetadata = {
+      chunkCount: 0,
+      completedAt: null,
+      createdAt: Date.now(),
+      errorMessage: null,
+      participantIndex,
+      roundNumber,
+      status: StreamStatuses.ACTIVE,
       streamId,
       threadId,
-      roundNumber,
-      participantIndex,
-      status: StreamStatuses.ACTIVE,
-      chunkCount: 0,
-      createdAt: Date.now(),
-      completedAt: null,
-      errorMessage: null,
     };
 
     await env.KV.put(getMetadataKey(streamId), JSON.stringify(metadata), {
@@ -112,16 +112,16 @@ export async function initializeParticipantStreamBuffer(
 
     logger?.info('Initialized participant stream buffer', LogHelpers.operation({
       operationName: 'initializeParticipantStreamBuffer',
+      participantIndex,
+      roundNumber,
       streamId,
       threadId,
-      roundNumber,
-      participantIndex,
     }));
   } catch (error) {
     logger?.error('Failed to initialize participant stream buffer', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'initializeParticipantStreamBuffer',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
     throw error;
   }
@@ -140,8 +140,8 @@ export async function appendParticipantStreamChunk(
   try {
     const chunk: StreamChunk = {
       data,
-      timestamp: Date.now(),
       event: parseSSEEventType(data),
+      timestamp: Date.now(),
     };
 
     const metadataKey = getMetadataKey(streamId);
@@ -149,9 +149,9 @@ export async function appendParticipantStreamChunk(
 
     if (!metadata) {
       logger?.warn('Stream metadata not found during chunk append', LogHelpers.operation({
+        edgeCase: 'metadata_not_found',
         operationName: 'appendParticipantStreamChunk',
         streamId,
-        edgeCase: 'metadata_not_found',
       }));
       return;
     }
@@ -170,10 +170,10 @@ export async function appendParticipantStreamChunk(
     });
   } catch (error) {
     logger?.error('Failed to append participant stream chunk', LogHelpers.operation({
-      operationName: 'appendParticipantStreamChunk',
-      streamId,
       chunkDataLength: data.length,
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'appendParticipantStreamChunk',
+      streamId,
     }));
   }
 }
@@ -193,17 +193,17 @@ export async function completeParticipantStreamBuffer(
 
     if (!metadata) {
       logger?.warn('Stream metadata not found during completion', LogHelpers.operation({
+        edgeCase: 'metadata_not_found',
         operationName: 'completeParticipantStreamBuffer',
         streamId,
-        edgeCase: 'metadata_not_found',
       }));
       return;
     }
 
     const updatedMetadata: StreamBufferMetadata = {
       ...metadata,
-      status: StreamStatuses.COMPLETED,
       completedAt: Date.now(),
+      status: StreamStatuses.COMPLETED,
     };
 
     await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
@@ -211,15 +211,15 @@ export async function completeParticipantStreamBuffer(
     });
 
     logger?.info('Completed participant stream buffer', LogHelpers.operation({
+      chunkCount: updatedMetadata.chunkCount,
       operationName: 'completeParticipantStreamBuffer',
       streamId,
-      chunkCount: updatedMetadata.chunkCount,
     }));
   } catch (error) {
     logger?.error('Failed to complete participant stream buffer', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'completeParticipantStreamBuffer',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -240,17 +240,17 @@ export async function failParticipantStreamBuffer(
 
     if (!metadata) {
       logger?.warn('Stream metadata not found during failure', LogHelpers.operation({
+        edgeCase: 'metadata_not_found',
         operationName: 'failParticipantStreamBuffer',
         streamId,
-        edgeCase: 'metadata_not_found',
       }));
       return;
     }
 
     const errorChunk: StreamChunk = {
       data: `3:${JSON.stringify({ error: errorMessage })}`,
-      timestamp: Date.now(),
       event: 'error',
+      timestamp: Date.now(),
     };
 
     const errorChunkIndex = metadata.chunkCount;
@@ -262,10 +262,10 @@ export async function failParticipantStreamBuffer(
 
     const updatedMetadata: StreamBufferMetadata = {
       ...metadata,
-      status: StreamStatuses.FAILED,
+      chunkCount: errorChunkIndex + 1,
       completedAt: Date.now(),
       errorMessage,
-      chunkCount: errorChunkIndex + 1,
+      status: StreamStatuses.FAILED,
     };
 
     await env.KV.put(metadataKey, JSON.stringify(updatedMetadata), {
@@ -273,15 +273,15 @@ export async function failParticipantStreamBuffer(
     });
 
     logger?.info('Marked participant stream buffer as failed', LogHelpers.operation({
+      errorMessage,
       operationName: 'failParticipantStreamBuffer',
       streamId,
-      errorMessage,
     }));
   } catch (error) {
     logger?.error('Failed to mark participant stream as failed', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'failParticipantStreamBuffer',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -306,21 +306,21 @@ export async function getActiveParticipantStreamId(
     if (streamId) {
       logger?.info('Found active participant stream', LogHelpers.operation({
         operationName: 'getActiveParticipantStreamId',
-        threadId,
-        roundNumber,
         participantIndex,
+        roundNumber,
         streamId,
+        threadId,
       }));
     }
 
     return streamId;
   } catch (error) {
     logger?.error('Failed to get active participant stream ID', LogHelpers.operation({
-      operationName: 'getActiveParticipantStreamId',
-      threadId,
-      roundNumber,
-      participantIndex,
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'getActiveParticipantStreamId',
+      participantIndex,
+      roundNumber,
+      threadId,
     }));
     return null;
   }
@@ -340,19 +340,19 @@ export async function getParticipantStreamMetadata(
 
     if (metadata) {
       logger?.info('Retrieved participant stream metadata', LogHelpers.operation({
-        operationName: 'getParticipantStreamMetadata',
-        streamId,
-        status: metadata.status,
         chunkCount: metadata.chunkCount,
+        operationName: 'getParticipantStreamMetadata',
+        status: metadata.status,
+        streamId,
       }));
     }
 
     return metadata;
   } catch (error) {
     logger?.error('Failed to get participant stream metadata', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'getParticipantStreamMetadata',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
     return null;
   }
@@ -403,18 +403,18 @@ export async function getParticipantStreamChunks(
 
     if (chunks.length > 0) {
       logger?.info('Retrieved participant stream chunks', LogHelpers.operation({
+        chunkCount: chunks.length,
         operationName: 'getParticipantStreamChunks',
         streamId,
-        chunkCount: chunks.length,
       }));
     }
 
     return chunks;
   } catch (error) {
     logger?.error('Failed to get participant stream chunks', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'getParticipantStreamChunks',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
     return null;
   }
@@ -436,18 +436,18 @@ export async function clearActiveParticipantStream(
 
     logger?.info('Cleared active participant stream tracking', LogHelpers.operation({
       operationName: 'clearActiveParticipantStream',
-      threadId,
-      roundNumber,
       participantIndex,
+      roundNumber,
+      threadId,
     }));
   } catch (error) {
     logger?.warn('Failed to clear active participant stream', LogHelpers.operation({
-      operationName: 'clearActiveParticipantStream',
-      threadId,
-      roundNumber,
-      participantIndex,
       edgeCase: 'clear_failed',
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'clearActiveParticipantStream',
+      participantIndex,
+      roundNumber,
+      threadId,
     }));
   }
 }
@@ -491,10 +491,10 @@ export async function deleteParticipantStreamBuffer(
     }));
   } catch (error) {
     logger?.warn('Failed to delete participant stream buffer', LogHelpers.operation({
-      operationName: 'deleteParticipantStreamBuffer',
-      streamId,
       edgeCase: 'delete_failed',
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'deleteParticipantStreamBuffer',
+      streamId,
     }));
   }
 }
@@ -526,10 +526,10 @@ export function createLiveParticipantResumeStream(
   options: ResumeStreamOptions = {},
 ): ReadableStream<Uint8Array> {
   const {
-    pollIntervalMs = 100,
+    filterReasoningOnReplay = false,
     maxPollDurationMs = 10 * 60 * 1000, // 10 minutes - generous for long AI streams
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds - just under Cloudflare's 100s idle timeout
-    filterReasoningOnReplay = false,
+    pollIntervalMs = 100,
     startFromChunkIndex = 0,
   } = options;
   const encoder = new TextEncoder();
@@ -566,14 +566,19 @@ export function createLiveParticipantResumeStream(
   };
 
   return new ReadableStream({
+    cancel() {
+      isClosed = true;
+    },
+
     async start(controller) {
       let lastChunkIndex = startFromChunkIndex;
       const startTime = Date.now();
       let lastNewDataTime = Date.now();
 
-      const shouldSendChunk = (chunk: { data: string; event?: string }): boolean => {
-        if (!filterReasoningOnReplay)
+      const shouldSendChunk = (chunk: { data: string; event?: string | undefined }): boolean => {
+        if (!filterReasoningOnReplay) {
           return true;
+        }
         return chunk.event !== 'reasoning-delta';
       };
 
@@ -601,8 +606,7 @@ export function createLiveParticipantResumeStream(
           return;
         }
 
-        // JUSTIFIED: isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
-        // eslint-disable-next-line no-unmodified-loop-condition
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {
             safeClose(controller);
@@ -641,15 +645,13 @@ export function createLiveParticipantResumeStream(
             return;
           }
 
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          await new Promise((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          });
         }
       } catch {
         safeClose(controller);
       }
-    },
-
-    cancel() {
-      isClosed = true;
     },
   });
 }
@@ -673,13 +675,13 @@ export async function initializePreSearchStreamBuffer(
 
   try {
     const metadata: PreSearchStreamMetadata = {
-      streamId,
-      threadId,
-      roundNumber,
-      preSearchId,
-      status: StreamStatuses.ACTIVE,
       chunkCount: 0,
       createdAt: Date.now(),
+      preSearchId,
+      roundNumber,
+      status: StreamStatuses.ACTIVE,
+      streamId,
+      threadId,
     };
 
     await Promise.all([
@@ -693,15 +695,15 @@ export async function initializePreSearchStreamBuffer(
 
     logger?.debug('Initialized pre-search stream buffer', LogHelpers.operation({
       operationName: 'initializePreSearchStreamBuffer',
+      roundNumber,
       streamId,
       threadId,
-      roundNumber,
     }));
   } catch (error) {
     logger?.warn('Failed to initialize pre-search stream buffer', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
       scenario: 'pre_search_buffer_init_failed',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -734,9 +736,9 @@ export async function appendPreSearchStreamChunk(
     const chunkIndex = metadata.chunkCount;
 
     const newChunk: PreSearchStreamChunk = {
-      index: chunkIndex,
-      event,
       data,
+      event,
+      index: chunkIndex,
       timestamp: Date.now(),
     };
 
@@ -752,9 +754,9 @@ export async function appendPreSearchStreamChunk(
     });
   } catch (error) {
     logger?.warn('Failed to append pre-search stream chunk', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
       scenario: 'pre_search_chunk_append_failed',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -779,8 +781,8 @@ export async function completePreSearchStreamBuffer(
 
     const metadata = {
       ...result.data,
-      status: StreamStatuses.COMPLETED,
       completedAt: Date.now(),
+      status: StreamStatuses.COMPLETED,
     };
 
     await env.KV.put(metadataKey, JSON.stringify(metadata), {
@@ -793,9 +795,9 @@ export async function completePreSearchStreamBuffer(
     }));
   } catch (error) {
     logger?.warn('Failed to complete pre-search stream buffer', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
       scenario: 'pre_search_buffer_complete_failed',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -821,9 +823,9 @@ export async function failPreSearchStreamBuffer(
 
     const metadata = {
       ...result.data,
-      status: StreamStatuses.FAILED,
       completedAt: Date.now(),
       errorMessage,
+      status: StreamStatuses.FAILED,
     };
 
     await env.KV.put(metadataKey, JSON.stringify(metadata), {
@@ -831,15 +833,15 @@ export async function failPreSearchStreamBuffer(
     });
 
     logger?.debug('Failed pre-search stream buffer', LogHelpers.operation({
+      errorMessage,
       operationName: 'failPreSearchStreamBuffer',
       streamId,
-      errorMessage,
     }));
   } catch (error) {
     logger?.warn('Failed to fail pre-search stream buffer', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
       scenario: 'pre_search_buffer_fail_failed',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -858,15 +860,15 @@ export async function clearActivePreSearchStream(
     await env.KV.delete(getActiveKey(threadId, roundNumber, StreamPhases.PRESEARCH));
     logger?.debug('Cleared active pre-search stream', LogHelpers.operation({
       operationName: 'clearActivePreSearchStream',
-      threadId,
       roundNumber,
+      threadId,
     }));
   } catch (error) {
     logger?.warn('Failed to clear active pre-search stream', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
+      roundNumber,
       scenario: 'pre_search_clear_failed',
       threadId,
-      roundNumber,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -1028,6 +1030,10 @@ export function createLivePreSearchResumeStream(
   };
 
   return new ReadableStream({
+    cancel() {
+      isClosed = true;
+    },
+
     async start(controller) {
       let lastChunkIndex = 0;
       const startTime = Date.now();
@@ -1052,8 +1058,7 @@ export function createLivePreSearchResumeStream(
           return;
         }
 
-        // JUSTIFIED: isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
-        // eslint-disable-next-line no-unmodified-loop-condition
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {
             safeClose(controller);
@@ -1090,15 +1095,13 @@ export function createLivePreSearchResumeStream(
             return;
           }
 
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          await new Promise((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          });
         }
       } catch {
         safeClose(controller);
       }
-    },
-
-    cancel() {
-      isClosed = true;
     },
   });
 }
@@ -1121,15 +1124,15 @@ export async function initializeModeratorStreamBuffer(
 
   try {
     const metadata: ModeratorStreamBufferMetadata = {
+      chunkCount: 0,
+      completedAt: null,
+      createdAt: Date.now(),
+      errorMessage: null,
+      moderatorId,
+      roundNumber,
+      status: StreamStatuses.ACTIVE,
       streamId,
       threadId,
-      roundNumber,
-      moderatorId,
-      status: StreamStatuses.ACTIVE,
-      chunkCount: 0,
-      createdAt: Date.now(),
-      completedAt: null,
-      errorMessage: null,
     };
 
     await Promise.all([
@@ -1143,15 +1146,15 @@ export async function initializeModeratorStreamBuffer(
 
     logger?.info('Initialized moderator stream buffer', LogHelpers.operation({
       operationName: 'initializeModeratorStreamBuffer',
+      roundNumber,
       streamId,
       threadId,
-      roundNumber,
     }));
   } catch (error) {
     logger?.error('Failed to initialize moderator stream buffer', LogHelpers.operation({
+      error: error instanceof Error ? error.message : 'Unknown error',
       operationName: 'initializeModeratorStreamBuffer',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }
@@ -1199,9 +1202,9 @@ export async function appendModeratorStreamChunk(
     });
   } catch (error) {
     logger?.warn('Failed to append moderator stream chunk', LogHelpers.edgeCase({
+      error: error instanceof Error ? error.message : 'Unknown error',
       scenario: 'moderator_chunk_append_failed',
       streamId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     }));
   }
 }

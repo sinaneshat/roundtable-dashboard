@@ -73,31 +73,31 @@ function createMockThread(overrides: {
   mode?: string;
 } = {}): MockThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: overrides.enableWebSearch ?? false,
     id: 'thread-123',
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: overrides.mode || 'brainstorm',
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: overrides.enableWebSearch ?? false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: overrides.mode || 'brainstorm',
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
   };
 }
 
 function createMockParticipants(count: number): MockParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: `model-${String.fromCharCode(97 + i)}`,
-    role: null,
-    priority: i,
-    isEnabled: true,
     createdAt: new Date(),
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `model-${String.fromCharCode(97 + i)}`,
+    priority: i,
+    role: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   }));
 }
@@ -105,33 +105,33 @@ function createMockParticipants(count: number): MockParticipant[] {
 function createUserMessage(roundNumber: number, text = 'Test message') {
   return {
     id: `user-msg-r${roundNumber}`,
+    metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' as const }],
     role: MessageRoles.USER as const,
-    parts: [{ type: 'text' as const, text }],
-    metadata: { roundNumber, role: MessageRoles.USER },
   };
 }
 
 function createPreSearch(roundNumber: number, status: typeof MessageStatuses[keyof typeof MessageStatuses]): StoredPreSearch {
   return {
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: status === MessageStatuses.FAILED ? 'Search failed' : null,
     id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    userQuery: 'Test query',
-    status,
     searchData: status === MessageStatuses.COMPLETE
       ? {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          summary: 'Search complete',
-          successCount: 1,
           failureCount: 0,
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
+          summary: 'Search complete',
           totalResults: 0,
           totalTime: 100,
         }
       : null,
-    errorMessage: status === MessageStatuses.FAILED ? 'Search failed' : null,
-    createdAt: new Date(),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Test query',
   };
 }
 
@@ -183,8 +183,8 @@ function canStreamingProceed(state: ChatStore): {
   }
 
   return {
-    canProceed: blockReasons.length === 0,
     blockReasons,
+    canProceed: blockReasons.length === 0,
   };
 }
 
@@ -209,7 +209,7 @@ describe('stream Initiation - Prerequisites', () => {
 
     // canStreamingProceed doesn't check thread - that happens in provider logic
     // This test documents the expected behavior
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     // Note: In actual implementation, provider checks thread.id before streaming
   });
 
@@ -221,7 +221,7 @@ describe('stream Initiation - Prerequisites', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('no participants');
   });
 
@@ -233,7 +233,7 @@ describe('stream Initiation - Prerequisites', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('no messages');
   });
 
@@ -245,7 +245,7 @@ describe('stream Initiation - Prerequisites', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('not on overview screen');
   });
 
@@ -257,7 +257,7 @@ describe('stream Initiation - Prerequisites', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 });
@@ -282,7 +282,7 @@ describe('stream Initiation - Patch Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -291,7 +291,7 @@ describe('stream Initiation - Patch Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
 
@@ -301,26 +301,26 @@ describe('stream Initiation - Patch Completion Blocking', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Changelog sync completes
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('handles case where no config changes exist (immediate unblock)', () => {
     // PATCH in progress
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // PATCH completes with no changes (form-actions.ts:373)
     store.getState().setConfigChangeRoundNumber(null);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -346,7 +346,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search missing');
   });
 
@@ -355,7 +355,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -364,7 +364,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search streaming');
   });
 
@@ -373,7 +373,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
@@ -382,7 +382,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
@@ -393,7 +393,7 @@ describe('stream Initiation - Pre-Search Completion Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).not.toContain('pre-search missing');
   });
 });
@@ -424,7 +424,7 @@ describe('stream Initiation - Combined Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).toContain('pre-search streaming');
@@ -442,7 +442,7 @@ describe('stream Initiation - Combined Blocking', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -453,7 +453,7 @@ describe('stream Initiation - Combined Blocking', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear patch flags
     store.getState().setConfigChangeRoundNumber(null);
@@ -461,14 +461,14 @@ describe('stream Initiation - Combined Blocking', () => {
 
     // Still blocked by pre-search
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Complete pre-search
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
 
     // NOW streaming can proceed
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -501,12 +501,13 @@ describe('stream Initiation - Participant Order', () => {
 
   it('handles custom priority order (user reordered)', () => {
     const baseParticipant = createMockParticipants(1)[0];
-    if (!baseParticipant)
+    if (!baseParticipant) {
       throw new Error('Expected base participant');
+    }
     const participants = [
-      { ...baseParticipant, priority: 2, modelId: 'model-c' },
-      { ...baseParticipant, priority: 0, modelId: 'model-a' },
-      { ...baseParticipant, priority: 1, modelId: 'model-b' },
+      { ...baseParticipant, modelId: 'model-c', priority: 2 },
+      { ...baseParticipant, modelId: 'model-a', priority: 0 },
+      { ...baseParticipant, modelId: 'model-b', priority: 1 },
     ];
 
     store.getState().setParticipants(participants);
@@ -560,30 +561,30 @@ describe('stream Initiation - Waiting Mechanism', () => {
   it('waits for PATCH → Pre-Search → Streaming sequence', () => {
     // Step 1: PATCH starts
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 2: PATCH completes, waiting for changelog
     store.getState().setIsWaitingForChangelog(true);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 3: Pre-search created as PENDING
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 4: Changelog sync completes
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false); // Still waiting for pre-search
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy(); // Still waiting for pre-search
 
     // Step 5: Pre-search starts streaming
     store.getState().updatePreSearchStatus(0, MessageStatuses.STREAMING);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 6: Pre-search completes
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
 
     // Step 7: NOW streaming can start
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 
   it('handles parallel PATCH and pre-search completion', () => {
@@ -592,18 +593,18 @@ describe('stream Initiation - Waiting Mechanism', () => {
     store.getState().setIsWaitingForChangelog(true);
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Pre-search completes first
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false); // Still waiting for changelog
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy(); // Still waiting for changelog
 
     // Changelog completes
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
 
     // Now can proceed
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 
   it('handles case where changelog completes before pre-search created', () => {
@@ -615,13 +616,13 @@ describe('stream Initiation - Waiting Mechanism', () => {
 
     // Pre-search not yet created
     store.getState().setPreSearches([]);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Pre-search created and completes
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.COMPLETE)]);
 
     // Now can proceed
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 });
 
@@ -645,7 +646,7 @@ describe('stream Initiation - Multi-Round', () => {
     store.getState().setMessages([createUserMessage(0)]);
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.COMPLETE)]);
 
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
 
     // Round 1 starts
     store.getState().setMessages([createUserMessage(0), createUserMessage(1)]);
@@ -655,7 +656,7 @@ describe('stream Initiation - Multi-Round', () => {
     ]);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -667,20 +668,20 @@ describe('stream Initiation - Multi-Round', () => {
     ]);
 
     // Round 1 pre-search pending - blocked
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Round 1 pre-search completes
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
 
     // Now can stream Round 1
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 
   it('handles web search toggling between rounds', () => {
     // Round 0: Web search enabled
     store.getState().setMessages([createUserMessage(0)]);
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.COMPLETE)]);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
 
     // Round 1: User toggles web search OFF
     store.getState().setEnableWebSearch(false);
@@ -688,7 +689,7 @@ describe('stream Initiation - Multi-Round', () => {
 
     // Should not require pre-search for Round 1
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).not.toContain('pre-search missing');
   });
 });
@@ -724,7 +725,7 @@ describe('stream Initiation - Premature Start Prevention', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -732,7 +733,7 @@ describe('stream Initiation - Premature Start Prevention', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.STREAMING)]);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search streaming');
   });
 
@@ -744,7 +745,7 @@ describe('stream Initiation - Premature Start Prevention', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons.length).toBeGreaterThan(1);
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
@@ -757,19 +758,19 @@ describe('stream Initiation - Premature Start Prevention', () => {
     store.getState().setIsWaitingForChangelog(true);
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Clear one condition - still blocked
     store.getState().setConfigChangeRoundNumber(null);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Clear second condition - still blocked
     store.getState().setIsWaitingForChangelog(false);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Clear final condition - NOW can proceed
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 });
 
@@ -791,35 +792,36 @@ describe('stream Initiation - Participant Configurations', () => {
     store.getState().setParticipants(createMockParticipants(1));
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('initiates streaming with 2 participants', () => {
     store.getState().setParticipants(createMockParticipants(2));
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('initiates streaming with 5 participants', () => {
     store.getState().setParticipants(createMockParticipants(5));
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('initiates streaming with 10 participants', () => {
     store.getState().setParticipants(createMockParticipants(10));
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('respects participant enabled/disabled state', () => {
     const participants = createMockParticipants(3);
     const middleParticipant = participants[1];
-    if (!middleParticipant)
+    if (!middleParticipant) {
       throw new Error('Expected middle participant');
+    }
     middleParticipant.isEnabled = false; // Disable middle participant
 
     store.getState().setParticipants(participants);
@@ -851,13 +853,13 @@ describe('stream Initiation - Optimistic User Message', () => {
     // User message with isOptimistic marker
     const optimisticMessage = {
       id: 'optimistic-user-0-123456',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Test message' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 0,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Test message', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     // Add optimistic message (simulates form-actions.ts:285)
@@ -868,43 +870,43 @@ describe('stream Initiation - Optimistic User Message', () => {
     expect(state.messages).toHaveLength(1);
     expect(state.messages[0]?.id).toBe('optimistic-user-0-123456');
     expect(state.messages[0]?.metadata).toMatchObject({
-      roundNumber: 0,
       isOptimistic: true,
+      roundNumber: 0,
     });
   });
 
   it('optimistic message has correct metadata structure', () => {
     const optimisticMessage = {
       id: 'optimistic-user-1-789',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Round 1 message' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 1,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Round 1 message', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     store.getState().setMessages([optimisticMessage]);
 
     const message = store.getState().messages[0];
     expect(message?.metadata).toMatchObject({
+      isOptimistic: true,
       role: MessageRoles.USER,
       roundNumber: 1,
-      isOptimistic: true,
     });
   });
 
   it('optimistic message persists during async operations', () => {
     const optimisticMessage = {
       id: 'optimistic-user-0-999',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Test' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 0,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Test', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     // Add optimistic message
@@ -922,13 +924,13 @@ describe('stream Initiation - Optimistic User Message', () => {
   it('optimistic message remains after PATCH completes', () => {
     const optimisticMessage = {
       id: 'optimistic-user-0-111',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Persisted message' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 0,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Persisted message', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     // Add optimistic message
@@ -955,13 +957,13 @@ describe('stream Initiation - Optimistic User Message', () => {
     // Round 0 user message (optimistic)
     const userMessage = {
       id: 'optimistic-user-0-555',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Test query' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 0,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Test query', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     store.getState().setMessages([userMessage]);
@@ -985,7 +987,7 @@ describe('stream Initiation - Optimistic User Message', () => {
 
     // 3. Streaming is blocked until pre-search completes
     const result = canStreamingProceed(state);
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -995,9 +997,9 @@ describe('stream Initiation - Optimistic User Message', () => {
       createUserMessage(0, 'Round 0 user'),
       {
         id: 'assistant-0-0',
+        metadata: { participantIndex: 0, roundNumber: 0 },
+        parts: [{ text: 'Round 0 response', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Round 0 response' }],
-        metadata: { roundNumber: 0, participantIndex: 0 },
       },
     ]);
 
@@ -1014,13 +1016,13 @@ describe('stream Initiation - Optimistic User Message', () => {
     // Add optimistic message for Round 1
     const optimisticMessage = {
       id: 'optimistic-user-1-777',
-      role: MessageRoles.USER as const,
-      parts: [{ type: 'text' as const, text: 'Round 1 message' }],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: nextRoundNumber,
-        isOptimistic: true,
       },
+      parts: [{ text: 'Round 1 message', type: 'text' as const }],
+      role: MessageRoles.USER as const,
     };
 
     store.getState().setMessages([...currentMessages, optimisticMessage]);
@@ -1029,30 +1031,30 @@ describe('stream Initiation - Optimistic User Message', () => {
     const updatedMessages = store.getState().messages;
     expect(updatedMessages).toHaveLength(3);
     expect(updatedMessages[2]?.metadata).toMatchObject({
-      roundNumber: 1,
       isOptimistic: true,
+      roundNumber: 1,
     });
   });
 
   it('handles optimistic message with file attachments', () => {
     const optimisticMessageWithFiles = {
       id: 'optimistic-user-0-file',
-      role: MessageRoles.USER as const,
-      parts: [
-        {
-          type: 'file' as const,
-          url: 'blob:preview-url',
-          filename: 'test.pdf',
-          mediaType: 'application/pdf',
-          uploadId: 'upload-123',
-        },
-        { type: 'text' as const, text: 'Message with attachment' },
-      ],
       metadata: {
+        isOptimistic: true,
         role: MessageRoles.USER,
         roundNumber: 0,
-        isOptimistic: true,
       },
+      parts: [
+        {
+          filename: 'test.pdf',
+          mediaType: 'application/pdf',
+          type: 'file' as const,
+          uploadId: 'upload-123',
+          url: 'blob:preview-url',
+        },
+        { text: 'Message with attachment', type: 'text' as const },
+      ],
+      role: MessageRoles.USER as const,
     };
 
     store.getState().setMessages([optimisticMessageWithFiles]);

@@ -11,8 +11,8 @@ import dynamic from '@/lib/utils/dynamic';
 const CodeBlock = dynamic(
   () => import('@/components/ai-elements/code-block').then(mod => ({ default: mod.CodeBlock })),
   {
-    ssr: false,
     loading: () => <Skeleton className="h-32 w-full rounded-xl" />,
+    ssr: false,
   },
 );
 
@@ -22,8 +22,9 @@ const CodeBlockCopyButton = dynamic(
 );
 
 function extractLanguage(className: string | undefined): string {
-  if (!className)
+  if (!className) {
     return 'text';
+  }
   const match = className.match(/language-(\w+)/);
   return match?.[1] ?? 'text';
 }
@@ -33,11 +34,13 @@ function isReactNodeWithChildren(node: ReactNode): node is React.ReactElement<{ 
 }
 
 function extractTextContent(children: ReactNode): string {
-  if (typeof children === 'string')
+  if (typeof children === 'string') {
     return children;
+  }
 
-  if (Array.isArray(children))
+  if (Array.isArray(children)) {
     return children.map(extractTextContent).join('');
+  }
 
   if (isReactNodeWithChildren(children)) {
     return extractTextContent(children.props.children);
@@ -52,7 +55,7 @@ type MarkdownCodeProps = {
   readonly children?: ReactNode;
 };
 
-export function MarkdownCode({ inline, className, children }: MarkdownCodeProps) {
+export function MarkdownCode({ children, className, inline }: MarkdownCodeProps) {
   // Only handle inline code - block code is handled by MarkdownPre
   // This prevents double-wrapping when ReactMarkdown processes <pre><code>...</code></pre>
   if (inline) {
@@ -75,8 +78,9 @@ function isCodeElement(child: ReactNode): child is React.ReactElement<{ classNam
 export function MarkdownPre({ children, className }: MarkdownPreProps) {
   const child = Array.isArray(children) ? children[0] : children;
 
-  if (isValidElement(child) && child.type === CodeBlock)
+  if (isValidElement(child) && child.type === CodeBlock) {
     return child;
+  }
 
   if (isCodeElement(child)) {
     const codeClassName = typeof child.props.className === 'string' ? child.props.className : undefined;

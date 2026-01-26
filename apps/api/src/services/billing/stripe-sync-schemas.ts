@@ -20,17 +20,17 @@ const PaymentMethodDetailsSchema = z.object({
  * Active subscription state
  */
 const ActiveSubscriptionStateSchema = z.object({
-  status: StripeSubscriptionStatusSchema,
-  subscriptionId: z.string(),
-  priceId: z.string(),
-  productId: z.string(),
-  currentPeriodStart: z.number().int(),
-  currentPeriodEnd: z.number().int(),
   cancelAtPeriodEnd: z.boolean(),
   canceledAt: z.number().int().nullable(),
-  trialStart: z.number().int().nullable(),
-  trialEnd: z.number().int().nullable(),
+  currentPeriodEnd: z.number().int(),
+  currentPeriodStart: z.number().int(),
   paymentMethod: PaymentMethodDetailsSchema.nullable(),
+  priceId: z.string(),
+  productId: z.string(),
+  status: StripeSubscriptionStatusSchema,
+  subscriptionId: z.string(),
+  trialEnd: z.number().int().nullable(),
+  trialStart: z.number().int().nullable(),
 });
 
 /**

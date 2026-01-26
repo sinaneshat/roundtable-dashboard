@@ -41,10 +41,10 @@ import { useChatScroll } from '../use-chat-scroll';
  */
 function createMockMessage(id: string, content: string): UIMessage {
   return {
-    id,
-    role: MessageRoles.USER,
     content,
-    parts: [{ type: 'text', text: content }],
+    id,
+    parts: [{ text: content, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -61,26 +61,26 @@ function simulateScroll(
 ): void {
   // Set scroll position
   Object.defineProperty(window, 'scrollY', {
+    configurable: true,
     value: scrollTop,
     writable: true,
-    configurable: true,
   });
   Object.defineProperty(document.documentElement, 'scrollTop', {
+    configurable: true,
     value: scrollTop,
     writable: true,
-    configurable: true,
   });
 
   // Set scroll dimensions
   Object.defineProperty(document.documentElement, 'scrollHeight', {
+    configurable: true,
     value: scrollHeight,
     writable: true,
-    configurable: true,
   });
   Object.defineProperty(window, 'innerHeight', {
+    configurable: true,
     value: clientHeight,
     writable: true,
-    configurable: true,
   });
 
   // Trigger scroll event
@@ -118,7 +118,7 @@ function simulateScrollMiddle(scrollHeight = 2000, clientHeight = 800): void {
 // ============================================================================
 
 describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
-  let rafCallbacks: Array<FrameRequestCallback> = [];
+  let rafCallbacks: FrameRequestCallback[] = [];
   let rafIdCounter = 0;
   const originalRaf = globalThis.requestAnimationFrame;
   const originalCaf = globalThis.cancelAnimationFrame;
@@ -131,43 +131,43 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
     rafIdCounter = 0;
 
     // Mock requestAnimationFrame to capture callbacks
-    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
       const id = ++rafIdCounter;
       rafCallbacks.push(callback);
       return id;
     });
 
-    globalThis.cancelAnimationFrame = vi.fn();
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation();
 
     // Mock window scroll APIs
     Object.defineProperty(window, 'scrollY', {
+      configurable: true,
       value: 0,
       writable: true,
-      configurable: true,
     });
     Object.defineProperty(document.documentElement, 'scrollTop', {
+      configurable: true,
       value: 0,
       writable: true,
-      configurable: true,
     });
     Object.defineProperty(document.documentElement, 'scrollHeight', {
+      configurable: true,
       value: 2000,
       writable: true,
-      configurable: true,
     });
     Object.defineProperty(document.body, 'scrollHeight', {
+      configurable: true,
       value: 2000,
       writable: true,
-      configurable: true,
     });
     Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
       value: 800,
       writable: true,
-      configurable: true,
     });
 
     // Mock window.scrollTo
-    window.scrollTo = vi.fn();
+    vi.spyOn(window, 'scrollTo').mockImplementation();
   });
 
   afterEach(() => {
@@ -368,8 +368,8 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
 
       // NOW scrollTo should be called
       expect(window.scrollTo).toHaveBeenCalledWith({
-        top: expect.any(Number),
         behavior: 'smooth',
+        top: expect.any(Number),
       });
     });
 
@@ -387,8 +387,8 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       expect(window.scrollTo).toHaveBeenCalledWith({
-        top: expect.any(Number),
         behavior: 'instant',
+        top: expect.any(Number),
       });
     });
 
@@ -406,8 +406,8 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       expect(window.scrollTo).toHaveBeenCalledWith({
-        top: expect.any(Number),
         behavior: 'smooth',
+        top: expect.any(Number),
       });
     });
   });
@@ -422,14 +422,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         useChatScroll({ messages: [] }),
       );
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should track when user is at bottom (within threshold)', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           autoScrollThreshold: 100,
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
@@ -441,14 +441,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should track when user is near bottom (within threshold)', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           autoScrollThreshold: 100,
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
@@ -463,14 +463,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should track when user is away from bottom (beyond threshold)', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           autoScrollThreshold: 100,
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
@@ -479,7 +479,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
 
       // Scroll up significantly (more than threshold + 10px for scroll delta check)
       simulateScrollUp();
@@ -487,7 +487,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
   });
 
@@ -510,7 +510,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
 
       // Scroll up by 150px (beyond 100px threshold, delta > 10px)
       // New position: 1050, distanceFromBottom = 2000 - 1050 - 800 = 150px (beyond 100px)
@@ -520,7 +520,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
 
     it('should detect upward scroll even with small scroll delta', () => {
@@ -537,7 +537,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
 
       // Scroll up by 120px (beyond 100px threshold but only 20px more than threshold)
       // This tests that the scroll delta detection (-10px threshold) triggers the state change
@@ -548,7 +548,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
 
     it('should NOT change isAtBottomRef on tiny scroll movements (less than 10px up)', () => {
@@ -574,7 +574,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       // Should still be considered at bottom (within threshold)
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
   });
 
@@ -611,14 +611,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should set isAtBottomRef to true when within threshold of bottom', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           autoScrollThreshold: 100,
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
@@ -638,14 +638,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should respect custom autoScrollThreshold', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           autoScrollThreshold: 200, // Custom threshold
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
@@ -659,7 +659,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
   });
 
@@ -688,14 +688,14 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
 
       // Reset state
       act(() => {
         result.current.resetScrollState();
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should reset last scroll position tracking', () => {
@@ -731,11 +731,11 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
 
     it('should automatically reset when messages become empty (navigation)', () => {
-      const { result, rerender } = renderHook(
+      const { rerender, result } = renderHook(
         ({ messages }) => useChatScroll({ messages }),
         {
           initialProps: { messages: [createMockMessage('1', 'Test')] },
@@ -757,13 +757,13 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
 
       // Navigate away (empty messages)
       rerender({ messages: [] });
 
       // Should auto-reset
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
   });
 
@@ -784,7 +784,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
 
       // The programmatic flag is internal, but we can verify behavior:
       // isAtBottomRef should be set to true immediately
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should NOT update isAtBottomRef during programmatic scroll', () => {
@@ -807,7 +807,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
 
       // Trigger programmatic scroll
       act(() => {
@@ -815,7 +815,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       // isAtBottomRef should be true (set by scrollToBottom)
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
 
       // Simulate scroll event during programmatic scroll
       // (this would normally be triggered by browser during scrollTo animation)
@@ -858,7 +858,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
 
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
   });
 
@@ -870,13 +870,13 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
     it('should handle scroll events when enableNearBottomDetection is false', () => {
       const { result } = renderHook(() =>
         useChatScroll({
-          messages: [createMockMessage('1', 'Test')],
           enableNearBottomDetection: false,
+          messages: [createMockMessage('1', 'Test')],
         }),
       );
 
       // isAtBottomRef should always be true when detection is disabled
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
 
       // Scroll away from bottom
       simulateScrollUp();
@@ -885,7 +885,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       // Should still be true (detection disabled)
-      expect(result.current.isAtBottomRef.current).toBe(true);
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
     });
 
     it('should throttle scroll events with RAF', () => {
@@ -906,7 +906,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
     });
 
     it('should handle scroll when messages array changes frequently', () => {
-      const { result, rerender } = renderHook(
+      const { rerender, result } = renderHook(
         ({ messages }) => useChatScroll({ messages }),
         {
           initialProps: { messages: [createMockMessage('1', 'First')] },
@@ -938,7 +938,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       }
 
       // isAtBottomRef should maintain state (no auto-scroll)
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
     });
 
     it('should cleanup scroll listener on unmount', () => {
@@ -974,8 +974,8 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       // Should not cause errors and isAtBottomRef should be true
-      expect(result.current.isAtBottomRef.current).toBe(true);
-      expect(window.scrollTo).toHaveBeenCalled();
+      expect(result.current.isAtBottomRef.current).toBeTruthy();
+      expect(window.scrollTo).toHaveBeenCalledWith();
     });
   });
 
@@ -1043,7 +1043,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
     });
 
     it('should maintain user scroll position during streaming', () => {
-      const { result, rerender } = renderHook(
+      const { rerender, result } = renderHook(
         ({ messages }) => useChatScroll({ messages }),
         {
           initialProps: { messages: [createMockMessage('1', 'First')] },
@@ -1065,7 +1065,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       act(() => {
         rafCallbacks.forEach(cb => cb(performance.now()));
       });
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
 
       // New streaming content arrives
       const streamUpdates = [
@@ -1079,7 +1079,7 @@ describe('useChatScroll - SCROLL BEHAVIOR GROUND RULES', () => {
       });
 
       // User's scroll position should be preserved
-      expect(result.current.isAtBottomRef.current).toBe(false);
+      expect(result.current.isAtBottomRef.current).toBeFalsy();
       expect(window.scrollTo).not.toHaveBeenCalled();
     });
   });

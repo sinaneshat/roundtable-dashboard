@@ -33,17 +33,17 @@ import { createChatStore } from '@/stores/chat';
 // Test Utilities
 // ============================================================================
 
-function createParticipant(index: number, threadId: string = 'thread-123') {
+function createParticipant(index: number, threadId = 'thread-123') {
   return {
-    id: `participant-${index}`,
-    threadId,
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: '2024-01-01T00:00:00Z',
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: '2024-01-01T00:00:00Z',
   };
 }
@@ -52,39 +52,39 @@ function createParticipantMessage(
   roundNumber: number,
   participantIndex: number,
   threadId: string,
-  content: string = '',
+  content = '',
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: content ? [{ type: 'text', text: content }] : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
       finishReason: content ? FinishReasons.STOP : FinishReasons.UNKNOWN,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: content.length, totalTokens: content.length },
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: content.length, promptTokens: 0, totalTokens: content.length },
     },
+    parts: content ? [{ text: content, type: 'text' }] : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function _createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [],
     metadata: {
-      isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
-      model: 'Council Moderator',
-      role: MessageRoles.ASSISTANT,
       finishReason: FinishReasons.UNKNOWN,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      isModerator: true,
+      model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -98,8 +98,8 @@ describe('participant Placeholders - Immediate Visibility', () => {
 
     // User submits message
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'What is the meaning of life?',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -129,8 +129,8 @@ describe('participant Placeholders - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -148,7 +148,7 @@ describe('participant Placeholders - Immediate Visibility', () => {
 
     const stateAfterRoundSet = store.getState();
     expect(stateAfterRoundSet.streamingRoundNumber).toBe(0);
-    expect(stateAfterRoundSet.isStreaming).toBe(false); // Not streaming yet!
+    expect(stateAfterRoundSet.isStreaming).toBeFalsy(); // Not streaming yet!
 
     // At this point, UI shows 3 participant placeholders even though isStreaming=false
     // This is CORRECT behavior - placeholders show BEFORE streaming starts
@@ -157,7 +157,7 @@ describe('participant Placeholders - Immediate Visibility', () => {
     store.getState().setIsStreaming(true);
 
     const stateAfterStreaming = store.getState();
-    expect(stateAfterStreaming.isStreaming).toBe(true);
+    expect(stateAfterStreaming.isStreaming).toBeTruthy();
 
     // Placeholders were already visible, now streaming has started
   });
@@ -166,8 +166,8 @@ describe('participant Placeholders - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -197,7 +197,7 @@ describe('participant Placeholders - Immediate Visibility', () => {
       createParticipant(4),
     ];
     store.getState().setParticipants(fiveParticipants);
-    store.getState().setMessages([createTestUserMessage({ id: 'user_r1', content: 'Test 2', roundNumber: 1 })]);
+    store.getState().setMessages([createTestUserMessage({ content: 'Test 2', id: 'user_r1', roundNumber: 1 })]);
     store.getState().setStreamingRoundNumber(1);
 
     state = store.getState();
@@ -211,8 +211,8 @@ describe('participant Placeholders - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -266,8 +266,8 @@ describe('web Search Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research AI trends',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -275,29 +275,29 @@ describe('web Search Placeholder - Immediate Visibility', () => {
 
     // Set thread with web search enabled
     store.getState().setThread({
+      createdAt: '2024-01-01T00:00:00Z',
+      enableWebSearch: true, // Web search enabled
       id: 'thread-123',
-      userId: 'user-123',
-      projectId: null,
-      title: 'Test Thread',
-      slug: 'test-thread',
-      previousSlug: null,
-      mode: 'debating',
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      isAiGeneratedTitle: false,
-      enableWebSearch: true, // Web search enabled
-      metadata: null,
-      version: 1,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
       lastMessageAt: '2024-01-01T00:00:00Z',
+      metadata: null,
+      mode: 'debating',
+      previousSlug: null,
+      projectId: null,
+      slug: 'test-thread',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: '2024-01-01T00:00:00Z',
+      userId: 'user-123',
+      version: 1,
     });
 
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
-    expect(state.thread?.enableWebSearch).toBe(true);
+    expect(state.thread?.enableWebSearch).toBeTruthy();
     expect(state.streamingRoundNumber).toBe(0);
 
     // UI Logic (chat-message-list.tsx):
@@ -310,37 +310,37 @@ describe('web Search Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Simple question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
     store.getState().setMessages([userMessage]);
 
     store.getState().setThread({
+      createdAt: '2024-01-01T00:00:00Z',
+      enableWebSearch: false, // Web search disabled
       id: 'thread-123',
-      userId: 'user-123',
-      projectId: null,
-      title: 'Test Thread',
-      slug: 'test-thread',
-      previousSlug: null,
-      mode: 'debating',
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      isAiGeneratedTitle: false,
-      enableWebSearch: false, // Web search disabled
-      metadata: null,
-      version: 1,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
       lastMessageAt: '2024-01-01T00:00:00Z',
+      metadata: null,
+      mode: 'debating',
+      previousSlug: null,
+      projectId: null,
+      slug: 'test-thread',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: '2024-01-01T00:00:00Z',
+      userId: 'user-123',
+      version: 1,
     });
 
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
-    expect(state.thread?.enableWebSearch).toBe(false);
+    expect(state.thread?.enableWebSearch).toBeFalsy();
 
     // No pre-search placeholder will render
   });
@@ -349,8 +349,8 @@ describe('web Search Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -363,29 +363,29 @@ describe('web Search Placeholder - Immediate Visibility', () => {
     store.getState().setParticipants(participants);
 
     store.getState().setThread({
+      createdAt: '2024-01-01T00:00:00Z',
+      enableWebSearch: true,
       id: 'thread-123',
-      userId: 'user-123',
-      projectId: null,
-      title: 'Test Thread',
-      slug: 'test-thread',
-      previousSlug: null,
-      mode: 'debating',
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      isAiGeneratedTitle: false,
-      enableWebSearch: true,
-      metadata: null,
-      version: 1,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
       lastMessageAt: '2024-01-01T00:00:00Z',
+      metadata: null,
+      mode: 'debating',
+      previousSlug: null,
+      projectId: null,
+      slug: 'test-thread',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: '2024-01-01T00:00:00Z',
+      userId: 'user-123',
+      version: 1,
     });
 
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
-    expect(state.thread?.enableWebSearch).toBe(true);
+    expect(state.thread?.enableWebSearch).toBeTruthy();
     expect(state.participants).toHaveLength(2);
     expect(state.streamingRoundNumber).toBe(0);
 
@@ -406,8 +406,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -433,8 +433,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -449,8 +449,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
 
     const state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
-    expect(state.isStreaming).toBe(false); // Not streaming yet
-    expect(state.isModeratorStreaming).toBe(false); // Moderator not streaming yet
+    expect(state.isStreaming).toBeFalsy(); // Not streaming yet
+    expect(state.isModeratorStreaming).toBeFalsy(); // Moderator not streaming yet
 
     // Moderator placeholder is visible (because isStreamingRound=true)
     // This provides visual feedback that moderator will analyze responses
@@ -460,8 +460,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -482,7 +482,7 @@ describe('moderator Placeholder - Immediate Visibility', () => {
 
     let state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
 
     // Moderator placeholder still visible at bottom
 
@@ -501,8 +501,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -520,8 +520,8 @@ describe('moderator Placeholder - Immediate Visibility', () => {
     store.getState().setIsModeratorStreaming(true);
 
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.isModeratorStreaming).toBeTruthy();
     expect(state.streamingRoundNumber).toBe(0);
 
     // Same moderator placeholder component, now actively streaming
@@ -537,8 +537,8 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Multi-participant question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -558,7 +558,7 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
 
     // Verify: streamingRoundNumber set, but streaming hasn't started
     expect(stateBeforeStreaming.streamingRoundNumber).toBe(0);
-    expect(stateBeforeStreaming.isStreaming).toBe(false);
+    expect(stateBeforeStreaming.isStreaming).toBeFalsy();
     expect(stateBeforeStreaming.messages).toHaveLength(1); // Only user message
 
     // UI State: ALL placeholders visible
@@ -572,8 +572,8 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -591,8 +591,9 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     // Messages array only has user message
     expect(state.messages).toHaveLength(1);
     const firstMessage = state.messages[0];
-    if (!firstMessage)
+    if (!firstMessage) {
       throw new Error('Expected first message');
+    }
     expect(getRoundNumber(firstMessage.metadata)).toBe(0);
 
     // But UI renders placeholders based on:
@@ -606,8 +607,8 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Question with web search',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -620,30 +621,30 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     store.getState().setParticipants(participants);
 
     store.getState().setThread({
+      createdAt: '2024-01-01T00:00:00Z',
+      enableWebSearch: true,
       id: 'thread-123',
-      userId: 'user-123',
-      projectId: null,
-      title: 'Test Thread',
-      slug: 'test-thread',
-      previousSlug: null,
-      mode: 'debating',
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      isAiGeneratedTitle: false,
-      enableWebSearch: true,
-      metadata: null,
-      version: 1,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
       lastMessageAt: '2024-01-01T00:00:00Z',
+      metadata: null,
+      mode: 'debating',
+      previousSlug: null,
+      projectId: null,
+      slug: 'test-thread',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: '2024-01-01T00:00:00Z',
+      userId: 'user-123',
+      version: 1,
     });
 
     store.getState().setStreamingRoundNumber(0);
 
     const state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
 
     // Background Operations (not reflected in store yet):
     // - Thread creation API call
@@ -660,21 +661,21 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
 
   it('should track placeholder visibility duration', () => {
     const store = createChatStore();
-    const visibilityMarkers: Array<{ timestamp: number; event: string }> = [];
+    const visibilityMarkers: { timestamp: number; event: string }[] = [];
 
     store.subscribe(() => {
       const state = store.getState();
       if (state.streamingRoundNumber !== null && state.messages.length === 1) {
-        visibilityMarkers.push({ timestamp: Date.now(), event: 'placeholders-visible' });
+        visibilityMarkers.push({ event: 'placeholders-visible', timestamp: Date.now() });
       }
       if (state.isStreaming && state.messages.length > 1) {
-        visibilityMarkers.push({ timestamp: Date.now(), event: 'first-stream-token' });
+        visibilityMarkers.push({ event: 'first-stream-token', timestamp: Date.now() });
       }
     });
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -696,14 +697,15 @@ describe('placeholder Timing - Before Stream Tokens Arrive', () => {
     const streamEvent = visibilityMarkers.find(m => m.event === 'first-stream-token');
 
     expect(placeholderEvent).toBeDefined();
-    if (!placeholderEvent)
+    if (!placeholderEvent) {
       throw new Error('Expected placeholder event');
+    }
     // Verify timing - if stream event exists, placeholder should have been visible before/at stream start
 
     const placeholderBeforeStream = streamEvent
       ? placeholderEvent.timestamp <= streamEvent.timestamp
       : true; // No stream event to compare
-    expect(placeholderBeforeStream).toBe(true);
+    expect(placeholderBeforeStream).toBeTruthy();
   });
 });
 
@@ -726,8 +728,8 @@ describe('placeholder Content - Based on Configuration', () => {
       store.getState().completeStreaming(); // Reset
 
       const userMessage = createTestUserMessage({
-        id: `user_r${testCase.count}`,
         content: `Test ${testCase.description}`,
+        id: `user_r${testCase.count}`,
         roundNumber: testCase.count,
       });
 
@@ -749,8 +751,8 @@ describe('placeholder Content - Based on Configuration', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -778,8 +780,8 @@ describe('placeholder Content - Based on Configuration', () => {
     const store = createChatStore();
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -796,7 +798,7 @@ describe('placeholder Content - Based on Configuration', () => {
 
     let state = store.getState();
     expect(state.streamingRoundNumber).toBe(0);
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
     // UI: All placeholders in pending state
 
     // Phase 2: Streaming starts - P0 streaming, P1 pending
@@ -804,7 +806,7 @@ describe('placeholder Content - Based on Configuration', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     state = store.getState();
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
     expect(state.currentParticipantIndex).toBe(0);
     // UI: P0 placeholder shows streaming indicator, P1 still pending
 
@@ -824,8 +826,8 @@ describe('placeholder Content - Based on Configuration', () => {
     store.getState().setIsModeratorStreaming(true);
 
     state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.isModeratorStreaming).toBeTruthy();
     // UI: All participants complete, moderator placeholder shows streaming indicator
   });
 });

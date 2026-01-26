@@ -33,8 +33,8 @@ type ActionProps = ComponentProps<typeof Button> & {
 export function Action({
   children,
   className,
-  tooltip,
   label,
+  tooltip,
   ...props
 }: ActionProps) {
   if (tooltip || label) {

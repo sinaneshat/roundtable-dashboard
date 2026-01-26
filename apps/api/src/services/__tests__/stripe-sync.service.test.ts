@@ -17,20 +17,20 @@ describe('stripe Sync Service (Theo Pattern)', () => {
   describe('return Type Structure', () => {
     it('defines correct type for active subscription', () => {
       const activeSubscription: SyncedSubscriptionState = {
-        status: 'active',
-        subscriptionId: 'sub_123',
-        priceId: 'price_456',
-        productId: 'prod_789',
-        currentPeriodStart: 1704067200,
-        currentPeriodEnd: 1706745600,
         cancelAtPeriodEnd: false,
         canceledAt: null,
-        trialStart: null,
-        trialEnd: null,
+        currentPeriodEnd: 1706745600,
+        currentPeriodStart: 1704067200,
         paymentMethod: {
           brand: 'visa',
           last4: '4242',
         },
+        priceId: 'price_456',
+        productId: 'prod_789',
+        status: 'active',
+        subscriptionId: 'sub_123',
+        trialEnd: null,
+        trialStart: null,
       };
 
       expect(activeSubscription.status).toBe('active');
@@ -72,17 +72,17 @@ describe('stripe Sync Service (Theo Pattern)', () => {
       ];
 
       const ourActiveType: SyncedSubscriptionState = {
-        status: 'active',
-        subscriptionId: 'sub_test',
-        priceId: 'price_test',
-        productId: 'prod_test', // Extra field (ok to have more)
-        currentPeriodStart: 123,
-        currentPeriodEnd: 456,
         cancelAtPeriodEnd: false,
         canceledAt: null,
-        trialStart: null,
-        trialEnd: null,
+        currentPeriodEnd: 456,
+        currentPeriodStart: 123,
         paymentMethod: { brand: 'visa', last4: '4242' },
+        priceId: 'price_test',
+        productId: 'prod_test', // Extra field (ok to have more)
+        status: 'active',
+        subscriptionId: 'sub_test',
+        trialEnd: null,
+        trialStart: null,
       };
 
       // Verify all Theo's required fields exist
@@ -105,17 +105,17 @@ describe('stripe Sync Service (Theo Pattern)', () => {
 
     it('allows null payment method', () => {
       const subscription: SyncedSubscriptionState = {
-        status: 'active',
-        subscriptionId: 'sub_123',
-        priceId: 'price_456',
-        productId: 'prod_789',
-        currentPeriodStart: 123,
-        currentPeriodEnd: 456,
         cancelAtPeriodEnd: false,
         canceledAt: null,
-        trialStart: null,
-        trialEnd: null,
+        currentPeriodEnd: 456,
+        currentPeriodStart: 123,
         paymentMethod: null, // User may not have saved payment method
+        priceId: 'price_456',
+        productId: 'prod_789',
+        status: 'active',
+        subscriptionId: 'sub_123',
+        trialEnd: null,
+        trialStart: null,
       };
 
       expect(subscription.paymentMethod).toBeNull();
@@ -137,17 +137,17 @@ describe('stripe Sync Service (Theo Pattern)', () => {
 
       validStatuses.forEach((status) => {
         const subscription: SyncedSubscriptionState = {
-          status,
-          subscriptionId: 'sub_test',
-          priceId: 'price_test',
-          productId: 'prod_test',
-          currentPeriodStart: 123,
-          currentPeriodEnd: 456,
           cancelAtPeriodEnd: false,
           canceledAt: null,
-          trialStart: null,
-          trialEnd: null,
+          currentPeriodEnd: 456,
+          currentPeriodStart: 123,
           paymentMethod: null,
+          priceId: 'price_test',
+          productId: 'prod_test',
+          status,
+          subscriptionId: 'sub_test',
+          trialEnd: null,
+          trialStart: null,
         };
 
         expect(subscription.status).toBe(status);
@@ -159,14 +159,14 @@ describe('stripe Sync Service (Theo Pattern)', () => {
 describe('theo Pattern: Single Sync Function', () => {
   it('documents the single sync function principle', () => {
     const pattern = {
-      functionName: 'syncStripeDataFromStripe',
-      parameter: 'customerId: string',
-      returns: 'SyncedSubscriptionState',
       calledBy: [
         'All webhook events',
         'Success page after checkout',
         'Manual sync operations',
       ],
+      functionName: 'syncStripeDataFromStripe',
+      parameter: 'customerId: string',
+      returns: 'SyncedSubscriptionState',
     };
 
     expect(pattern.functionName).toBe('syncStripeDataFromStripe');
@@ -176,9 +176,9 @@ describe('theo Pattern: Single Sync Function', () => {
 
   it('explains why single sync prevents split brain', () => {
     const explanation = {
+      benefit: 'Consistent state across all sync operations',
       problem: 'Multiple sync functions can get out of sync',
       solution: 'Single function that fetches ALL data from Stripe API',
-      benefit: 'Consistent state across all sync operations',
     };
 
     expect(explanation.problem).toContain('out of sync');
@@ -190,9 +190,9 @@ describe('theo Pattern: Single Sync Function', () => {
 describe('theo Pattern: Customer ID Validation', () => {
   it('documents validation requirements', () => {
     const validation = {
+      errorType: 'badRequest',
       requirement: 'customerId must be non-empty string',
       throwOn: ['null', 'undefined', 'empty string', 'non-string'],
-      errorType: 'badRequest',
     };
 
     expect(validation.requirement).toContain('non-empty string');
@@ -222,8 +222,8 @@ describe('theo Pattern: Customer ID Validation', () => {
 describe('theo Pattern: Fresh Data from Stripe API', () => {
   it('documents the fetch pattern', () => {
     const fetchPattern = {
-      principle: 'Always fetch fresh data from Stripe API',
       never: 'Trust webhook payloads directly',
+      principle: 'Always fetch fresh data from Stripe API',
       reason: 'Webhook payloads can be stale or incomplete',
     };
 
@@ -248,9 +248,9 @@ describe('theo Pattern: Fresh Data from Stripe API', () => {
   it('specifies subscription list parameters', () => {
     const subscriptionListParams = {
       customer: 'customerId',
+      expand: ['data.default_payment_method', 'data.items.data.price'],
       limit: 1,
       status: 'all',
-      expand: ['data.default_payment_method', 'data.items.data.price'],
     };
 
     expect(subscriptionListParams.limit).toBe(1); // One subscription per customer

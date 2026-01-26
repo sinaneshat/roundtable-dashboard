@@ -20,10 +20,10 @@ const UNKNOWN_ERROR_MESSAGE = 'An unknown error occurred' as const;
 // ClientErrorDetailsSchema: Used for parsing error responses on the frontend/client-side
 // Note: Different from @/api/common/error-handling ErrorDetailsSchema which uses discriminated unions for API error construction
 export const ClientErrorDetailsSchema = z.object({
-  errorName: z.string().optional(),
-  stack: z.string().optional(),
-  errorType: z.string().optional(),
   context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  errorName: z.string().optional(),
+  errorType: z.string().optional(),
+  stack: z.string().optional(),
 }).optional();
 
 export type ClientErrorDetails = z.infer<typeof ClientErrorDetailsSchema>;
@@ -35,9 +35,9 @@ type ErrorContextValue = string | number | boolean | null;
 // ============================================================================
 
 export const RequestMetaSchema = z.object({
+  correlationId: z.string().optional(),
   requestId: z.string().optional(),
   timestamp: z.string().optional(),
-  correlationId: z.string().optional(),
 });
 
 export type RequestMeta = z.infer<typeof RequestMetaSchema>;
@@ -47,12 +47,12 @@ export type RequestMeta = z.infer<typeof RequestMetaSchema>;
 // ============================================================================
 
 export const ApiErrorDetailsSchema = z.object({
-  message: z.string(),
   code: z.string().optional(),
+  details: ClientErrorDetailsSchema,
+  message: z.string(),
+  meta: RequestMetaSchema.optional(),
   status: z.number().int().positive().optional(),
   validationErrors: z.array(ValidationErrorSchema).optional(),
-  details: ClientErrorDetailsSchema,
-  meta: RequestMetaSchema.optional(),
 });
 
 export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
@@ -151,9 +151,9 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
       result.validationErrors = apiError.validation
         .filter((v): v is { field?: unknown; message?: unknown; code?: unknown } => typeof v === 'object' && v !== null)
         .map(v => ({
+          code: 'code' in v && typeof v.code === 'string' ? v.code : undefined,
           field: 'field' in v && typeof v.field === 'string' ? v.field : 'unknown',
           message: 'message' in v && typeof v.message === 'string' ? v.message : 'Validation failed',
-          code: 'code' in v && typeof v.code === 'string' ? v.code : undefined,
         }));
     }
 
@@ -183,9 +183,9 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   if ('meta' in error && typeof error.meta === 'object' && error.meta !== null) {
     const meta = error.meta;
     result.meta = {
+      correlationId: 'correlationId' in meta && typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
       requestId: 'requestId' in meta && typeof meta.requestId === 'string' ? meta.requestId : undefined,
       timestamp: 'timestamp' in meta && typeof meta.timestamp === 'string' ? meta.timestamp : undefined,
-      correlationId: 'correlationId' in meta && typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
     };
   }
 
@@ -202,7 +202,7 @@ export function getApiErrorMessage(error: unknown, fallback: string = UNKNOWN_ER
 }
 
 export function formatValidationErrorsAsString(
-  validationErrors: ReadonlyArray<ValidationError>,
+  validationErrors: readonly ValidationError[],
 ): string {
   if (!validationErrors || validationErrors.length === 0) {
     return 'Validation failed';

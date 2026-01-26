@@ -30,8 +30,9 @@ let isPatched = false;
  * when the browser tab closes, not when individual components unmount.
  */
 function patchHistoryMethods() {
-  if (typeof window === 'undefined' || isPatched)
+  if (typeof window === 'undefined' || isPatched) {
     return;
+  }
 
   const originalPushState = window.history.pushState.bind(window.history);
   const originalReplaceState = window.history.replaceState.bind(window.history);
@@ -83,8 +84,9 @@ function subscribe(callback: () => void): () => void {
  * Get the current pathname (client-side)
  */
 function getSnapshot(): string {
-  if (typeof window === 'undefined')
+  if (typeof window === 'undefined') {
     return '';
+  }
   return window.location.pathname;
 }
 

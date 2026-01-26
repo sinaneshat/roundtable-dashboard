@@ -24,22 +24,22 @@ describe('completeStreaming Deduplication', () => {
       // Set up streaming state
       store.getState().setIsModeratorStreaming(true);
       store.setState({
+        currentParticipantIndex: 2,
+        currentRoundNumber: 1,
         isStreaming: true,
         streamingRoundNumber: 1,
-        currentRoundNumber: 1,
         waitingToStartStreaming: true,
-        currentParticipantIndex: 2,
       });
 
       // Verify pre-conditions
-      expect(store.getState().isStreaming).toBe(true);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(1);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
       expect(store.getState().currentParticipantIndex).toBe(2);
 
       // Track state changes
-      const stateChanges: Array<{ action: string }> = [];
+      const stateChanges: { action: string }[] = [];
       store.subscribe((state, prevState) => {
         if (state !== prevState) {
           stateChanges.push({ action: 'state_change' });
@@ -50,11 +50,11 @@ describe('completeStreaming Deduplication', () => {
       store.getState().completeStreaming();
 
       // Verify all flags are reset
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().streamingRoundNumber).toBe(null);
-      expect(store.getState().currentRoundNumber).toBe(null);
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().streamingRoundNumber).toBeNull();
+      expect(store.getState().currentRoundNumber).toBeNull();
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
       expect(store.getState().currentParticipantIndex).toBe(0);
     });
 
@@ -63,25 +63,25 @@ describe('completeStreaming Deduplication', () => {
       store.getState().setIsModeratorStreaming(true);
       store.setState({ isWaitingForChangelog: true });
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // completeStreaming should reset isModeratorStreaming
       store.getState().completeStreaming();
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       // ⚠️ CRITICAL: isWaitingForChangelog is NOT cleared by completeStreaming
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should not require separate completeModeratorStream call', () => {
       // Simulate full round completion state
       store.setState({
-        isStreaming: true,
-        isModeratorStreaming: true,
         currentParticipantIndex: 3,
+        isModeratorStreaming: true,
+        isStreaming: true,
         streamingRoundNumber: 0,
       });
 
@@ -89,10 +89,10 @@ describe('completeStreaming Deduplication', () => {
       store.getState().completeStreaming();
 
       // All states should be reset
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       expect(store.getState().currentParticipantIndex).toBe(0);
-      expect(store.getState().streamingRoundNumber).toBe(null);
+      expect(store.getState().streamingRoundNumber).toBeNull();
     });
   });
 
@@ -156,25 +156,25 @@ describe('completeStreaming Deduplication', () => {
     it('should reset all pending message related state', () => {
       // Set up pending message state
       store.setState({
-        pendingMessage: 'Test message',
-        pendingAttachmentIds: ['attach-1', 'attach-2'],
-        pendingFileParts: [{ type: 'file', mimeType: 'image/png', url: 'https://example.com/file.png' }],
         expectedParticipantIds: ['p1', 'p2'],
         hasSentPendingMessage: true,
+        pendingAttachmentIds: ['attach-1', 'attach-2'],
+        pendingFileParts: [{ mimeType: 'image/png', type: 'file', url: 'https://example.com/file.png' }],
+        pendingMessage: 'Test message',
       });
 
       expect(store.getState().pendingMessage).toBe('Test message');
       expect(store.getState().pendingAttachmentIds?.length).toBe(2);
-      expect(store.getState().hasSentPendingMessage).toBe(true);
+      expect(store.getState().hasSentPendingMessage).toBeTruthy();
 
       // Complete streaming should reset all
       store.getState().completeStreaming();
 
-      expect(store.getState().pendingMessage).toBe(null);
-      expect(store.getState().pendingAttachmentIds).toBe(null);
-      expect(store.getState().pendingFileParts).toBe(null);
-      expect(store.getState().expectedParticipantIds).toBe(null);
-      expect(store.getState().hasSentPendingMessage).toBe(false);
+      expect(store.getState().pendingMessage).toBeNull();
+      expect(store.getState().pendingAttachmentIds).toBeNull();
+      expect(store.getState().pendingFileParts).toBeNull();
+      expect(store.getState().expectedParticipantIds).toBeNull();
+      expect(store.getState().hasSentPendingMessage).toBeFalsy();
     });
   });
 
@@ -186,14 +186,14 @@ describe('completeStreaming Deduplication', () => {
         regeneratingRoundNumber: 2,
       });
 
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
       expect(store.getState().regeneratingRoundNumber).toBe(2);
 
       // Complete streaming should reset regeneration state
       store.getState().completeStreaming();
 
-      expect(store.getState().isRegenerating).toBe(false);
-      expect(store.getState().regeneratingRoundNumber).toBe(null);
+      expect(store.getState().isRegenerating).toBeFalsy();
+      expect(store.getState().regeneratingRoundNumber).toBeNull();
     });
   });
 
@@ -201,16 +201,16 @@ describe('completeStreaming Deduplication', () => {
     it('should be safe to call completeStreaming multiple times', () => {
       // Set up state
       store.setState({
-        isStreaming: true,
-        isModeratorStreaming: true,
         currentParticipantIndex: 2,
+        isModeratorStreaming: true,
+        isStreaming: true,
       });
 
       // First call
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // Second call should not throw or cause issues
       expect(() => {
@@ -218,8 +218,8 @@ describe('completeStreaming Deduplication', () => {
       }).not.toThrow();
 
       // State should remain reset
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
   });
 
@@ -227,9 +227,9 @@ describe('completeStreaming Deduplication', () => {
     it('should trigger single subscription notification for completeStreaming', () => {
       // Set up state
       store.setState({
-        isStreaming: true,
-        isModeratorStreaming: true,
         currentParticipantIndex: 2,
+        isModeratorStreaming: true,
+        isStreaming: true,
         streamingRoundNumber: 1,
       });
 

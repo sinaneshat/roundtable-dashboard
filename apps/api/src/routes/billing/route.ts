@@ -38,40 +38,40 @@ import {
 // ============================================================================
 
 export const listProductsRoute = createRoute({
+  description: 'Get all active products with their pricing plans',
   method: 'get',
   path: '/billing/products',
-  tags: ['billing'],
-  summary: 'List all products',
-  description: 'Get all active products with their pricing plans',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Products retrieved successfully',
       content: {
         'application/json': { schema: ProductListResponseSchema },
       },
+      description: 'Products retrieved successfully',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'List all products',
+  tags: ['billing'],
 });
 
 export const getProductRoute = createRoute({
+  description: 'Get a specific product with all its pricing plans',
   method: 'get',
   path: '/billing/products/:id',
-  tags: ['billing'],
-  summary: 'Get product details',
-  description: 'Get a specific product with all its pricing plans',
   request: {
     params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Product retrieved successfully',
       content: {
         'application/json': { schema: ProductDetailResponseSchema },
       },
+      description: 'Product retrieved successfully',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'Get product details',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -79,30 +79,30 @@ export const getProductRoute = createRoute({
 // ============================================================================
 
 export const createCheckoutSessionRoute = createRoute({
+  description: 'Create a Stripe checkout session for subscription purchase',
   method: 'post',
   path: '/billing/checkout',
-  tags: ['billing'],
-  summary: 'Create checkout session',
-  description: 'Create a Stripe checkout session for subscription purchase',
   request: {
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: CheckoutRequestSchema,
         },
       },
+      required: true,
     },
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Checkout session created successfully',
       content: {
         'application/json': { schema: CheckoutResponseSchema },
       },
+      description: 'Checkout session created successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Create checkout session',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -110,30 +110,30 @@ export const createCheckoutSessionRoute = createRoute({
 // ============================================================================
 
 export const createCustomerPortalSessionRoute = createRoute({
+  description: 'Create a Stripe customer portal session for managing subscriptions and billing',
   method: 'post',
   path: '/billing/portal',
-  tags: ['billing'],
-  summary: 'Create customer portal session',
-  description: 'Create a Stripe customer portal session for managing subscriptions and billing',
   request: {
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: CustomerPortalRequestSchema,
         },
       },
+      required: true,
     },
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Customer portal session created successfully',
       content: {
         'application/json': { schema: CustomerPortalResponseSchema },
       },
+      description: 'Customer portal session created successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Create customer portal session',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -141,41 +141,41 @@ export const createCustomerPortalSessionRoute = createRoute({
 // ============================================================================
 
 export const listSubscriptionsRoute = createRoute({
+  description: 'Get all subscriptions for the authenticated user',
   method: 'get',
   path: '/billing/subscriptions',
-  tags: ['billing'],
-  summary: 'List user subscriptions',
-  description: 'Get all subscriptions for the authenticated user',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Subscriptions retrieved successfully',
       content: {
         'application/json': { schema: SubscriptionListResponseSchema },
       },
+      description: 'Subscriptions retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'List user subscriptions',
+  tags: ['billing'],
 });
 
 export const getSubscriptionRoute = createRoute({
+  description: 'Get details of a specific subscription',
   method: 'get',
   path: '/billing/subscriptions/:id',
-  tags: ['billing'],
-  summary: 'Get subscription details',
-  description: 'Get details of a specific subscription',
   request: {
     params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Subscription retrieved successfully',
       content: {
         'application/json': { schema: SubscriptionDetailResponseSchema },
       },
+      description: 'Subscription retrieved successfully',
     },
     ...StandardApiResponses.FORBIDDEN,
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get subscription details',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -183,61 +183,61 @@ export const getSubscriptionRoute = createRoute({
 // ============================================================================
 
 export const switchSubscriptionRoute = createRoute({
+  description: 'Switch the current subscription to a different price. Automatically handles upgrades (immediate with proration) and downgrades (at period end).',
   method: 'post',
   path: '/billing/subscriptions/:id/switch',
-  tags: ['billing'],
-  summary: 'Switch subscription plan',
-  description: 'Switch the current subscription to a different price. Automatically handles upgrades (immediate with proration) and downgrades (at period end).',
   request: {
-    params: IdParamSchema,
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: SwitchSubscriptionRequestSchema,
         },
       },
+      required: true,
     },
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Subscription switched successfully',
       content: {
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
+      description: 'Subscription switched successfully',
     },
     ...StandardApiResponses.FORBIDDEN,
     ...createMutationRouteResponses(),
   },
+  summary: 'Switch subscription plan',
+  tags: ['billing'],
 });
 
 export const cancelSubscriptionRoute = createRoute({
+  description: 'Cancel the subscription either immediately or at the end of the current billing period (default).',
   method: 'post',
   path: '/billing/subscriptions/:id/cancel',
-  tags: ['billing'],
-  summary: 'Cancel subscription',
-  description: 'Cancel the subscription either immediately or at the end of the current billing period (default).',
   request: {
-    params: IdParamSchema,
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: CancelSubscriptionRequestSchema,
         },
       },
+      required: true,
     },
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Subscription canceled successfully',
       content: {
         'application/json': { schema: SubscriptionChangeResponseSchema },
       },
+      description: 'Subscription canceled successfully',
     },
     ...StandardApiResponses.FORBIDDEN,
     ...createMutationRouteResponses(),
   },
+  summary: 'Cancel subscription',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -245,22 +245,22 @@ export const cancelSubscriptionRoute = createRoute({
 // ============================================================================
 
 export const syncAfterCheckoutRoute = createRoute({
+  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks. For subscriptions only.',
   method: 'post',
   path: '/billing/sync-after-checkout',
-  tags: ['billing'],
-  summary: 'Sync Stripe subscription data after checkout',
-  description: 'Eagerly sync Stripe subscription data after successful checkout to prevent race conditions with webhooks. For subscriptions only.',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Stripe data synced successfully',
       content: {
         'application/json': {
           schema: SyncAfterCheckoutResponseSchema,
         },
       },
+      description: 'Stripe data synced successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Sync Stripe subscription data after checkout',
+  tags: ['billing'],
 });
 
 /**
@@ -271,22 +271,22 @@ export const syncAfterCheckoutRoute = createRoute({
  * Simpler flow than subscriptions - just grant credits and return.
  */
 export const syncCreditsAfterCheckoutRoute = createRoute({
+  description: 'Process and grant credits after a one-time credit pack purchase. Separate from subscription flow for simplicity.',
   method: 'post',
   path: '/billing/sync-credits-after-checkout',
-  tags: ['billing'],
-  summary: 'Sync credits after one-time purchase',
-  description: 'Process and grant credits after a one-time credit pack purchase. Separate from subscription flow for simplicity.',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Credits synced successfully',
       content: {
         'application/json': {
           schema: SyncCreditsAfterCheckoutResponseSchema,
         },
       },
+      description: 'Credits synced successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Sync credits after one-time purchase',
+  tags: ['billing'],
 });
 
 // ============================================================================
@@ -294,10 +294,6 @@ export const syncCreditsAfterCheckoutRoute = createRoute({
 // ============================================================================
 
 export const handleWebhookRoute = createRoute({
-  method: 'post',
-  path: '/webhooks/stripe',
-  tags: ['billing'],
-  summary: 'Handle Stripe webhooks',
   description: `Process Stripe webhook events using Theo's "Stay Sane with Stripe" pattern.
 
     This endpoint receives webhook events from Stripe and processes them by:
@@ -308,16 +304,20 @@ export const handleWebhookRoute = createRoute({
     5. Updating database with the latest subscription and invoice states
 
     Tracked events: checkout.session.completed, customer.subscription.*, invoice.*, payment_intent.*`,
+  method: 'post',
+  path: '/webhooks/stripe',
   request: {
     headers: WebhookHeadersSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Webhook received and processed successfully',
       content: {
         'application/json': { schema: WebhookResponseSchema },
       },
+      description: 'Webhook received and processed successfully',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'Handle Stripe webhooks',
+  tags: ['billing'],
 });

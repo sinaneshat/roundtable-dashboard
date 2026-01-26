@@ -53,18 +53,24 @@ describe('submission Flow Performance - Store Updates', () => {
     const unsubscribe = store.subscribe((state, prevState) => {
       const changes: string[] = [];
 
-      if (state.inputValue !== prevState.inputValue)
+      if (state.inputValue !== prevState.inputValue) {
         changes.push('inputValue');
-      if (state.isCreatingThread !== prevState.isCreatingThread)
+      }
+      if (state.isCreatingThread !== prevState.isCreatingThread) {
         changes.push('isCreatingThread');
-      if (state.showInitialUI !== prevState.showInitialUI)
+      }
+      if (state.showInitialUI !== prevState.showInitialUI) {
         changes.push('showInitialUI');
-      if (state.isStreaming !== prevState.isStreaming)
+      }
+      if (state.isStreaming !== prevState.isStreaming) {
         changes.push('isStreaming');
-      if (state.streamingRoundNumber !== prevState.streamingRoundNumber)
+      }
+      if (state.streamingRoundNumber !== prevState.streamingRoundNumber) {
         changes.push('streamingRoundNumber');
-      if (state.messages !== prevState.messages)
+      }
+      if (state.messages !== prevState.messages) {
         changes.push('messages');
+      }
 
       if (changes.length > 0) {
         updateLog.push(changes.join('+'));
@@ -80,8 +86,8 @@ describe('submission Flow Performance - Store Updates', () => {
 
     // 3. Thread created - user message added
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'What is React?',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -143,11 +149,11 @@ describe('submission Flow Performance - Function Call Tracking', () => {
     // Simulate 10 streaming chunks for participant 0
     for (let i = 1; i <= 10; i++) {
       const message = createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Word '.repeat(i),
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([message]);
     }
@@ -165,11 +171,11 @@ describe('submission Flow Performance - Function Call Tracking', () => {
 
     // Simulate streaming chunks (should NOT call setIsStreaming)
     const message = createTestAssistantMessage({
-      id: 'thread_abc_r0_p0',
       content: 'Response here',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
     store.getState().setMessages([message]);
 
@@ -208,8 +214,8 @@ describe('submission Flow Performance - Function Call Tracking', () => {
 
     // Simulate submission without web search
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question without search',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -224,14 +230,14 @@ describe('submission Flow Performance - Function Call Tracking', () => {
 
     // Simulate pre-search creation
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question with search',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question with search',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -270,7 +276,7 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
 
   it('should track message updates per participant without duplicates', () => {
     const store = createTestChatStore();
-    const messageUpdates: Array<{ participantIndex: number; updateCount: number }> = [];
+    const messageUpdates: { participantIndex: number; updateCount: number }[] = [];
 
     // Track updates for each participant
     const participantUpdates = new Map<number, number>();
@@ -294,11 +300,11 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
     for (let i = 1; i <= 5; i++) {
       store.getState().setMessages([
         createTestAssistantMessage({
-          id: 'thread_abc_r0_p0',
           content: 'P0 '.repeat(i),
-          roundNumber: 0,
+          id: 'thread_abc_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ]);
     }
@@ -307,11 +313,11 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
     for (let i = 1; i <= 3; i++) {
       store.getState().setMessages([
         createTestAssistantMessage({
-          id: 'thread_abc_r0_p1',
           content: 'P1 '.repeat(i),
-          roundNumber: 0,
+          id: 'thread_abc_r0_p1',
           participantId: 'participant-1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
       ]);
     }
@@ -338,9 +344,9 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
 
     // Set up streaming state
     store.setState({
+      currentParticipantIndex: 2,
       isStreaming: true,
       streamingRoundNumber: 0,
-      currentParticipantIndex: 2,
     });
 
     const unsubscribe = store.subscribe(() => {
@@ -359,8 +365,8 @@ describe('submission Flow Performance - Sequential Participant Streaming', () =>
 
     // Verify all state was reset
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 });
@@ -410,15 +416,15 @@ describe('submission Flow Performance - Council Moderator', () => {
     store.setState({ isModeratorStreaming: true, isStreaming: false });
 
     // Verify state
-    expect(store.getState().isModeratorStreaming).toBe(true);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // Participant streaming should not start while moderator is active
     // (This is business logic enforced in components/providers)
     const currentState = store.getState();
     const shouldBlockParticipantStreaming = currentState.isModeratorStreaming;
 
-    expect(shouldBlockParticipantStreaming).toBe(true);
+    expect(shouldBlockParticipantStreaming).toBeTruthy();
   });
 });
 
@@ -466,16 +472,16 @@ describe('submission Flow Performance - Regression Baselines', () => {
      * - Verify completeStreaming still batches
      * - Look for cascading effect bugs
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('verifies completeStreaming batching is maintained', () => {
     const store = createTestChatStore();
 
     store.setState({
+      currentParticipantIndex: 2,
       isStreaming: true,
       streamingRoundNumber: 0,
-      currentParticipantIndex: 2,
       waitingToStartStreaming: false,
     });
 
@@ -498,30 +504,30 @@ describe('submission Flow Performance - Regression Baselines', () => {
     // Simulate 3 participants streaming
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Response 1',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p1',
         content: 'Response 2',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p2',
         content: 'Response 3',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
+        roundNumber: 0,
       }),
     ];
 

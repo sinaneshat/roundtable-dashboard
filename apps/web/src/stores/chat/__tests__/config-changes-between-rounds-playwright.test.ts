@@ -67,13 +67,13 @@ function completeRound(
     includeModerator?: boolean;
   } = {},
 ): void {
-  const { roundNumber, participants } = config;
+  const { participants, roundNumber } = config;
   const { includePreSearch = false } = options;
 
   // User message
   const userMsg = createTestUserMessage({
-    id: `user-r${roundNumber}`,
     content: `Question for round ${roundNumber}`,
+    id: `user-r${roundNumber}`,
     roundNumber,
   });
 
@@ -81,35 +81,35 @@ function completeRound(
   const sortedParticipants = [...participants].sort((a, b) => a.priority - b.priority);
   const participantMsgs = sortedParticipants.map((p, idx) =>
     createTestAssistantMessage({
-      id: `thread-123_r${roundNumber}_p${idx}`,
       content: `Response from ${p.modelId}`,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `thread-123_r${roundNumber}_p${idx}`,
       participantId: p.id,
       participantIndex: idx,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     }),
   );
 
   // Add pre-search if enabled
   if (includePreSearch) {
     store.getState().addPreSearch({
+      completedAt: new Date(),
+      createdAt: new Date(),
+      errorMessage: null,
       id: `presearch-r${roundNumber}`,
-      threadId: 'thread-123',
       roundNumber,
-      status: 'complete',
       searchData: {
+        failureCount: 0,
         queries: [],
         results: [],
-        summary: 'Web search results',
         successCount: 1,
-        failureCount: 0,
+        summary: 'Web search results',
         totalResults: 3,
         totalTime: 1000,
       },
+      status: 'complete',
+      threadId: 'thread-123',
       userQuery: `Question for round ${roundNumber}`,
-      errorMessage: null,
-      createdAt: new Date(),
-      completedAt: new Date(),
     });
   }
 
@@ -133,10 +133,10 @@ function detectParticipantChanges(
   curr.forEach((p) => {
     if (!prevIds.has(p.id)) {
       changes.push({
-        participantId: p.id,
-        modelId: p.modelId,
-        role: p.role,
         changeType: 'added',
+        modelId: p.modelId,
+        participantId: p.id,
+        role: p.role,
       });
     }
   });
@@ -145,10 +145,10 @@ function detectParticipantChanges(
   prev.forEach((p) => {
     if (!currIds.has(p.id)) {
       changes.push({
-        participantId: p.id,
-        modelId: p.modelId,
-        role: p.role,
         changeType: 'removed',
+        modelId: p.modelId,
+        participantId: p.id,
+        role: p.role,
       });
     }
   });
@@ -158,10 +158,10 @@ function detectParticipantChanges(
     const prevP = prev.find(p => p.id === currP.id);
     if (prevP && prevP.role !== currP.role) {
       changes.push({
-        participantId: currP.id,
-        modelId: currP.modelId,
-        role: currP.role,
         changeType: 'role_changed',
+        modelId: currP.modelId,
+        participantId: currP.id,
+        role: currP.role,
       });
     }
   });
@@ -171,10 +171,10 @@ function detectParticipantChanges(
     const prevP = prev.find(p => p.id === currP.id);
     if (prevP && prevP.priority !== currP.priority) {
       changes.push({
-        participantId: currP.id,
-        modelId: currP.modelId,
-        role: currP.role,
         changeType: 'priority_changed',
+        modelId: currP.modelId,
+        participantId: currP.id,
+        role: currP.role,
       });
     }
   });
@@ -203,10 +203,10 @@ describe('participant Additions Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Round 1: Add 1 participant
@@ -223,10 +223,10 @@ describe('participant Additions Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'claude-3-opus', 'gemini-pro']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     // Verify Round 1 has 3 participant messages
@@ -243,10 +243,10 @@ describe('participant Additions Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -262,10 +262,10 @@ describe('participant Additions Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'claude-3-opus', 'gemini-pro']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     const r1Messages = store.getState().messages.filter(m =>
@@ -281,10 +281,10 @@ describe('participant Additions Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -301,10 +301,10 @@ describe('participant Additions Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     const r1Messages = store.getState().messages.filter(m =>
@@ -320,10 +320,10 @@ describe('participant Additions Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Add new participant in Round 1
@@ -340,10 +340,10 @@ describe('participant Additions Between Rounds', () => {
     expect(allMessages.length).toBeGreaterThan(0);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     // Verify Round 1 has both participants
@@ -375,19 +375,21 @@ describe('participant Removals Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Remove participant-1
     const p0 = round0Participants[0];
     const p2 = round0Participants[2];
-    if (!p0)
+    if (!p0) {
       throw new Error('expected round0Participants[0] to exist');
-    if (!p2)
+    }
+    if (!p2) {
       throw new Error('expected round0Participants[2] to exist');
+    }
     const round1Participants = [p0, p2];
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
@@ -398,10 +400,10 @@ describe('participant Removals Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'gemini-pro']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     const r1Messages = store.getState().messages.filter(m =>
@@ -420,15 +422,16 @@ describe('participant Removals Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const p0 = round0Participants[0];
-    if (!p0)
+    if (!p0) {
       throw new Error('expected round0Participants[0] to exist');
+    }
     const round1Participants = [p0];
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
@@ -438,10 +441,10 @@ describe('participant Removals Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     const r1Messages = store.getState().messages.filter(m =>
@@ -459,15 +462,16 @@ describe('participant Removals Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const p1 = round0Participants[1];
-    if (!p1)
+    if (!p1) {
       throw new Error('expected round0Participants[1] to exist');
+    }
     const round1Participants = [p1]; // Keep only claude
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
@@ -477,10 +481,10 @@ describe('participant Removals Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['claude-3-opus']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     const r1Messages = store.getState().messages.filter(m =>
@@ -510,10 +514,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -529,10 +533,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 
@@ -543,10 +547,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -558,10 +562,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 
@@ -572,10 +576,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -587,10 +591,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 
@@ -602,10 +606,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -618,10 +622,10 @@ describe('participant Role Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 });
@@ -646,10 +650,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -664,10 +668,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
     store.getState().setExpectedParticipantIds(['claude-3-opus', 'gpt-4o']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     // Verify messages follow new priority order
@@ -688,10 +692,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -705,10 +709,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 
@@ -722,10 +726,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Shuffle: 2, 0, 3, 1
@@ -741,10 +745,10 @@ describe('participant Priority/Order Changes Between Rounds', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 });
@@ -768,10 +772,10 @@ describe('mode Changes Between Rounds', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Change to council mode
@@ -779,10 +783,10 @@ describe('mode Changes Between Rounds', () => {
     store.getState().setThread(createMockThread({ mode: ChatModes.DEBATING }));
 
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.DEBATING,
       enableWebSearch: false,
+      mode: ChatModes.DEBATING,
+      participants,
+      roundNumber: 1,
     });
 
     expect(store.getState().selectedMode).toBe(ChatModes.DEBATING);
@@ -796,16 +800,17 @@ describe('mode Changes Between Rounds', () => {
 
     for (let i = 0; i < modes.length; i++) {
       const mode = modes[i];
-      if (!mode)
+      if (!mode) {
         throw new Error(`expected modes[${i}] to exist`);
+      }
       store.getState().setSelectedMode(mode);
       store.getState().setThread(createMockThread({ mode }));
 
       completeRound(store, {
-        roundNumber: i,
-        participants,
-        mode,
         enableWebSearch: false,
+        mode,
+        participants,
+        roundNumber: i,
       });
 
       expect(store.getState().selectedMode).toBe(mode);
@@ -819,10 +824,10 @@ describe('mode Changes Between Rounds', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Change to debating mode
@@ -830,10 +835,10 @@ describe('mode Changes Between Rounds', () => {
     store.getState().setThread(createMockThread({ mode: ChatModes.DEBATING }));
 
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.DEBATING,
       enableWebSearch: false,
+      mode: ChatModes.DEBATING,
+      participants,
+      roundNumber: 1,
     });
 
     // Mode should reflect debating (would affect moderator evaluation criteria)
@@ -860,10 +865,10 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setEnableWebSearch(false);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Enable web search for Round 1
@@ -871,13 +876,13 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: true }));
 
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 1,
     }, { includePreSearch: true });
 
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().preSearches.find(p => p.roundNumber === 1)).toBeDefined();
   });
 
@@ -889,10 +894,10 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: true }));
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     }, { includePreSearch: true });
 
     // Disable web search for Round 1
@@ -900,13 +905,13 @@ describe('web Search Toggle Between Rounds', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: false }));
 
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 1,
     });
 
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
     expect(store.getState().preSearches.find(p => p.roundNumber === 1)).toBeUndefined();
   });
 
@@ -918,16 +923,17 @@ describe('web Search Toggle Between Rounds', () => {
 
     for (let i = 0; i < toggleStates.length; i++) {
       const enableWebSearch = toggleStates[i];
-      if (enableWebSearch === undefined)
+      if (enableWebSearch === undefined) {
         throw new Error(`expected toggleStates[${i}] to exist`);
+      }
       store.getState().setEnableWebSearch(enableWebSearch);
       store.getState().setThread(createMockThread({ enableWebSearch }));
 
       completeRound(store, {
-        roundNumber: i,
-        participants,
-        mode: ChatModes.ANALYZING,
         enableWebSearch,
+        mode: ChatModes.ANALYZING,
+        participants,
+        roundNumber: i,
       }, { includePreSearch: enableWebSearch });
 
       expect(store.getState().enableWebSearch).toBe(enableWebSearch);
@@ -957,10 +963,10 @@ describe('combined Changes (Multiple Types at Once)', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const round1Participants = [
@@ -974,10 +980,10 @@ describe('combined Changes (Multiple Types at Once)', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'claude-3-opus']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
 
     expect(store.getState().selectedMode).toBe(ChatModes.ANALYZING);
@@ -994,15 +1000,16 @@ describe('combined Changes (Multiple Types at Once)', () => {
     store.getState().setEnableWebSearch(false);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     const p0 = round0Participants[0];
-    if (!p0)
+    if (!p0) {
       throw new Error('expected round0Participants[0] to exist');
+    }
     const round1Participants = [p0];
 
     store.getState().setParticipants(round1Participants);
@@ -1011,20 +1018,20 @@ describe('combined Changes (Multiple Types at Once)', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o']);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     }, { includePreSearch: true });
 
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().participants).toHaveLength(1);
   });
 
   it('should handle all change types simultaneously', () => {
     const round0Participants = [
-      createMockParticipant(0, { modelId: 'gpt-4o', role: 'Analyst', priority: 0 }),
-      createMockParticipant(1, { modelId: 'claude-3-opus', role: 'Critic', priority: 1 }),
+      createMockParticipant(0, { modelId: 'gpt-4o', priority: 0, role: 'Analyst' }),
+      createMockParticipant(1, { modelId: 'claude-3-opus', priority: 1, role: 'Critic' }),
     ];
 
     store.getState().setParticipants(round0Participants);
@@ -1032,23 +1039,23 @@ describe('combined Changes (Multiple Types at Once)', () => {
     store.getState().setEnableWebSearch(false);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Apply all change types
     const round1Participants = [
-      createMockParticipant(0, { modelId: 'gpt-4o', role: 'Ideator', priority: 1 }), // Role + priority changed
-      createMockParticipant(2, { modelId: 'gemini-pro', role: 'Synthesizer', priority: 0 }), // Added
+      createMockParticipant(0, { modelId: 'gpt-4o', priority: 1, role: 'Ideator' }), // Role + priority changed
+      createMockParticipant(2, { modelId: 'gemini-pro', priority: 0, role: 'Synthesizer' }), // Added
       // participant-1 removed
     ];
 
     store.getState().setParticipants(round1Participants);
     store.getState().setSelectedMode(ChatModes.ANALYZING); // Mode changed
     store.getState().setEnableWebSearch(true); // Web search toggled
-    store.getState().setThread(createMockThread({ mode: ChatModes.ANALYZING, enableWebSearch: true }));
+    store.getState().setThread(createMockThread({ enableWebSearch: true, mode: ChatModes.ANALYZING }));
     store.getState().setExpectedParticipantIds(['gemini-pro', 'gpt-4o']);
 
     const changes = detectParticipantChanges(round0Participants, round1Participants);
@@ -1058,14 +1065,14 @@ describe('combined Changes (Multiple Types at Once)', () => {
     expect(changes.filter(c => c.changeType === 'priority_changed')).toHaveLength(1);
 
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     }, { includePreSearch: true });
 
     expect(store.getState().selectedMode).toBe(ChatModes.ANALYZING);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
     expect(store.getState().participants).toHaveLength(2);
   });
 });
@@ -1087,10 +1094,10 @@ describe('edge Cases', () => {
 
     store.getState().setParticipants(round0Participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // User adds participant-1
@@ -1107,10 +1114,10 @@ describe('edge Cases', () => {
 
     store.getState().setParticipants(round1Participants);
     completeRound(store, {
-      roundNumber: 1,
-      participants: round1Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round1Participants,
+      roundNumber: 1,
     });
   });
 
@@ -1119,10 +1126,10 @@ describe('edge Cases', () => {
 
     store.getState().setParticipants(participants);
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Rapid changes: mode → web search → mode again
@@ -1132,7 +1139,7 @@ describe('edge Cases', () => {
 
     // Final state at submission
     expect(store.getState().selectedMode).toBe(ChatModes.DEBATING);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 
   it('should handle config changes on round 2', () => {
@@ -1142,17 +1149,17 @@ describe('edge Cases', () => {
 
     // Complete rounds 0 and 1
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 1,
     });
 
     // Change config for round 2
@@ -1160,10 +1167,10 @@ describe('edge Cases', () => {
     store.getState().setThread(createMockThread({ mode: ChatModes.DEBATING }));
 
     completeRound(store, {
-      roundNumber: 2,
-      participants,
-      mode: ChatModes.DEBATING,
       enableWebSearch: false,
+      mode: ChatModes.DEBATING,
+      participants,
+      roundNumber: 2,
     });
 
     expect(store.getState().selectedMode).toBe(ChatModes.DEBATING);
@@ -1177,10 +1184,10 @@ describe('edge Cases', () => {
     // Complete rounds 0-4
     for (let i = 0; i < 5; i++) {
       completeRound(store, {
-        roundNumber: i,
-        participants,
-        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
+        mode: ChatModes.ANALYZING,
+        participants,
+        roundNumber: i,
       });
     }
 
@@ -1194,10 +1201,10 @@ describe('edge Cases', () => {
     store.getState().setExpectedParticipantIds(['gpt-4o', 'claude-3-opus']);
 
     completeRound(store, {
-      roundNumber: 5,
-      participants: newParticipants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: newParticipants,
+      roundNumber: 5,
     });
 
     expect(store.getState().participants).toHaveLength(2);
@@ -1211,10 +1218,10 @@ describe('edge Cases', () => {
     // Complete rounds 0-9
     for (let i = 0; i < 10; i++) {
       completeRound(store, {
-        roundNumber: i,
-        participants,
-        mode: ChatModes.ANALYZING,
         enableWebSearch: false,
+        mode: ChatModes.ANALYZING,
+        participants,
+        roundNumber: i,
       });
     }
 
@@ -1223,13 +1230,13 @@ describe('edge Cases', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: true }));
 
     completeRound(store, {
-      roundNumber: 10,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: true,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 10,
     }, { includePreSearch: true });
 
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
   });
 
   it('should handle no changes between rounds', () => {
@@ -1238,18 +1245,18 @@ describe('edge Cases', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // No changes for round 1
     completeRound(store, {
-      roundNumber: 1,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 1,
     });
 
     const changes = detectParticipantChanges(participants, participants);
@@ -1276,21 +1283,21 @@ describe('config Change Flags and Detection', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Initially no pending changes
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
     // Change mode
     store.getState().setSelectedMode(ChatModes.ANALYZING);
     store.getState().setHasPendingConfigChanges(true); // This simulates handleModeChange
 
     // Verify flag is set
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
   });
 
   it('should set hasPendingConfigChanges when web search toggles', () => {
@@ -1300,21 +1307,21 @@ describe('config Change Flags and Detection', () => {
     store.getState().setEnableWebSearch(false);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Initially no pending changes
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
     // Toggle web search
     store.getState().setEnableWebSearch(true);
     store.getState().setHasPendingConfigChanges(true); // This simulates handleWebSearchToggle
 
     // Verify flag is set
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
   });
 
   it('should set hasPendingConfigChanges when participants change', () => {
@@ -1323,14 +1330,14 @@ describe('config Change Flags and Detection', () => {
     store.getState().setParticipants(round0Participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Initially no pending changes
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
 
     // Add participant
     const round1Participants = [
@@ -1341,7 +1348,7 @@ describe('config Change Flags and Detection', () => {
     store.getState().setHasPendingConfigChanges(true); // This simulates participant change
 
     // Verify flag is set
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
   });
 
   it('should detect hasAnyChanges when mode changes', () => {
@@ -1352,10 +1359,10 @@ describe('config Change Flags and Detection', () => {
     store.getState().setThread(createMockThread({ mode: ChatModes.BRAINSTORMING }));
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Change mode
@@ -1366,7 +1373,7 @@ describe('config Change Flags and Detection', () => {
     const selectedMode = store.getState().selectedMode;
     const modeChanged = currentModeId !== selectedMode;
 
-    expect(modeChanged).toBe(true);
+    expect(modeChanged).toBeTruthy();
   });
 
   it('should detect hasAnyChanges when web search toggles', () => {
@@ -1377,10 +1384,10 @@ describe('config Change Flags and Detection', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: false }));
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Toggle web search
@@ -1391,7 +1398,7 @@ describe('config Change Flags and Detection', () => {
     const selectedWebSearch = store.getState().enableWebSearch;
     const webSearchChanged = currentWebSearch !== selectedWebSearch;
 
-    expect(webSearchChanged).toBe(true);
+    expect(webSearchChanged).toBeTruthy();
   });
 
   it('should detect hasAnyChanges via hasPendingConfigChanges flag even when values match', () => {
@@ -1402,10 +1409,10 @@ describe('config Change Flags and Detection', () => {
     store.getState().setThread(createMockThread({ enableWebSearch: false }));
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // User toggles OFF → ON → OFF (back to original value)
@@ -1419,8 +1426,8 @@ describe('config Change Flags and Detection', () => {
     const webSearchChanged = currentWebSearch !== selectedWebSearch;
     const hasPendingConfigChanges = store.getState().hasPendingConfigChanges;
 
-    expect(webSearchChanged).toBe(false); // Values match
-    expect(hasPendingConfigChanges).toBe(true); // But flag indicates change happened
+    expect(webSearchChanged).toBeFalsy(); // Values match
+    expect(hasPendingConfigChanges).toBeTruthy(); // But flag indicates change happened
     // hasAnyChanges = webSearchChanged || hasPendingConfigChanges = true
   });
 
@@ -1431,22 +1438,22 @@ describe('config Change Flags and Detection', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Simulate config change
     store.getState().setSelectedMode(ChatModes.ANALYZING);
     store.getState().setHasPendingConfigChanges(true);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(true);
+    expect(store.getState().hasPendingConfigChanges).toBeTruthy();
 
     // Simulate successful submission (form-actions.ts clears the flag)
     store.getState().setHasPendingConfigChanges(false);
 
-    expect(store.getState().hasPendingConfigChanges).toBe(false);
+    expect(store.getState().hasPendingConfigChanges).toBeFalsy();
   });
 });
 
@@ -1468,19 +1475,19 @@ describe('changelog Fetch and Sync After Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Initially not waiting
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
     // Simulate PATCH completion (form-actions.ts sets this flag)
     store.getState().setIsWaitingForChangelog(true);
 
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
   });
 
   it('should set configChangeRoundNumber after PATCH to block streaming', () => {
@@ -1489,10 +1496,10 @@ describe('changelog Fetch and Sync After Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Initially null
@@ -1510,24 +1517,24 @@ describe('changelog Fetch and Sync After Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Set waiting flags
     store.getState().setIsWaitingForChangelog(true);
     store.getState().setConfigChangeRoundNumber(1);
 
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(1);
 
     // Simulate changelog sync completion (use-changelog-sync.ts clears flags)
     store.getState().setIsWaitingForChangelog(false);
     store.getState().setConfigChangeRoundNumber(null);
 
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
   });
 
@@ -1540,21 +1547,21 @@ describe('changelog Fetch and Sync After Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // No config changes, but still set isWaitingForChangelog
     store.getState().setIsWaitingForChangelog(true);
 
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // use-changelog-sync will fetch (empty) changelog and clear flag
     store.getState().setIsWaitingForChangelog(false);
 
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
   });
 });
 
@@ -1577,10 +1584,10 @@ describe('placeholder Persistence During Config Changes', () => {
     store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.BRAINSTORMING,
       enableWebSearch: false,
+      mode: ChatModes.BRAINSTORMING,
+      participants,
+      roundNumber: 0,
     });
 
     // Change mode
@@ -1593,7 +1600,7 @@ describe('placeholder Persistence During Config Changes', () => {
 
     // Verify placeholders aren't cleared by config change
     expect(store.getState().streamingRoundNumber).toBe(1);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('should keep pre-search placeholder visible when web search is enabled', () => {
@@ -1603,10 +1610,10 @@ describe('placeholder Persistence During Config Changes', () => {
     store.getState().setEnableWebSearch(false);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Enable web search
@@ -1615,15 +1622,15 @@ describe('placeholder Persistence During Config Changes', () => {
 
     // Add pre-search placeholder
     store.getState().addPreSearch({
-      id: 'presearch-r1',
-      threadId: 'thread-123',
-      roundNumber: 1,
-      status: 'pending',
-      searchData: null,
-      userQuery: 'Question for round 1',
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: null,
+      status: 'pending',
+      threadId: 'thread-123',
+      userQuery: 'Question for round 1',
     });
 
     // Verify pre-search placeholder exists
@@ -1638,10 +1645,10 @@ describe('placeholder Persistence During Config Changes', () => {
     store.getState().setParticipants(round0Participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants: round0Participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants: round0Participants,
+      roundNumber: 0,
     });
 
     // Add participant
@@ -1668,10 +1675,10 @@ describe('placeholder Persistence During Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Set placeholders for round 1
@@ -1686,7 +1693,7 @@ describe('placeholder Persistence During Config Changes', () => {
     // Verify placeholders persist
     expect(store.getState().streamingRoundNumber).toBe(1);
     expect(store.getState().expectedParticipantIds).toEqual(['gpt-4o']);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('should not clear placeholders when isWaitingForChangelog is true', () => {
@@ -1695,10 +1702,10 @@ describe('placeholder Persistence During Config Changes', () => {
     store.getState().setParticipants(participants);
 
     completeRound(store, {
-      roundNumber: 0,
-      participants,
-      mode: ChatModes.ANALYZING,
       enableWebSearch: false,
+      mode: ChatModes.ANALYZING,
+      participants,
+      roundNumber: 0,
     });
 
     // Set placeholders for round 1

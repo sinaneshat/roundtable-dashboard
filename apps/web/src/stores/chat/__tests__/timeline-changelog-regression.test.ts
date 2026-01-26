@@ -22,13 +22,16 @@ import type { ChatThreadChangelog, DbModeratorMessageMetadata, StoredPreSearch }
 // TEST HELPERS - Mimic production state structure
 // ============================================================================
 
+/**
+ * TestChangelog - changelog with flexible createdAt type
+ */
 type TestChangelog = Omit<ChatThreadChangelog, 'createdAt'> & {
   createdAt: Date | string;
 };
 
 function createMockChangelog(
   roundNumber: number,
-  changes: Array<{
+  changes: {
     type: 'added' | 'removed' | 'modified' | 'reordered' | 'mode_change';
     participantId?: string;
     modelId?: string;
@@ -38,28 +41,28 @@ function createMockChangelog(
     newPriority?: number;
     oldMode?: string;
     newMode?: string;
-  }>,
+  }[],
 ): TestChangelog {
   return {
-    id: `changelog-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
-    changeType: 'participant_change',
     changeData: {
       changes: changes.map(c => ({
-        type: c.type,
-        participantId: c.participantId,
         modelId: c.modelId,
-        oldRole: c.oldRole,
-        newRole: c.newRole,
-        oldPriority: c.oldPriority,
-        newPriority: c.newPriority,
-        oldMode: c.oldMode,
         newMode: c.newMode,
+        newPriority: c.newPriority,
+        newRole: c.newRole,
+        oldMode: c.oldMode,
+        oldPriority: c.oldPriority,
+        oldRole: c.oldRole,
+        participantId: c.participantId,
+        type: c.type,
       })),
     },
+    changeType: 'participant_change',
     createdAt: new Date(),
+    id: `changelog-r${roundNumber}`,
+    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
+    roundNumber,
+    threadId: 'thread-123',
   };
 }
 
@@ -68,25 +71,25 @@ function createMockPreSearch(
   status: typeof MessageStatuses[keyof typeof MessageStatuses] = MessageStatuses.COMPLETE,
 ): StoredPreSearch {
   return {
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    userQuery: `Query for round ${roundNumber}`,
-    status,
     searchData: status === MessageStatuses.COMPLETE
       ? {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Summary',
           successCount: 1,
-          failureCount: 0,
+          summary: 'Summary',
           totalResults: 3,
           totalTime: 1000,
         }
       : undefined,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: `Query for round ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -95,17 +98,17 @@ function createModeratorMessage(
   text: string,
 ): UIMessage {
   const metadata: DbModeratorMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    isModerator: true,
-    roundNumber,
-    model: 'moderator-model',
     hasError: false,
+    isModerator: true,
+    model: 'moderator-model',
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
   };
   return {
     id: `moderator-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -126,33 +129,33 @@ describe('bug #1: Changelog Display Between Rounds', () => {
        */
       const messages: UIMessage[] = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Round 0 question', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0p0', content: 'P0 response', roundNumber: 0, participantId: 'p0', participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'a0p1', content: 'P1 response', roundNumber: 0, participantId: 'p1', participantIndex: 1 }),
-        createTestAssistantMessage({ id: 'a0p2', content: 'P2 response', roundNumber: 0, participantId: 'p2', participantIndex: 2 }),
+        createTestUserMessage({ content: 'Round 0 question', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P0 response', id: 'a0p0', participantId: 'p0', participantIndex: 0, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P1 response', id: 'a0p1', participantId: 'p1', participantIndex: 1, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P2 response', id: 'a0p2', participantId: 'p2', participantIndex: 2, roundNumber: 0 }),
         // Round 1
-        createTestUserMessage({ id: 'u1', content: 'Round 1 question', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'a1p0', content: 'P0 response', roundNumber: 1, participantId: 'p0', participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'a1p1', content: 'P1 response', roundNumber: 1, participantId: 'p1', participantIndex: 1 }),
+        createTestUserMessage({ content: 'Round 1 question', id: 'u1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'P0 response', id: 'a1p0', participantId: 'p0', participantIndex: 0, roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'P1 response', id: 'a1p1', participantId: 'p1', participantIndex: 1, roundNumber: 1 }),
         // Round 2 - CONFIG CHANGED: Only 1 participant now
-        createTestUserMessage({ id: 'u2', content: 'Round 2 question', roundNumber: 2 }),
-        createTestAssistantMessage({ id: 'a2p0', content: 'P0 response', roundNumber: 2, participantId: 'new-p0', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Round 2 question', id: 'u2', roundNumber: 2 }),
+        createTestAssistantMessage({ content: 'P0 response', id: 'a2p0', participantId: 'new-p0', participantIndex: 0, roundNumber: 2 }),
       ];
 
       // Changelog for round 2 (config changed before round 2)
       const changelog: TestChangelog[] = [
         createMockChangelog(2, [
-          { type: 'removed', participantId: 'p0', modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324 },
-          { type: 'removed', participantId: 'p1', modelId: ModelIds.X_AI_GROK_4_FAST },
-          { type: 'removed', participantId: 'p2', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
-          { type: 'added', participantId: 'new-p0', modelId: ModelIds.X_AI_GROK_4_1_FAST },
+          { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, participantId: 'p0', type: 'removed' },
+          { modelId: ModelIds.X_AI_GROK_4_FAST, participantId: 'p1', type: 'removed' },
+          { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, participantId: 'p2', type: 'removed' },
+          { modelId: ModelIds.X_AI_GROK_4_1_FAST, participantId: 'new-p0', type: 'added' },
         ]),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -190,23 +193,23 @@ describe('bug #1: Changelog Display Between Rounds', () => {
        */
       const messages: UIMessage[] = [
         // Round 2 with config change
-        createTestUserMessage({ id: 'u2', content: 'Round 2', roundNumber: 2 }),
-        createTestAssistantMessage({ id: 'a2p0', content: 'Response', roundNumber: 2, participantId: 'p0', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Round 2', id: 'u2', roundNumber: 2 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a2p0', participantId: 'p0', participantIndex: 0, roundNumber: 2 }),
         // Round 3 - same config as round 2
-        createTestUserMessage({ id: 'u3', content: 'Round 3', roundNumber: 3 }),
-        createTestAssistantMessage({ id: 'a3p0', content: 'Response', roundNumber: 3, participantId: 'p0', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Round 3', id: 'u3', roundNumber: 3 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a3p0', participantId: 'p0', participantIndex: 0, roundNumber: 3 }),
       ];
 
       const changelog: TestChangelog[] = [
         createMockChangelog(2, [
-          { type: 'added', participantId: 'p0', modelId: 'grok-4.1-fast' },
+          { modelId: 'grok-4.1-fast', participantId: 'p0', type: 'added' },
         ]),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -238,9 +241,9 @@ describe('bug #2: Timeline Element Ordering', () => {
        * Pre-search is rendered INSIDE ChatMessageList, not as separate timeline item
        */
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0p0', content: 'P0', roundNumber: 0, participantId: 'p0', participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'a0p1', content: 'P1', roundNumber: 0, participantId: 'p1', participantIndex: 1 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P0', id: 'a0p0', participantId: 'p0', participantIndex: 0, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P1', id: 'a0p1', participantId: 'p1', participantIndex: 1, roundNumber: 0 }),
         createModeratorMessage(0, 'Round 0 moderator'),
       ];
 
@@ -250,8 +253,8 @@ describe('bug #2: Timeline Element Ordering', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -281,8 +284,8 @@ describe('bug #2: Timeline Element Ordering', () => {
        */
       const messages: UIMessage[] = [
         // Round 0 is complete
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0p0', content: 'Response', roundNumber: 0, participantId: 'p0', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a0p0', participantId: 'p0', participantIndex: 0, roundNumber: 0 }),
         // Round 1 has NO messages yet (orphaned pre-search)
       ];
 
@@ -293,8 +296,8 @@ describe('bug #2: Timeline Element Ordering', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -318,17 +321,17 @@ describe('bug #2: Timeline Element Ordering', () => {
        * Should be: p0, p1, p2 (by participantIndex)
        */
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         // Intentionally out of order in array (simulating race condition)
-        createTestAssistantMessage({ id: 'a0p2', content: 'P2', roundNumber: 0, participantId: 'p2', participantIndex: 2 }),
-        createTestAssistantMessage({ id: 'a0p0', content: 'P0', roundNumber: 0, participantId: 'p0', participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'a0p1', content: 'P1', roundNumber: 0, participantId: 'p1', participantIndex: 1 }),
+        createTestAssistantMessage({ content: 'P2', id: 'a0p2', participantId: 'p2', participantIndex: 2, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P0', id: 'a0p0', participantId: 'p0', participantIndex: 0, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'P1', id: 'a0p1', participantId: 'p1', participantIndex: 1, roundNumber: 0 }),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -340,7 +343,7 @@ describe('bug #2: Timeline Element Ordering', () => {
       expect(messagesItem?.type).toBe(TimelineItemTypes.MESSAGES);
 
       // Type assertion after expect assertion
-      const typedMessagesItem = messagesItem as { type: 'messages'; data: Array<{ role: string; metadata?: { participantIndex?: number } }> };
+      const typedMessagesItem = messagesItem as { type: 'messages'; data: { role: string; metadata?: { participantIndex?: number } }[] };
       const assistantMessages = typedMessagesItem.data.filter(m => m.role === MessageRoles.ASSISTANT);
 
       // Should be sorted by participantIndex
@@ -366,27 +369,27 @@ describe('bug #3: Changelog Visibility After New Round Submission', () => {
      * 4. BUG: Changelog for round 2 disappears
      */
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'u1', content: 'Round 1', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'a1p0', content: 'R1', roundNumber: 1, participantId: 'p0', participantIndex: 0 }),
+      createTestUserMessage({ content: 'Round 1', id: 'u1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'R1', id: 'a1p0', participantId: 'p0', participantIndex: 0, roundNumber: 1 }),
       // Config change happens here
-      createTestUserMessage({ id: 'u2', content: 'Round 2', roundNumber: 2 }),
-      createTestAssistantMessage({ id: 'a2p0', content: 'R2', roundNumber: 2, participantId: 'new-p0', participantIndex: 0 }),
+      createTestUserMessage({ content: 'Round 2', id: 'u2', roundNumber: 2 }),
+      createTestAssistantMessage({ content: 'R2', id: 'a2p0', participantId: 'new-p0', participantIndex: 0, roundNumber: 2 }),
       // Round 3 submitted
-      createTestUserMessage({ id: 'u3', content: 'Round 3', roundNumber: 3 }),
-      createTestAssistantMessage({ id: 'a3p0', content: 'R3', roundNumber: 3, participantId: 'new-p0', participantIndex: 0 }),
+      createTestUserMessage({ content: 'Round 3', id: 'u3', roundNumber: 3 }),
+      createTestAssistantMessage({ content: 'R3', id: 'a3p0', participantId: 'new-p0', participantIndex: 0, roundNumber: 3 }),
     ];
 
     const changelog: TestChangelog[] = [
       createMockChangelog(2, [
-        { type: 'removed', participantId: 'p0' },
-        { type: 'added', participantId: 'new-p0', modelId: ModelIds.X_AI_GROK_4_1_FAST },
+        { participantId: 'p0', type: 'removed' },
+        { modelId: ModelIds.X_AI_GROK_4_1_FAST, participantId: 'new-p0', type: 'added' },
       ]),
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages,
         changelog,
+        messages,
         preSearches: [],
       }),
     );
@@ -428,35 +431,35 @@ describe('bug #4: Progressive UI Updates During Streaming', () => {
       // Initial streaming message (partial content)
       const streamingMessage: UIMessage = {
         id: 'streaming-msg',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Partial...' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          isPartialResponse: true,
           participantId: 'p0',
           participantIndex: 0,
-          isPartialResponse: true,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Partial...', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       };
 
       // Message should have isPartialResponse flag during streaming
-      expect((streamingMessage.metadata as { isPartialResponse?: boolean })?.isPartialResponse).toBe(true);
+      expect((streamingMessage.metadata as { isPartialResponse?: boolean })?.isPartialResponse).toBeTruthy();
 
       // After streaming completes, flag should be false
       const completedMessage: UIMessage = {
         ...streamingMessage,
-        parts: [{ type: 'text', text: 'Complete response with all content' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: streamingMessage.metadata?.roundNumber ?? 0,
+          finishReason: 'stop',
+          isPartialResponse: false,
           participantId: streamingMessage.metadata?.participantId as string,
           participantIndex: streamingMessage.metadata?.participantIndex as number,
-          isPartialResponse: false,
-          finishReason: 'stop',
+          role: MessageRoles.ASSISTANT,
+          roundNumber: streamingMessage.metadata?.roundNumber ?? 0,
         },
+        parts: [{ text: 'Complete response with all content', type: 'text' }],
       };
 
-      expect((completedMessage.metadata as { isPartialResponse?: boolean })?.isPartialResponse).toBe(false);
+      expect((completedMessage.metadata as { isPartialResponse?: boolean })?.isPartialResponse).toBeFalsy();
     });
   });
 
@@ -494,74 +497,74 @@ describe('production State Reproduction', () => {
      */
     const messages: UIMessage[] = [
       // Round 0: 3 participants
-      createTestUserMessage({ id: '01KCC1FR1PJ8CAP14C6M5HS0TC', content: 'say hi, 1 word only', roundNumber: 0 }),
+      createTestUserMessage({ content: 'say hi, 1 word only', id: '01KCC1FR1PJ8CAP14C6M5HS0TC', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p0',
         content: 'Hi',
-        roundNumber: 0,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p0',
         participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p1',
         content: 'Hi',
-        roundNumber: 0,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p1',
         participantId: '01KCC1FR15MYRT64K4Q70SNA2Z',
         participantIndex: 1,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p2',
         content: 'Hi',
-        roundNumber: 0,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r0_p2',
         participantId: '01KCC1FR16W3SF4NFJAJ84RCMF',
         participantIndex: 2,
+        roundNumber: 0,
       }),
 
       // Round 1: 2 participants
-      createTestUserMessage({ id: 'vBtyMUmOMFSqpzBx', content: 'How would you explain quantum computing?', roundNumber: 1 }),
+      createTestUserMessage({ content: 'How would you explain quantum computing?', id: 'vBtyMUmOMFSqpzBx', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r1_p0',
         content: 'Quantum computing explanation...',
-        roundNumber: 1,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r1_p0',
         participantId: '01KCC1H3AW39S7DVJYNTDYRRDM',
         participantIndex: 0,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r1_p1',
         content: 'More quantum explanation...',
-        roundNumber: 1,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r1_p1',
         participantId: '01KCC1H3AXVF144Q29CME0ZFJZ',
         participantIndex: 1,
+        roundNumber: 1,
       }),
 
       // Round 2: CONFIG CHANGED - Only 1 participant now
-      createTestUserMessage({ id: 'EYZNFCbPbRQ9MKOu', content: 'Add practical perspective', roundNumber: 2 }),
+      createTestUserMessage({ content: 'Add practical perspective', id: 'EYZNFCbPbRQ9MKOu', roundNumber: 2 }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r2_p0',
         content: 'Practical perspective...',
-        roundNumber: 2,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r2_p0',
         participantId: '01KCC1S6D47KTNBC46N7337WTB',
         participantIndex: 0,
+        roundNumber: 2,
       }),
 
       // Round 3: Same config as round 2
-      createTestUserMessage({ id: 'XtLPXyhT5uYJZJNo', content: 'Add practical perspective', roundNumber: 3 }),
+      createTestUserMessage({ content: 'Add practical perspective', id: 'XtLPXyhT5uYJZJNo', roundNumber: 3 }),
       createTestAssistantMessage({
-        id: '01KCC1FR0V0ZS0X63M794KFE6X_r3_p0',
         content: 'More practical perspective...',
-        roundNumber: 3,
+        id: '01KCC1FR0V0ZS0X63M794KFE6X_r3_p0',
         participantId: '01KCC1S6D47KTNBC46N7337WTB',
         participantIndex: 0,
+        roundNumber: 3,
       }),
     ];
 
     // Changelogs (config changed before round 2)
     const changelog: TestChangelog[] = [
       createMockChangelog(2, [
-        { type: 'removed', participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG', modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324 },
-        { type: 'removed', participantId: '01KCC1FR15MYRT64K4Q70SNA2Z', modelId: ModelIds.X_AI_GROK_4_FAST },
-        { type: 'removed', participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH },
-        { type: 'added', participantId: '01KCC1S6D47KTNBC46N7337WTB', modelId: ModelIds.X_AI_GROK_4_1_FAST },
+        { modelId: ModelIds.DEEPSEEK_DEEPSEEK_CHAT_V3_0324, participantId: '01KCC1FR15M9S8Y1CRHJ6ADZNG', type: 'removed' },
+        { modelId: ModelIds.X_AI_GROK_4_FAST, participantId: '01KCC1FR15MYRT64K4Q70SNA2Z', type: 'removed' },
+        { modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH, participantId: '01KCC1FR16W3SF4NFJAJ84RCMF', type: 'removed' },
+        { modelId: ModelIds.X_AI_GROK_4_1_FAST, participantId: '01KCC1S6D47KTNBC46N7337WTB', type: 'added' },
       ]),
     ];
 
@@ -573,8 +576,8 @@ describe('production State Reproduction', () => {
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages,
         changelog,
+        messages,
         preSearches,
       }),
     );

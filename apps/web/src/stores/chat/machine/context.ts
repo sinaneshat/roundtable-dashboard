@@ -50,10 +50,10 @@ export function buildContext(store: StoreSnapshot, aiSdk: AiSdkSnapshot): RoundC
     );
 
     return {
-      id: p.id,
-      index: p.participantIndex ?? idx,
       enabled: p.enabled !== false,
       hasMessage,
+      id: p.id,
+      index: p.participantIndex ?? idx,
     };
   });
 
@@ -69,45 +69,45 @@ export function buildContext(store: StoreSnapshot, aiSdk: AiSdkSnapshot): RoundC
   );
 
   return {
-    threadId: store.thread?.id ?? null,
+    allParticipantsComplete: completedParticipants.length === enabledParticipants.length,
+    completedParticipantCount: completedParticipants.length,
+
     createdThreadId: store.createdThreadId,
+    currentParticipantIndex: store.currentParticipantIndex,
 
-    roundNumber,
-    streamingRoundNumber: store.streamingRoundNumber,
+    enabledParticipantCount: enabledParticipants.length,
+    isAiSdkReady: aiSdk.isReady,
 
-    webSearchEnabled: store.enableWebSearch,
+    isAiSdkStreaming: aiSdk.isStreaming,
+    lastError: store.error,
+    moderator: {
+      hasMessage: hasModerator,
+      streamId: store.moderatorResumption?.streamId ?? null,
+    },
+    participantCount: store.participants.length,
+
+    participants: participantInfos,
     preSearch: {
       exists: currentPreSearch !== null,
       status: currentPreSearch?.status as PreSearchInfo['status'] ?? null,
       streamId: currentPreSearch?.id ?? null,
     },
 
-    participants: participantInfos,
-    participantCount: store.participants.length,
-    enabledParticipantCount: enabledParticipants.length,
-    currentParticipantIndex: store.currentParticipantIndex,
-
-    allParticipantsComplete: completedParticipants.length === enabledParticipants.length,
-    completedParticipantCount: completedParticipants.length,
-
-    moderator: {
-      hasMessage: hasModerator,
-      streamId: store.moderatorResumption?.streamId ?? null,
-    },
-
     resumption: {
-      phase: store.currentResumptionPhase,
-      participantIndex: store.nextParticipantToTrigger?.[1] ?? null,
-      roundNumber: store.resumptionRoundNumber,
-      preSearchStreamId: store.preSearchResumption?.streamId ?? null,
-      moderatorStreamId: store.moderatorResumption?.streamId ?? null,
       isPrefilled: store.streamResumptionPrefilled,
+      moderatorStreamId: store.moderatorResumption?.streamId ?? null,
+      participantIndex: store.nextParticipantToTrigger?.[1] ?? null,
+      phase: store.currentResumptionPhase,
+      preSearchStreamId: store.preSearchResumption?.streamId ?? null,
+      roundNumber: store.resumptionRoundNumber,
     },
 
-    lastError: store.error,
+    roundNumber,
 
-    isAiSdkStreaming: aiSdk.isStreaming,
-    isAiSdkReady: aiSdk.isReady,
+    streamingRoundNumber: store.streamingRoundNumber,
+
+    threadId: store.thread?.id ?? null,
+    webSearchEnabled: store.enableWebSearch,
   };
 }
 
@@ -116,36 +116,36 @@ export function buildContext(store: StoreSnapshot, aiSdk: AiSdkSnapshot): RoundC
  */
 export function createEmptyContext(): RoundContext {
   return {
-    threadId: null,
+    allParticipantsComplete: false,
+    completedParticipantCount: 0,
     createdThreadId: null,
-    roundNumber: null,
-    streamingRoundNumber: null,
-    webSearchEnabled: false,
+    currentParticipantIndex: 0,
+    enabledParticipantCount: 0,
+    isAiSdkReady: false,
+    isAiSdkStreaming: false,
+    lastError: null,
+    moderator: {
+      hasMessage: false,
+      streamId: null,
+    },
+    participantCount: 0,
+    participants: [],
     preSearch: {
       exists: false,
       status: null,
       streamId: null,
     },
-    participants: [],
-    participantCount: 0,
-    enabledParticipantCount: 0,
-    currentParticipantIndex: 0,
-    allParticipantsComplete: false,
-    completedParticipantCount: 0,
-    moderator: {
-      hasMessage: false,
-      streamId: null,
-    },
     resumption: {
-      phase: null,
-      participantIndex: null,
-      roundNumber: null,
-      preSearchStreamId: null,
-      moderatorStreamId: null,
       isPrefilled: false,
+      moderatorStreamId: null,
+      participantIndex: null,
+      phase: null,
+      preSearchStreamId: null,
+      roundNumber: null,
     },
-    lastError: null,
-    isAiSdkStreaming: false,
-    isAiSdkReady: false,
+    roundNumber: null,
+    streamingRoundNumber: null,
+    threadId: null,
+    webSearchEnabled: false,
   };
 }

@@ -10,10 +10,10 @@
  */
 export const systemFonts = {
   className: 'font-sans',
-  variable: '--font-sans',
   style: {
     fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, sans-serif',
   },
+  variable: '--font-sans',
 };
 
 /**

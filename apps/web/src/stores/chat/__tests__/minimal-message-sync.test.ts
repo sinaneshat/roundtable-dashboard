@@ -47,8 +47,8 @@ describe('minimal-message-sync', () => {
 
       // Step 1: User submits message - store has the original user message
       const originalUserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'Original user question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
@@ -63,22 +63,22 @@ describe('minimal-message-sync', () => {
       // This is the message AI SDK uses internally to trigger streaming
       const participantTriggerMessage: UIMessage = {
         id: `${threadId}_r${roundNumber}_trigger`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'Original user question' }],
         metadata: {
+          isParticipantTrigger: true, // ✅ This flag marks it as AI SDK internal message
           role: MessageRoles.USER,
           roundNumber,
-          isParticipantTrigger: true, // ✅ This flag marks it as AI SDK internal message
         },
+        parts: [{ text: 'Original user question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       // Step 3: AI SDK starts streaming assistant response
       const assistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r${roundNumber}_p0`,
         content: 'Assistant response',
-        roundNumber,
+        id: `${threadId}_r${roundNumber}_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       // Simulate useMinimalMessageSync syncing AI SDK messages to store
@@ -90,8 +90,9 @@ describe('minimal-message-sync', () => {
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
       const storeOnlyMessages = getState().messages.filter((m) => {
         // Keep messages that are in store but not in AI SDK
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         // ✅ CRITICAL FIX: Preserve non-participant-trigger user messages
         if (m.role === MessageRoles.USER) {
@@ -128,7 +129,7 @@ describe('minimal-message-sync', () => {
 
       // VERIFY: Trigger message has isParticipantTrigger flag
       const triggerMeta = triggerInMerged ? getUserMetadata(triggerInMerged.metadata) : undefined;
-      expect(triggerMeta?.isParticipantTrigger).toBe(true);
+      expect(triggerMeta?.isParticipantTrigger).toBeTruthy();
     });
 
     it('should filter out participant trigger messages but keep original user messages', () => {
@@ -137,21 +138,21 @@ describe('minimal-message-sync', () => {
 
       // Original user message (should be preserved)
       const originalUserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
       // Participant trigger message (should NOT be preserved)
       const participantTriggerMessage: UIMessage = {
         id: `${threadId}_r${roundNumber}_trigger`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'User question' }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: 'User question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       // Store has both messages (edge case: both exist in store)
@@ -165,8 +166,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -194,8 +196,8 @@ describe('minimal-message-sync', () => {
       // User message with no metadata (edge case)
       const userMessageNoMetadata: UIMessage = {
         id: `${threadId}_r${roundNumber}_user`,
+        parts: [{ text: 'User question', type: 'text' }],
         role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'User question' }],
         // No metadata field at all
       };
 
@@ -208,8 +210,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -233,9 +236,9 @@ describe('minimal-message-sync', () => {
       // User message with null metadata (edge case)
       const userMessageNullMetadata: UIMessage = {
         id: `${threadId}_r${roundNumber}_user`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'User question' }],
         metadata: null as unknown,
+        parts: [{ text: 'User question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       store.setState({
@@ -247,8 +250,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -272,24 +276,24 @@ describe('minimal-message-sync', () => {
 
       // Round 0: User message
       const round0UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r0_user`,
         content: 'Round 0 question',
+        id: `${threadId}_r0_user`,
         roundNumber: 0,
       });
 
       // Round 0: Assistant response
       const round0AssistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r0_p0`,
         content: 'Round 0 response',
-        roundNumber: 0,
+        id: `${threadId}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       // Round 1: User message
       const round1UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Round 1 question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       });
 
@@ -301,21 +305,21 @@ describe('minimal-message-sync', () => {
       // AI SDK is streaming round 1 - has only round 1 trigger and response
       const round1TriggerMessage: UIMessage = {
         id: `${threadId}_r1_trigger`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       const round1AssistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'Round 1 response streaming...',
-        roundNumber: 1,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       const chatMessages = [round1TriggerMessage, round1AssistantMessage];
@@ -323,8 +327,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         // Preserve user messages without trigger flag
         if (m.role === MessageRoles.USER) {
@@ -359,38 +364,38 @@ describe('minimal-message-sync', () => {
 
       // Round 0 messages
       const round0UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r0_user`,
         content: 'Round 0 question',
+        id: `${threadId}_r0_user`,
         roundNumber: 0,
       });
 
       const round0AssistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r0_p0`,
         content: 'Round 0 response',
-        roundNumber: 0,
+        id: `${threadId}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       // Round 1 messages
       const round1UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Round 1 question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       });
 
       const round1AssistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'Round 1 response',
-        roundNumber: 1,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       // Round 2 user message
       const round2UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r2_user`,
         content: 'Round 2 question',
+        id: `${threadId}_r2_user`,
         roundNumber: 2,
       });
 
@@ -408,13 +413,13 @@ describe('minimal-message-sync', () => {
       // AI SDK filtered to round 2 only (common pattern during streaming)
       const round2TriggerMessage: UIMessage = {
         id: `${threadId}_r2_trigger`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 2 question' }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 2,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: 'Round 2 question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       const chatMessages = [round2TriggerMessage];
@@ -422,8 +427,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         // Preserve user messages without trigger flag
         if (m.role === MessageRoles.USER) {
@@ -455,17 +461,17 @@ describe('minimal-message-sync', () => {
       const roundNumber = 0;
 
       const userMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
       const assistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r${roundNumber}_p0`,
         content: 'Assistant response',
-        roundNumber,
+        id: `${threadId}_r${roundNumber}_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       // Store has only user message initially
@@ -477,21 +483,22 @@ describe('minimal-message-sync', () => {
       const chatMessages = [
         {
           id: `${threadId}_r${roundNumber}_trigger`,
-          role: UIMessageRoles.USER,
-          parts: [{ type: 'text', text: 'User question' }],
           metadata: {
+            isParticipantTrigger: true,
             role: MessageRoles.USER,
             roundNumber,
-            isParticipantTrigger: true,
           },
+          parts: [{ text: 'User question', type: 'text' }],
+          role: UIMessageRoles.USER,
         } as UIMessage,
         assistantMessage,
       ];
 
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -524,11 +531,11 @@ describe('minimal-message-sync', () => {
 
       // Initial assistant message (partial content)
       const assistantMessageV1: UIMessage = createTestAssistantMessage({
-        id: assistantMessageId,
         content: 'Streaming...',
-        roundNumber,
+        id: assistantMessageId,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       // Store has partial message
@@ -538,11 +545,11 @@ describe('minimal-message-sync', () => {
 
       // AI SDK has updated content
       const assistantMessageV2: UIMessage = createTestAssistantMessage({
-        id: assistantMessageId,
         content: 'Streaming... more content',
-        roundNumber,
+        id: assistantMessageId,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       const chatMessages = [assistantMessageV2];
@@ -553,7 +560,7 @@ describe('minimal-message-sync', () => {
       // VERIFY: Message content updated
       const updatedMessage = getState().messages.find(m => m.id === assistantMessageId);
       expect(updatedMessage).toBeDefined();
-      expect(updatedMessage?.parts[0]).toMatchObject({ type: 'text', text: 'Streaming... more content' });
+      expect(updatedMessage?.parts[0]).toMatchObject({ text: 'Streaming... more content', type: 'text' });
     });
   });
 
@@ -563,14 +570,14 @@ describe('minimal-message-sync', () => {
       const roundNumber = 0;
 
       const userMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
       const moderatorMessage: UIMessage = createTestModeratorMessage({
-        id: `${threadId}_r${roundNumber}_moderator`,
         content: 'Moderator summary',
+        id: `${threadId}_r${roundNumber}_moderator`,
         roundNumber,
       });
 
@@ -581,11 +588,11 @@ describe('minimal-message-sync', () => {
 
       // AI SDK has only participant messages (no moderator)
       const participantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r${roundNumber}_p0`,
         content: 'Participant response',
-        roundNumber,
+        id: `${threadId}_r${roundNumber}_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       const chatMessages = [participantMessage];
@@ -593,8 +600,9 @@ describe('minimal-message-sync', () => {
 
       // Apply storeOnlyMessages filter (includes moderator check)
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         // Preserve moderator messages (not in AI SDK)
         if (m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata) {
@@ -625,8 +633,8 @@ describe('minimal-message-sync', () => {
       const roundNumber = 0;
 
       const userMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
@@ -640,8 +648,9 @@ describe('minimal-message-sync', () => {
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
 
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -671,19 +680,20 @@ describe('minimal-message-sync', () => {
 
       // AI SDK has messages
       const assistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r${roundNumber}_p0`,
         content: 'Assistant response',
-        roundNumber,
+        id: `${threadId}_r${roundNumber}_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber,
       });
 
       const chatMessages = [assistantMessage];
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
 
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -713,8 +723,9 @@ describe('minimal-message-sync', () => {
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
 
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -739,8 +750,8 @@ describe('minimal-message-sync', () => {
       const roundNumber = 0;
 
       const userMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user`,
         roundNumber,
       });
 
@@ -754,8 +765,9 @@ describe('minimal-message-sync', () => {
       // After sync, we'll have duplicate (before deduplication)
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
-          return false; // This will filter out the duplicate
+        if (chatMessageIds.has(m.id)) {
+          return false;
+        } // This will filter out the duplicate
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -780,15 +792,15 @@ describe('minimal-message-sync', () => {
 
       // Original user message
       const originalUserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user_original`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user_original`,
         roundNumber,
       });
 
       // Different user message (different ID, same content)
       const duplicateUserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r${roundNumber}_user_duplicate`,
         content: 'User question',
+        id: `${threadId}_r${roundNumber}_user_duplicate`,
         roundNumber,
       });
 
@@ -802,8 +814,9 @@ describe('minimal-message-sync', () => {
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
 
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         if (m.role === MessageRoles.USER) {
           const userMeta = getUserMetadata(m.metadata);
@@ -833,45 +846,45 @@ describe('minimal-message-sync', () => {
 
       // Previous round messages
       const round0UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r0_user`,
         content: 'Round 0 question',
+        id: `${threadId}_r0_user`,
         roundNumber: 0,
       });
 
       const round0AssistantMessage: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r0_p0`,
         content: 'Round 0 response',
-        roundNumber: 0,
+        id: `${threadId}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       // Current round messages
       const round1UserMessage: UIMessage = createTestUserMessage({
-        id: `${threadId}_r1_user`,
         content: 'Round 1 question',
+        id: `${threadId}_r1_user`,
         roundNumber: 1,
       });
 
       const round1Participant0: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r1_p0`,
         content: 'Participant 0 response',
-        roundNumber: 1,
+        id: `${threadId}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 1,
       });
 
       const round1Participant1: UIMessage = createTestAssistantMessage({
-        id: `${threadId}_r1_p1`,
         content: 'Participant 1 response',
-        roundNumber: 1,
+        id: `${threadId}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 1,
       });
 
       const round1ModeratorMessage: UIMessage = createTestModeratorMessage({
-        id: `${threadId}_r1_moderator`,
         content: 'Moderator summary',
+        id: `${threadId}_r1_moderator`,
         roundNumber: 1,
       });
 
@@ -890,13 +903,13 @@ describe('minimal-message-sync', () => {
       // AI SDK has only current round participant messages + trigger
       const round1TriggerMessage: UIMessage = {
         id: `${threadId}_r1_trigger`,
-        role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1 question' }],
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isParticipantTrigger: true,
         },
+        parts: [{ text: 'Round 1 question', type: 'text' }],
+        role: UIMessageRoles.USER,
       };
 
       const chatMessages = [
@@ -908,8 +921,9 @@ describe('minimal-message-sync', () => {
       const chatMessageIds = new Set(chatMessages.map(m => m.id));
 
       const storeOnlyMessages = getState().messages.filter((m) => {
-        if (chatMessageIds.has(m.id))
+        if (chatMessageIds.has(m.id)) {
           return false;
+        }
 
         // Preserve moderator messages
         if (m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata) {

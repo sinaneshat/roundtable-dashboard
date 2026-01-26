@@ -32,9 +32,9 @@ type UseVisibilityStreamGuardParams = {
  * triggering reconnection on visibility change (AI SDK only checks on mount).
  */
 export function useVisibilityStreamGuard({
-  store,
   chat,
   effectiveThreadId,
+  store,
 }: UseVisibilityStreamGuardParams) {
   const wasHiddenRef = useRef(false);
   const hiddenTimestampRef = useRef<number | null>(null);
@@ -48,8 +48,9 @@ export function useVisibilityStreamGuard({
   );
 
   useEffect(() => {
-    if (typeof document === 'undefined')
+    if (typeof document === 'undefined') {
       return;
+    }
 
     const handleVisibilityChange = () => {
       const isHidden = document.hidden;
@@ -63,8 +64,9 @@ export function useVisibilityStreamGuard({
       }
 
       // Tab is becoming visible
-      if (!wasHiddenRef.current)
+      if (!wasHiddenRef.current) {
         return;
+      }
 
       const hiddenDuration = hiddenTimestampRef.current
         ? Date.now() - hiddenTimestampRef.current
@@ -77,8 +79,9 @@ export function useVisibilityStreamGuard({
 
       // Only check for stream issues if we were hidden for a meaningful duration
       // Short visibility changes (< 1 second) are unlikely to cause stream issues
-      if (hiddenDuration < 1000)
+      if (hiddenDuration < 1000) {
         return;
+      }
 
       const state = store.getState();
       const threadId = state.thread?.id || effectiveThreadId;
@@ -124,10 +127,10 @@ export function useVisibilityStreamGuard({
     async function checkAndReconnectStream(threadId: string) {
       try {
         const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'GET',
-          credentials: 'include',
           // Use cache: 'no-store' to ensure we get fresh stream state
           cache: 'no-store',
+          credentials: 'include',
+          method: 'GET',
         });
 
         rlog.flow('visibility', `reconnect check response: ${response.status}`);

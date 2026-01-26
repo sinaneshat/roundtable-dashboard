@@ -126,8 +126,8 @@ function isAllowedMimeType(mimeType: string): mimeType is typeof ALLOWED_MIME_TY
 export const listUploadsHandler: RouteHandler<typeof listUploadsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: ListUploadsQuerySchema,
     operationName: 'listUploads',
+    validateQuery: ListUploadsQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -143,26 +143,26 @@ export const listUploadsHandler: RouteHandler<typeof listUploadsRoute, ApiEnv> =
 
     // Fetch uploads with cursor pagination - exclude r2Key from selection
     const uploads = await db.query.upload.findMany({
+      columns: {
+        createdAt: true,
+        filename: true,
+        fileSize: true,
+        id: true,
+        metadata: true,
+        mimeType: true,
+        r2Key: false,
+        status: true,
+        updatedAt: true,
+        userId: true,
+      },
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.upload.createdAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.upload.createdAt,
         query.cursor,
         'desc',
         filters,
       ),
-      orderBy: getCursorOrderBy(tables.upload.createdAt, 'desc'),
-      limit: query.limit + 1,
-      columns: {
-        id: true,
-        userId: true,
-        filename: true,
-        fileSize: true,
-        mimeType: true,
-        status: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        r2Key: false,
-      },
     });
 
     // Apply pagination
@@ -182,8 +182,8 @@ export const listUploadsHandler: RouteHandler<typeof listUploadsRoute, ApiEnv> =
 export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getUpload',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -191,22 +191,22 @@ export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = cre
     const db = await getDbAsync();
 
     const uploadRecord = await db.query.upload.findFirst({
+      columns: {
+        createdAt: true,
+        filename: true,
+        fileSize: true,
+        id: true,
+        metadata: true,
+        mimeType: true,
+        r2Key: false,
+        status: true,
+        updatedAt: true,
+        userId: true,
+      },
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
-      columns: {
-        id: true,
-        userId: true,
-        filename: true,
-        fileSize: true,
-        mimeType: true,
-        status: true,
-        metadata: true,
-        createdAt: true,
-        updatedAt: true,
-        r2Key: false,
-      },
     });
 
     if (!uploadRecord) {
@@ -228,8 +228,8 @@ export const getUploadHandler: RouteHandler<typeof getUploadRoute, ApiEnv> = cre
 export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getDownloadUrl',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -238,13 +238,13 @@ export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, Api
 
     // Verify ownership - only need id for existence check
     const uploadRecord = await db.query.upload.findFirst({
+      columns: {
+        id: true,
+      },
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
-      columns: {
-        id: true,
-      },
     });
 
     if (!uploadRecord) {
@@ -280,8 +280,8 @@ export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, Api
 export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicketRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: RequestUploadTicketSchema,
     operationName: 'requestUploadTicket',
+    validateBody: RequestUploadTicketSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -314,11 +314,11 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
 
     // Create upload ticket with the declared file size as the limit
     // The ticket enforces the client's declared size, not the type limit
-    const { ticketId, token, expiresAt } = await createUploadTicket(c, {
-      userId: user.id,
+    const { expiresAt, ticketId, token } = await createUploadTicket(c, {
       filename: body.filename,
-      mimeType: body.mimeType,
       maxFileSize: body.fileSize,
+      mimeType: body.mimeType,
+      userId: user.id,
     });
 
     // Build upload URL
@@ -326,9 +326,9 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
     const uploadUrl = `${baseUrl}/api/v1/uploads/ticket/upload?token=${encodeURIComponent(token)}`;
 
     return Responses.ok(c, {
+      expiresAt,
       ticketId,
       token,
-      expiresAt,
       uploadUrl,
     });
   },
@@ -343,8 +343,8 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
 export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: UploadWithTicketQuerySchema,
     operationName: 'uploadWithTicket',
+    validateQuery: UploadWithTicketQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -380,12 +380,14 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     // Parse multipart form data
     const body = await c.req.parseBody({ all: true });
 
-    // Extract file from parsed body
+    // Extract file from body - use helper to access index signature property
+    const fileField = 'file';
+    const bodyFile = body[fileField];
     let file: File | undefined;
-    if (body.file instanceof File) {
-      file = body.file;
-    } else if (Array.isArray(body.file) && body.file[0] instanceof File) {
-      file = body.file[0];
+    if (bodyFile instanceof File) {
+      file = bodyFile;
+    } else if (Array.isArray(bodyFile) && bodyFile[0] instanceof File) {
+      file = bodyFile[0];
     }
 
     if (!file) {
@@ -438,11 +440,11 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       {
         contentType: file.type,
         customMetadata: {
-          userId: user.id,
-          uploadId,
           filename: file.name,
           ticketId: ticket.ticketId,
           uploadedAt: new Date().toISOString(),
+          uploadId,
+          userId: user.id,
         },
       },
     );
@@ -458,15 +460,15 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     const [uploadRecord] = await db
       .insert(tables.upload)
       .values({
-        id: uploadId,
-        userId: user.id,
-        filename: file.name,
-        r2Key,
-        fileSize: file.size,
-        mimeType: file.type,
-        status: ChatAttachmentStatuses.READY,
         createdAt: new Date(),
+        filename: file.name,
+        fileSize: file.size,
+        id: uploadId,
+        mimeType: file.type,
+        r2Key,
+        status: ChatAttachmentStatuses.READY,
         updatedAt: new Date(),
+        userId: user.id,
       })
       .returning();
 
@@ -501,13 +503,13 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     if ((canExtractInWorker || canExtractWithAI) && c.env.UPLOADS_R2_BUCKET) {
       try {
         await backgroundPdfProcessing({
-          uploadId,
-          r2Key,
+          ai: c.env.AI, // Cloudflare AI binding for large file extraction
+          db,
           fileSize: file.size,
           mimeType: file.type,
           r2Bucket: c.env.UPLOADS_R2_BUCKET,
-          db,
-          ai: c.env.AI, // Cloudflare AI binding for large file extraction
+          r2Key,
+          uploadId,
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional
@@ -528,9 +530,9 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
 export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateUploadRequestSchema,
     operationName: 'updateUpload',
+    validateBody: UpdateUploadRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -540,14 +542,14 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
 
     // Verify ownership and get metadata in single query
     const existing = await db.query.upload.findFirst({
-      where: and(
-        eq(tables.upload.id, id),
-        eq(tables.upload.userId, user.id),
-      ),
       columns: {
         id: true,
         metadata: true,
       },
+      where: and(
+        eq(tables.upload.id, id),
+        eq(tables.upload.userId, user.id),
+      ),
     });
 
     if (!existing) {
@@ -604,8 +606,8 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
 export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session', // SECURITY: Always require session - no anonymous access
-    validateParams: IdParamSchema,
     operationName: 'downloadFile',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth(); // Guaranteed by auth: 'session'
@@ -687,15 +689,15 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
 
     // SECURITY: Session user must own the file - private access only
     const uploadRecord = await db.query.upload.findFirst({
+      columns: {
+        filename: true,
+        mimeType: true,
+        r2Key: true,
+      },
       where: and(
         eq(tables.upload.id, id),
         eq(tables.upload.userId, user.id),
       ),
-      columns: {
-        r2Key: true,
-        filename: true,
-        mimeType: true,
-      },
     });
 
     if (!uploadRecord) {
@@ -722,12 +724,12 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
     // Security audit: file download
     console.error(JSON.stringify({
       audit: 'file_download',
-      uploadId: id,
-      userId: user.id,
       ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
-      userAgent: c.req.header('user-agent'),
       method: 'session_auth',
       timestamp: Date.now(),
+      uploadId: id,
+      userAgent: c.req.header('user-agent'),
+      userId: user.id,
     }));
 
     return buildStreamingResponse(result, uploadRecord, 'private, no-store');
@@ -743,8 +745,8 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
 export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteUpload',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -753,14 +755,14 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
 
     // Get upload with R2 key - only need r2Key for deletion
     const uploadRecord = await db.query.upload.findFirst({
-      where: and(
-        eq(tables.upload.id, id),
-        eq(tables.upload.userId, user.id),
-      ),
       columns: {
         id: true,
         r2Key: true,
       },
+      where: and(
+        eq(tables.upload.id, id),
+        eq(tables.upload.userId, user.id),
+      ),
     });
 
     if (!uploadRecord) {
@@ -779,13 +781,13 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
     // Non-blocking storage cleanup via runBackgroundTask
     runBackgroundTask(
       c.executionCtx,
-      () => deleteFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key),
+      async () => await deleteFile(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key),
       { operationName: 'upload-storage-cleanup' },
     );
 
     return Responses.ok(c, {
-      id,
       deleted: true,
+      id,
     });
   },
 );
@@ -805,8 +807,8 @@ export const deleteUploadHandler: RouteHandler<typeof deleteUploadRoute, ApiEnv>
 export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateMultipartUploadRequestSchema,
     operationName: 'createMultipartUpload',
+    validateBody: CreateMultipartUploadRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -840,47 +842,47 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
     // ✅ TYPE-SAFE: Use validated R2 bucket instead of non-null assertion
     const r2Bucket = getValidatedR2Bucket(c.env.UPLOADS_R2_BUCKET);
     const multipartUpload = await r2Bucket.createMultipartUpload(r2Key, {
+      customMetadata: {
+        filename: body.filename,
+        uploadId,
+        userId: user.id,
+      },
       httpMetadata: {
         contentType: body.mimeType,
-      },
-      customMetadata: {
-        userId: user.id,
-        uploadId,
-        filename: body.filename,
       },
     });
 
     // Store metadata in KV for persistence across worker restarts
     await storeMultipartMetadata(c.env.KV, {
-      userId: user.id,
-      uploadId,
+      createdAt: Date.now(),
+      filename: body.filename,
+      fileSize: body.fileSize,
+      mimeType: body.mimeType,
       r2Key,
       r2UploadId: multipartUpload.uploadId,
-      filename: body.filename,
-      mimeType: body.mimeType,
-      fileSize: body.fileSize,
-      createdAt: Date.now(),
+      uploadId,
+      userId: user.id,
     });
 
     // Create DB record with 'uploading' status
     await db
       .insert(tables.upload)
       .values({
-        id: uploadId,
-        userId: user.id,
-        filename: body.filename,
-        r2Key,
-        fileSize: body.fileSize,
-        mimeType: body.mimeType,
-        status: ChatAttachmentStatuses.UPLOADING,
         createdAt: new Date(),
+        filename: body.filename,
+        fileSize: body.fileSize,
+        id: uploadId,
+        mimeType: body.mimeType,
+        r2Key,
+        status: ChatAttachmentStatuses.UPLOADING,
         updatedAt: new Date(),
+        userId: user.id,
       });
 
     return Responses.created(c, {
-      uploadId: multipartUpload.uploadId,
-      key: r2Key,
       attachmentId: uploadId,
+      key: r2Key,
+      uploadId: multipartUpload.uploadId,
     });
   },
 );
@@ -896,14 +898,14 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
 export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'uploadPart',
     validateParams: IdParamSchema,
     validateQuery: UploadPartParamsSchema,
-    operationName: 'uploadPart',
   },
   async (c) => {
     const { user } = c.auth();
     const { id: uploadId } = c.validated.params;
-    const { uploadId: r2UploadId, partNumber: partNumberStr } = c.validated.query;
+    const { partNumber: partNumberStr, uploadId: r2UploadId } = c.validated.query;
 
     const partNumber = Number.parseInt(partNumberStr, 10);
     if (Number.isNaN(partNumber) || partNumber < 1) {
@@ -956,8 +958,8 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
     const uploadedPart = await multipartUpload.uploadPart(partNumber, partData);
 
     return Responses.ok(c, {
-      partNumber: uploadedPart.partNumber,
       etag: uploadedPart.etag,
+      partNumber: uploadedPart.partNumber,
     });
   },
 );
@@ -973,9 +975,9 @@ export const uploadPartHandler: RouteHandler<typeof uploadPartRoute, ApiEnv> = c
 export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipartUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: CompleteMultipartUploadRequestSchema,
     operationName: 'completeMultipartUpload',
+    validateBody: CompleteMultipartUploadRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1008,8 +1010,8 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
       await db
         .update(tables.upload)
         .set({
-          status: ChatAttachmentStatuses.FAILED,
           metadata: { errorMessage: error instanceof Error ? error.message : 'Unknown error' },
+          status: ChatAttachmentStatuses.FAILED,
           updatedAt: new Date(),
         })
         .where(eq(tables.upload.id, uploadId));
@@ -1069,13 +1071,13 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
     if ((canExtractInWorkerMultipart || canExtractWithAIMultipart) && c.env.UPLOADS_R2_BUCKET) {
       try {
         await backgroundPdfProcessing({
-          uploadId,
-          r2Key: uploadMeta.r2Key,
+          ai: c.env.AI, // Cloudflare AI binding for large file extraction
+          db,
           fileSize: uploadMeta.fileSize,
           mimeType: uploadMeta.mimeType,
           r2Bucket: c.env.UPLOADS_R2_BUCKET,
-          db,
-          ai: c.env.AI, // Cloudflare AI binding for large file extraction
+          r2Key: uploadMeta.r2Key,
+          uploadId,
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional
@@ -1097,9 +1099,9 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
 export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUploadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'abortMultipartUpload',
     validateParams: IdParamSchema,
     validateQuery: UploadPartParamsSchema.pick({ uploadId: true }),
-    operationName: 'abortMultipartUpload',
   },
   async (c) => {
     const { user } = c.auth();
@@ -1151,8 +1153,8 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
     }
 
     return Responses.ok(c, {
-      uploadId: r2UploadId,
       aborted: true,
+      uploadId: r2UploadId,
     });
   },
 );

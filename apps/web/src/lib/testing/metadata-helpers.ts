@@ -8,16 +8,43 @@
 import type { FinishReason } from '@roundtable/shared';
 import { FinishReasonSchema, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
+import { z } from 'zod';
 
 import { getParticipantIndex, getRoundNumber } from '@/lib/utils';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
+// ============================================================================
+// TYPE GUARD SCHEMAS - For narrowed UIMessage types
+// ============================================================================
+
+/**
+ * Schema for UIMessage with user metadata
+ */
+const _UIMessageWithUserMetadataSchema = z.custom<UIMessage>().and(
+  z.object({ metadata: z.custom<DbUserMessageMetadata>() }),
+);
+type UIMessageWithUserMetadata = z.infer<typeof _UIMessageWithUserMetadataSchema>;
+
+/**
+ * Schema for UIMessage with assistant metadata
+ */
+const _UIMessageWithAssistantMetadataSchema = z.custom<UIMessage>().and(
+  z.object({ metadata: z.custom<DbAssistantMessageMetadata>() }),
+);
+type UIMessageWithAssistantMetadata = z.infer<typeof _UIMessageWithAssistantMetadataSchema>;
+
+/**
+ * Schema for moderator metadata (assistant metadata with isModerator: true)
+ */
+const _ModeratorMetadataSchema = z.custom<DbAssistantMessageMetadata>().and(
+  z.object({ isModerator: z.literal(true) }),
+);
+type ModeratorMetadata = z.infer<typeof _ModeratorMetadataSchema>;
+
 /**
  * Type guard: check if message has user metadata
  */
-export function hasUserMetadata(message: UIMessage): message is UIMessage & {
-  metadata: DbUserMessageMetadata;
-} {
+export function hasUserMetadata(message: UIMessage): message is UIMessageWithUserMetadata {
   return (
     message.metadata !== undefined
     && message.metadata !== null
@@ -30,9 +57,7 @@ export function hasUserMetadata(message: UIMessage): message is UIMessage & {
 /**
  * Type guard: check if message has assistant metadata
  */
-export function hasAssistantMetadata(message: UIMessage): message is UIMessage & {
-  metadata: DbAssistantMessageMetadata;
-} {
+export function hasAssistantMetadata(message: UIMessage): message is UIMessageWithAssistantMetadata {
   return (
     message.metadata !== undefined
     && message.metadata !== null
@@ -45,9 +70,7 @@ export function hasAssistantMetadata(message: UIMessage): message is UIMessage &
 /**
  * Type guard: check if metadata is moderator
  */
-export function isModeratorMetadata(metadata: unknown): metadata is DbAssistantMessageMetadata & {
-  isModerator: true;
-} {
+export function isModeratorMetadata(metadata: unknown): metadata is ModeratorMetadata {
   return (
     metadata !== null
     && typeof metadata === 'object'

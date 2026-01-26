@@ -9,10 +9,10 @@ import { useServiceWorkerRegistration } from './use-service-worker-registration'
  * and lets them control when to apply it (prevents unexpected refreshes).
  */
 export function ServiceWorkerProvider({ children }: { children: React.ReactNode }) {
-  const { updateAvailable, applyUpdate } = useServiceWorkerRegistration();
+  const { applyUpdate, updateAvailable } = useServiceWorkerRegistration();
 
   return (
-    <SwContext value={{ updateAvailable, applyUpdate }}>
+    <SwContext value={{ applyUpdate, updateAvailable }}>
       {children}
     </SwContext>
   );

@@ -29,24 +29,24 @@ import type { BaseModelResponse } from './schema';
  */
 function toModelForApi(model: ReturnType<typeof getAllModels>[number]): BaseModelResponse {
   return {
-    id: model.id,
-    name: model.name,
-    description: model.description,
-    pricing: model.pricing,
-    context_length: model.context_length,
-    pricing_display: model.pricing_display,
-    created: model.created,
-    provider: model.provider,
-    category: model.category,
-    capabilities: model.capabilities,
-    is_free: model.is_free,
-    supports_vision: model.supports_vision,
-    supports_file: model.supports_file,
-    is_reasoning_model: model.is_reasoning_model,
-    tags: model.tags,
     architecture: model.architecture,
-    top_provider: model.top_provider,
+    capabilities: model.capabilities,
+    category: model.category,
+    context_length: model.context_length,
+    created: model.created,
+    description: model.description,
+    id: model.id,
+    is_free: model.is_free,
+    is_reasoning_model: model.is_reasoning_model,
+    name: model.name,
     per_request_limits: model.per_request_limits,
+    pricing: model.pricing,
+    pricing_display: model.pricing_display,
+    provider: model.provider,
+    supports_file: model.supports_file,
+    supports_vision: model.supports_vision,
+    tags: model.tags,
+    top_provider: model.top_provider,
   };
 }
 
@@ -127,10 +127,10 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     const canUpgrade = userTier !== SubscriptionTiers.PRO;
 
     const userTierConfig = {
+      can_upgrade: canUpgrade,
+      max_models: maxModels,
       tier: userTier,
       tier_name: tierName,
-      max_models: maxModels,
-      can_upgrade: canUpgrade,
       upgrade_message: canUpgrade ? 'Upgrade to Pro for unlimited model access' : null,
     };
 
@@ -138,8 +138,8 @@ export const listModelsHandler: RouteHandler<typeof listModelsRoute, ApiEnv> = c
     // ✅ RETURN RESPONSE: Simplified single sorted list
     // ============================================================================
     const response = Responses.collection(c, sortedModels, {
-      total: sortedModels.length,
       default_model_id: defaultModelId,
+      total: sortedModels.length,
       user_tier_config: userTierConfig,
     });
 

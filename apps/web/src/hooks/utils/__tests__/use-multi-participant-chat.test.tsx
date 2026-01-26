@@ -25,14 +25,14 @@ import { useMultiParticipantChat } from '../use-multi-participant-chat';
 // Mock @ai-sdk/react before importing the hook
 vi.mock('@ai-sdk/react', () => ({
   useChat: vi.fn(() => ({
-    messages: [],
     append: vi.fn(),
-    setMessages: vi.fn(),
-    isLoading: false,
-    error: null,
-    reload: vi.fn(),
-    stop: vi.fn(),
     data: undefined,
+    error: null,
+    isLoading: false,
+    messages: [],
+    reload: vi.fn(),
+    setMessages: vi.fn(),
+    stop: vi.fn(),
   })),
 }));
 
@@ -47,24 +47,24 @@ describe('useMultiParticipantChat', () => {
     mockParticipants = [
       createMockParticipant(0, {
         id: 'p1',
-        threadId: mockThreadId,
-        modelId: 'model-1',
         isEnabled: true,
+        modelId: 'model-1',
         priority: 0,
+        threadId: mockThreadId,
       }),
       createMockParticipant(1, {
         id: 'p2',
-        threadId: mockThreadId,
-        modelId: 'model-2',
         isEnabled: true,
+        modelId: 'model-2',
         priority: 1,
+        threadId: mockThreadId,
       }),
       createMockParticipant(2, {
         id: 'p3',
-        threadId: mockThreadId,
-        modelId: 'model-3',
         isEnabled: true,
+        modelId: 'model-3',
         priority: 2,
+        threadId: mockThreadId,
       }),
     ];
   });
@@ -73,14 +73,14 @@ describe('useMultiParticipantChat', () => {
     it('should initialize with no messages', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
       expect(result.current.messages).toEqual([]);
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
       expect(result.current.currentParticipantIndex).toBe(0);
     });
 
@@ -93,9 +93,9 @@ describe('useMultiParticipantChat', () => {
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: unorderedParticipants,
           messages: [],
+          participants: unorderedParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -111,9 +111,9 @@ describe('useMultiParticipantChat', () => {
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mixedParticipants,
           messages: [],
+          participants: mixedParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -126,9 +126,9 @@ describe('useMultiParticipantChat', () => {
     it('should accept sendMessage to start round', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -137,15 +137,15 @@ describe('useMultiParticipantChat', () => {
       });
 
       // Verify hook is ready to stream
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should call startRound with participants override', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -163,9 +163,9 @@ describe('useMultiParticipantChat', () => {
     it('should expose continueFromParticipant function', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -185,9 +185,9 @@ describe('useMultiParticipantChat', () => {
     it('should accept participant validation object', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -206,9 +206,9 @@ describe('useMultiParticipantChat', () => {
     it('should allow sequential continuation calls', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -235,10 +235,10 @@ describe('useMultiParticipantChat', () => {
       const onComplete = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onComplete,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -256,17 +256,17 @@ describe('useMultiParticipantChat', () => {
       });
 
       // Round should be complete
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should NOT mark round complete until ALL participants finish', async () => {
       const onComplete = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onComplete,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -287,10 +287,10 @@ describe('useMultiParticipantChat', () => {
       const onComplete = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onComplete,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -307,7 +307,7 @@ describe('useMultiParticipantChat', () => {
         result.current.continueFromParticipant(2, mockParticipants);
       });
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
   });
 
@@ -318,10 +318,10 @@ describe('useMultiParticipantChat', () => {
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onError,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -338,10 +338,10 @@ describe('useMultiParticipantChat', () => {
       const onRetry = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onRetry,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -358,9 +358,9 @@ describe('useMultiParticipantChat', () => {
     it('should support resumption via continueFromParticipant', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -376,25 +376,25 @@ describe('useMultiParticipantChat', () => {
     it('should handle stream resumption prefilled flag', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
           streamResumptionPrefilled: true,
+          threadId: mockThreadId,
         }),
       );
 
       // With prefilled flag, should not auto-resume
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should accept onResumedStreamComplete callback', async () => {
       const onResumedStreamComplete = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           onResumedStreamComplete,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -411,13 +411,13 @@ describe('useMultiParticipantChat', () => {
     it('should track isStreaming state correctly', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
 
       // Start streaming would set this to true
       await act(async () => {
@@ -425,31 +425,31 @@ describe('useMultiParticipantChat', () => {
       });
 
       // Initial state should be false until AI SDK starts
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should provide isStreamingRef for synchronous checks', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
-      expect(result.current.isStreamingRef.current).toBe(false);
+      expect(result.current.isStreamingRef.current).toBeFalsy();
     });
 
     it('should provide isTriggeringRef for race condition prevention', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
-      expect(result.current.isTriggeringRef.current).toBe(false);
+      expect(result.current.isTriggeringRef.current).toBeFalsy();
     });
   });
 
@@ -458,10 +458,10 @@ describe('useMultiParticipantChat', () => {
       const clearAnimations = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           clearAnimations,
+          messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -470,17 +470,17 @@ describe('useMultiParticipantChat', () => {
       });
 
       // Animations would be cleared on round start
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should call completeAnimation for specific participant', async () => {
       const completeAnimation = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           completeAnimation,
+          messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -497,14 +497,14 @@ describe('useMultiParticipantChat', () => {
     it('should handle empty participants array', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: [],
           messages: [],
+          participants: [],
+          threadId: mockThreadId,
         }),
       );
 
       expect(result.current.messages).toEqual([]);
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should handle single participant scenario', async () => {
@@ -513,10 +513,10 @@ describe('useMultiParticipantChat', () => {
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: singleParticipant,
           messages: [],
           onComplete,
+          participants: singleParticipant,
+          threadId: mockThreadId,
         }),
       );
 
@@ -529,12 +529,12 @@ describe('useMultiParticipantChat', () => {
     });
 
     it('should handle participant reconfiguration mid-round', async () => {
-      const { result, rerender } = renderHook(
+      const { rerender, result } = renderHook(
         ({ participants }) =>
           useMultiParticipantChat({
-            threadId: mockThreadId,
-            participants,
             messages: [],
+            participants,
+            threadId: mockThreadId,
           }),
         {
           initialProps: { participants: mockParticipants },
@@ -553,28 +553,28 @@ describe('useMultiParticipantChat', () => {
     it('should handle newly created thread flag', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
       // Newly created threads don't auto-resume
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should handle early optimistic message flag', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           hasEarlyOptimisticMessage: true,
+          messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
       // With early optimistic message, prevents resumed stream race
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
   });
 
@@ -582,17 +582,17 @@ describe('useMultiParticipantChat', () => {
     it('should allow setting messages manually', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
       const testMessages = [
         {
+          content: 'Test message',
           id: 'msg-1',
           role: MessageRoles.USER as const,
-          content: 'Test message',
         },
       ];
 
@@ -607,9 +607,9 @@ describe('useMultiParticipantChat', () => {
     it('should accept messages callback function', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -625,9 +625,9 @@ describe('useMultiParticipantChat', () => {
     it('should provide isReady state', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -641,27 +641,27 @@ describe('useMultiParticipantChat', () => {
       const onPreSearchStart = vi.fn();
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           enableWebSearch: true,
+          messages: [],
           onPreSearchStart,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
       // Pre-search callbacks would be called during search phase
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should handle pre-search query callback', async () => {
       const onPreSearchQuery = vi.fn();
       renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           enableWebSearch: true,
+          messages: [],
           onPreSearchQuery,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -673,11 +673,11 @@ describe('useMultiParticipantChat', () => {
       const onPreSearchResult = vi.fn();
       renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           enableWebSearch: true,
+          messages: [],
           onPreSearchResult,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -688,11 +688,11 @@ describe('useMultiParticipantChat', () => {
       const onPreSearchComplete = vi.fn();
       renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           enableWebSearch: true,
+          messages: [],
           onPreSearchComplete,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -703,11 +703,11 @@ describe('useMultiParticipantChat', () => {
       const onPreSearchError = vi.fn();
       renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
-          messages: [],
           enableWebSearch: true,
+          messages: [],
           onPreSearchError,
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
@@ -720,10 +720,10 @@ describe('useMultiParticipantChat', () => {
       const pendingAttachmentIds = ['att-1', 'att-2'];
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
           pendingAttachmentIds,
+          threadId: mockThreadId,
         }),
       );
 
@@ -731,25 +731,25 @@ describe('useMultiParticipantChat', () => {
         await result.current.sendMessage('Message with attachments');
       });
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should handle pending file parts', async () => {
       const pendingFileParts = [
         {
-          type: 'file' as const,
-          mimeType: 'application/pdf',
           data: 'base64data',
+          mimeType: 'application/pdf',
+          type: 'file' as const,
           uploadId: 'upload-1',
         },
       ];
 
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
           pendingFileParts,
+          threadId: mockThreadId,
         }),
       );
 
@@ -757,7 +757,7 @@ describe('useMultiParticipantChat', () => {
         await result.current.sendMessage('Message with file');
       });
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
   });
 
@@ -765,10 +765,10 @@ describe('useMultiParticipantChat', () => {
     it('should handle round regeneration', async () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
+          participants: mockParticipants,
           regenerateRoundNumber: 0,
+          threadId: mockThreadId,
         }),
       );
 
@@ -781,27 +781,27 @@ describe('useMultiParticipantChat', () => {
     it('should accept moderator mode', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           mode: 'moderator',
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
 
     it('should accept standard mode', () => {
       const { result } = renderHook(() =>
         useMultiParticipantChat({
-          threadId: mockThreadId,
-          participants: mockParticipants,
           messages: [],
           mode: 'standard',
+          participants: mockParticipants,
+          threadId: mockThreadId,
         }),
       );
 
-      expect(result.current.isStreaming).toBe(false);
+      expect(result.current.isStreaming).toBeFalsy();
     });
   });
 });

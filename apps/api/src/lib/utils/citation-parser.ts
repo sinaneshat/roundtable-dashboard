@@ -31,20 +31,20 @@ import type { DbCitation } from '@/db/schemas/chat-metadata';
  * Represents a parsed citation marker from AI response text
  */
 export const ParsedCitationSchema = z.object({
+  /** Display number for UI rendering (1, 2, 3...) */
+  displayNumber: z.number(),
+  /** End index in original text */
+  endIndex: z.number(),
   /** The full citation marker as it appears in text (e.g., "[mem_abc123]") */
   marker: z.string(),
   /** The source ID extracted from the marker (e.g., "mem_abc123") */
   sourceId: z.string(),
-  /** The type prefix extracted from source ID */
-  typePrefix: z.string(),
   /** The source type derived from prefix */
   sourceType: CitationSourceTypeSchema,
-  /** Display number for UI rendering (1, 2, 3...) */
-  displayNumber: z.number(),
   /** Start index in original text */
   startIndex: z.number(),
-  /** End index in original text */
-  endIndex: z.number(),
+  /** The type prefix extracted from source ID */
+  typePrefix: z.string(),
 });
 
 export type ParsedCitation = z.infer<typeof ParsedCitationSchema>;
@@ -55,13 +55,13 @@ export type ParsedCitation = z.infer<typeof ParsedCitationSchema>;
  */
 export const TextSegmentSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('text'),
     content: z.string(),
+    type: z.literal('text'),
   }),
   z.object({
-    type: z.literal('citation'),
-    content: z.string(),
     citation: ParsedCitationSchema,
+    content: z.string(),
+    type: z.literal('citation'),
   }),
 ]);
 
@@ -71,14 +71,14 @@ export type TextSegment = z.infer<typeof TextSegmentSchema>;
  * Result from parsing citations in text
  */
 export const ParsedCitationResultSchema = z.object({
-  /** Array of text and citation segments */
-  segments: z.array(TextSegmentSchema),
   /** Array of unique citations found in order of appearance */
   citations: z.array(ParsedCitationSchema),
   /** Original text with citations */
   originalText: z.string(),
   /** Text with citation markers removed */
   plainText: z.string(),
+  /** Array of text and citation segments */
+  segments: z.array(TextSegmentSchema),
 });
 
 export type ParsedCitationResult = z.infer<typeof ParsedCitationResultSchema>;
@@ -133,8 +133,9 @@ function normalizeMultipleCitations(text: string): string {
     // Extract all individual citation IDs from the match
     SINGLE_ID_PATTERN.lastIndex = 0;
     const ids = match.match(SINGLE_ID_PATTERN);
-    if (!ids || ids.length === 0)
+    if (!ids || ids.length === 0) {
       return match;
+    }
     // Convert to individual bracketed citations
     return ids.map(id => `[${id}]`).join('');
   });
@@ -190,8 +191,8 @@ export function parseCitations(text: string): ParsedCitationResult {
     // Add preceding text as segment
     if (match.index > lastIndex) {
       segments.push({
-        type: CitationSegmentTypes.TEXT,
         content: normalizedText.slice(lastIndex, match.index),
+        type: CitationSegmentTypes.TEXT,
       });
     }
 
@@ -204,20 +205,20 @@ export function parseCitations(text: string): ParsedCitationResult {
 
     // Create parsed citation
     const citation: ParsedCitation = {
+      displayNumber,
+      endIndex: match.index + marker.length,
       marker,
       sourceId,
-      typePrefix: prefix,
       sourceType,
-      displayNumber,
       startIndex: match.index,
-      endIndex: match.index + marker.length,
+      typePrefix: prefix,
     };
 
     // Add citation segment
     segments.push({
-      type: CitationSegmentTypes.CITATION,
-      content: marker,
       citation,
+      content: marker,
+      type: CitationSegmentTypes.CITATION,
     });
 
     // Track unique citations
@@ -233,8 +234,8 @@ export function parseCitations(text: string): ParsedCitationResult {
   // Add remaining text as segment
   if (lastIndex < normalizedText.length) {
     segments.push({
-      type: CitationSegmentTypes.TEXT,
       content: normalizedText.slice(lastIndex),
+      type: CitationSegmentTypes.TEXT,
     });
   }
 
@@ -245,10 +246,10 @@ export function parseCitations(text: string): ParsedCitationResult {
     .join('');
 
   return {
-    segments,
     citations,
     originalText: text,
     plainText,
+    segments,
   };
 }
 
@@ -279,21 +280,21 @@ export function toDbCitations(
     const sourceData = sourceDataResolver?.(citation.sourceId);
 
     return {
-      id: citation.sourceId,
-      sourceType: citation.sourceType,
-      sourceId: citation.sourceId.split('_').slice(1).join('_'), // Original record ID
       displayNumber: citation.displayNumber,
-      title: sourceData?.title,
-      excerpt: sourceData?.excerpt,
-      url: sourceData?.url,
-      threadId: sourceData?.threadId,
-      threadTitle: sourceData?.threadTitle,
-      roundNumber: sourceData?.roundNumber,
       // Attachment-specific fields
       downloadUrl: sourceData?.downloadUrl,
+      excerpt: sourceData?.excerpt,
       filename: sourceData?.filename,
-      mimeType: sourceData?.mimeType,
       fileSize: sourceData?.fileSize,
+      id: citation.sourceId,
+      mimeType: sourceData?.mimeType,
+      roundNumber: sourceData?.roundNumber,
+      sourceId: citation.sourceId.split('_').slice(1).join('_'), // Original record ID
+      sourceType: citation.sourceType,
+      threadId: sourceData?.threadId,
+      threadTitle: sourceData?.threadTitle,
+      title: sourceData?.title,
+      url: sourceData?.url,
     };
   });
 }

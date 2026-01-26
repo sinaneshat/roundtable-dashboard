@@ -14,7 +14,9 @@ export function simpleOptimizeQuery(userQuery: string): string {
   if (isLongMessage && hasInstructionPatterns) {
     const technicalTerms: string[] = [];
 
-    const capitalizedWords = optimized.match(/\b[A-Z][a-zA-Z]+(?:\.[a-zA-Z]+)?\b/g) || [];
+    // Simple PascalCase word extraction - avoids ReDoS by using bounded quantifiers
+
+    const capitalizedWords = optimized.match(/\b[A-Z][a-zA-Z]{0,30}\b/g) || [];
     technicalTerms.push(...capitalizedWords);
 
     const techTermPatterns = [
@@ -108,7 +110,8 @@ export function simpleOptimizeQuery(userQuery: string): string {
   optimized = optimized.replace(/^the\s+/i, '');
   optimized = optimized.replace(/^(so|well|okay|ok|alright|hey|hi)\s+/i, '');
 
-  const comparisonMatch = optimized.match(/\b([A-Z][\w.]+(?:\s+[A-Z][\w.]+)*?)\s+(?:or|versus|vs)\s+([A-Z][\w.]+(?:\s+[A-Z][\w.]+)*?)(?:\s+[a-z]|$)/i);
+  // Simplified pattern to avoid ReDoS - matches "X vs Y" or "X or Y" comparisons
+  const comparisonMatch = optimized.match(/\b([A-Z][\w.]{0,30})\s+(?:or|versus|vs)\s+([A-Z][\w.]{0,30})(?:\s|$)/i);
   if (comparisonMatch) {
     const entity1 = comparisonMatch[1]?.trim();
     const entity2 = comparisonMatch[2]?.trim();
@@ -145,7 +148,7 @@ export function simpleOptimizeQuery(userQuery: string): string {
   optimized = optimized.replace(/\b(what|which|where|when|who|why|how)\b/gi, ' ');
   optimized = optimized.replace(/\b(now|while|out|this|that|these|those|here|there)\b/gi, ' ');
   optimized = optimized.replace(/\bnext\b(?!\.js)/gi, (match) => {
-    return match[0] === 'N' ? match : ' ';
+    return match.startsWith('N') ? match : ' ';
   });
   optimized = optimized.replace(/\b(something|anything|everything|nothing|else|entirely|just|only)\b/gi, ' ');
   optimized = optimized.replace(/\b(working|figure|handle)\b/gi, ' ');

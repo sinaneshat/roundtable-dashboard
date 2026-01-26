@@ -35,12 +35,12 @@ export async function getEnabledParticipants(
   threadId: string,
   db: DbInstance,
 ): Promise<ParticipantRecord[]> {
-  return db.query.chatParticipant.findMany({
+  return await db.query.chatParticipant.findMany({
+    orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
     where: and(
       eq(tables.chatParticipant.threadId, threadId),
       eq(tables.chatParticipant.isEnabled, true),
     ),
-    orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
   });
 }
 
@@ -58,9 +58,9 @@ export async function getAllParticipants(
   threadId: string,
   db: DbInstance,
 ): Promise<ParticipantRecord[]> {
-  return db.query.chatParticipant.findMany({
-    where: eq(tables.chatParticipant.threadId, threadId),
+  return await db.query.chatParticipant.findMany({
     orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
+    where: eq(tables.chatParticipant.threadId, threadId),
   });
 }
 
@@ -79,11 +79,11 @@ export async function getEnabledParticipantIds(
   db: DbInstance,
 ): Promise<string[]> {
   const participants = await db.query.chatParticipant.findMany({
+    columns: { id: true },
     where: and(
       eq(tables.chatParticipant.threadId, threadId),
       eq(tables.chatParticipant.isEnabled, true),
     ),
-    columns: { id: true },
   });
   return participants.map(p => p.id);
 }
@@ -102,11 +102,11 @@ export async function getEnabledParticipantCount(
   db: DbInstance,
 ): Promise<number> {
   const participants = await db.query.chatParticipant.findMany({
+    columns: { id: true },
     where: and(
       eq(tables.chatParticipant.threadId, threadId),
       eq(tables.chatParticipant.isEnabled, true),
     ),
-    columns: { id: true },
   });
   return participants.length;
 }

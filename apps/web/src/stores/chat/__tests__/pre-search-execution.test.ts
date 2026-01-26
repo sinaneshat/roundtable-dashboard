@@ -28,13 +28,13 @@ import { shouldWaitForPreSearch } from '../utils/pre-search-execution';
 
 function createMockPreSearch(overrides?: Partial<StoredPreSearch>): StoredPreSearch {
   return createMockPreSearchBase({
+    completedAt: overrides?.completedAt ?? null,
+    createdAt: overrides?.createdAt ?? new Date(),
     id: overrides?.id ?? 'presearch-123',
-    threadId: overrides?.threadId ?? 'thread-123',
     roundNumber: overrides?.roundNumber ?? 0,
     status: overrides?.status ?? MessageStatuses.PENDING,
+    threadId: overrides?.threadId ?? 'thread-123',
     userQuery: overrides?.userQuery ?? 'Test query',
-    createdAt: overrides?.createdAt ?? new Date(),
-    completedAt: overrides?.completedAt ?? null,
     ...overrides,
   }) as StoredPreSearch;
 }
@@ -47,26 +47,26 @@ describe('shouldWaitForPreSearch', () => {
   describe('web Search Disabled', () => {
     it('returns false when web search is disabled', () => {
       const result = shouldWaitForPreSearch(false, undefined);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when web search disabled even if pre-search exists', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.PENDING });
       const result = shouldWaitForPreSearch(false, preSearch);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when web search disabled even if pre-search streaming', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.STREAMING });
       const result = shouldWaitForPreSearch(false, preSearch);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
   describe('web Search Enabled - No Pre-Search', () => {
     it('returns true when no pre-search exists', () => {
       const result = shouldWaitForPreSearch(true, undefined);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
   });
 
@@ -74,13 +74,13 @@ describe('shouldWaitForPreSearch', () => {
     it('returns true when pre-search is pending', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.PENDING });
       const result = shouldWaitForPreSearch(true, preSearch);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('returns true when pre-search is streaming', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.STREAMING });
       const result = shouldWaitForPreSearch(true, preSearch);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
   });
 
@@ -88,13 +88,13 @@ describe('shouldWaitForPreSearch', () => {
     it('returns false when pre-search is complete', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.COMPLETE });
       const result = shouldWaitForPreSearch(true, preSearch);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when pre-search failed', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.FAILED });
       const result = shouldWaitForPreSearch(true, preSearch);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 });
@@ -103,7 +103,7 @@ describe('pre-Search State Transitions', () => {
   describe('status Flow', () => {
     it('follows pending -> streaming -> complete flow', () => {
       // Test that the expected status transitions are valid
-      const statusFlow: Array<typeof MessageStatuses[keyof typeof MessageStatuses]> = [
+      const statusFlow: typeof MessageStatuses[keyof typeof MessageStatuses][] = [
         MessageStatuses.PENDING,
         MessageStatuses.STREAMING,
         MessageStatuses.COMPLETE,
@@ -139,22 +139,22 @@ describe('pre-Search State Transitions', () => {
   describe('blocking Behavior During Status Changes', () => {
     it('blocks participants while pre-search pending', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.PENDING });
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
 
     it('blocks participants while pre-search streaming', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.STREAMING });
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
 
     it('unblocks participants when pre-search completes', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.COMPLETE });
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('unblocks participants when pre-search fails', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.FAILED });
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 });
@@ -170,12 +170,12 @@ describe('pre-Search Round Coordination', () => {
       // Find pre-search for round 0
       const round0PreSearch = preSearches.find(ps => ps.roundNumber === 0);
       expect(round0PreSearch?.status).toBe(MessageStatuses.COMPLETE);
-      expect(shouldWaitForPreSearch(true, round0PreSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, round0PreSearch)).toBeFalsy();
 
       // Find pre-search for round 1
       const round1PreSearch = preSearches.find(ps => ps.roundNumber === 1);
       expect(round1PreSearch?.status).toBe(MessageStatuses.PENDING);
-      expect(shouldWaitForPreSearch(true, round1PreSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, round1PreSearch)).toBeTruthy();
     });
 
     it('handles multi-round scenarios correctly', () => {
@@ -188,15 +188,15 @@ describe('pre-Search Round Coordination', () => {
 
       // Round 0 - participants can proceed
       const round0 = preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, round0)).toBe(false);
+      expect(shouldWaitForPreSearch(true, round0)).toBeFalsy();
 
       // Round 1 - still streaming, participants must wait
       const round1 = preSearches.find(ps => ps.roundNumber === 1);
-      expect(shouldWaitForPreSearch(true, round1)).toBe(true);
+      expect(shouldWaitForPreSearch(true, round1)).toBeTruthy();
 
       // Round 2 - pending, participants must wait
       const round2 = preSearches.find(ps => ps.roundNumber === 2);
-      expect(shouldWaitForPreSearch(true, round2)).toBe(true);
+      expect(shouldWaitForPreSearch(true, round2)).toBeTruthy();
     });
   });
 
@@ -210,7 +210,7 @@ describe('pre-Search Round Coordination', () => {
       // Round 1 has no pre-search - should block to create one
       const round1PreSearch = preSearches.find(ps => ps.roundNumber === 1);
       expect(round1PreSearch).toBeUndefined();
-      expect(shouldWaitForPreSearch(true, round1PreSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, round1PreSearch)).toBeTruthy();
     });
 
     it('does not block when round 0 complete and checking round 0', () => {
@@ -219,7 +219,7 @@ describe('pre-Search Round Coordination', () => {
       ];
 
       const round0PreSearch = preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, round0PreSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, round0PreSearch)).toBeFalsy();
     });
   });
 });
@@ -230,8 +230,8 @@ describe('pre-Search Placeholder Handling', () => {
       const placeholder = createMockPreSearch({ id: 'placeholder-round-0' });
       const real = createMockPreSearch({ id: 'presearch-abc123' });
 
-      expect(placeholder.id.startsWith('placeholder-')).toBe(true);
-      expect(real.id.startsWith('placeholder-')).toBe(false);
+      expect(placeholder.id.startsWith('placeholder-')).toBeTruthy();
+      expect(real.id.startsWith('placeholder-')).toBeFalsy();
     });
 
     it('placeholder still blocks until complete', () => {
@@ -240,7 +240,7 @@ describe('pre-Search Placeholder Handling', () => {
         status: MessageStatuses.PENDING,
       });
 
-      expect(shouldWaitForPreSearch(true, placeholder)).toBe(true);
+      expect(shouldWaitForPreSearch(true, placeholder)).toBeTruthy();
     });
 
     it('completed placeholder allows participants to proceed', () => {
@@ -249,7 +249,7 @@ describe('pre-Search Placeholder Handling', () => {
         status: MessageStatuses.COMPLETE,
       });
 
-      expect(shouldWaitForPreSearch(true, placeholder)).toBe(false);
+      expect(shouldWaitForPreSearch(true, placeholder)).toBeFalsy();
     });
   });
 });
@@ -260,13 +260,13 @@ describe('edge Cases', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.PENDING });
 
       // Rapid status check sequence
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       preSearch.status = MessageStatuses.STREAMING;
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       preSearch.status = MessageStatuses.COMPLETE;
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 
@@ -276,14 +276,14 @@ describe('edge Cases', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.STREAMING });
 
       // Should still wait for it to complete
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
 
     it('proceeds correctly after refresh when pre-search was complete', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.COMPLETE });
 
       // Should not wait
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 
@@ -292,10 +292,10 @@ describe('edge Cases', () => {
       const preSearch = createMockPreSearch({ status: MessageStatuses.STREAMING });
 
       // With web search enabled - should wait
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       // If user disables web search - should not wait
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
   });
 });

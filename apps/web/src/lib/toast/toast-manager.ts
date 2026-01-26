@@ -1,5 +1,5 @@
 import type { BaseToastVariant, ToastPosition, ToastVariant } from '@roundtable/shared';
-import { BaseToastVariants, ToastVariants } from '@roundtable/shared';
+import { BaseToastVariants, isValidBaseToastVariant, ToastVariants } from '@roundtable/shared';
 import React from 'react';
 
 import type { ToastActionElement } from '@/components/ui/toast';
@@ -27,28 +27,35 @@ const toastQueue: ToastOptions[] = [];
 let isProcessingQueue = false;
 let maxConcurrentToasts = 3;
 
+/**
+ * Toast options type (using direct TypeScript type instead of Zod schema
+ * to avoid Zod v4 z.function() API complexities)
+ */
 export type ToastOptions = {
-  id?: string;
-  title?: string;
-  description?: string;
-  variant?: ToastVariant;
-  duration?: number;
-  preventDuplicates?: boolean;
   action?: {
     label: string;
     onClick: () => void;
   };
-  icon?: React.ComponentType<{ className?: string }>;
+  description?: string;
   dismissible?: boolean;
+  duration?: number;
+  icon?: React.ComponentType<{ className?: string }>;
+  id?: string;
   position?: ToastPosition;
+  preventDuplicates?: boolean;
+  title?: string;
+  variant?: ToastVariant;
 };
 
 type ToastProgressCallback = (progress: number) => void;
 
+/**
+ * Progress toast options type - extends ToastOptions without duration
+ */
 export type ProgressToastOptions = Omit<ToastOptions, 'duration'> & {
-  onProgress?: ToastProgressCallback;
   onComplete?: () => void;
   onError?: (error: Error) => void;
+  onProgress?: ToastProgressCallback;
 };
 
 function createToastId(title: string, description?: string): string {
@@ -56,10 +63,12 @@ function createToastId(title: string, description?: string): string {
 }
 
 function processToastQueue(): void {
-  if (isProcessingQueue || toastQueue.length === 0)
+  if (isProcessingQueue || toastQueue.length === 0) {
     return;
-  if (activeToasts.size >= maxConcurrentToasts)
+  }
+  if (activeToasts.size >= maxConcurrentToasts) {
     return;
+  }
 
   isProcessingQueue = true;
   const nextToast = toastQueue.shift();
@@ -78,13 +87,13 @@ function processToastQueue(): void {
 
 function showToastInternal(options: ToastOptions): void {
   const {
-    id,
-    title = '',
+    action,
     description = '',
     variant = ToastVariants.DEFAULT,
     duration = variant === ToastVariants.LOADING ? 0 : 5000,
+    id,
     preventDuplicates = true,
-    action,
+    title = '',
   } = options;
 
   const toastId = id || createToastId(title, description);
@@ -104,15 +113,16 @@ function showToastInternal(options: ToastOptions): void {
     ? createToastActionElement(action.label, action.onClick)
     : undefined;
 
+  // Normalize variant to BaseToastVariant (loading is not supported by base toast)
   const normalizedVariant: BaseToastVariant = variant === ToastVariants.LOADING
     ? BaseToastVariants.DEFAULT
-    : (variant as BaseToastVariant);
+    : isValidBaseToastVariant(variant) ? variant : BaseToastVariants.DEFAULT;
 
   const toastConfig = {
-    title,
     description,
-    variant: normalizedVariant,
     duration,
+    title,
+    variant: normalizedVariant,
     ...(actionElement && { action: actionElement }),
   };
 
@@ -149,18 +159,44 @@ export function createProgressToast(options: ProgressToastOptions): {
 } {
   const toastId = options.id || createToastId(options.title || '', 'progress');
 
-  const progressData = { progress: 0, callback: options.onProgress };
+  const progressData = { callback: options.onProgress, progress: 0 };
   progressToasts.set(toastId, progressData);
 
   showToastInternal({
     ...options,
+    dismissible: false,
+    duration: 0,
     id: toastId,
     variant: ToastVariants.LOADING,
-    duration: 0,
-    dismissible: false,
   });
 
   return {
+    complete: () => {
+      progressToasts.delete(toastId);
+      dismissToast(toastId);
+      options.onComplete?.();
+      toast({
+        description: `${options.description} - Completed`,
+        duration: 3000,
+        title: options.title,
+        variant: ToastVariants.SUCCESS,
+      });
+    },
+    dismiss: () => {
+      progressToasts.delete(toastId);
+      dismissToast(toastId);
+    },
+    error: (error: Error) => {
+      progressToasts.delete(toastId);
+      dismissToast(toastId);
+      options.onError?.(error);
+      toast({
+        description: error.message,
+        duration: 5000,
+        title: options.title,
+        variant: ToastVariants.DESTRUCTIVE,
+      });
+    },
     updateProgress: (progress: number) => {
       const data = progressToasts.get(toastId);
       if (data) {
@@ -168,39 +204,13 @@ export function createProgressToast(options: ProgressToastOptions): {
         data.callback?.(progress);
         showToastInternal({
           ...options,
-          id: toastId,
           description: `${options.description} (${Math.round(progress)}%)`,
-          variant: ToastVariants.LOADING,
-          duration: 0,
           dismissible: false,
+          duration: 0,
+          id: toastId,
+          variant: ToastVariants.LOADING,
         });
       }
-    },
-    complete: () => {
-      progressToasts.delete(toastId);
-      dismissToast(toastId);
-      options.onComplete?.();
-      toast({
-        title: options.title,
-        description: `${options.description} - Completed`,
-        variant: ToastVariants.SUCCESS,
-        duration: 3000,
-      });
-    },
-    error: (error: Error) => {
-      progressToasts.delete(toastId);
-      dismissToast(toastId);
-      options.onError?.(error);
-      toast({
-        title: options.title,
-        description: error.message,
-        variant: ToastVariants.DESTRUCTIVE,
-        duration: 5000,
-      });
-    },
-    dismiss: () => {
-      progressToasts.delete(toastId);
-      dismissToast(toastId);
     },
   };
 }
@@ -217,57 +227,93 @@ export function dismissToast(toastId: string): void {
 }
 
 export const toastManager = {
-  success: (message: string, description?: string, options?: Partial<ToastOptions>) => {
+  action: (message: string, actionLabel: string, actionFn: () => void, options?: Partial<ToastOptions>) => {
     return toast({
+      action: {
+        label: actionLabel,
+        onClick: actionFn,
+      },
+      duration: 10000,
       title: message,
-      description,
-      variant: ToastVariants.SUCCESS,
-      preventDuplicates: true,
+      variant: ToastVariants.INFO,
       ...options,
     });
+  },
+
+  clear: () => {
+    activeToasts.clear();
+    toastTimeouts.forEach(timeout => clearTimeout(timeout));
+    toastTimeouts.clear();
+    progressToasts.clear();
+    toastQueue.length = 0;
+  },
+
+  dismiss: (toastId: string) => {
+    dismissToast(toastId);
   },
 
   error: (message: string, description?: string, options?: Partial<ToastOptions>) => {
     return toast({
-      title: message,
       description,
-      variant: ToastVariants.DESTRUCTIVE,
-      preventDuplicates: true,
       duration: 8000, // Longer duration for errors
+      preventDuplicates: true,
+      title: message,
+      variant: ToastVariants.DESTRUCTIVE,
       ...options,
     });
   },
 
-  warning: (message: string, description?: string, options?: Partial<ToastOptions>) => {
-    return toast({
-      title: message,
-      description,
-      variant: ToastVariants.WARNING,
-      preventDuplicates: true,
-      ...options,
-    });
+  force: (options: ToastOptions) => {
+    return toast({ ...options, preventDuplicates: false });
+  },
+
+  getActiveCount: () => {
+    return activeToasts.size;
+  },
+
+  getQueueLength: () => {
+    return toastQueue.length;
   },
 
   info: (message: string, description?: string, options?: Partial<ToastOptions>) => {
     return toast({
-      title: message,
       description,
-      variant: ToastVariants.INFO,
       preventDuplicates: true,
+      title: message,
+      variant: ToastVariants.INFO,
       ...options,
     });
   },
 
+  isActive: (id: string) => {
+    return activeToasts.has(id);
+  },
+
   loading: (message = 'Loading...', description?: string, options?: Partial<ToastOptions>) => {
     return toast({
-      title: message,
       description,
-      variant: ToastVariants.LOADING,
-      duration: 0,
       dismissible: false,
+      duration: 0,
       preventDuplicates: true,
+      title: message,
+      variant: ToastVariants.LOADING,
       ...options,
     });
+  },
+
+  persistent: (message: string, description?: string, options?: Partial<ToastOptions>) => {
+    return toast({
+      description,
+      dismissible: true,
+      duration: 0,
+      title: message,
+      variant: ToastVariants.INFO,
+      ...options,
+    });
+  },
+
+  progress: (options: ProgressToastOptions) => {
+    return createProgressToast(options);
   },
 
   promise: async <T>(
@@ -280,8 +326,8 @@ export const toastManager = {
     options?: Partial<ProgressToastOptions>,
   ): Promise<T> => {
     const progressToast = createProgressToast({
-      title: messages.loading,
       description: 'Processing...',
+      title: messages.loading,
       ...options,
     });
 
@@ -298,15 +344,24 @@ export const toastManager = {
     }
   },
 
-  action: (message: string, actionLabel: string, actionFn: () => void, options?: Partial<ToastOptions>) => {
+  retry: (message: string, retryFn: () => void, options?: Partial<ToastOptions>) => {
+    return toastManager.action(message, 'Retry', retryFn, {
+      variant: ToastVariants.DESTRUCTIVE,
+      ...options,
+    });
+  },
+
+  setMaxConcurrent: (max: number) => {
+    maxConcurrentToasts = Math.max(1, max);
+    processToastQueue();
+  },
+
+  success: (message: string, description?: string, options?: Partial<ToastOptions>) => {
     return toast({
+      description,
+      preventDuplicates: true,
       title: message,
-      variant: ToastVariants.INFO,
-      action: {
-        label: actionLabel,
-        onClick: actionFn,
-      },
-      duration: 10000,
+      variant: ToastVariants.SUCCESS,
       ...options,
     });
   },
@@ -318,65 +373,20 @@ export const toastManager = {
     });
   },
 
-  retry: (message: string, retryFn: () => void, options?: Partial<ToastOptions>) => {
-    return toastManager.action(message, 'Retry', retryFn, {
-      variant: ToastVariants.DESTRUCTIVE,
-      ...options,
-    });
-  },
-
-  persistent: (message: string, description?: string, options?: Partial<ToastOptions>) => {
-    return toast({
-      title: message,
-      description,
-      variant: ToastVariants.INFO,
-      duration: 0,
-      dismissible: true,
-      ...options,
-    });
-  },
-
   update: (toastId: string, options: Partial<ToastOptions>) => {
     if (activeToasts.has(toastId)) {
       toast({ ...options, id: toastId, preventDuplicates: false });
     }
   },
 
-  force: (options: ToastOptions) => {
-    return toast({ ...options, preventDuplicates: false });
-  },
-
-  dismiss: (toastId: string) => {
-    dismissToast(toastId);
-  },
-
-  clear: () => {
-    activeToasts.clear();
-    toastTimeouts.forEach(timeout => clearTimeout(timeout));
-    toastTimeouts.clear();
-    progressToasts.clear();
-    toastQueue.length = 0;
-  },
-
-  isActive: (id: string) => {
-    return activeToasts.has(id);
-  },
-
-  getActiveCount: () => {
-    return activeToasts.size;
-  },
-
-  getQueueLength: () => {
-    return toastQueue.length;
-  },
-
-  setMaxConcurrent: (max: number) => {
-    maxConcurrentToasts = Math.max(1, max);
-    processToastQueue();
-  },
-
-  progress: (options: ProgressToastOptions) => {
-    return createProgressToast(options);
+  warning: (message: string, description?: string, options?: Partial<ToastOptions>) => {
+    return toast({
+      description,
+      preventDuplicates: true,
+      title: message,
+      variant: ToastVariants.WARNING,
+      ...options,
+    });
   },
 };
 

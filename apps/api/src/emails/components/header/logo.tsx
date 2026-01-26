@@ -21,9 +21,9 @@ export function Logo({ size = 60 }: LogoProps) {
       height={size}
       alt={`${BRAND.displayName} Logo`}
       style={{
+        borderRadius: '50%',
         display: 'block',
         margin: '0 auto',
-        borderRadius: '50%',
       }}
     />
   );

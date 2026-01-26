@@ -15,10 +15,10 @@ export function EmailContainer({
   style,
 }: EmailContainerProps) {
   const containerStyle: CSSProperties = {
+    border: `1px solid ${colors.border}`,
+    borderRadius: borderRadius.md,
     margin: '40px auto',
     maxWidth: `${maxWidth}px`,
-    borderRadius: borderRadius.md,
-    border: `1px solid ${colors.border}`,
     padding: spacing[5],
     ...style,
   };

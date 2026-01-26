@@ -72,7 +72,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
-  const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useSidebarThreadsQuery();
+  const { data: threadsData, error, fetchNextPage, hasNextPage, isError, isFetchingNextPage, isLoading } = useSidebarThreadsQuery();
 
   const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
@@ -81,10 +81,10 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   // Projects state
   const {
     data: projectsData,
-    isLoading: isProjectsLoading,
     fetchNextPage: fetchNextProjectsPage,
     hasNextPage: hasNextProjectsPage,
     isFetchingNextPage: isFetchingNextProjectsPage,
+    isLoading: isProjectsLoading,
   } = useSidebarProjectsQuery();
   const { data: projectLimits } = useProjectLimitsQuery();
 
@@ -110,35 +110,38 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     : threadIsPublic;
 
   const chats: ChatSidebarItem[] = useMemo(() => {
-    if (!threadsData?.pages)
+    if (!threadsData?.pages) {
       return [];
+    }
     const threads = threadsData.pages.flatMap(page =>
       page.success && page.data?.items ? page.data.items : [],
     );
     return threads.map(thread => ({
-      id: thread.id,
-      title: thread.title,
-      slug: thread.slug,
-      previousSlug: thread.previousSlug ?? null,
       createdAt: typeof thread.createdAt === 'string' ? thread.createdAt : new Date(thread.createdAt).toISOString(),
-      updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : new Date(thread.updatedAt).toISOString(),
-      messages: [],
+      id: thread.id,
       isFavorite: thread.isFavorite ?? false,
       isPublic: thread.isPublic ?? false,
+      messages: [],
+      previousSlug: thread.previousSlug ?? null,
+      slug: thread.slug,
+      title: thread.title,
+      updatedAt: typeof thread.updatedAt === 'string' ? thread.updatedAt : new Date(thread.updatedAt).toISOString(),
     }));
   }, [threadsData]);
 
   const projects: ProjectListItemData[] = useMemo(() => {
-    if (!projectsData?.pages)
+    if (!projectsData?.pages) {
       return [];
+    }
     return projectsData.pages.flatMap((page) => {
-      if (!page.success || !page.data?.items)
+      if (!page.success || !page.data?.items) {
         return [];
+      }
       return page.data.items.map((project: ProjectItem): ProjectListItemData => ({
-        id: project.id,
-        name: project.name,
         color: project.color ?? null,
         icon: project.icon ?? null,
+        id: project.id,
+        name: project.name,
         threadCount: project.threadCount ?? 0,
       }));
     });
@@ -184,9 +187,10 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const nonFavoriteChats = useMemo(() => chats.filter(chat => !chat.isFavorite), [chats]);
 
   const handleScroll = useCallback(() => {
-    if (!sidebarContentRef.current)
+    if (!sidebarContentRef.current) {
       return;
-    const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
+    }
+    const { clientHeight, scrollHeight, scrollTop } = sidebarContentRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
     if (scrollPercentage > 0.8) {
@@ -203,8 +207,9 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
 
   useEffect(() => {
     const viewport = sidebarContentRef.current;
-    if (!viewport)
+    if (!viewport) {
       return;
+    }
     viewport.addEventListener('scroll', handleScroll);
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
@@ -233,7 +238,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     if (!chatToShare || threadIsPublic || togglePublicMutation.isPending) {
       return;
     }
-    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: true, slug: chatToShare.slug ?? undefined });
+    togglePublicMutation.mutate({ isPublic: true, slug: chatToShare.slug ?? undefined, threadId: chatToShare.id });
   }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   const handleMakePrivate = useCallback(() => {
@@ -242,7 +247,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       return;
     }
     setIsShareDialogOpen(false);
-    togglePublicMutation.mutate({ threadId: chatToShare.id, isPublic: false, slug: chatToShare.slug ?? undefined });
+    togglePublicMutation.mutate({ isPublic: false, slug: chatToShare.slug ?? undefined, threadId: chatToShare.id });
   }, [chatToShare, threadIsPublic, togglePublicMutation]);
 
   return (

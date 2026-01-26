@@ -167,8 +167,8 @@ export function hasShape<T extends Record<string, unknown>>(
  * Schema for text part of a message
  */
 export const TextPartSchema = z.object({
-  type: z.literal(MessagePartTypes.TEXT),
   text: NonEmptyStringSchema,
+  type: z.literal(MessagePartTypes.TEXT),
 });
 
 export type TextPart = z.infer<typeof TextPartSchema>;
@@ -183,8 +183,8 @@ export function isTextPart(
  * Schema for tool call
  */
 export const ToolCallSchema = z.object({
-  toolName: NonEmptyStringSchema,
   input: z.unknown(),
+  toolName: NonEmptyStringSchema,
 });
 
 export type ToolCall = z.infer<typeof ToolCallSchema>;
@@ -224,8 +224,8 @@ export function isStripePaymentMethod(
  * We only validate the fields we need and allow extras.
  */
 export const PeriodTimestampsSchema = z.object({
-  current_period_start: NumberSchema.optional(),
   current_period_end: NumberSchema.optional(),
+  current_period_start: NumberSchema.optional(),
 }).catchall(z.unknown());
 
 export type PeriodTimestamps = z.infer<typeof PeriodTimestampsSchema>;

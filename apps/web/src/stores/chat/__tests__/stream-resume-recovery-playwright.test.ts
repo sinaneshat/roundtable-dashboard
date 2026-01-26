@@ -63,13 +63,14 @@ function parseStreamId(streamId: string): {
   participantIndex: number;
 } | null {
   const match = streamId.match(/^(.+)_r(\d+)_p(\d+)$/);
-  if (!match)
+  if (!match) {
     return null;
+  }
 
   return {
-    threadId: match[1],
-    roundNumber: Number.parseInt(match[2], 10),
     participantIndex: Number.parseInt(match[3], 10),
+    roundNumber: Number.parseInt(match[2], 10),
+    threadId: match[1],
   };
 }
 
@@ -113,9 +114,9 @@ function setStreamCompleted(
   messageId: string,
 ): Promise<void> {
   return kv.set(`stream:${streamId}`, {
-    status: 'completed',
-    messageId,
     completedAt: Date.now(),
+    messageId,
+    status: 'completed',
   });
 }
 
@@ -125,9 +126,9 @@ function setStreamFailed(
   errorMessage: string,
 ): Promise<void> {
   return kv.set(`stream:${streamId}`, {
-    status: 'failed',
-    errorMessage,
     completedAt: Date.now(),
+    errorMessage,
+    status: 'failed',
   });
 }
 
@@ -165,8 +166,9 @@ async function getNextParticipantToStream(
   threadId: string,
 ): Promise<{ participantIndex: number } | null> {
   const activeStream = await getThreadActiveStream(kv, threadId);
-  if (!activeStream)
+  if (!activeStream) {
     return null;
+  }
 
   // Find first participant that hasn't completed
   for (let i = 0; i < activeStream.totalParticipants; i++) {
@@ -186,12 +188,12 @@ function buildResumptionState(
   if (!activeStream) {
     return {
       hasActiveStream: false,
-      streamId: null,
-      roundNumber: null,
-      totalParticipants: null,
-      participantStatuses: null,
       nextParticipantToTrigger: null,
+      participantStatuses: null,
       roundComplete: true,
+      roundNumber: null,
+      streamId: null,
+      totalParticipants: null,
     };
   }
 
@@ -202,12 +204,12 @@ function buildResumptionState(
 
   return {
     hasActiveStream: true,
-    streamId: activeStream.streamId,
-    roundNumber: activeStream.roundNumber,
-    totalParticipants: activeStream.totalParticipants,
-    participantStatuses: participantStatusesStringKeyed,
     nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
+    participantStatuses: participantStatusesStringKeyed,
     roundComplete,
+    roundNumber: activeStream.roundNumber,
+    streamId: activeStream.streamId,
+    totalParticipants: activeStream.totalParticipants,
   };
 }
 
@@ -223,7 +225,7 @@ describe('stream Resume and Recovery E2E', () => {
       const streamId = generateStreamId('thread-abc123', 0, 0);
 
       expect(streamId).toBe('thread-abc123_r0_p0');
-      expect(isValidStreamId(streamId)).toBe(true);
+      expect(isValidStreamId(streamId)).toBeTruthy();
     });
 
     it('should generate unique stream IDs for different participants', () => {
@@ -270,10 +272,10 @@ describe('stream Resume and Recovery E2E', () => {
     });
 
     it('should validate stream ID format', () => {
-      expect(isValidStreamId('thread-123_r0_p0')).toBe(true);
-      expect(isValidStreamId('thread-123_r10_p5')).toBe(true);
-      expect(isValidStreamId('invalid')).toBe(false);
-      expect(isValidStreamId('thread_r_p')).toBe(false);
+      expect(isValidStreamId('thread-123_r0_p0')).toBeTruthy();
+      expect(isValidStreamId('thread-123_r10_p5')).toBeTruthy();
+      expect(isValidStreamId('invalid')).toBeFalsy();
+      expect(isValidStreamId('thread_r_p')).toBeFalsy();
     });
   });
 
@@ -281,12 +283,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should set stream as active', async () => {
       const streamId = generateStreamId('thread-123', 0, 0);
       const metadata: ParticipantStreamMetadata = {
+        createdAt: Date.now(),
+        participantIndex: 0,
+        roundNumber: 0,
+        status: 'active',
         streamId,
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        status: 'active',
-        createdAt: Date.now(),
       };
 
       await setStreamActive(kv, streamId, metadata);
@@ -299,12 +301,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should update stream to completed', async () => {
       const streamId = generateStreamId('thread-123', 0, 0);
       await setStreamActive(kv, streamId, {
+        createdAt: Date.now(),
+        participantIndex: 0,
+        roundNumber: 0,
+        status: 'active',
         streamId,
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        status: 'active',
-        createdAt: Date.now(),
       });
 
       await setStreamCompleted(kv, streamId, 'msg-final-123');
@@ -318,12 +320,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should update stream to failed', async () => {
       const streamId = generateStreamId('thread-123', 0, 0);
       await setStreamActive(kv, streamId, {
+        createdAt: Date.now(),
+        participantIndex: 0,
+        roundNumber: 0,
+        status: 'active',
         streamId,
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        status: 'active',
-        createdAt: Date.now(),
       });
 
       await setStreamFailed(kv, streamId, 'Rate limit exceeded');
@@ -345,12 +347,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should set and get thread active stream', async () => {
       const threadId = 'thread-123';
       const activeStream: ThreadActiveStream = {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'active', 2: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'active', 2: 'active' },
       };
 
       await setThreadActiveStream(kv, threadId, activeStream);
@@ -364,12 +366,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should clear thread active stream', async () => {
       const threadId = 'thread-123';
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants: 1,
-        participantStatuses: { 0: 'active' },
       });
 
       await clearThreadActiveStream(kv, threadId);
@@ -383,12 +385,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should find first incomplete participant', async () => {
       const threadId = 'thread-123';
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed' },
       });
 
       const next = await getNextParticipantToStream(kv, threadId);
@@ -399,12 +401,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should return null when all participants complete', async () => {
       const threadId = 'thread-123';
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 2,
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 2),
         threadId,
-        roundNumber: 0,
-        participantIndex: 2,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
       });
 
       const next = await getNextParticipantToStream(kv, threadId);
@@ -415,12 +417,12 @@ describe('stream Resume and Recovery E2E', () => {
     it('should find active participant', async () => {
       const threadId = 'thread-123';
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'active' },
       });
 
       const next = await getNextParticipantToStream(kv, threadId);
@@ -439,54 +441,54 @@ describe('stream Resume and Recovery E2E', () => {
     it('should build state for no active stream', () => {
       const state = buildResumptionState(null, null);
 
-      expect(state.hasActiveStream).toBe(false);
+      expect(state.hasActiveStream).toBeFalsy();
       expect(state.streamId).toBeNull();
-      expect(state.roundComplete).toBe(true);
+      expect(state.roundComplete).toBeTruthy();
     });
 
     it('should build state for active stream with next participant', () => {
       const activeStream: ThreadActiveStream = {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId('thread-123', 0, 1),
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'active' },
       };
 
       const state = buildResumptionState(activeStream, { participantIndex: 2 });
 
-      expect(state.hasActiveStream).toBe(true);
+      expect(state.hasActiveStream).toBeTruthy();
       expect(state.roundNumber).toBe(0);
       expect(state.nextParticipantToTrigger).toBe(2);
-      expect(state.roundComplete).toBe(false);
+      expect(state.roundComplete).toBeFalsy();
     });
 
     it('should build state for complete round', () => {
       const activeStream: ThreadActiveStream = {
+        participantIndex: 2,
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId('thread-123', 0, 2),
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 2,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
       };
 
       const state = buildResumptionState(activeStream, null);
 
-      expect(state.hasActiveStream).toBe(true);
-      expect(state.roundComplete).toBe(true);
+      expect(state.hasActiveStream).toBeTruthy();
+      expect(state.roundComplete).toBeTruthy();
       expect(state.nextParticipantToTrigger).toBeNull();
     });
 
     it('should convert participant statuses to string keys', () => {
       const activeStream: ThreadActiveStream = {
+        participantIndex: 0,
+        participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId('thread-123', 0, 0),
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants: 2,
-        participantStatuses: { 0: 'completed', 1: 'active' },
       };
 
       const state = buildResumptionState(activeStream, { participantIndex: 1 });
@@ -502,12 +504,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // State before refresh: P0 was streaming
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants: 3,
-        participantStatuses: { 0: 'active' },
       });
 
       // After refresh: get resumption state
@@ -515,9 +517,9 @@ describe('stream Resume and Recovery E2E', () => {
       const nextParticipant = await getNextParticipantToStream(kv, threadId);
       const state = buildResumptionState(activeStream, nextParticipant);
 
-      expect(state.hasActiveStream).toBe(true);
+      expect(state.hasActiveStream).toBeTruthy();
       expect(state.nextParticipantToTrigger).toBe(0); // Resume P0
-      expect(state.roundComplete).toBe(false);
+      expect(state.roundComplete).toBeFalsy();
     });
 
     it('should recover when refresh happens during P1 streaming', async () => {
@@ -525,12 +527,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // State before refresh: P0 complete, P1 streaming
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'active' },
       });
 
       const activeStream = await getThreadActiveStream(kv, threadId);
@@ -545,12 +547,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // P0 and P1 complete, P2 not started yet
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed' },
       });
 
       const activeStream = await getThreadActiveStream(kv, threadId);
@@ -565,19 +567,19 @@ describe('stream Resume and Recovery E2E', () => {
 
       // All participants complete
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 2,
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 2),
         threadId,
-        roundNumber: 0,
-        participantIndex: 2,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
       });
 
       const activeStream = await getThreadActiveStream(kv, threadId);
       const nextParticipant = await getNextParticipantToStream(kv, threadId);
       const state = buildResumptionState(activeStream, nextParticipant);
 
-      expect(state.roundComplete).toBe(true);
+      expect(state.roundComplete).toBeTruthy();
       expect(state.nextParticipantToTrigger).toBeNull();
     });
   });
@@ -587,12 +589,12 @@ describe('stream Resume and Recovery E2E', () => {
       const threadId = 'thread-multi-round';
 
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 2, // Third round
         streamId: generateStreamId(threadId, 2, 0),
         threadId,
-        roundNumber: 2, // Third round
-        participantIndex: 0,
         totalParticipants: 2,
-        participantStatuses: { 0: 'active' },
       });
 
       const activeStream = await getThreadActiveStream(kv, threadId);
@@ -606,12 +608,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // Round 0 complete, round 1 starting
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 1,
         streamId: generateStreamId(threadId, 1, 0),
         threadId,
-        roundNumber: 1,
-        participantIndex: 0,
         totalParticipants: 3,
-        participantStatuses: { 0: 'active' },
       });
 
       const activeStream = await getThreadActiveStream(kv, threadId);
@@ -628,12 +630,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // P0 failed, need to trigger P1
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'failed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants: 3,
-        participantStatuses: { 0: 'failed' },
       });
 
       const nextParticipant = await getNextParticipantToStream(kv, threadId);
@@ -646,12 +648,12 @@ describe('stream Resume and Recovery E2E', () => {
       const threadId = 'thread-multi-fail';
 
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'failed', 1: 'failed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 3,
-        participantStatuses: { 0: 'failed', 1: 'failed' },
       });
 
       const nextParticipant = await getNextParticipantToStream(kv, threadId);
@@ -667,8 +669,9 @@ describe('stream Resume and Recovery E2E', () => {
       expectedParticipant: number,
     ): boolean {
       const parsed = parseStreamId(streamId);
-      if (!parsed)
+      if (!parsed) {
         return false;
+      }
 
       return (
         parsed.roundNumber === expectedRound
@@ -679,43 +682,44 @@ describe('stream Resume and Recovery E2E', () => {
     it('should validate matching stream ID', () => {
       const streamId = 'thread-123_r0_p1';
 
-      expect(validateStreamIdForResume(streamId, 0, 1)).toBe(true);
+      expect(validateStreamIdForResume(streamId, 0, 1)).toBeTruthy();
     });
 
     it('should reject mismatched round', () => {
       const streamId = 'thread-123_r0_p1';
 
-      expect(validateStreamIdForResume(streamId, 1, 1)).toBe(false);
+      expect(validateStreamIdForResume(streamId, 1, 1)).toBeFalsy();
     });
 
     it('should reject mismatched participant', () => {
       const streamId = 'thread-123_r0_p1';
 
-      expect(validateStreamIdForResume(streamId, 0, 2)).toBe(false);
+      expect(validateStreamIdForResume(streamId, 0, 2)).toBeFalsy();
     });
   });
 
   describe('stale Stream Detection', () => {
-    function isStreamStale(lastChunkTime: number, thresholdMs: number = 15000): boolean {
-      if (lastChunkTime === 0)
+    function isStreamStale(lastChunkTime: number, thresholdMs = 15000): boolean {
+      if (lastChunkTime === 0) {
         return false;
+      }
       return Date.now() - lastChunkTime > thresholdMs;
     }
 
     it('should detect stale stream', () => {
       const oldTime = Date.now() - 20000; // 20 seconds ago
 
-      expect(isStreamStale(oldTime, 15000)).toBe(true);
+      expect(isStreamStale(oldTime, 15000)).toBeTruthy();
     });
 
     it('should not flag fresh stream as stale', () => {
       const recentTime = Date.now() - 5000; // 5 seconds ago
 
-      expect(isStreamStale(recentTime, 15000)).toBe(false);
+      expect(isStreamStale(recentTime, 15000)).toBeFalsy();
     });
 
     it('should not flag zero timestamp as stale', () => {
-      expect(isStreamStale(0)).toBe(false);
+      expect(isStreamStale(0)).toBeFalsy();
     });
   });
 
@@ -726,32 +730,32 @@ describe('stream Resume and Recovery E2E', () => {
 
       // === Phase 1: P0 starts streaming ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants,
-        participantStatuses: { 0: 'active' },
       });
 
       // === Phase 2: P0 completes ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 0),
         threadId,
-        roundNumber: 0,
-        participantIndex: 0,
         totalParticipants,
-        participantStatuses: { 0: 'completed' },
       });
 
       // === Phase 3: P1 starts streaming ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'active' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants,
-        participantStatuses: { 0: 'completed', 1: 'active' },
       });
 
       // === REFRESH HAPPENS HERE ===
@@ -761,7 +765,7 @@ describe('stream Resume and Recovery E2E', () => {
       const nextParticipant = await getNextParticipantToStream(kv, threadId);
       const state = buildResumptionState(activeStream, nextParticipant);
 
-      expect(state.hasActiveStream).toBe(true);
+      expect(state.hasActiveStream).toBeTruthy();
       expect(state.roundNumber).toBe(0);
       expect(state.nextParticipantToTrigger).toBe(1); // Resume P1
       expect(state.participantStatuses?.['0']).toBe('completed');
@@ -769,22 +773,22 @@ describe('stream Resume and Recovery E2E', () => {
 
       // === Phase 5: P1 completes after resume ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants,
-        participantStatuses: { 0: 'completed', 1: 'completed' },
       });
 
       // === Phase 6: P2 streams and completes ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 2,
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 2),
         threadId,
-        roundNumber: 0,
-        participantIndex: 2,
         totalParticipants,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
       });
 
       // === Phase 7: Verify round complete ===
@@ -792,7 +796,7 @@ describe('stream Resume and Recovery E2E', () => {
       const finalNext = await getNextParticipantToStream(kv, threadId);
       const finalState = buildResumptionState(finalStream, finalNext);
 
-      expect(finalState.roundComplete).toBe(true);
+      expect(finalState.roundComplete).toBeTruthy();
       expect(finalState.nextParticipantToTrigger).toBeNull();
     });
 
@@ -801,12 +805,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // === Round 0 completes normally ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 1,
+        participantStatuses: { 0: 'completed', 1: 'completed' },
+        roundNumber: 0,
         streamId: generateStreamId(threadId, 0, 1),
         threadId,
-        roundNumber: 0,
-        participantIndex: 1,
         totalParticipants: 2,
-        participantStatuses: { 0: 'completed', 1: 'completed' },
       });
 
       // Clear after round 0 completes
@@ -814,12 +818,12 @@ describe('stream Resume and Recovery E2E', () => {
 
       // === Round 1 starts ===
       await setThreadActiveStream(kv, threadId, {
+        participantIndex: 0,
+        participantStatuses: { 0: 'active' },
+        roundNumber: 1,
         streamId: generateStreamId(threadId, 1, 0),
         threadId,
-        roundNumber: 1,
-        participantIndex: 0,
         totalParticipants: 2,
-        participantStatuses: { 0: 'active' },
       });
 
       // === REFRESH during Round 1 ===

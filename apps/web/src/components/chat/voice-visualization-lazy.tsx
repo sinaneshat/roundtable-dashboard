@@ -43,8 +43,8 @@ const VoiceVisualizationInternal = dynamic<VoiceVisualizationProps>(
     default: m.VoiceVisualization,
   })),
   {
-    ssr: false,
     loading: () => <VoiceVisualizationSkeleton />,
+    ssr: false,
   },
 );
 

@@ -15,12 +15,8 @@ const authErrorSearchSchema = z.object({
 });
 
 export const Route = createFileRoute('/auth/error')({
-  validateSearch: authErrorSearchSchema,
   component: AuthErrorPage,
-  // Static error page - cache at Edge for fast delivery
-  headers: () => ({
-    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
-  }),
+  validateSearch: authErrorSearchSchema,
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -46,6 +42,10 @@ export const Route = createFileRoute('/auth/error')({
       ],
     };
   },
+  // Static error page - cache at Edge for fast delivery
+  headers: () => ({
+    'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
+  }),
 });
 
 function AuthErrorPage() {

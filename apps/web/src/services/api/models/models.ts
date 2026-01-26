@@ -36,8 +36,8 @@ export type ListModelsResponse = InferResponseType<ListModelsEndpoint, 200>;
  */
 export async function listModelsService(options?: ServiceOptions) {
   const client = createApiClient({
-    cookieHeader: options?.cookieHeader,
     bypassCache: options?.bypassCache,
+    cookieHeader: options?.cookieHeader,
   });
   const res = await client.models.$get();
   if (!res.ok) {

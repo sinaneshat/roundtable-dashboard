@@ -26,15 +26,15 @@ type RHFTextFieldProps<TFieldValues extends FieldValues = FieldValues> = {
 };
 
 export function RHFTextField<TFieldValues extends FieldValues = FieldValues>({
-  name,
-  title,
+  className,
   description,
-  placeholder,
-  required,
   disabled,
   fieldType = FieldTypes.TEXT,
-  className,
   inputClassName,
+  name,
+  placeholder,
+  required,
+  title,
 }: RHFTextFieldProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

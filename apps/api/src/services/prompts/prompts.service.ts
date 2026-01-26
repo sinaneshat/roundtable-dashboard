@@ -35,8 +35,8 @@ export function placeholder(prefix: PlaceholderPrefix, description: string): str
  * Shorthand placeholder creators
  */
 export const p = {
-  context: (desc: string) => placeholder(PlaceholderPrefixes.FROM_CONTEXT, desc),
   compute: (desc: string) => placeholder(PlaceholderPrefixes.COMPUTE, desc),
+  context: (desc: string) => placeholder(PlaceholderPrefixes.FROM_CONTEXT, desc),
   extract: (desc: string) => placeholder(PlaceholderPrefixes.EXTRACT, desc),
   optional: (desc: string) => placeholder(PlaceholderPrefixes.OPTIONAL, desc),
 } as const;
@@ -232,9 +232,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
   if (wordCount <= 3) {
     return {
       complexity: QueryAnalysisComplexities.SIMPLE,
-      maxQueries: 1,
       defaultSearchDepth: WebSearchDepths.BASIC,
       defaultSourceCount: 2,
+      maxQueries: 1,
       reasoning: 'Short query - single focused search sufficient',
     };
   }
@@ -244,9 +244,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
     if (pattern.test(trimmed)) {
       return {
         complexity: QueryAnalysisComplexities.SIMPLE,
-        maxQueries: 1,
         defaultSearchDepth: WebSearchDepths.BASIC,
         defaultSourceCount: 2,
+        maxQueries: 1,
         reasoning: 'Simple fact/definition lookup - one query sufficient',
       };
     }
@@ -257,9 +257,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
     if (pattern.test(trimmed)) {
       return {
         complexity: QueryAnalysisComplexities.COMPLEX,
-        maxQueries: 3,
         defaultSearchDepth: WebSearchDepths.ADVANCED,
         defaultSourceCount: 3,
+        maxQueries: 3,
         reasoning: 'Complex multi-faceted query - multiple angles needed',
       };
     }
@@ -270,9 +270,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
     if (pattern.test(trimmed)) {
       return {
         complexity: QueryAnalysisComplexities.MODERATE,
-        maxQueries: 2,
         defaultSearchDepth: WebSearchDepths.ADVANCED,
         defaultSourceCount: 3,
+        maxQueries: 2,
         reasoning: 'Comparison/how-to query - two search angles recommended',
       };
     }
@@ -282,9 +282,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
   if (wordCount > 15) {
     return {
       complexity: QueryAnalysisComplexities.COMPLEX,
-      maxQueries: 3,
       defaultSearchDepth: WebSearchDepths.ADVANCED,
       defaultSourceCount: 3,
+      maxQueries: 3,
       reasoning: 'Long detailed query - multiple search angles recommended',
     };
   }
@@ -292,9 +292,9 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
   // Default to moderate for medium-length queries
   return {
     complexity: QueryAnalysisComplexities.MODERATE,
-    maxQueries: 2,
     defaultSearchDepth: WebSearchDepths.ADVANCED,
     defaultSourceCount: 3,
+    maxQueries: 2,
     reasoning: 'Standard query complexity - balanced search approach',
   };
 }
@@ -802,13 +802,13 @@ ${basePrompt}`;
  * until this template is updated to match - preventing silent schema drift.
  */
 export const MODERATOR_JSON_STRUCTURE = {
-  summary: p.compute('2-3 sentence concise moderator of the conversation'),
   metrics: {
-    engagement: p.compute('0-100 score for how actively participants contributed'),
-    insight: p.compute('0-100 score for quality and depth of ideas shared'),
     balance: p.compute('0-100 score for how well perspectives were distributed'),
     clarity: p.compute('0-100 score for how clear and understandable the discussion was'),
+    engagement: p.compute('0-100 score for how actively participants contributed'),
+    insight: p.compute('0-100 score for quality and depth of ideas shared'),
   },
+  summary: p.compute('2-3 sentence concise moderator of the conversation'),
 } satisfies ValidatePromptTemplate<ModeratorPayload>;
 
 /**
@@ -890,15 +890,17 @@ export function buildAnalyzeSystemPrompt(
   minModels: number,
   roleNames: readonly string[],
   chatModes: string[],
-  requiresVision: boolean = false,
-  freeTierMaxModels: number = 3,
+  requiresVision = false,
+  freeTierMaxModels = 3,
 ): string {
   const modelList = models.map((m) => {
     const tags: string[] = [];
-    if (m.isReasoning)
+    if (m.isReasoning) {
       tags.push('reasoning');
-    if (m.hasVision)
+    }
+    if (m.hasVision) {
       tags.push('vision');
+    }
     const tagStr = tags.length > 0 ? ` [${tags.join(', ')}]` : '';
     return `- ${m.id}: ${m.description}${tagStr}`;
   }).join('\n');
@@ -1112,7 +1114,7 @@ export function buildCouncilModeratorSystemPrompt(
   mode: ChatMode,
   userQuestion: string,
   participantResponses: ParticipantResponse[],
-  projectContext?: { instructions?: string | null; ragContext?: string },
+  projectContext?: { instructions?: string | null | undefined; ragContext?: string | undefined },
 ): string {
   const participantList = buildModeratorParticipantList(participantResponses);
   const participantCount = participantResponses.length;
@@ -1382,7 +1384,7 @@ Return ONLY valid JSON array, no other text.`;
  */
 export function buildSelectiveMemoryPrompt(
   userQuestion: string,
-  participantResponses: Array<{ name: string; response: string }>,
+  participantResponses: { name: string; response: string }[],
   existingMemories: string[],
 ): string {
   const existingList = existingMemories.length > 0

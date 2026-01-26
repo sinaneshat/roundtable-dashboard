@@ -76,8 +76,9 @@ export function useAuthCheck(): UseAuthCheckReturn {
    * by fetching fresh session data. If invalid, signs out and redirects.
    */
   const handleAuthError = useCallback(async (error: unknown) => {
-    if (!is401Error(error))
+    if (!is401Error(error)) {
       return;
+    }
 
     // Verify session is actually invalid by fetching fresh data
     const freshSession = await getSession();
@@ -100,10 +101,10 @@ export function useAuthCheck(): UseAuthCheckReturn {
   const isServer = typeof window === 'undefined';
 
   return useMemo(() => ({
+    handleAuthError,
     // Server: always true (beforeLoad already validated), Client: check session
     isAuthenticated: isServer || (!isPending && !!session?.user?.id),
     isPending: isServer ? false : isPending,
     userId: session?.user?.id,
-    handleAuthError,
   }), [session?.user?.id, isPending, handleAuthError, isServer]);
 }

@@ -13,14 +13,14 @@ import { WebSearchResultItemSchema } from '@/services/api';
  * Tracks cache information and search limits
  */
 const WebSearchResultMetaSchema = z.object({
-  cached: z.boolean().optional(),
   cacheAge: z.number().optional(),
+  cached: z.boolean().optional(),
   cacheHitRate: z.number().min(0).max(1).optional(),
+  error: z.boolean().optional(),
   limitReached: z.boolean().optional(),
-  searchesUsed: z.number().int().min(0).optional(),
   maxSearches: z.number().int().positive().optional(),
   remainingSearches: z.number().int().min(0).optional(),
-  error: z.boolean().optional(),
+  searchesUsed: z.number().int().min(0).optional(),
 });
 
 /**
@@ -28,16 +28,16 @@ const WebSearchResultMetaSchema = z.object({
  * Matches the structure returned by the web_search tool
  */
 const WebSearchResultSchema = z.object({
-  query: z.string(),
-  answer: z.string().nullable(),
-  results: z.array(WebSearchResultItemSchema),
-  responseTime: z.number(),
-  requestId: z.string().optional(),
-  images: z.array(z.object({
-    url: z.string(),
-    description: z.string().optional(),
-  })).optional(),
   _meta: WebSearchResultMetaSchema.optional(),
+  answer: z.string().nullable(),
+  images: z.array(z.object({
+    description: z.string().optional(),
+    url: z.string(),
+  })).optional(),
+  query: z.string(),
+  requestId: z.string().optional(),
+  responseTime: z.number(),
+  results: z.array(WebSearchResultItemSchema),
 });
 
 // Lazy-loaded - only rendered when web_search tool results exist (~180 lines)
@@ -51,7 +51,7 @@ type ToolResultPartProps = {
   className?: string;
 };
 
-export function ToolResultPart({ part, className }: ToolResultPartProps) {
+export function ToolResultPart({ className, part }: ToolResultPartProps) {
   const isError = part.isError ?? false;
   const statusColor = isError ? ComponentVariants.DESTRUCTIVE : ComponentVariants.SUCCESS;
   const bgColor = isError ? 'bg-destructive/5' : 'bg-green-500/5';

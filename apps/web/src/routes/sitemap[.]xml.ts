@@ -26,14 +26,14 @@ type SitemapRoute = {
 function getStaticRoutes(): SitemapRoute[] {
   return [
     // Homepage - highest priority
-    { path: '/', changefreq: 'weekly', priority: '1.0' },
+    { changefreq: 'weekly', path: '/', priority: '1.0' },
     // Auth pages
-    { path: '/auth/sign-in', changefreq: 'monthly', priority: '0.8' },
+    { changefreq: 'monthly', path: '/auth/sign-in', priority: '0.8' },
     // Pricing
-    { path: '/chat/pricing', changefreq: 'weekly', priority: '0.9' },
+    { changefreq: 'weekly', path: '/chat/pricing', priority: '0.9' },
     // Legal pages
-    { path: '/legal/terms', changefreq: 'monthly', priority: '0.5' },
-    { path: '/legal/privacy', changefreq: 'monthly', priority: '0.5' },
+    { changefreq: 'monthly', path: '/legal/terms', priority: '0.5' },
+    { changefreq: 'monthly', path: '/legal/privacy', priority: '0.5' },
   ];
 }
 
@@ -64,8 +64,8 @@ export const Route = createFileRoute('/sitemap.xml')({
         // Only serve sitemap in production
         if (env !== WebAppEnvs.PROD) {
           return new Response('Sitemap not available in non-production environments', {
-            status: 404,
             headers: { 'Content-Type': 'text/plain' },
+            status: 404,
           });
         }
 
@@ -75,8 +75,8 @@ export const Route = createFileRoute('/sitemap.xml')({
 
         return new Response(sitemapXml, {
           headers: {
-            'Content-Type': 'application/xml; charset=utf-8',
             'Cache-Control': 'public, max-age=86400', // Cache for 24 hours
+            'Content-Type': 'application/xml; charset=utf-8',
           },
         });
       },

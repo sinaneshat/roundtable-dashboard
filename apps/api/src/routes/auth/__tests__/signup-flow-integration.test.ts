@@ -31,9 +31,9 @@ describe('signup Flow Integration', () => {
       // ensureUserCreditRecord creates record with:
       const expectedBalance = {
         balance: CREDIT_CONFIG.SIGNUP_CREDITS,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
         monthlyCredits: 0,
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         version: 1,
       };
 
@@ -78,12 +78,12 @@ describe('signup Flow Integration', () => {
     it('creates usage record with free tier', () => {
       // usage-tracking.service.ts:88-96
       const expectedUsage = {
-        subscriptionTier: SubscriptionTiers.FREE,
-        isAnnual: false,
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        customRolesCreated: 0,
+        isAnnual: false,
+        messagesCreated: 0,
+        subscriptionTier: SubscriptionTiers.FREE,
+        threadsCreated: 0,
         version: 1,
       };
 
@@ -95,10 +95,10 @@ describe('signup Flow Integration', () => {
     it('initializes all usage counters to zero', () => {
       // usage.ts:42-45 - all counters default to 0
       const initialCounters = {
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        customRolesCreated: 0,
+        messagesCreated: 0,
+        threadsCreated: 0,
       };
 
       expect(initialCounters.threadsCreated).toBe(0);
@@ -132,10 +132,10 @@ describe('signup Flow Integration', () => {
     it('enforces non-negative usage counters', () => {
       // usage.ts:97-100 - check constraints for all counters >= 0
       const counters = {
-        threadsCreated: 0,
-        messagesCreated: 0,
-        customRolesCreated: 0,
         analysisGenerated: 0,
+        customRolesCreated: 0,
+        messagesCreated: 0,
+        threadsCreated: 0,
       };
 
       Object.values(counters).forEach((counter) => {
@@ -148,11 +148,11 @@ describe('signup Flow Integration', () => {
     it('records signup_bonus transaction with correct type', () => {
       // credit.service.ts:119-126
       const transaction = {
-        type: CreditTransactionTypes.CREDIT_GRANT,
         action: CreditActions.SIGNUP_BONUS,
         amount: CREDIT_CONFIG.SIGNUP_CREDITS,
         balanceAfter: CREDIT_CONFIG.SIGNUP_CREDITS,
         description: 'Signup bonus credits - one free round',
+        type: CreditTransactionTypes.CREDIT_GRANT,
       };
 
       expect(transaction.type).toBe(CreditTransactionTypes.CREDIT_GRANT);
@@ -201,10 +201,10 @@ describe('signup Flow Integration', () => {
     it('transaction has no token breakdown for signup', () => {
       // Signup bonus is a grant, not usage-based
       const signupTransaction = {
+        creditsUsed: null,
         inputTokens: null,
         outputTokens: null,
         totalTokens: null,
-        creditsUsed: null,
       };
 
       expect(signupTransaction.inputTokens).toBeNull();
@@ -274,9 +274,9 @@ describe('signup Flow Integration', () => {
   describe('plan Configuration', () => {
     it('initializes free users with correct plan', () => {
       const freePlan = {
-        planType: PlanTypes.FREE,
         monthlyCredits: 0,
         nextRefillAt: null,
+        planType: PlanTypes.FREE,
       };
 
       expect(freePlan.planType).toBe('free');

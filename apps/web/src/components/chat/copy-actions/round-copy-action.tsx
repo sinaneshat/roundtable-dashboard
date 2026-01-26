@@ -18,28 +18,28 @@ type RoundCopyActionProps = {
 };
 
 function RoundCopyActionComponent({
+  className,
   messages,
+  moderatorText,
   participants,
   roundNumber,
   threadTitle,
-  moderatorText,
-  className,
 }: RoundCopyActionProps) {
   const t = useTranslations();
 
   const toastMessages = useMemo(() => ({
-    successTitle: t('chat.roundActions.copySuccess'),
-    successDescription: t('chat.roundActions.copySuccessDescription'),
-    errorTitle: t('chat.roundActions.copyError'),
     errorDescription: t('chat.roundActions.copyErrorDescription'),
+    errorTitle: t('chat.roundActions.copyError'),
+    successDescription: t('chat.roundActions.copySuccessDescription'),
+    successTitle: t('chat.roundActions.copySuccess'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages: toastMessages });
 
   const handleCopy = useCallback(() => {
     const markdown = formatRoundAsMarkdown(messages, participants, roundNumber, {
-      threadTitle,
       moderatorText,
+      threadTitle,
     });
     copy(markdown);
   }, [copy, messages, participants, roundNumber, threadTitle, moderatorText]);

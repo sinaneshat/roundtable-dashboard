@@ -27,11 +27,11 @@ export type PreSearchStatus = z.infer<typeof PreSearchStatusSchema>;
 
 // 5. CONSTANT OBJECT
 export const PreSearchStatuses = {
-  IDLE: 'idle' as const,
-  STREAMING: 'streaming' as const,
   ACTIVE: 'active' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  IDLE: 'idle' as const,
+  STREAMING: 'streaming' as const,
 } as const;
 
 // ============================================================================
@@ -80,10 +80,10 @@ export type PreSearchQueryStateStatus = z.infer<typeof PreSearchQueryStateStatus
 
 // 5. CONSTANT OBJECT
 export const PreSearchQueryStateStatuses = {
-  PENDING: 'pending' as const,
-  SEARCHING: 'searching' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  PENDING: 'pending' as const,
+  SEARCHING: 'searching' as const,
 } as const;
 
 // ============================================================================
@@ -107,10 +107,10 @@ export type PreSearchExecutionResult = z.infer<typeof PreSearchExecutionResultSc
 
 // 5. CONSTANT OBJECT
 export const PreSearchExecutionResults = {
-  STARTED: 'started' as const,
-  IN_PROGRESS: 'in_progress' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  IN_PROGRESS: 'in_progress' as const,
+  STARTED: 'started' as const,
 } as const;
 
 // ============================================================================
@@ -134,10 +134,10 @@ export type SearchResultStatus = z.infer<typeof SearchResultStatusSchema>;
 
 // 5. CONSTANT OBJECT
 export const SearchResultStatuses = {
-  SEARCHING: 'searching' as const,
-  PROCESSING: 'processing' as const,
   COMPLETE: 'complete' as const,
   ERROR: 'error' as const,
+  PROCESSING: 'processing' as const,
+  SEARCHING: 'searching' as const,
 } as const;
 
 // ============================================================================
@@ -161,9 +161,9 @@ export type QueryResultStatus = z.infer<typeof QueryResultStatusSchema>;
 
 // 5. CONSTANT OBJECT
 export const QueryResultStatuses = {
+  FAILED: 'failed' as const,
   PENDING: 'pending' as const,
   SUCCESS: 'success' as const,
-  FAILED: 'failed' as const,
 } as const;
 
 // ============================================================================
@@ -187,15 +187,15 @@ export type PreSearchSseEvent = z.infer<typeof PreSearchSseEventSchema>;
 
 // 5. CONSTANT OBJECT
 export const PreSearchSseEvents = {
-  START: 'start' as const,
-  QUERY: 'query' as const,
-  RESULT: 'result' as const,
   ANSWER_CHUNK: 'answer_chunk' as const,
   ANSWER_COMPLETE: 'answer_complete' as const,
   ANSWER_ERROR: 'answer_error' as const,
   COMPLETE: 'complete' as const,
   DONE: 'done' as const,
   FAILED: 'failed' as const,
+  QUERY: 'query' as const,
+  RESULT: 'result' as const,
+  START: 'start' as const,
 } as const;
 
 // ============================================================================
@@ -219,10 +219,10 @@ export type AnalyzePromptSseEvent = z.infer<typeof AnalyzePromptSseEventSchema>;
 
 // 5. CONSTANT OBJECT
 export const AnalyzePromptSseEvents = {
-  START: 'start' as const,
   CONFIG: 'config' as const,
   DONE: 'done' as const,
   FAILED: 'failed' as const,
+  START: 'start' as const,
 } as const;
 
 // ============================================================================
@@ -247,8 +247,8 @@ export type WebSearchComplexity = z.infer<typeof WebSearchComplexitySchema>;
 // 5. CONSTANT OBJECT
 export const WebSearchComplexities = {
   BASIC: 'basic' as const,
-  MODERATE: 'moderate' as const,
   DEEP: 'deep' as const,
+  MODERATE: 'moderate' as const,
 } as const;
 
 // ============================================================================
@@ -272,8 +272,8 @@ export type WebSearchDepth = z.infer<typeof WebSearchDepthSchema>;
 
 // 5. CONSTANT OBJECT
 export const WebSearchDepths = {
-  BASIC: 'basic' as const,
   ADVANCED: 'advanced' as const,
+  BASIC: 'basic' as const,
 } as const;
 
 // ============================================================================
@@ -297,9 +297,9 @@ export type QueryAnalysisComplexity = z.infer<typeof QueryAnalysisComplexitySche
 
 // 5. CONSTANT OBJECT
 export const QueryAnalysisComplexities = {
-  SIMPLE: 'simple' as const,
-  MODERATE: 'moderate' as const,
   COMPLEX: 'complex' as const,
+  MODERATE: 'moderate' as const,
+  SIMPLE: 'simple' as const,
 } as const;
 
 // ============================================================================
@@ -325,12 +325,12 @@ export type MaxQueryCount = z.infer<typeof MaxQueryCountSchema>;
 
 export const QueryAnalysisResultSchema = z.object({
   complexity: QueryAnalysisComplexitySchema,
-  maxQueries: MaxQueryCountSchema,
   defaultSearchDepth: WebSearchDepthSchema,
   defaultSourceCount: z.number().int().min(1).max(5).openapi({
     description: 'Default number of sources to fetch per query',
     example: 3,
   }),
+  maxQueries: MaxQueryCountSchema,
   reasoning: z.string().openapi({
     description: 'Explanation of why this complexity level was chosen',
     example: 'Long detailed query - multiple search angles recommended',
@@ -363,13 +363,13 @@ export type WebSearchContentType = z.infer<typeof WebSearchContentTypeSchema>;
 // 5. CONSTANT OBJECT
 export const WebSearchContentTypes = {
   ARTICLE: 'article' as const,
-  COMPARISON: 'comparison' as const,
-  GUIDE: 'guide' as const,
-  DATA: 'data' as const,
-  NEWS: 'news' as const,
   BLOG: 'blog' as const,
-  RESEARCH: 'research' as const,
+  COMPARISON: 'comparison' as const,
+  DATA: 'data' as const,
   GENERAL: 'general' as const,
+  GUIDE: 'guide' as const,
+  NEWS: 'news' as const,
+  RESEARCH: 'research' as const,
 } as const;
 
 // ============================================================================
@@ -393,10 +393,10 @@ export type WebSearchTopic = z.infer<typeof WebSearchTopicSchema>;
 
 // 5. CONSTANT OBJECT
 export const WebSearchTopics = {
-  GENERAL: 'general' as const,
-  NEWS: 'news' as const,
   FINANCE: 'finance' as const,
+  GENERAL: 'general' as const,
   HEALTH: 'health' as const,
+  NEWS: 'news' as const,
   SCIENTIFIC: 'scientific' as const,
   TRAVEL: 'travel' as const,
 } as const;
@@ -422,14 +422,14 @@ export type WebSearchTimeRange = z.infer<typeof WebSearchTimeRangeSchema>;
 
 // 5. CONSTANT OBJECT
 export const WebSearchTimeRanges = {
-  DAY: 'day' as const,
-  WEEK: 'week' as const,
-  MONTH: 'month' as const,
-  YEAR: 'year' as const,
   D: 'd' as const,
-  W: 'w' as const,
+  DAY: 'day' as const,
   M: 'm' as const,
+  MONTH: 'month' as const,
+  W: 'w' as const,
+  WEEK: 'week' as const,
   Y: 'y' as const,
+  YEAR: 'year' as const,
 } as const;
 
 // ============================================================================
@@ -478,9 +478,9 @@ export type WebSearchAnswerMode = z.infer<typeof WebSearchAnswerModeSchema>;
 
 // 5. CONSTANT OBJECT
 export const WebSearchAnswerModes = {
-  NONE: 'none' as const,
-  BASIC: 'basic' as const,
   ADVANCED: 'advanced' as const,
+  BASIC: 'basic' as const,
+  NONE: 'none' as const,
 } as const;
 
 // ============================================================================
@@ -504,8 +504,8 @@ export type WebSearchActiveAnswerMode = z.infer<typeof WebSearchActiveAnswerMode
 
 // 5. CONSTANT OBJECT
 export const WebSearchActiveAnswerModes = {
-  BASIC: 'basic' as const,
   ADVANCED: 'advanced' as const,
+  BASIC: 'basic' as const,
 } as const;
 
 // ============================================================================
@@ -555,10 +555,10 @@ export type WebSearchStreamEventType = z.infer<typeof WebSearchStreamEventTypeSc
 
 // 5. CONSTANT OBJECT
 export const WebSearchStreamEventTypes = {
-  METADATA: 'metadata' as const,
-  RESULT: 'result' as const,
   COMPLETE: 'complete' as const,
   ERROR: 'error' as const,
+  METADATA: 'metadata' as const,
+  RESULT: 'result' as const,
 } as const;
 
 // ============================================================================
@@ -619,8 +619,8 @@ export type PageWaitStrategy = z.infer<typeof PageWaitStrategySchema>;
 
 // 5. CONSTANT OBJECT
 export const PageWaitStrategies = {
-  LOAD: 'load' as const,
   DOM_CONTENT_LOADED: 'domcontentloaded' as const,
+  LOAD: 'load' as const,
   NETWORK_IDLE_0: 'networkidle0' as const,
   NETWORK_IDLE_2: 'networkidle2' as const,
 } as const;
@@ -647,9 +647,9 @@ export type BlockedResourceType = z.infer<typeof BlockedResourceTypeSchema>;
 // 5. CONSTANT OBJECT
 export const BlockedResourceTypes = {
   FONT: 'font' as const,
+  MANIFEST: 'manifest' as const,
   MEDIA: 'media' as const,
   WEBSOCKET: 'websocket' as const,
-  MANIFEST: 'manifest' as const,
 } as const;
 
 // 6. DEFAULT ARRAY (for blocking multiple resource types)

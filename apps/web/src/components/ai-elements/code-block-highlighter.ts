@@ -36,11 +36,9 @@ type CoreLanguage = typeof CORE_LANGUAGES[number];
 const SUPPORTED_LANGUAGES = new Set<string>(CORE_LANGUAGES);
 
 const lineNumberTransformer: ShikiTransformer = {
-  name: 'line-numbers',
   line(node, line) {
     node.children.unshift({
-      type: 'element',
-      tagName: 'span',
+      children: [{ type: 'text', value: String(line) }],
       properties: {
         className: [
           'inline-block',
@@ -51,9 +49,11 @@ const lineNumberTransformer: ShikiTransformer = {
           'text-muted-foreground',
         ],
       },
-      children: [{ type: 'text', value: String(line) }],
+      tagName: 'span',
+      type: 'element',
     });
   },
+  name: 'line-numbers',
 };
 
 function isSupportedLanguage(lang: string): lang is CoreLanguage {
@@ -116,10 +116,6 @@ async function getHighlighter(): Promise<HighlighterCore> {
 
       return createHighlighterCore({
         engine: createJavaScriptRegexEngine(),
-        themes: [
-          oneDarkPro.default,
-          oneLight.default,
-        ],
         langs: [
           javascript.default,
           typescript.default,
@@ -137,6 +133,10 @@ async function getHighlighter(): Promise<HighlighterCore> {
           css.default,
           sql.default,
           diff.default,
+        ],
+        themes: [
+          oneDarkPro.default,
+          oneLight.default,
         ],
       });
     })();
@@ -161,10 +161,12 @@ async function highlightCode(
     const highlighter = await getHighlighter();
     // Map 'shell' to 'shellscript' (shiki's name for shell)
     let lang = language.toLowerCase();
-    if (lang === 'shell')
+    if (lang === 'shell') {
       lang = 'shellscript';
-    if (!isSupportedLanguage(lang) && lang !== 'shellscript')
+    }
+    if (!isSupportedLanguage(lang) && lang !== 'shellscript') {
       lang = 'text';
+    }
 
     const [light, dark] = await Promise.all([
       highlighter.codeToHtml(code, {

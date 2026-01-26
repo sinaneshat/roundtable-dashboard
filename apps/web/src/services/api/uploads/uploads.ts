@@ -247,14 +247,18 @@ export async function requestUploadTicketService(
   data: RequestUploadTicketRequest,
   signal?: AbortSignal,
 ): Promise<RequestUploadTicketResponse> {
-  const response = await authenticatedFetch('/uploads/ticket', {
-    method: 'POST',
+  const fetchOptions: Parameters<typeof authenticatedFetch>[1] = {
+    body: JSON.stringify(data.json),
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(data.json),
-    signal,
-  });
+    method: 'POST',
+  };
+  if (signal !== undefined) {
+    fetchOptions.signal = signal;
+  }
+
+  const response = await authenticatedFetch('/uploads/ticket', fetchOptions);
 
   const json: unknown = await response.json();
   if (!isSuccessResponse<RequestUploadTicketResponse>(json)) {
@@ -277,12 +281,16 @@ export async function uploadWithTicketService(
   const formData = new FormData();
   formData.append('file', data.form.file);
 
-  const response = await authenticatedFetch('/uploads/ticket/upload', {
-    method: 'POST',
+  const fetchOptions: Parameters<typeof authenticatedFetch>[1] = {
     body: formData,
+    method: 'POST',
     searchParams: { token: data.query.token },
-    signal,
-  });
+  };
+  if (signal !== undefined) {
+    fetchOptions.signal = signal;
+  }
+
+  const response = await authenticatedFetch('/uploads/ticket/upload', fetchOptions);
 
   const json: unknown = await response.json();
   if (!isSuccessResponse<UploadWithTicketResponse>(json)) {
@@ -303,8 +311,8 @@ export async function secureUploadService(file: File, signal?: AbortSignal): Pro
   const ticketResponse = await requestUploadTicketService({
     json: {
       filename: file.name,
-      mimeType: file.type || 'application/octet-stream',
       fileSize: file.size,
+      mimeType: file.type || 'application/octet-stream',
     },
   }, signal);
 
@@ -317,8 +325,8 @@ export async function secureUploadService(file: File, signal?: AbortSignal): Pro
   }
 
   return uploadWithTicketService({
-    query: { token: ticketResponse.data.token },
     form: { file },
+    query: { token: ticketResponse.data.token },
   }, signal);
 }
 
@@ -346,19 +354,23 @@ export async function uploadPartService(
   data: UploadPartServiceInput,
   signal?: AbortSignal,
 ): Promise<UploadPartResponse> {
-  const response = await authenticatedFetch(`/uploads/multipart/${data.param.id}/parts`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/octet-stream',
-      'Accept': 'application/json',
-    },
+  const fetchOptions: Parameters<typeof authenticatedFetch>[1] = {
     body: data.body,
-    searchParams: {
-      uploadId: data.query.uploadId,
-      partNumber: data.query.partNumber,
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/octet-stream',
     },
-    signal,
-  });
+    method: 'PUT',
+    searchParams: {
+      partNumber: data.query.partNumber,
+      uploadId: data.query.uploadId,
+    },
+  };
+  if (signal !== undefined) {
+    fetchOptions.signal = signal;
+  }
+
+  const response = await authenticatedFetch(`/uploads/multipart/${data.param.id}/parts`, fetchOptions);
 
   const json: unknown = await response.json();
   if (!isSuccessResponse<UploadPartResponse>(json)) {

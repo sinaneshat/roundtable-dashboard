@@ -15,6 +15,35 @@ import type { StoredPreSearch } from '@/routes/chat/schema';
 import { StoredPreSearchSchema } from '@/routes/chat/schema';
 
 // ============================================================================
+// RAW API RESPONSE TYPES (String Dates)
+// ============================================================================
+
+/**
+ * Raw ChatThread from API (dates as strings)
+ * Used for type-safe transformation from API response to ChatThread
+ */
+export type RawChatThread = Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
+  createdAt: string | Date;
+  lastMessageAt: string | Date | null;
+  updatedAt: string | Date;
+};
+
+/**
+ * Raw ChatParticipant from API (dates as strings)
+ */
+export type RawChatParticipant = Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+/**
+ * Raw ChatMessage from API (dates as strings)
+ */
+export type RawChatMessage = Omit<ChatMessage, 'createdAt'> & {
+  createdAt: string | Date;
+};
+
+// ============================================================================
 // CORE DATE UTILITIES
 // ============================================================================
 
@@ -112,17 +141,13 @@ export function toISOStringOrNull(value: string | Date | null | undefined): stri
  * ```
  */
 export function transformChatThread(
-  thread: Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  },
+  thread: RawChatThread,
 ): ChatThread {
   return {
     ...thread,
     createdAt: ensureDate(thread.createdAt),
-    updatedAt: ensureDate(thread.updatedAt),
     lastMessageAt: ensureDateOrNull(thread.lastMessageAt),
+    updatedAt: ensureDate(thread.updatedAt),
   };
 }
 
@@ -144,10 +169,7 @@ export function transformChatThread(
  * ```
  */
 export function transformChatParticipant(
-  participant: Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  },
+  participant: RawChatParticipant,
 ): ChatParticipant {
   return {
     ...participant,
@@ -173,9 +195,7 @@ export function transformChatParticipant(
  * ```
  */
 export function transformChatMessage(
-  message: Omit<ChatMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  },
+  message: RawChatMessage,
 ): ChatMessage {
   return {
     ...message,
@@ -199,11 +219,7 @@ export function transformChatMessage(
  * ```
  */
 export function transformChatThreads(
-  threads: Array<Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  }>,
+  threads: RawChatThread[],
 ): ChatThread[] {
   return threads.map(transformChatThread);
 }
@@ -220,10 +236,7 @@ export function transformChatThreads(
  * ```
  */
 export function transformChatParticipants(
-  participants: Array<Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  }>,
+  participants: RawChatParticipant[],
 ): ChatParticipant[] {
   return participants.map(transformChatParticipant);
 }
@@ -240,9 +253,7 @@ export function transformChatParticipants(
  * ```
  */
 export function transformChatMessages(
-  messages: Array<Omit<ChatMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  }>,
+  messages: RawChatMessage[],
 ): ChatMessage[] {
   return messages.map(transformChatMessage);
 }
@@ -266,8 +277,8 @@ export function transformPreSearch(
 
   return {
     ...result.data,
-    createdAt: ensureDate(result.data.createdAt),
     completedAt: result.data.completedAt ? ensureDate(result.data.completedAt) : null,
+    createdAt: ensureDate(result.data.createdAt),
   };
 }
 
@@ -302,18 +313,9 @@ export function transformPreSearches(
  * Represents a complete thread response with related entities
  */
 export type ThreadDataBundle = {
-  thread?: Omit<ChatThread, 'createdAt' | 'updatedAt' | 'lastMessageAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    lastMessageAt: string | Date | null;
-  };
-  participants?: Array<Omit<ChatParticipant, 'createdAt' | 'updatedAt'> & {
-    createdAt: string | Date;
-    updatedAt: string | Date;
-  }>;
-  messages?: Array<Omit<ChatMessage, 'createdAt'> & {
-    createdAt: string | Date;
-  }>;
+  messages?: RawChatMessage[];
+  participants?: RawChatParticipant[];
+  thread?: RawChatThread;
 };
 
 /**
@@ -357,9 +359,16 @@ export type TransformedThreadDataBundle = {
 export function transformThreadBundle(
   bundle: ThreadDataBundle,
 ): TransformedThreadDataBundle {
-  return {
-    thread: bundle.thread ? transformChatThread(bundle.thread) : undefined,
-    participants: bundle.participants ? transformChatParticipants(bundle.participants) : undefined,
-    messages: bundle.messages ? transformChatMessages(bundle.messages) : undefined,
-  };
+  // Build result with only defined properties (satisfies exactOptionalPropertyTypes)
+  const result: TransformedThreadDataBundle = {};
+  if (bundle.messages) {
+    result.messages = transformChatMessages(bundle.messages);
+  }
+  if (bundle.participants) {
+    result.participants = transformChatParticipants(bundle.participants);
+  }
+  if (bundle.thread) {
+    result.thread = transformChatThread(bundle.thread);
+  }
+  return result;
 }

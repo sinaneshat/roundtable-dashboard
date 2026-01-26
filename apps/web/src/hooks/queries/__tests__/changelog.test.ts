@@ -42,10 +42,10 @@ describe('changelog Query Keys', () => {
       const key = queryKeys.threads.roundChangelog(threadId, roundNumber);
 
       // Key should be an array containing identifiable parts
-      expect(Array.isArray(key)).toBe(true);
+      expect(Array.isArray(key)).toBeTruthy();
       expect(key.some((part: string | number) =>
         typeof part === 'string' && part.includes(threadId),
-      )).toBe(true);
+      )).toBeTruthy();
     });
 
     it('should generate different keys for different threads', () => {
@@ -61,7 +61,7 @@ describe('changelog Query Keys', () => {
       const threadId = 'thread-789';
       const key = queryKeys.threads.changelog(threadId);
 
-      expect(Array.isArray(key)).toBe(true);
+      expect(Array.isArray(key)).toBeTruthy();
     });
 
     it('should be different from round-specific keys', () => {
@@ -95,32 +95,32 @@ describe('changelog Query - No PlaceholderData', () => {
       // When querying a new round, without placeholderData:
       const expectedInitialState = {
         data: undefined, // NOT stale data from previous round
-        isSuccess: false,
         isFetching: true,
         isLoading: true, // First fetch for this key
+        isSuccess: false,
       };
 
       expect(expectedInitialState.data).toBeUndefined();
-      expect(expectedInitialState.isFetching).toBe(true);
+      expect(expectedInitialState.isFetching).toBeTruthy();
     });
 
     it('should document expected state after successful fetch', () => {
       // After fetch completes:
       const expectedSuccessState = {
         data: {
-          success: true,
           data: {
-            items: [{ roundNumber: 2, id: 'changelog-1' }],
+            items: [{ id: 'changelog-1', roundNumber: 2 }],
           },
+          success: true,
         },
-        isSuccess: true,
         isFetching: false,
         isLoading: false,
+        isSuccess: true,
       };
 
       expect(expectedSuccessState.data).toBeDefined();
-      expect(expectedSuccessState.isSuccess).toBe(true);
-      expect(expectedSuccessState.isFetching).toBe(false);
+      expect(expectedSuccessState.isSuccess).toBeTruthy();
+      expect(expectedSuccessState.isFetching).toBeFalsy();
     });
   });
 
@@ -131,21 +131,21 @@ describe('changelog Query - No PlaceholderData', () => {
 
       // Round 1 query (completed)
       const round1State = {
-        queryKey: queryKeys.threads.roundChangelog('thread-123', 1),
         data: {
-          success: true,
           data: { items: [{ roundNumber: 1 }] },
+          success: true,
         },
-        isSuccess: true,
         isFetching: false,
+        isSuccess: true,
+        queryKey: queryKeys.threads.roundChangelog('thread-123', 1),
       };
 
       // Round 2 query (just started, NO placeholderData)
       const round2State = {
-        queryKey: queryKeys.threads.roundChangelog('thread-123', 2),
         data: undefined, // KEY: No stale data
-        isSuccess: false,
         isFetching: true,
+        isSuccess: false,
+        queryKey: queryKeys.threads.roundChangelog('thread-123', 2),
       };
 
       // Round 2 should NOT have round 1's data
@@ -160,30 +160,30 @@ describe('changelog Query - No PlaceholderData', () => {
       const stateTransitions = [
         // 1. Initial (just started)
         {
-          phase: 'initial',
           data: undefined,
           isFetching: true,
           isSuccess: false,
+          phase: 'initial',
         },
         // 2. Fetching complete
         {
-          phase: 'success',
           data: {
+            data: { items: [{ id: 'new', roundNumber: 2 }] },
             success: true,
-            data: { items: [{ roundNumber: 2, id: 'new' }] },
           },
           isFetching: false,
           isSuccess: true,
+          phase: 'success',
         },
       ];
 
       // Initial should have no data
       expect(stateTransitions[0]?.data).toBeUndefined();
-      expect(stateTransitions[0]?.isFetching).toBe(true);
+      expect(stateTransitions[0]?.isFetching).toBeTruthy();
 
       // After success should have correct data
       expect(stateTransitions[1]?.data).toBeDefined();
-      expect(stateTransitions[1]?.isFetching).toBe(false);
+      expect(stateTransitions[1]?.isFetching).toBeFalsy();
       expect(stateTransitions[1]?.data?.data?.items[0]?.roundNumber).toBe(2);
     });
   });
@@ -202,7 +202,7 @@ describe('changelog Query Enabled Logic', () => {
 
       // Query should not run when shouldFetch is false
       const enabled = shouldFetch && !!threadId;
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should be disabled when threadId is empty', () => {
@@ -211,7 +211,7 @@ describe('changelog Query Enabled Logic', () => {
       const _roundNumber = 2; // Round context - not used in enabled check
 
       const enabled = shouldFetch && !!threadId;
-      expect(enabled).toBe(false);
+      expect(enabled).toBeFalsy();
     });
 
     it('should be enabled when all conditions are met', () => {
@@ -220,7 +220,7 @@ describe('changelog Query Enabled Logic', () => {
       const _roundNumber = 2; // Round context - not used in enabled check
 
       const enabled = shouldFetch && !!threadId;
-      expect(enabled).toBe(true);
+      expect(enabled).toBeTruthy();
     });
   });
 
@@ -228,13 +228,13 @@ describe('changelog Query Enabled Logic', () => {
     it('should require both isWaitingForChangelog and configChangeRoundNumber', () => {
       // Both required for shouldFetch to be true
       const cases = [
-        { isWaitingForChangelog: false, configChangeRoundNumber: null, shouldFetch: false },
-        { isWaitingForChangelog: true, configChangeRoundNumber: null, shouldFetch: false },
-        { isWaitingForChangelog: false, configChangeRoundNumber: 2, shouldFetch: false },
-        { isWaitingForChangelog: true, configChangeRoundNumber: 2, shouldFetch: true },
+        { configChangeRoundNumber: null, isWaitingForChangelog: false, shouldFetch: false },
+        { configChangeRoundNumber: null, isWaitingForChangelog: true, shouldFetch: false },
+        { configChangeRoundNumber: 2, isWaitingForChangelog: false, shouldFetch: false },
+        { configChangeRoundNumber: 2, isWaitingForChangelog: true, shouldFetch: true },
       ];
 
-      cases.forEach(({ isWaitingForChangelog, configChangeRoundNumber, shouldFetch }) => {
+      cases.forEach(({ configChangeRoundNumber, isWaitingForChangelog, shouldFetch }) => {
         const computed = isWaitingForChangelog && configChangeRoundNumber !== null;
         expect(computed).toBe(shouldFetch);
       });
@@ -254,55 +254,59 @@ describe('changelog Query Integration with Merge Logic', () => {
         isSuccess: boolean;
         data: unknown;
       }) => {
-        if (state.isFetching)
+        if (state.isFetching) {
           return false;
-        if (!state.isSuccess)
+        }
+        if (!state.isSuccess) {
           return false;
-        if (!state.data)
+        }
+        if (!state.data) {
           return false;
+        }
         return true;
       };
 
       // During fetch
       expect(canProcess({
+        data: undefined,
         isFetching: true,
         isSuccess: false,
-        data: undefined,
-      })).toBe(false);
+      })).toBeFalsy();
 
       // After fetch, no data
       expect(canProcess({
+        data: undefined,
         isFetching: false,
         isSuccess: false,
-        data: undefined,
-      })).toBe(false);
+      })).toBeFalsy();
 
       // After successful fetch
       expect(canProcess({
+        data: { data: { items: [] }, success: true },
         isFetching: false,
         isSuccess: true,
-        data: { success: true, data: { items: [] } },
-      })).toBe(true);
+      })).toBeTruthy();
     });
 
     it('should validate round number matches expected', () => {
       const validateRoundData = (
-        items: Array<{ roundNumber: number }>,
+        items: { roundNumber: number }[],
         expectedRound: number,
       ): boolean => {
-        if (items.length === 0)
+        if (items.length === 0) {
           return true;
+        }
         return items.every(item => item.roundNumber === expectedRound);
       };
 
       // Correct round
-      expect(validateRoundData([{ roundNumber: 2 }], 2)).toBe(true);
+      expect(validateRoundData([{ roundNumber: 2 }], 2)).toBeTruthy();
 
       // Wrong round (stale data)
-      expect(validateRoundData([{ roundNumber: 1 }], 2)).toBe(false);
+      expect(validateRoundData([{ roundNumber: 1 }], 2)).toBeFalsy();
 
       // Empty is valid
-      expect(validateRoundData([], 2)).toBe(true);
+      expect(validateRoundData([], 2)).toBeTruthy();
     });
   });
 });
@@ -343,15 +347,15 @@ describe('changelog Query Regression Prevention', () => {
       // T5: BUG: Round 1 data merged as round 2
 
       const bugScenario = {
-        t0: { round: 1, data: 'round1Data', correct: true },
+        t0: { correct: true, data: 'round1Data', round: 1 },
         t1: { action: 'submit' },
         t2: { configChangeRoundNumber: 2 },
         t3: { effectRuns: true },
-        t4: { queryData: 'round1Data', isFetching: true }, // WITH placeholderData
-        t5: { merged: 'round1Data', shouldBe: 'round2Data', bug: true },
+        t4: { isFetching: true, queryData: 'round1Data' }, // WITH placeholderData
+        t5: { bug: true, merged: 'round1Data', shouldBe: 'round2Data' },
       };
 
-      expect(bugScenario.t5.bug).toBe(true);
+      expect(bugScenario.t5.bug).toBeTruthy();
     });
 
     it('should document the fix', () => {
@@ -367,21 +371,21 @@ describe('changelog Query Regression Prevention', () => {
       // T8: Round 2 data correctly merged
 
       const fixScenario = {
-        t0: { round: 1, data: 'round1Data', correct: true },
+        t0: { correct: true, data: 'round1Data', round: 1 },
         t1: { action: 'submit' },
         t2: { configChangeRoundNumber: 2 },
         t3: { effectRuns: true },
-        t4: { queryData: undefined, isFetching: true }, // NO placeholderData
+        t4: { isFetching: true, queryData: undefined }, // NO placeholderData
         t5: { blocked: true, reason: 'isFetching guard' },
-        t6: { queryCompletes: true, data: 'round2Data' },
+        t6: { data: 'round2Data', queryCompletes: true },
         t7: { effectRuns: true, isFetching: false },
-        t8: { merged: 'round2Data', correct: true },
+        t8: { correct: true, merged: 'round2Data' },
       };
 
       // Fix prevents the bug
       expect(fixScenario.t4.queryData).toBeUndefined();
-      expect(fixScenario.t5.blocked).toBe(true);
-      expect(fixScenario.t8.correct).toBe(true);
+      expect(fixScenario.t5.blocked).toBeTruthy();
+      expect(fixScenario.t8.correct).toBeTruthy();
     });
   });
 });

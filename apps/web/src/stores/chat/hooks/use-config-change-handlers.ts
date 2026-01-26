@@ -77,16 +77,16 @@ export type UseConfigChangeHandlersReturn = {
 export function useConfigChangeHandlers(
   options: UseConfigChangeHandlersOptions,
 ): UseConfigChangeHandlersReturn {
-  const { slug, isRoundInProgress } = options;
+  const { isRoundInProgress, slug } = options;
 
   const queryClient = useQueryClient();
 
   // Store actions - batched with useShallow for stable reference
   const actions = useChatStore(useShallow(s => ({
-    setSelectedMode: s.setSelectedMode,
-    setSelectedParticipants: s.setSelectedParticipants,
     setEnableWebSearch: s.setEnableWebSearch,
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
+    setSelectedMode: s.setSelectedMode,
+    setSelectedParticipants: s.setSelectedParticipants,
   })));
 
   // ✅ REACT 19: Simplified memoization - each handler uses useCallback directly
@@ -95,8 +95,9 @@ export function useConfigChangeHandlers(
 
   /** Handle mode change */
   const handleModeChange = useCallback((mode: ChatMode) => {
-    if (isRoundInProgress)
+    if (isRoundInProgress) {
       return;
+    }
     actions.setSelectedMode(mode);
     actions.setHasPendingConfigChanges(true);
     queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
@@ -104,8 +105,9 @@ export function useConfigChangeHandlers(
 
   /** Handle participants change */
   const handleParticipantsChange = useCallback((participants: ParticipantConfig[]) => {
-    if (isRoundInProgress)
+    if (isRoundInProgress) {
       return;
+    }
     actions.setSelectedParticipants(participants);
     actions.setHasPendingConfigChanges(true);
     queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
@@ -113,8 +115,9 @@ export function useConfigChangeHandlers(
 
   /** Handle web search toggle */
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    if (isRoundInProgress)
+    if (isRoundInProgress) {
       return;
+    }
     actions.setEnableWebSearch(enabled);
     actions.setHasPendingConfigChanges(true);
     queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
@@ -128,8 +131,9 @@ export function useConfigChangeHandlers(
     setter: (value: TValue) => void,
   ) => {
     return (value: TValue) => {
-      if (isRoundInProgress)
+      if (isRoundInProgress) {
         return;
+      }
       setter(value);
       actions.setHasPendingConfigChanges(true);
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.bySlug(slug) });
@@ -138,9 +142,9 @@ export function useConfigChangeHandlers(
 
   // ✅ REACT 19: Plain object return - handlers are already memoized via useCallback
   return {
+    createConfigChangeHandler,
     handleModeChange,
     handleParticipantsChange,
     handleWebSearchToggle,
-    createConfigChangeHandler,
   };
 }

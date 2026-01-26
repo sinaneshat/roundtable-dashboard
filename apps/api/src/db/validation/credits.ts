@@ -26,21 +26,21 @@ import {
  * SINGLE SOURCE OF TRUTH for credit transaction metadata type
  */
 export const CreditTransactionMetadataSchema = z.object({
+  // Admin context (for adjustments)
+  adjustedBy: z.string().optional(),
+  adjustmentReason: z.string().optional(),
+
   // Error context (for failed transactions)
   errorCode: z.string().optional(),
   errorMessage: z.string().optional(),
 
+  reservationExpiry: z.string().datetime().optional(),
   // Reservation tracking
   reservationId: z.string().optional(),
-  reservationExpiry: z.string().datetime().optional(),
 
+  streamCompletedAt: z.string().datetime().optional(),
   // Stream context
   streamStartedAt: z.string().datetime().optional(),
-  streamCompletedAt: z.string().datetime().optional(),
-
-  // Admin context (for adjustments)
-  adjustedBy: z.string().optional(),
-  adjustmentReason: z.string().optional(),
 
   // Purchase context
   stripePaymentIntentId: z.string().optional(),

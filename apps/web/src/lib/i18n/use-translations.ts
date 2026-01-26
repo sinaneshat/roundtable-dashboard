@@ -16,7 +16,7 @@ export type TranslationValue = string | { [key: string]: TranslationValue };
 /**
  * Translation messages structure - recursive nested object
  */
-export type Messages = { [key: string]: TranslationValue };
+export type Messages = Record<string, TranslationValue>;
 
 export type TranslationFunction = (key: string, values?: Record<string, string | number>) => string;
 

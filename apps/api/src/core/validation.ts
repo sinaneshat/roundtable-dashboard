@@ -13,8 +13,8 @@ import { CoreSchemas, ErrorContextSchema, ValidationErrorSchema } from './schema
 
 export function ValidationSuccessSchema<T>(dataSchema: z.ZodSchema<T>) {
   return z.object({
-    success: z.literal(true),
     data: dataSchema,
+    success: z.literal(true),
   });
 }
 
@@ -24,8 +24,8 @@ export type ValidationSuccess<T> = {
 };
 
 export const ValidationFailureSchema = z.object({
-  success: z.literal(false),
   errors: z.array(ValidationErrorSchema),
+  success: z.literal(false),
 });
 
 export type ValidationFailure = z.infer<typeof ValidationFailureSchema>;
@@ -44,16 +44,16 @@ export function validateWithSchema<T>(
   const result = schema.safeParse(data);
 
   if (result.success) {
-    return { success: true, data: result.data };
+    return { data: result.data, success: true };
   }
 
   return {
-    success: false,
     errors: result.error.issues.map(issue => ({
+      code: issue.code,
       field: issue.path.join('.') || 'root',
       message: issue.message,
-      code: issue.code,
     })),
+    success: false,
   };
 }
 
@@ -67,9 +67,9 @@ export function formatValidationErrorContext(errors: ValidationError[]): ErrorCo
   return {
     errorType: 'validation' as const,
     fieldErrors: errors.map(err => ({
+      code: err.code,
       field: err.field,
       message: err.message,
-      code: err.code,
     })),
   };
 }
@@ -88,6 +88,11 @@ export function createPartialSchema<T extends z.ZodRawShape>(
  * Creates a schema with specified fields omitted
  * Use for creating update/partial schemas from base schemas
  * Note: Different from drizzle-zod's createUpdateSchema which derives from table
+ *
+ * ✅ JUSTIFIED TYPE ASSERTIONS: Zod's .omit() expects a specific type signature
+ * {[key: K]: true} but TypeScript cannot infer that reduce() produces this exact
+ * shape. The omitRecord is built from K[], so it's guaranteed to have all K keys.
+ * The final cast matches Zod's API expectations.
  */
 export function createOmitSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
@@ -99,13 +104,23 @@ export function createOmitSchema<T extends z.ZodRawShape, K extends keyof T>(
       acc[key] = true;
       return acc;
     },
+    // ✅ JUSTIFIED: TypeScript needs explicit type for reduce accumulator;
+    // result is always Record<K, true> when iterating over K[]
     {} as Record<K, true>,
   );
 
-  // Use type parameter to match Zod's expected omit signature
+  // ✅ JUSTIFIED: Zod's omit signature requires specific type parameter;
+  // omitRecord is guaranteed to match since it's built from K[]
   return schema.omit(omitRecord as Parameters<(typeof schema)['omit']>[0]);
 }
 
+/**
+ * Creates a schema with only specified fields included
+ *
+ * ✅ JUSTIFIED TYPE ASSERTIONS: Same rationale as createOmitSchema.
+ * Zod's .pick() expects {[key: K]: true} but TypeScript cannot infer
+ * that reduce() produces this exact shape from K[].
+ */
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
@@ -116,10 +131,13 @@ export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
       acc[key] = true;
       return acc;
     },
+    // ✅ JUSTIFIED: TypeScript needs explicit type for reduce accumulator;
+    // result is always Record<K, true> when iterating over K[]
     {} as Record<K, true>,
   );
 
-  // Use type parameter to match Zod's expected pick signature
+  // ✅ JUSTIFIED: Zod's pick signature requires specific type parameter;
+  // pickRecord is guaranteed to match since it's built from K[]
   return schema.pick(pickRecord as Parameters<(typeof schema)['pick']>[0]);
 }
 
@@ -133,19 +151,19 @@ export const FilterValueSchema = z.union([
 export type FilterValue = z.infer<typeof FilterValueSchema>;
 
 export function createSearchSchema<T extends z.ZodRawShape>(
-  searchableFields: Array<keyof T>,
+  searchableFields: (keyof T)[],
 ) {
   return z.object({
+    limit: CoreSchemas.limit(),
     // Pagination
     page: CoreSchemas.page(),
-    limit: CoreSchemas.limit(),
-
-    // Sorting
-    sortBy: z.enum(searchableFields as [string, ...string[]]).optional(),
-    sortOrder: CoreSchemas.sortOrder(),
 
     // Search
     search: z.string().min(1).optional(),
+    // Sorting
+    sortBy: z.enum(searchableFields as [string, ...string[]]).optional(),
+
+    sortOrder: CoreSchemas.sortOrder(),
 
     // Dynamic filters based on schema fields using discriminated union
     ...Object.fromEntries(
@@ -162,14 +180,11 @@ export function createSearchSchema<T extends z.ZodRawShape>(
 // ============================================================================
 
 export const SecurityValidators = {
-  strongPassword: () =>
+  apiKey: () =>
     z.string()
-      .min(8, 'Password must be at least 8 characters')
-      .max(128, 'Password must not exceed 128 characters')
-      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/\d/, 'Password must contain at least one number')
-      .regex(/\W/, 'Password must contain at least one special character'),
+      .min(32, 'API key must be at least 32 characters')
+      .max(128, 'API key must not exceed 128 characters')
+      .regex(/^[\w-]+$/, 'API key contains invalid characters'),
 
   safeString: (maxLength = 1000) =>
     z.string()
@@ -193,11 +208,14 @@ export const SecurityValidators = {
       )
       .refine(str => str.length > 0, 'Content required after sanitization'),
 
-  apiKey: () =>
+  strongPassword: () =>
     z.string()
-      .min(32, 'API key must be at least 32 characters')
-      .max(128, 'API key must not exceed 128 characters')
-      .regex(/^[\w-]+$/, 'API key contains invalid characters'),
+      .min(8, 'Password must be at least 8 characters')
+      .max(128, 'Password must not exceed 128 characters')
+      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+      .regex(/\d/, 'Password must contain at least one number')
+      .regex(/\W/, 'Password must contain at least one special character'),
 } as const;
 
 // ============================================================================
@@ -209,6 +227,7 @@ export function createFileUploadValidator(
   maxSizeBytes: number,
 ) {
   return z.object({
+    content: z.string().min(1, 'File content is required'),
     name: z.string().min(1, 'File name is required'),
     size: z.number()
       .positive('File size must be positive')
@@ -218,7 +237,6 @@ export function createFileUploadValidator(
         type => allowedTypes.includes(type),
         `Only these file types are allowed: ${allowedTypes.join(', ')}`,
       ),
-    content: z.string().min(1, 'File content is required'),
   });
 }
 
@@ -261,7 +279,7 @@ export function createConditionalValidator<T, K extends string>(
 }
 
 export function createMultiFormatValidator<T>(
-  validators: Array<z.ZodSchema<T>>,
+  validators: z.ZodSchema<T>[],
   errorMessage?: string,
 ) {
   return z.union(
@@ -329,18 +347,18 @@ export function validateErrorContext(context: UnknownInput): ValidationResult<Er
 export const customValidationHook: Hook<UnknownInput, ApiEnv, string, UnknownInput> = (result, c) => {
   if (!result.success) {
     console.error('[VALIDATION-HOOK] Validation failed:', {
-      path: c.req.path,
       issues: result.error.issues.slice(0, 5).map(i => ({
-        path: i.path.join('.'),
-        message: i.message,
         code: i.code,
+        message: i.message,
+        path: i.path.join('.'),
       })),
+      path: c.req.path,
     });
 
     const errors = result.error.issues.map((err: z.ZodIssue) => ({
+      code: err.code,
       field: err.path.join('.') || 'root',
       message: err.message,
-      code: err.code,
     }));
 
     return validationError(c, errors, 'Request validation failed');

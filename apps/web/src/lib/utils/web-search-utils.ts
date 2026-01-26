@@ -30,24 +30,24 @@ export const TIMEOUT_CONFIG = {
   /** Base timeout: query generation + search API calls */
   BASE_MS: 10_000, // 10s for AI query gen + DDG search (both are fast)
 
-  /** Per-query overhead: minimal since DDG search is fast */
-  PER_QUERY_BASIC_MS: 3_000, // 3s per basic query
-  PER_QUERY_ADVANCED_MS: 5_000, // 5s per advanced query
-
-  /** Per-result scraping time: the actual bottleneck */
-  PER_RESULT_MS: 4_000, // 4s per result (content extraction via Puppeteer)
-
-  /** Minimum timeout */
-  MIN_MS: 15_000, // 15s minimum (fast queries)
+  /** Default when no config */
+  DEFAULT_MS: 30_000, // 30s default
+  /** Max sources per query - keep low for speed */
+  DEFAULT_RESULTS_PER_QUERY: 3,
 
   /** Maximum timeout - cap at 2 minutes */
   MAX_MS: 120_000, // 2 minutes max (avoid hanging)
 
-  /** Default when no config */
-  DEFAULT_MS: 30_000, // 30s default
+  /** Minimum timeout */
+  MIN_MS: 15_000, // 15s minimum (fast queries)
 
-  /** Max sources per query - keep low for speed */
-  DEFAULT_RESULTS_PER_QUERY: 3,
+  PER_QUERY_ADVANCED_MS: 5_000, // 5s per advanced query
+
+  /** Per-query overhead: minimal since DDG search is fast */
+  PER_QUERY_BASIC_MS: 3_000, // 3s per basic query
+
+  /** Per-result scraping time: the actual bottleneck */
+  PER_RESULT_MS: 4_000, // 4s per result (content extraction via Puppeteer)
 } as const;
 
 /**
@@ -62,7 +62,7 @@ export type PreSearchTimeoutInput = {
   /** Expected total number of results/websites to scrape */
   expectedResultCount?: number;
   /** Array of queries with depth info (alternative to queryCount/advancedQueryCount) */
-  queries?: Array<{ searchDepth?: WebSearchDepth; sourceCount?: number | string }>;
+  queries?: { searchDepth?: WebSearchDepth; sourceCount?: number | string }[];
 };
 
 /**
@@ -151,11 +151,11 @@ export function extractTimeoutInputFromPreSearch(preSearch: StoredPreSearch | nu
   if (searchData?.queries && searchData.queries.length > 0) {
     // Full data available - extract from queries
     return {
+      expectedResultCount: searchData.totalResults || searchData.queries.length * TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY,
       queries: searchData.queries.map((q: PreSearchQuery) => ({
         searchDepth: q.searchDepth,
         sourceCount: TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY, // Individual queries don't have sourceCount
       })),
-      expectedResultCount: searchData.totalResults || searchData.queries.length * TIMEOUT_CONFIG.DEFAULT_RESULTS_PER_QUERY,
     };
   }
 
@@ -417,7 +417,7 @@ async function extractTextFromFile(file: File, maxLength = 5000): Promise<string
  * ```
  */
 export async function extractFileContextForSearch(
-  attachments: Array<{ file: File; id?: string }>,
+  attachments: { file: File; id?: string }[],
   maxTotalLength = 8000,
 ): Promise<string> {
   if (!attachments || attachments.length === 0) {
@@ -428,8 +428,9 @@ export async function extractFileContextForSearch(
   let remainingLength = maxTotalLength;
 
   for (const attachment of attachments) {
-    if (remainingLength <= 0)
+    if (remainingLength <= 0) {
       break;
+    }
 
     const perFileMax = Math.min(5000, remainingLength);
     const text = await extractTextFromFile(attachment.file, perFileMax);

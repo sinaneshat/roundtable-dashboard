@@ -9,9 +9,9 @@ type HeaderSkeletonProps = {
 } & ComponentProps<'header'>;
 
 export function HeaderSkeleton({
-  variant = 'simple',
-  showTrigger = true,
   className,
+  showTrigger = true,
+  variant = 'simple',
   ...props
 }: HeaderSkeletonProps) {
   return (

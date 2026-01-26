@@ -33,8 +33,8 @@ import { getModeratorMessageForRound } from '../utils/participant-completion-gat
 function createCompleteRoundWithModerator(roundNumber: number, participantCount: number): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -42,22 +42,22 @@ function createCompleteRoundWithModerator(roundNumber: number, participantCount:
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Participant ${i} response`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
 
   messages.push(
     createTestModeratorMessage({
-      id: `thread-123_r${roundNumber}_moderator`,
       content: 'Moderator summary complete',
-      roundNumber,
       finishReason: FinishReasons.STOP,
+      id: `thread-123_r${roundNumber}_moderator`,
+      roundNumber,
     }),
   );
 
@@ -67,17 +67,17 @@ function createCompleteRoundWithModerator(roundNumber: number, participantCount:
 function createIncompleteModeratorMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: 'text' as const, text: 'Partial moderator...' }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber,
-      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: FinishReasons.UNKNOWN, // Incomplete - interrupted stream
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       hasError: false,
+      isModerator: true,
+      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: [{ text: 'Partial moderator...', type: 'text' as const }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -100,17 +100,17 @@ describe('moderator Message Detection for Recovery', () => {
       // Round 0 with participants but no moderator
       const messages: UIMessage[] = [
         createTestUserMessage({
-          id: 'thread-123_r0_user',
           content: 'Test',
+          id: 'thread-123_r0_user',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -135,10 +135,10 @@ describe('moderator Message Detection for Recovery', () => {
   describe('moderator FinishReason Detection', () => {
     it('should detect complete moderator via finishReason = STOP', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: 'mod-1',
+        roundNumber: 0,
       });
 
       // Use getModeratorMetadata for moderator messages, not getAssistantMetadata
@@ -158,10 +158,10 @@ describe('moderator Message Detection for Recovery', () => {
 
     it('should distinguish between complete and incomplete moderators', () => {
       const completeModerator = createTestModeratorMessage({
-        id: 'mod-complete',
         content: 'Complete summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: 'mod-complete',
+        roundNumber: 0,
       });
 
       const incompleteModerator = createIncompleteModeratorMessage(0);
@@ -175,35 +175,35 @@ describe('moderator Message Detection for Recovery', () => {
       const hasValidIncompleteFinishReason = incompleteMetadata?.finishReason
         && incompleteMetadata.finishReason !== FinishReasons.UNKNOWN;
 
-      expect(hasValidCompleteFinishReason).toBe(true);
-      expect(hasValidIncompleteFinishReason).toBe(false);
+      expect(hasValidCompleteFinishReason).toBeTruthy();
+      expect(hasValidIncompleteFinishReason).toBeFalsy();
     });
   });
 
   describe('moderator Metadata Parsing', () => {
     it('should parse moderator metadata correctly via getModeratorMetadata', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: 'mod-1',
+        roundNumber: 0,
       });
 
       const metadata = getModeratorMetadata(moderator.metadata);
 
       expect(metadata).not.toBeNull();
-      expect(metadata?.isModerator).toBe(true);
+      expect(metadata?.isModerator).toBeTruthy();
       expect(metadata?.finishReason).toBe(FinishReasons.STOP);
     });
 
     it('should return null for non-moderator assistant metadata', () => {
       const participantMessage = createTestAssistantMessage({
-        id: 'p0',
         content: 'Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const metadata = getModeratorMetadata(participantMessage.metadata);
@@ -214,10 +214,10 @@ describe('moderator Message Detection for Recovery', () => {
 
     it('should extract round number from moderator metadata', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Summary',
-        roundNumber: 3,
         finishReason: FinishReasons.STOP,
+        id: 'mod-1',
+        roundNumber: 3,
       });
 
       const roundNumber = getRoundNumber(moderator.metadata);
@@ -254,7 +254,7 @@ describe('recovery Logic Validation', () => {
       // 2. moderatorMessage exists ✓
       // 3. hasValidFinishReason === true (finishReason is 'stop') ✓
       expect(moderatorResumptionStatus).toBe('failed');
-      expect(hasValidFinishReason).toBe(true);
+      expect(hasValidFinishReason).toBeTruthy();
     });
 
     it('should NOT trigger recovery when moderator is incomplete', () => {
@@ -264,17 +264,17 @@ describe('recovery Logic Validation', () => {
 
       const incompleteMessages: UIMessage[] = [
         createTestUserMessage({
-          id: 'thread-123_r0_user',
           content: 'Test',
+          id: 'thread-123_r0_user',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createIncompleteModeratorMessage(0), // Incomplete moderator
       ];
@@ -296,24 +296,24 @@ describe('recovery Logic Validation', () => {
       // 2. moderatorMessage exists ✓
       // 3. hasValidFinishReason === false (finishReason is 'unknown') ✗
       expect(moderatorResumptionStatus).toBe('failed');
-      expect(hasValidFinishReason).toBe(false);
+      expect(hasValidFinishReason).toBeFalsy();
     });
 
     it('should NOT trigger recovery when no moderator message exists', () => {
       // This simulates the case where moderator never started
       const messagesWithoutModerator: UIMessage[] = [
         createTestUserMessage({
-          id: 'thread-123_r0_user',
           content: 'Test',
+          id: 'thread-123_r0_user',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // No moderator message
       ];
@@ -331,47 +331,47 @@ describe('recovery Logic Validation', () => {
   describe('finish Reason Edge Cases', () => {
     it('should treat length finish reason as complete', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Truncated summary due to length...',
-        roundNumber: 0,
         finishReason: FinishReasons.LENGTH,
+        id: 'mod-1',
+        roundNumber: 0,
       });
 
       const metadata = getModeratorMetadata(moderator.metadata);
       const hasValidFinishReason = metadata?.finishReason
         && metadata.finishReason !== FinishReasons.UNKNOWN;
 
-      expect(hasValidFinishReason).toBe(true);
+      expect(hasValidFinishReason).toBeTruthy();
     });
 
     it('should treat content_filter finish reason as complete', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Filtered content',
-        roundNumber: 0,
         finishReason: FinishReasons.CONTENT_FILTER,
+        id: 'mod-1',
+        roundNumber: 0,
       });
 
       const metadata = getModeratorMetadata(moderator.metadata);
       const hasValidFinishReason = metadata?.finishReason
         && metadata.finishReason !== FinishReasons.UNKNOWN;
 
-      expect(hasValidFinishReason).toBe(true);
+      expect(hasValidFinishReason).toBeTruthy();
     });
 
     it('should treat error finish reason as complete', () => {
       const moderator = createTestModeratorMessage({
-        id: 'mod-1',
         content: 'Error during generation',
-        roundNumber: 0,
         finishReason: FinishReasons.ERROR,
+        id: 'mod-1',
+        roundNumber: 0,
       });
 
       const metadata = getModeratorMetadata(moderator.metadata);
       const hasValidFinishReason = metadata?.finishReason
         && metadata.finishReason !== FinishReasons.UNKNOWN;
 
-      expect(hasValidFinishReason).toBe(true);
+      expect(hasValidFinishReason).toBeTruthy();
     });
   });
 });
@@ -386,44 +386,44 @@ describe('regression: Bug Scenario Reproduction', () => {
 
     const bugScenarioMessages: UIMessage[] = [
       createTestUserMessage({
-        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_user',
         content: 'AGI Alignment Hope Or Catastrophe',
+        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_p0',
         content: 'Participant 0 response about AGI...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_p1',
         content: 'Participant 1 response about AGI...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_moderator',
         content: 'Moderator summary: Both participants discussed AGI...',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP, // Key: moderator is complete
+        id: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_moderator',
+        roundNumber: 0,
       }),
     ];
 
     // State from bug report
     const bugState = {
+      isModeratorStreaming: true,
       moderatorResumption: {
+        moderatorMessageId: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_moderator',
         status: 'failed' as const,
         streamId: null,
-        moderatorMessageId: '01KE3DYA5V7GQ160ZF7CJEAJBY_r0_moderator',
       },
-      waitingToStartStreaming: true,
-      isModeratorStreaming: true,
       resumptionRoundNumber: 0,
+      waitingToStartStreaming: true,
     };
 
     // The fix logic should detect this and clear state
@@ -441,7 +441,7 @@ describe('regression: Bug Scenario Reproduction', () => {
     // All conditions for recovery are met:
     expect(bugState.moderatorResumption.status).toBe('failed');
     expect(moderatorMessage).toBeDefined();
-    expect(hasValidFinishReason).toBe(true);
+    expect(hasValidFinishReason).toBeTruthy();
 
     // Fix should clear these flags:
     // - clearStreamResumption()

@@ -15,12 +15,12 @@ export function useTurnstile(): TurnstileContextValue {
   if (!context) {
     // Return a no-op context when not inside provider (e.g., SSR)
     return {
-      token: null,
-      isReady: false,
-      isLoading: false,
       error: null,
-      refreshToken: () => {},
       getToken: () => null,
+      isLoading: false,
+      isReady: false,
+      refreshToken: () => {},
+      token: null,
     };
   }
   return context;

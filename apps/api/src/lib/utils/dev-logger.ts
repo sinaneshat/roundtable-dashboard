@@ -28,11 +28,11 @@ const isDev = process.env.NODE_ENV === NodeEnvs.DEVELOPMENT;
 function getConsoleMethod(level: DevLogLevel): typeof console.debug {
   const consoleMethodMap: Record<DevLogLevel, typeof console.debug> = {
     [DevLogLevels.DEBUG]: console.debug.bind(console),
+    [DevLogLevels.ERROR]: console.error.bind(console),
     [DevLogLevels.INFO]: console.info.bind(console),
     [DevLogLevels.WARN]: console.warn.bind(console),
-    [DevLogLevels.ERROR]: console.error.bind(console),
   };
-  return consoleMethodMap[level] as typeof console.debug;
+  return consoleMethodMap[level];
 }
 
 function logWarning(message: string): void {
@@ -46,8 +46,9 @@ function debouncedLog(
   message: string,
   data?: string,
 ): void {
-  if (!isDev)
+  if (!isDev) {
     return;
+  }
 
   const now = Date.now();
   const cached = logCache.get(key);
@@ -75,19 +76,24 @@ function debouncedLog(
     logFn(logMsg);
   }
 
-  logCache.set(key, {
+  // Build entry with only defined properties (satisfies exactOptionalPropertyTypes)
+  const entry: LogEntry = {
+    count: 1,
     key,
+    lastTime: now,
     level,
     message,
-    data,
-    count: 1,
-    lastTime: now,
-  });
+  };
+  if (data !== undefined) {
+    entry.data = data;
+  }
+  logCache.set(key, entry);
 }
 
 function trackUpdate(key: string): { count: number; isExcessive: boolean } {
-  if (!isDev)
+  if (!isDev) {
     return { count: 0, isExcessive: false };
+  }
 
   const now = Date.now();
   const entry = updateCounts.get(key);
@@ -110,14 +116,18 @@ function trackUpdate(key: string): { count: number; isExcessive: boolean } {
 }
 
 function formatDebugValue(key: string, value: string | number | boolean | null | undefined): string {
-  if (typeof value === 'boolean')
+  if (typeof value === 'boolean') {
     return `${key}=${value ? 1 : 0}`;
-  if (typeof value === 'number')
+  }
+  if (typeof value === 'number') {
     return `${key}=${value}`;
-  if (typeof value === 'string')
+  }
+  if (typeof value === 'string') {
     return `${key}=${value.length > 10 ? `${value.slice(0, 10)}…` : value}`;
-  if (value === null || value === undefined)
+  }
+  if (value === null || value === undefined) {
     return `${key}=-`;
+  }
   return `${key}=?`;
 }
 
@@ -131,14 +141,16 @@ function getRlogStyle(category: RlogCategory): string {
 }
 
 function rlogLog(category: RlogCategory, key: string, message: string): void {
-  if (!rlogEnabled)
+  if (!rlogEnabled) {
     return;
+  }
 
   const logKey = `${category}:${key}`;
   const fullMessage = `[${category}] ${message}`;
 
-  if (rlogLastLogged[logKey] === fullMessage)
+  if (rlogLastLogged[logKey] === fullMessage) {
     return;
+  }
 
   if (rlogDebounceTimers[logKey]) {
     clearTimeout(rlogDebounceTimers[logKey]);
@@ -152,13 +164,21 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
 }
 
 function rlogNow(category: RlogCategory, message: string): void {
-  if (!rlogEnabled)
+  if (!rlogEnabled) {
     return;
+  }
   // eslint-disable-next-line no-console
   console.log(`%c[${category}] ${message}`, getRlogStyle(category));
 }
 
 export const rlog = {
+  changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
+  disable: (): void => {
+    rlogEnabled = false;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('rlog');
+    }
+  },
   enable: (): void => {
     rlogEnabled = true;
     if (typeof localStorage !== 'undefined') {
@@ -167,38 +187,32 @@ export const rlog = {
     // eslint-disable-next-line no-console
     console.log('%c[RLOG] Resumption debug logging enabled', 'color: #4CAF50; font-weight: bold');
   },
-  disable: (): void => {
-    rlogEnabled = false;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('rlog');
-    }
-  },
-  isEnabled: (): boolean => rlogEnabled,
-  phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),
-  resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
-  stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
-  msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
   gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),
-  // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog
-  // These fire frequently during renders and participant checks, causing console spam
-  trigger: (action: string, detail: string): void => rlogLog(RlogCategories.TRIGGER, action, detail),
-  presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
-  moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
-  state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
-  changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
-  submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
   // ✅ DEBOUNCE FIX: Changed init from rlogNow to rlogLog
   // timeline-render fires on every re-render, causing excessive console spam
   init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
+  isEnabled: (): boolean => rlogEnabled,
+  moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
+  msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
+  phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),
+  presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
+  resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
+  state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
+  stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
+  submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
   sync: (key: string, detail: string): void => rlogLog(RlogCategories.SYNC, key, detail),
+  // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog
+  // These fire frequently during renders and participant checks, causing console spam
+  trigger: (action: string, detail: string): void => rlogLog(RlogCategories.TRIGGER, action, detail),
 };
 
 export const devLog = {
   d: (tag: string, data: DebugData): void => {
     const key = `d:${tag}`;
     const { isExcessive } = trackUpdate(key);
-    if (isExcessive)
+    if (isExcessive) {
       return;
+    }
 
     const pairs = Object.entries(data)
       .map(([k, v]) => {

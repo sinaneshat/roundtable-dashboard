@@ -15,8 +15,8 @@ type MessageErrorDetailsProps = {
 };
 
 export function MessageErrorDetails({
-  metadata,
   className,
+  metadata,
 }: MessageErrorDetailsProps) {
   const t = useTranslations();
   const showDetails = useBoolean(false);
@@ -38,28 +38,39 @@ export function MessageErrorDetails({
   const aborted = metadata.aborted ?? false;
 
   const getErrorTitle = () => {
-    if (aborted)
+    if (aborted) {
       return t('chat.errors.generationCancelled');
-    if (errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE)
+    }
+    if (errorType === ErrorTypes.EMPTY_RESPONSE || errorType === ErrorCategories.EMPTY_RESPONSE) {
       return t('chat.errors.emptyResponse');
-    if (errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT || errorType === ErrorCategories.PROVIDER_RATE_LIMIT)
+    }
+    if (errorType === ErrorTypes.RATE_LIMIT || errorType === ErrorCategories.RATE_LIMIT || errorType === ErrorCategories.PROVIDER_RATE_LIMIT) {
       return t('chat.errors.rateLimitReached');
-    if (errorType === ErrorTypes.CONTEXT_LENGTH)
+    }
+    if (errorType === ErrorTypes.CONTEXT_LENGTH) {
       return t('chat.errors.contextTooLong');
-    if (errorType === ErrorTypes.API_ERROR)
+    }
+    if (errorType === ErrorTypes.API_ERROR) {
       return t('chat.errors.apiError');
-    if (errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK)
+    }
+    if (errorType === ErrorTypes.NETWORK || errorType === ErrorCategories.NETWORK || errorType === ErrorCategories.PROVIDER_NETWORK) {
       return t('chat.errors.networkError');
-    if (errorType === ErrorTypes.TIMEOUT)
+    }
+    if (errorType === ErrorTypes.TIMEOUT) {
       return t('chat.errors.requestTimeout');
-    if (errorType === ErrorCategories.VALIDATION)
+    }
+    if (errorType === ErrorCategories.VALIDATION) {
       return t('chat.errors.validationError');
-    if (errorType === ErrorCategories.MODEL_NOT_FOUND)
+    }
+    if (errorType === ErrorCategories.MODEL_NOT_FOUND) {
       return t('chat.errors.modelNotFound');
-    if (errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER)
+    }
+    if (errorType === ErrorCategories.MODEL_CONTENT_FILTER || errorType === ErrorCategories.CONTENT_FILTER) {
       return t('chat.errors.contentFiltered');
-    if (errorType === ErrorCategories.AUTHENTICATION)
+    }
+    if (errorType === ErrorCategories.AUTHENTICATION) {
       return t('chat.errors.authenticationError');
+    }
     return t('chat.errors.generationFailed');
   };
 

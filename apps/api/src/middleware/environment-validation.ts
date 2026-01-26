@@ -206,11 +206,11 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
   const isValid = errors.length === 0 && missingCritical.length === 0;
 
   return {
-    isValid,
     errors,
-    warnings,
+    isValid,
     missingCritical,
     missingOptional,
+    warnings,
   };
 }
 

@@ -26,99 +26,99 @@ import type { ApiParticipant } from '@/services/api';
  */
 function createMockPublicThreadResponse() {
   return {
-    thread: {
-      id: 'thread-123',
-      slug: 'test-thread',
-      title: 'Test Thread',
-      isPublic: true,
-      userId: 'user-123',
-    },
-    participants: [
-      {
-        id: 'p1',
-        threadId: 'thread-123',
-        modelId: 'gpt-4',
-        role: 'Expert analyst',
-        isEnabled: true,
-        priority: 0,
-      },
-      {
-        id: 'p2',
-        threadId: 'thread-123',
-        modelId: 'claude-3-opus',
-        role: 'Creative writer',
-        isEnabled: false, // Disabled after contributing - should still be visible
-        priority: 1,
-      },
-      {
-        id: 'p3',
-        threadId: 'thread-123',
-        modelId: 'gemini-pro',
-        role: null,
-        isEnabled: true,
-        priority: 2,
-      },
-    ] as ApiParticipant[],
     messages: [
     // Round 0
       {
-        id: 'm1',
-        threadId: 'thread-123',
-        role: 'user',
         content: 'Hello everyone',
-        roundNumber: 0,
+        id: 'm1',
         metadata: { role: 'user', roundNumber: 0 },
+        role: 'user',
+        roundNumber: 0,
+        threadId: 'thread-123',
       },
       {
-        id: 'm2',
-        threadId: 'thread-123',
-        role: 'assistant',
         content: 'Hello from GPT-4',
-        roundNumber: 0,
-        participantId: 'p1',
+        id: 'm2',
         metadata: {
-          role: 'assistant',
-          roundNumber: 0,
+          model: 'gpt-4',
           participantId: 'p1',
           participantIndex: 0,
-          model: 'gpt-4',
-        },
-      },
-      {
-        id: 'm3',
-        threadId: 'thread-123',
-        role: 'assistant',
-        content: 'Hello from Claude', // From disabled participant
-        roundNumber: 0,
-        participantId: 'p2',
-        metadata: {
           role: 'assistant',
           roundNumber: 0,
+        },
+        participantId: 'p1',
+        role: 'assistant',
+        roundNumber: 0,
+        threadId: 'thread-123',
+      },
+      {
+        content: 'Hello from Claude', // From disabled participant
+        id: 'm3',
+        metadata: {
+          model: 'claude-3-opus',
           participantId: 'p2',
           participantIndex: 1,
-          model: 'claude-3-opus',
-        },
-      },
-      {
-        id: 'm4',
-        threadId: 'thread-123',
-        role: 'assistant',
-        content: 'Hello from Gemini',
-        roundNumber: 0,
-        participantId: 'p3',
-        metadata: {
           role: 'assistant',
           roundNumber: 0,
+        },
+        participantId: 'p2',
+        role: 'assistant',
+        roundNumber: 0,
+        threadId: 'thread-123',
+      },
+      {
+        content: 'Hello from Gemini',
+        id: 'm4',
+        metadata: {
+          model: 'gemini-pro',
           participantId: 'p3',
           participantIndex: 2,
-          model: 'gemini-pro',
+          role: 'assistant',
+          roundNumber: 0,
         },
+        participantId: 'p3',
+        role: 'assistant',
+        roundNumber: 0,
+        threadId: 'thread-123',
       },
     ],
+    participants: [
+      {
+        id: 'p1',
+        isEnabled: true,
+        modelId: 'gpt-4',
+        priority: 0,
+        role: 'Expert analyst',
+        threadId: 'thread-123',
+      },
+      {
+        id: 'p2',
+        isEnabled: false, // Disabled after contributing - should still be visible
+        modelId: 'claude-3-opus',
+        priority: 1,
+        role: 'Creative writer',
+        threadId: 'thread-123',
+      },
+      {
+        id: 'p3',
+        isEnabled: true,
+        modelId: 'gemini-pro',
+        priority: 2,
+        role: null,
+        threadId: 'thread-123',
+      },
+    ] as ApiParticipant[],
+    thread: {
+      id: 'thread-123',
+      isPublic: true,
+      slug: 'test-thread',
+      title: 'Test Thread',
+      userId: 'user-123',
+    },
     user: {
       id: 'user-123',
-      name: 'Test User',
       image: null,
+      name: 'Test User',
     },
   };
 }
@@ -192,7 +192,7 @@ describe('public Thread Participant Consistency', () => {
       const resolved = claudeMessage ? resolveParticipant(claudeMessage) : undefined;
       expect(resolved).toBeDefined();
       expect(resolved?.modelId).toBe('claude-3-opus');
-      expect(resolved?.isEnabled).toBe(false); // Disabled but still resolvable
+      expect(resolved?.isEnabled).toBeFalsy(); // Disabled but still resolvable
     });
 
     it('should handle fallback to participantIndex when participantId missing', () => {
@@ -201,13 +201,13 @@ describe('public Thread Participant Consistency', () => {
       // Simulate old message format with only participantIndex
       const legacyMessage = {
         ...response.messages[1],
-        participantId: undefined,
         metadata: {
+          model: 'gpt-4',
+          participantIndex: 0,
           role: 'assistant',
           roundNumber: 0,
-          participantIndex: 0,
-          model: 'gpt-4',
         },
+        participantId: undefined,
       };
 
       const metadata = legacyMessage.metadata as { participantIndex?: number };
@@ -253,7 +253,7 @@ describe('public Thread Participant Consistency', () => {
 
       // All should still be present
       expect(response.participants).toHaveLength(3);
-      expect(response.participants.every(p => !p.isEnabled)).toBe(true);
+      expect(response.participants.every(p => !p.isEnabled)).toBeTruthy();
 
       // Messages should still be resolvable
       const participantMap = new Map(response.participants.map(p => [p.id, p]));
@@ -261,7 +261,7 @@ describe('public Thread Participant Consistency', () => {
 
       for (const msg of assistantMessages) {
         const hasParticipant = msg.participantId ? participantMap.has(msg.participantId) : false;
-        expect(hasParticipant || !msg.participantId).toBe(true);
+        expect(hasParticipant || !msg.participantId).toBeTruthy();
       }
     });
 
@@ -331,8 +331,8 @@ describe('transformChatParticipants Utility', () => {
   it('should preserve all participant data including isEnabled', () => {
     // Simulate the transform function's expected behavior
     const rawParticipants = [
-      { id: 'p1', modelId: 'gpt-4', isEnabled: true },
-      { id: 'p2', modelId: 'claude-3', isEnabled: false },
+      { id: 'p1', isEnabled: true, modelId: 'gpt-4' },
+      { id: 'p2', isEnabled: false, modelId: 'claude-3' },
     ];
 
     // Transform should preserve all fields
@@ -342,7 +342,7 @@ describe('transformChatParticipants Utility', () => {
     }));
 
     expect(transformed).toHaveLength(2);
-    expect(transformed[0].isEnabled).toBe(true);
-    expect(transformed[1].isEnabled).toBe(false);
+    expect(transformed[0].isEnabled).toBeTruthy();
+    expect(transformed[1].isEnabled).toBeFalsy();
   });
 });

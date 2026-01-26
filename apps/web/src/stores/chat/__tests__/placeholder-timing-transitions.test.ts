@@ -1,4 +1,3 @@
-/* eslint-disable no-console -- Performance test file requires console for metrics */
 /**
  * Placeholder Timing & Transitions Tests
  *
@@ -27,16 +26,16 @@ import { createChatStore } from '../store';
 type UpdateTracker = {
   count: number;
   timestamps: number[];
-  changes: Array<{ field: string; from: unknown; to: unknown }>;
+  changes: { field: string; from: unknown; to: unknown }[];
   actionCalls: Map<string, number>;
 };
 
 function createUpdateTracker(): UpdateTracker {
   return {
+    actionCalls: new Map(),
+    changes: [],
     count: 0,
     timestamps: [],
-    changes: [],
-    actionCalls: new Map(),
   };
 }
 
@@ -72,17 +71,21 @@ function trackActionCall(tracker: UpdateTracker, actionName: string): void {
 }
 
 function getUpdatesPerSecond(tracker: UpdateTracker): number {
-  if (tracker.timestamps.length < 2)
+  if (tracker.timestamps.length < 2) {
     return 0;
+  }
   const first = tracker.timestamps[0];
-  if (!first)
+  if (!first) {
     throw new Error('expected first timestamp');
+  }
   const last = tracker.timestamps[tracker.timestamps.length - 1];
-  if (!last)
+  if (!last) {
     throw new Error('expected last timestamp');
+  }
   const durationSeconds = (last - first) / 1000;
-  if (durationSeconds === 0)
+  if (durationSeconds === 0) {
     return tracker.count;
+  }
   return tracker.count / durationSeconds;
 }
 
@@ -95,19 +98,19 @@ function createStreamingMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: textContent
-      ? [{ type: MessagePartTypes.TEXT as const, text: textContent }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: textContent.length, totalTokens: textContent.length },
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: textContent.length, promptTokens: 0, totalTokens: textContent.length },
     },
+    parts: textContent
+      ? [{ text: textContent, type: MessagePartTypes.TEXT as const }]
+      : [],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -119,19 +122,19 @@ function createModeratorStreamingMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT as const,
-    parts: textContent
-      ? [{ type: MessagePartTypes.TEXT as const, text: textContent }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      isModerator: true,
-      participantIndex: -1,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: textContent.length, totalTokens: textContent.length },
+      isModerator: true,
+      participantIndex: -1,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: textContent.length, promptTokens: 0, totalTokens: textContent.length },
     },
+    parts: textContent
+      ? [{ text: textContent, type: MessagePartTypes.TEXT as const }]
+      : [],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
@@ -163,8 +166,8 @@ describe('placeholder Timing After Submission', () => {
 
     // Step 1: Set user message
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Hello',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -177,10 +180,10 @@ describe('placeholder Timing After Submission', () => {
     const stateAfterSubmission = store.getState();
 
     console.log('[TEST:SUBMIT] State after setStreamingRoundNumber:', JSON.stringify({
-      streamingRoundNumber: stateAfterSubmission.streamingRoundNumber,
-      isStreaming: stateAfterSubmission.isStreaming,
       isModeratorStreaming: stateAfterSubmission.isModeratorStreaming,
+      isStreaming: stateAfterSubmission.isStreaming,
       messagesCount: stateAfterSubmission.messages.length,
+      streamingRoundNumber: stateAfterSubmission.streamingRoundNumber,
     }));
 
     // Verify: streamingRoundNumber should be set
@@ -209,8 +212,8 @@ describe('placeholder Timing After Submission', () => {
 
     // Simulate complete submission setup (from form-actions.ts handleUpdateThreadAndSend)
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -263,8 +266,8 @@ describe('full Conversation Round Simulation', () => {
     console.log('[TEST:ROUND] === PHASE 1: SUBMISSION ===');
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'What is the meaning of life?',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -407,8 +410,8 @@ describe('full Conversation Round Simulation', () => {
     // Verify final state
     const finalState = store.getState();
     expect(finalState.messages).toHaveLength(5); // user + 3 participants + moderator
-    expect(finalState.isStreaming).toBe(false);
-    expect(finalState.isModeratorStreaming).toBe(false);
+    expect(finalState.isStreaming).toBeFalsy();
+    expect(finalState.isModeratorStreaming).toBeFalsy();
 
     // Performance bounds: entire round should have < 100 updates
     expect(tracker.count).toBeLessThan(100);
@@ -434,8 +437,8 @@ describe('full Conversation Round Simulation', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -484,8 +487,8 @@ describe('flashing Prevention During Transitions', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -519,8 +522,8 @@ describe('flashing Prevention During Transitions', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -573,7 +576,7 @@ describe('flashing Prevention During Transitions', () => {
 
   it('should detect status transitions that might cause flashing', () => {
     const store = createChatStore();
-    const statusTransitions: Array<{ messageId: string; from: string; to: string }> = [];
+    const statusTransitions: { messageId: string; from: string; to: string }[] = [];
     let prevMessages = store.getState().messages;
 
     const unsubscribe = store.subscribe(() => {
@@ -587,12 +590,12 @@ describe('flashing Prevention During Transitions', () => {
           const currStatus = (curr.metadata as { finishReason?: string })?.finishReason ?? MessageStatuses.PENDING;
           if (prevStatus !== currStatus) {
             statusTransitions.push({
-              messageId: curr.id,
               from: prevStatus,
+              messageId: curr.id,
               to: currStatus,
             });
 
-            console.log('[TEST:STATUS] Transition:', { id: curr.id, from: prevStatus, to: currStatus });
+            console.log('[TEST:STATUS] Transition:', { from: prevStatus, id: curr.id, to: currStatus });
           }
         }
       }
@@ -601,8 +604,8 @@ describe('flashing Prevention During Transitions', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -649,8 +652,8 @@ describe('moderator Placeholder Timing', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -661,9 +664,9 @@ describe('moderator Placeholder Timing', () => {
     const state = store.getState();
 
     console.log('[TEST:MOD-PLACEHOLDER] State after setStreamingRoundNumber:', {
-      streamingRoundNumber: state.streamingRoundNumber,
-      isStreaming: state.isStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
+      streamingRoundNumber: state.streamingRoundNumber,
     });
 
     // The condition for moderator placeholder in chat-message-list.tsx:1486-1488 is:
@@ -687,8 +690,8 @@ describe('moderator Placeholder Timing', () => {
 
     // Setup complete participants
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     const p0 = createStreamingMessage(0, 0, 'P0 done', FinishReasons.STOP);
@@ -702,8 +705,8 @@ describe('moderator Placeholder Timing', () => {
     const updatesBeforeTransition = tracker.count;
 
     console.log('[TEST:MOD-TRANS] State before transition:', {
-      isStreaming: store.getState().isStreaming,
       isModeratorStreaming: store.getState().isModeratorStreaming,
+      isStreaming: store.getState().isStreaming,
     });
 
     // CRITICAL TRANSITION: Participants done → Moderator starts
@@ -713,8 +716,8 @@ describe('moderator Placeholder Timing', () => {
     const updatesForTransition = tracker.count - updatesBeforeTransition;
 
     console.log('[TEST:MOD-TRANS] State after transition:', {
-      isStreaming: store.getState().isStreaming,
       isModeratorStreaming: store.getState().isModeratorStreaming,
+      isStreaming: store.getState().isStreaming,
     });
 
     console.log('[TEST:MOD-TRANS] Updates for transition:', updatesForTransition);
@@ -735,8 +738,8 @@ describe('moderator Placeholder Timing', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     const p0 = createStreamingMessage(0, 0, 'P0 done', FinishReasons.STOP);
@@ -769,15 +772,19 @@ describe('moderator Placeholder Timing', () => {
     let decreases = 0;
     for (let i = 1; i < messageCountChanges.length; i++) {
       const prev = messageCountChanges[i - 1];
-      if (prev === undefined)
+      if (prev === undefined) {
         throw new Error('expected prev message count');
+      }
       const curr = messageCountChanges[i];
-      if (curr === undefined)
+      if (curr === undefined) {
         throw new Error('expected curr message count');
-      if (curr > prev)
+      }
+      if (curr > prev) {
         increases++;
-      if (curr < prev)
+      }
+      if (curr < prev) {
         decreases++;
+      }
     }
 
     // Should have no decreases (no message removal churn)
@@ -816,8 +823,8 @@ describe('action Call Frequency', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -930,8 +937,8 @@ describe('performance Regression Detection', () => {
 
     // Setup
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1011,11 +1018,11 @@ describe('performance Regression Detection', () => {
   it('should baseline performance metrics for regression tracking', () => {
     const store = createChatStore();
     const metrics = {
-      setMessagesCount: 0,
-      setIsStreamingCount: 0,
       setCurrentParticipantIndexCount: 0,
-      setStreamingRoundNumberCount: 0,
       setIsModeratorStreamingCount: 0,
+      setIsStreamingCount: 0,
+      setMessagesCount: 0,
+      setStreamingRoundNumberCount: 0,
       totalSubscriberNotifications: 0,
     };
 
@@ -1027,25 +1034,25 @@ describe('performance Regression Detection', () => {
     const spySetIsModeratorStreaming = store.getState().setIsModeratorStreaming;
 
     store.setState({
-      setMessages: (m) => {
-        metrics.setMessagesCount++;
-        spySetMessages(m);
+      setCurrentParticipantIndex: (v) => {
+        metrics.setCurrentParticipantIndexCount++;
+        spySetCurrentParticipantIndex(v);
+      },
+      setIsModeratorStreaming: (v) => {
+        metrics.setIsModeratorStreamingCount++;
+        spySetIsModeratorStreaming(v);
       },
       setIsStreaming: (v) => {
         metrics.setIsStreamingCount++;
         spySetIsStreaming(v);
       },
-      setCurrentParticipantIndex: (v) => {
-        metrics.setCurrentParticipantIndexCount++;
-        spySetCurrentParticipantIndex(v);
+      setMessages: (m) => {
+        metrics.setMessagesCount++;
+        spySetMessages(m);
       },
       setStreamingRoundNumber: (v) => {
         metrics.setStreamingRoundNumberCount++;
         spySetStreamingRoundNumber(v);
-      },
-      setIsModeratorStreaming: (v) => {
-        metrics.setIsModeratorStreamingCount++;
-        spySetIsModeratorStreaming(v);
       },
     });
 
@@ -1055,8 +1062,8 @@ describe('performance Regression Detection', () => {
 
     // Simulate a minimal round: 2 participants, 3 chunks each, 2 moderator chunks
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 

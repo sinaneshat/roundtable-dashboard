@@ -20,9 +20,9 @@ const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
  */
 function getCorsHeaders(): Record<string, string> {
   return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-PostHog-Token, X-PostHog-Decide-Version',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Max-Age': '86400', // Cache preflight for 24h
   };
 }
@@ -35,8 +35,8 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
   // Handle CORS preflight immediately - no need to proxy OPTIONS to PostHog
   if (c.req.method === 'OPTIONS') {
     return new Response(null, {
-      status: 204,
       headers: getCorsHeaders(),
+      status: 204,
     });
   }
 
@@ -68,13 +68,16 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
   }
 
   try {
-    const response = await fetch(targetUrl, {
-      method: c.req.method,
+    // Build fetch options conditionally to avoid body on GET/HEAD requests
+    const isBodyMethod = c.req.method !== 'GET' && c.req.method !== 'HEAD';
+    const fetchOptions: RequestInit = {
       headers,
-      body: c.req.method !== 'GET' && c.req.method !== 'HEAD'
-        ? c.req.raw.body
-        : undefined,
-    });
+      method: c.req.method,
+    };
+    if (isBodyMethod && c.req.raw.body) {
+      fetchOptions.body = c.req.raw.body;
+    }
+    const response = await fetch(targetUrl, fetchOptions);
 
     // Copy response headers, add CORS
     const responseHeaders = new Headers();
@@ -93,18 +96,18 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
     }
 
     return new Response(response.body, {
-      status: response.status,
       headers: responseHeaders,
+      status: response.status,
     });
   } catch (error) {
     console.error('PostHog proxy error:', error);
     // Return error with CORS headers so browser can read the error
     return new Response(JSON.stringify({ error: 'Proxy request failed' }), {
-      status: 502,
       headers: {
         'Content-Type': 'application/json',
         ...getCorsHeaders(),
       },
+      status: 502,
     });
   }
 }

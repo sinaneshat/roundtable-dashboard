@@ -21,7 +21,7 @@ import {
 
 import type {
   AggregatedProjectContext,
-  ProjectContextParams,
+  CitableContextParams,
 } from '@/common/schemas/project-context';
 import { getAggregatedProjectContext } from '@/services/context';
 import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/types/citations';
@@ -30,11 +30,9 @@ import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/t
 // Types
 // ============================================================================
 
-export type CitableContextParams = ProjectContextParams & {
-  includeAttachments?: boolean;
-  baseUrl: string; // Base URL for generating absolute download URLs
-  r2Bucket?: R2Bucket; // R2 bucket for loading attachment content
-};
+// CitableContextParams is now defined via Zod schema in project-context.ts
+// Re-export for backwards compatibility
+export type { CitableContextParams } from '@/common/schemas/project-context';
 
 // ============================================================================
 // Helpers
@@ -55,15 +53,15 @@ function buildMemorySources(
   memories: AggregatedProjectContext['memories'],
 ): CitableSource[] {
   return memories.memories.map(memory => ({
+    content: memory.content,
     id: generateSourceId(CitationSourceTypes.MEMORY, memory.id),
-    type: CitationSourceTypes.MEMORY,
+    metadata: {
+      importance: memory.importance,
+      threadId: memory.sourceThreadId || undefined,
+    },
     sourceId: memory.id,
     title: memory.summary || memory.content.slice(0, 50),
-    content: memory.content,
-    metadata: {
-      threadId: memory.sourceThreadId || undefined,
-      importance: memory.importance,
-    },
+    type: CitationSourceTypes.MEMORY,
   }));
 }
 
@@ -83,16 +81,16 @@ function buildThreadSources(
 
     if (messageContent.trim()) {
       sources.push({
-        id: generateSourceId(CitationSourceTypes.THREAD, thread.id),
-        type: CitationSourceTypes.THREAD,
-        sourceId: thread.id,
-        title: thread.title,
         content: messageContent,
+        id: generateSourceId(CitationSourceTypes.THREAD, thread.id),
         metadata: {
+          roundNumber: thread.messages[0]?.roundNumber,
           threadId: thread.id,
           threadTitle: thread.title,
-          roundNumber: thread.messages[0]?.roundNumber,
         },
+        sourceId: thread.id,
+        title: thread.title,
+        type: CitationSourceTypes.THREAD,
       });
     }
   }
@@ -115,16 +113,16 @@ function buildSearchSources(
     const uniqueId = `${search.threadId}_r${search.roundNumber}`;
 
     return {
-      id: generateSourceId(CitationSourceTypes.SEARCH, uniqueId),
-      type: CitationSourceTypes.SEARCH,
-      sourceId: uniqueId,
-      title: `Search: "${search.userQuery}"`,
       content: search.summary || content,
+      id: generateSourceId(CitationSourceTypes.SEARCH, uniqueId),
       metadata: {
+        roundNumber: search.roundNumber,
         threadId: search.threadId,
         threadTitle: search.threadTitle,
-        roundNumber: search.roundNumber,
       },
+      sourceId: uniqueId,
+      title: `Search: "${search.userQuery}"`,
+      type: CitationSourceTypes.SEARCH,
     };
   });
 }
@@ -149,16 +147,16 @@ function buildModeratorSources(
     const uniqueId = `${moderator.threadId}_r${moderator.roundNumber}`;
 
     return {
-      id: generateSourceId(CitationSourceTypes.MODERATOR, uniqueId),
-      type: CitationSourceTypes.MODERATOR,
-      sourceId: uniqueId,
-      title: `Moderator: ${moderator.userQuestion.slice(0, 50)}`,
       content,
+      id: generateSourceId(CitationSourceTypes.MODERATOR, uniqueId),
       metadata: {
+        roundNumber: moderator.roundNumber,
         threadId: moderator.threadId,
         threadTitle: moderator.threadTitle,
-        roundNumber: moderator.roundNumber,
       },
+      sourceId: uniqueId,
+      title: `Moderator: ${moderator.userQuestion.slice(0, 50)}`,
+      type: CitationSourceTypes.MODERATOR,
     };
   });
 }
@@ -221,29 +219,30 @@ function buildAttachmentSources(
     const downloadUrl = `${baseUrl}/api/v1/uploads/${attachment.id}/download`;
 
     return {
-      id: generateSourceId(CitationSourceTypes.ATTACHMENT, attachment.id),
-      type: CitationSourceTypes.ATTACHMENT,
-      sourceId: attachment.id,
-      title: attachment.filename,
       content,
+      id: generateSourceId(CitationSourceTypes.ATTACHMENT, attachment.id),
       metadata: {
-        threadId: attachment.threadId || undefined,
-        threadTitle: attachment.threadTitle || undefined,
-        filename: attachment.filename,
         // Include attachment-specific fields for citation UI
         downloadUrl,
-        mimeType: attachment.mimeType,
+        filename: attachment.filename,
         fileSize: attachment.fileSize,
-        source: attachment.source,
         hasTextContent: !!attachment.textContent,
+        mimeType: attachment.mimeType,
+        source: attachment.source,
+        threadId: attachment.threadId || undefined,
+        threadTitle: attachment.threadTitle || undefined,
       },
+      sourceId: attachment.id,
+      title: attachment.filename,
+      type: CitationSourceTypes.ATTACHMENT,
     };
   });
 }
 
 function formatSourcesList(sources: CitableSource[]): string {
-  if (sources.length === 0)
+  if (sources.length === 0) {
     return '';
+  }
 
   const lines = sources.map(source =>
     `<source id="${source.id}" type="${CitationSourceLabels[source.type]}" title="${source.title}" />`,
@@ -253,8 +252,9 @@ function formatSourcesList(sources: CitableSource[]): string {
 }
 
 function formatContextWithSources(sources: CitableSource[]): string {
-  if (sources.length === 0)
+  if (sources.length === 0) {
     return '';
+  }
 
   const sections: string[] = [];
   const byType = sources.reduce<Partial<Record<CitationSourceType, CitableSource[]>>>((acc, source) => {
@@ -269,8 +269,9 @@ function formatContextWithSources(sources: CitableSource[]): string {
 
   for (const sourceType of CITATION_SOURCE_TYPES) {
     const typeSources = byType[sourceType];
-    if (!typeSources?.length)
+    if (!typeSources?.length) {
       continue;
+    }
 
     const contentLimit = CitationSourceContentLimits[sourceType];
     const content = typeSources.map((s, index) => {
@@ -355,15 +356,15 @@ export async function buildCitableContext(params: CitableContextParams): Promise
     : '';
 
   return {
-    sources: allSources,
-    sourceMap,
     formattedPrompt,
+    sourceMap,
+    sources: allSources,
     stats: {
-      totalMemories: aggregatedContext.memories.totalCount,
-      totalThreads: aggregatedContext.chats.totalThreads,
-      totalSearches: aggregatedContext.searches.totalCount,
-      totalModerators: aggregatedContext.moderators.totalCount,
       totalAttachments: attachmentSources.length,
+      totalMemories: aggregatedContext.memories.totalCount,
+      totalModerators: aggregatedContext.moderators.totalCount,
+      totalSearches: aggregatedContext.searches.totalCount,
+      totalThreads: aggregatedContext.chats.totalThreads,
     },
   };
 }
@@ -382,15 +383,15 @@ export function extractCitationMarkers(text: string): string[] {
   return [...new Set(matches.map(m => m.slice(1, -1)))];
 }
 
-export function resolveCitations(text: string, sourceMap: CitationSourceMap): Array<{
+export function resolveCitations(text: string, sourceMap: CitationSourceMap): {
   sourceId: string;
   displayNumber: number;
   source: CitableSource | undefined;
-}> {
+}[] {
   const markers = extractCitationMarkers(text);
   return markers.map((sourceId, index) => ({
-    sourceId,
     displayNumber: index + 1,
     source: sourceMap.get(sourceId),
+    sourceId,
   }));
 }

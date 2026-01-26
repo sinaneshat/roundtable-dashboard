@@ -31,25 +31,25 @@ const SPREADSHEET_MIME_SET = new Set<string>(SPREADSHEET_MIME_TYPES);
 // ============================================================================
 
 const FileValidationErrorDetailsSchema = z.object({
-  maxSize: z.number().optional(),
   actualSize: z.number().optional(),
-  allowedTypes: z.array(z.string()).readonly().optional(),
   actualType: z.string().optional(),
+  allowedTypes: z.array(z.string()).readonly().optional(),
+  maxSize: z.number().optional(),
 });
 
 export const FileValidationErrorSchema = z.object({
   code: FileValidationErrorCodeSchema,
-  message: z.string(),
   details: FileValidationErrorDetailsSchema.optional(),
+  message: z.string(),
 });
 
 export const FileValidationResultSchema = z.object({
-  valid: z.boolean(),
   error: FileValidationErrorSchema.optional(),
-  uploadStrategy: UploadStrategySchema,
+  fileCategory: FileCategorySchema,
   partCount: z.number().optional(),
   partSize: z.number().optional(),
-  fileCategory: FileCategorySchema,
+  uploadStrategy: UploadStrategySchema,
+  valid: z.boolean(),
 });
 
 // ============================================================================
@@ -64,9 +64,9 @@ export type FileValidationResult = z.infer<typeof FileValidationResultSchema>;
 // ============================================================================
 
 export const UseFileValidationOptionsSchema = z.object({
-  maxSize: z.number().optional(),
   allowedTypes: z.array(z.string()).readonly().optional(),
   allowMultipart: z.boolean().optional(),
+  maxSize: z.number().optional(),
 });
 
 export type UseFileValidationOptions = z.infer<typeof UseFileValidationOptionsSchema>;
@@ -85,22 +85,22 @@ const _PartCalculationResultSchema = z.object({
  * Constants schema for validation
  */
 const _FileValidationConstantsSchema = z.object({
-  /** Maximum single upload size in bytes */
-  maxSingleUploadSize: z.number().int().positive(),
-  /** Maximum total file size in bytes */
-  maxTotalFileSize: z.number().int().positive(),
+  /** Allowed MIME types */
+  allowedTypes: z.array(z.string()).readonly(),
   /** Maximum image file size in bytes */
   maxImageFileSize: z.number().int().positive(),
   /** Maximum PDF file size in bytes */
   maxPdfFileSize: z.number().int().positive(),
+  /** Maximum single upload size in bytes */
+  maxSingleUploadSize: z.number().int().positive(),
   /** Maximum spreadsheet file size in bytes */
   maxSpreadsheetFileSize: z.number().int().positive(),
+  /** Maximum total file size in bytes */
+  maxTotalFileSize: z.number().int().positive(),
   /** Minimum multipart part size in bytes */
   minPartSize: z.number().int().positive(),
   /** Recommended part size in bytes */
   recommendedPartSize: z.number().int().positive(),
-  /** Allowed MIME types */
-  allowedTypes: z.array(z.string()).readonly(),
 });
 
 /**
@@ -149,9 +149,9 @@ function calculateMultipartParts(fileSize: number): { partCount: number; partSiz
 
 export function useFileValidation(options: UseFileValidationOptions = {}): UseFileValidationReturn {
   const {
-    maxSize,
     allowedTypes = ALLOWED_MIME_TYPES,
     allowMultipart = true,
+    maxSize,
   } = options;
 
   const effectiveMaxSize = maxSize ?? (allowMultipart ? MAX_TOTAL_FILE_SIZE : MAX_SINGLE_UPLOAD_SIZE);
@@ -167,41 +167,41 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
 
       if (file.size === 0) {
         return {
-          valid: false,
           error: {
             code: 'empty_file',
             message: 'File is empty',
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
       if (file.name.length > 255) {
         return {
-          valid: false,
           error: {
             code: 'filename_too_long',
             message: 'Filename must be 255 characters or less',
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
       if (!checkAllowedMimeType(file.type, allowedTypes)) {
         return {
-          valid: false,
           error: {
             code: 'invalid_type',
-            message: `File type "${file.type}" is not allowed`,
             details: {
-              allowedTypes,
               actualType: file.type,
+              allowedTypes,
             },
+            message: `File type "${file.type}" is not allowed`,
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
@@ -215,75 +215,76 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
       if (file.size > maxSizeForType) {
         // Determine the appropriate error message based on file type
         let typeLabel = 'This file type';
-        if (isPdf)
+        if (isPdf) {
           typeLabel = 'PDF files';
-        else if (isImage)
+        } else if (isImage) {
           typeLabel = 'Image files';
-        else if (isSpreadsheet)
+        } else if (isSpreadsheet) {
           typeLabel = 'Spreadsheet files';
+        }
 
         return {
-          valid: false,
           error: {
             code: isImage || isPdf ? 'visual_file_too_large' : 'file_too_large',
-            message: `${typeLabel} must be ${formatFileSize(maxSizeForType)} or smaller. Your file is ${formatFileSize(file.size)}.`,
             details: {
-              maxSize: maxSizeForType,
               actualSize: file.size,
+              maxSize: maxSizeForType,
             },
+            message: `${typeLabel} must be ${formatFileSize(maxSizeForType)} or smaller. Your file is ${formatFileSize(file.size)}.`,
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
       if (file.size > effectiveMaxSize) {
         return {
-          valid: false,
           error: {
             code: 'file_too_large',
-            message: `File is too large (${formatFileSize(file.size)}). Maximum size is ${formatFileSize(effectiveMaxSize)}`,
             details: {
-              maxSize: effectiveMaxSize,
               actualSize: file.size,
+              maxSize: effectiveMaxSize,
             },
+            message: `File is too large (${formatFileSize(file.size)}). Maximum size is ${formatFileSize(effectiveMaxSize)}`,
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
       if (file.size <= MAX_SINGLE_UPLOAD_SIZE) {
         return {
-          valid: true,
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: true,
         };
       }
 
       if (!allowMultipart) {
         return {
-          valid: false,
           error: {
             code: 'file_too_large',
-            message: `File is too large for single upload (${formatFileSize(file.size)}). Maximum is ${formatFileSize(MAX_SINGLE_UPLOAD_SIZE)}`,
             details: {
-              maxSize: MAX_SINGLE_UPLOAD_SIZE,
               actualSize: file.size,
+              maxSize: MAX_SINGLE_UPLOAD_SIZE,
             },
+            message: `File is too large for single upload (${formatFileSize(file.size)}). Maximum is ${formatFileSize(MAX_SINGLE_UPLOAD_SIZE)}`,
           },
-          uploadStrategy: UploadStrategies.SINGLE,
           fileCategory,
+          uploadStrategy: UploadStrategies.SINGLE,
+          valid: false,
         };
       }
 
       const { partCount, partSize } = calculateMultipartParts(file.size);
       return {
-        valid: true,
-        uploadStrategy: UploadStrategies.MULTIPART,
+        fileCategory,
         partCount,
         partSize,
-        fileCategory,
+        uploadStrategy: UploadStrategies.MULTIPART,
+        valid: true,
       };
     },
     [allowedTypes, allowMultipart, effectiveMaxSize],
@@ -302,25 +303,25 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
 
   const constants = useMemo(
     () => ({
-      maxSingleUploadSize: MAX_SINGLE_UPLOAD_SIZE,
-      maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
+      allowedTypes,
       maxImageFileSize: MAX_IMAGE_FILE_SIZE,
       maxPdfFileSize: MAX_PDF_FILE_SIZE,
+      maxSingleUploadSize: MAX_SINGLE_UPLOAD_SIZE,
       maxSpreadsheetFileSize: MAX_SPREADSHEET_FILE_SIZE,
+      maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
       minPartSize: MIN_MULTIPART_PART_SIZE,
       recommendedPartSize: RECOMMENDED_PART_SIZE,
-      allowedTypes,
     }),
     [allowedTypes],
   );
 
   return {
-    validateFile,
-    validateFiles,
-    isAllowedType,
-    getFileCategory: getFileCategoryFromMime,
-    formatFileSize,
     calculateParts: calculateMultipartParts,
     constants,
+    formatFileSize,
+    getFileCategory: getFileCategoryFromMime,
+    isAllowedType,
+    validateFile,
+    validateFiles,
   };
 }

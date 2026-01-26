@@ -17,20 +17,20 @@ const preSearchOrchestrator = createOrchestrator<
   number,
   GetThreadPreSearchesResponse
 >({
-  queryHook: useThreadPreSearchesQuery,
-  useStoreHook: useChatStore,
-  storeSelector: s => s.preSearches,
-  storeSetter: s => s.setPreSearches,
+  compareKeys: [...PRE_SEARCH_COMPARE_KEYS],
   extractItems: (response) => {
     if (!response || !response.success || !response.data) {
       return [];
     }
     return response.data.items;
   },
-  transformItems: transformPreSearches,
   getItemKey: item => item.roundNumber,
   getItemPriority: item => getStatusPriority(item.status as 'pending' | 'streaming' | 'failed' | 'complete'),
-  compareKeys: [...PRE_SEARCH_COMPARE_KEYS],
+  queryHook: useThreadPreSearchesQuery,
+  storeSelector: s => s.preSearches,
+  storeSetter: s => s.setPreSearches,
+  transformItems: transformPreSearches,
+  useStoreHook: useChatStore,
 });
 
 export function getPreSearchOrchestrator(options: OrchestratorOptions): OrchestratorReturn {

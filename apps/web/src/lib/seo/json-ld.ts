@@ -34,23 +34,23 @@ export function createWebSiteJsonLd(): WithContext<WebSite> {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    'name': BRAND.name,
-    'url': baseUrl,
     'description': BRAND.description,
+    'name': BRAND.name,
     'publisher': {
       '@type': 'Organization',
-      'name': BRAND.name,
-      'url': baseUrl,
       'logo': {
         '@type': 'ImageObject',
         'url': `${baseUrl}/static/logo.svg`,
       },
+      'name': BRAND.name,
       'sameAs': [
         BRAND.social.twitter,
         BRAND.social.linkedin,
         BRAND.social.github,
       ],
+      'url': baseUrl,
     },
+    'url': baseUrl,
   };
 }
 
@@ -63,20 +63,20 @@ export function createSoftwareAppJsonLd(): WithContext<SoftwareApplication> {
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    'name': BRAND.name,
-    'description': BRAND.description,
-    'url': baseUrl,
     'applicationCategory': 'BusinessApplication',
-    'operatingSystem': 'Web Browser',
+    'description': BRAND.description,
+    'image': {
+      '@type': 'ImageObject',
+      'url': `${baseUrl}/static/og-image.png`,
+    },
+    'name': BRAND.name,
     'offers': {
       '@type': 'Offer',
       'price': '0',
       'priceCurrency': 'USD',
     },
-    'image': {
-      '@type': 'ImageObject',
-      'url': `${baseUrl}/static/og-image.png`,
-    },
+    'operatingSystem': 'Web Browser',
+    'url': baseUrl,
   };
 }
 
@@ -89,23 +89,23 @@ export function createOrganizationJsonLd(): WithContext<Organization> {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    'name': BRAND.name,
-    'url': baseUrl,
+    'contactPoint': {
+      '@type': 'ContactPoint',
+      'contactType': 'customer service',
+      'email': BRAND.support,
+    },
+    'description': BRAND.description,
     'logo': {
       '@type': 'ImageObject',
       'url': `${baseUrl}/static/logo.svg`,
     },
-    'description': BRAND.description,
+    'name': BRAND.name,
     'sameAs': [
       BRAND.social.twitter,
       BRAND.social.linkedin,
       BRAND.social.github,
     ],
-    'contactPoint': {
-      '@type': 'ContactPoint',
-      'email': BRAND.support,
-      'contactType': 'customer service',
-    },
+    'url': baseUrl,
   };
 }
 
@@ -122,14 +122,14 @@ export function createWebPageJsonLd(opts: {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
-    'name': opts.name,
     'description': opts.description,
-    'url': `${baseUrl}${opts.path}`,
     'isPartOf': {
       '@type': 'WebSite',
       'name': BRAND.name,
       'url': baseUrl,
     },
+    'name': opts.name,
+    'url': `${baseUrl}${opts.path}`,
   };
 }
 
@@ -150,21 +150,21 @@ export function createArticleJsonLd(opts: {
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
-    'headline': opts.headline,
-    'description': opts.description,
-    'url': `${baseUrl}${opts.path}`,
-    'image': opts.image || `${baseUrl}/static/og-image.png`,
     'author': opts.author
       ? { '@type': 'Person', 'name': opts.author }
       : { '@type': 'Organization', 'name': BRAND.name },
+    'description': opts.description,
+    'headline': opts.headline,
+    'image': opts.image || `${baseUrl}/static/og-image.png`,
     'publisher': {
       '@type': 'Organization',
-      'name': BRAND.name,
       'logo': {
         '@type': 'ImageObject',
         'url': `${baseUrl}/static/logo.svg`,
       },
+      'name': BRAND.name,
     },
+    'url': `${baseUrl}${opts.path}`,
     ...(opts.datePublished && { datePublished: opts.datePublished }),
     ...(opts.dateModified && { dateModified: opts.dateModified }),
   };
@@ -185,19 +185,19 @@ export function createProductJsonLd(opts: {
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    'name': opts.name,
-    'description': opts.description,
-    'url': `${baseUrl}${opts.path || '/chat/pricing'}`,
     'brand': {
       '@type': 'Organization',
       'name': BRAND.name,
     },
+    'description': opts.description,
+    'name': opts.name,
     'offers': {
       '@type': 'Offer',
+      'availability': 'https://schema.org/InStock',
       'price': opts.price.toString(),
       'priceCurrency': opts.currency || 'USD',
-      'availability': 'https://schema.org/InStock',
     },
+    'url': `${baseUrl}${opts.path || '/chat/pricing'}`,
   };
 }
 
@@ -205,7 +205,7 @@ export function createProductJsonLd(opts: {
  * Create BreadcrumbList JSON-LD
  */
 export function createBreadcrumbListJsonLd(
-  items: Array<{ name: string; path: string }>,
+  items: { name: string; path: string }[],
 ): WithContext<BreadcrumbList> {
   const baseUrl = getAppBaseUrl();
 
@@ -214,9 +214,9 @@ export function createBreadcrumbListJsonLd(
     '@type': 'BreadcrumbList',
     'itemListElement': items.map((item, index) => ({
       '@type': 'ListItem',
-      'position': index + 1,
-      'name': item.name,
       'item': `${baseUrl}${item.path}`,
+      'name': item.name,
+      'position': index + 1,
     })),
   };
 }
@@ -225,18 +225,18 @@ export function createBreadcrumbListJsonLd(
  * Create FAQPage JSON-LD
  */
 export function createFAQPageJsonLd(
-  faqs: Array<{ question: string; answer: string }>,
+  faqs: { question: string; answer: string }[],
 ): WithContext<FAQPage> {
   return {
     '@context': 'https://schema.org',
     '@type': 'FAQPage',
     'mainEntity': faqs.map(faq => ({
       '@type': 'Question',
-      'name': faq.question,
       'acceptedAnswer': {
         '@type': 'Answer',
         'text': faq.answer,
       },
+      'name': faq.question,
     })),
   };
 }

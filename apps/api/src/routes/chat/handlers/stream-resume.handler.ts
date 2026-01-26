@@ -40,14 +40,14 @@ async function queueRoundCompletionCheck(
 
   try {
     const message: CheckRoundCompletionQueueMessage = {
-      type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
       messageId: `check-${threadId}-r${roundNumber}-${Date.now()}`,
-      threadId,
-      roundNumber,
-      userId,
-      sessionToken,
-      reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
       queuedAt: new Date().toISOString(),
+      reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
+      roundNumber,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+      userId,
     };
 
     await env.ROUND_ORCHESTRATION_QUEUE.send(message);
@@ -78,12 +78,12 @@ async function getDbValidatedNextParticipant(
 
   // Query DB for actual participant messages in current round
   const assistantMessages = await db.query.chatMessage.findMany({
+    columns: { id: true, metadata: true },
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    columns: { id: true, metadata: true },
   });
 
   // Get participant indices that have actual DB messages (excluding moderator)
@@ -141,8 +141,8 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, threadId),
       columns: { id: true, userId: true },
+      where: eq(tables.chatThread.id, threadId),
     });
 
     if (!thread) {
@@ -154,9 +154,9 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     }
 
     const latestMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: desc(tables.chatMessage.createdAt),
       columns: { roundNumber: true },
+      orderBy: desc(tables.chatMessage.createdAt),
+      where: eq(tables.chatMessage.threadId, threadId),
     });
     const currentRound = latestMessage?.roundNumber ?? 0;
 
@@ -183,7 +183,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     const activeStream = await getThreadActiveStream(threadId, c.env);
 
-    if (activeStream && activeStream.roundNumber === currentRound) {
+    if (activeStream?.roundNumber === currentRound) {
       const nextParticipant = await getNextParticipantToStream(threadId, c.env);
       const roundComplete = !nextParticipant;
       const streamIdToResume = activeStream.streamId;
@@ -218,13 +218,13 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           );
 
           return Responses.noContentWithHeaders({
-            roundNumber: activeStream.roundNumber,
-            totalParticipants: activeStream.totalParticipants,
+            // Signal to client that auto-trigger was queued
+            autoTriggerQueued: triggered,
             nextParticipantIndex: dbValidatedNext.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
-            // Signal to client that auto-trigger was queued
-            autoTriggerQueued: triggered,
+            roundNumber: activeStream.roundNumber,
+            totalParticipants: activeStream.totalParticipants,
           });
         }
         return Responses.noContentWithHeaders();
@@ -284,13 +284,13 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           );
 
           return Responses.noContentWithHeaders({
-            roundNumber: activeStream.roundNumber,
-            totalParticipants: activeStream.totalParticipants,
+            // Signal to client that auto-trigger was queued
+            autoTriggerQueued: triggered,
             nextParticipantIndex: dbValidatedNextParticipant.participantIndex,
             participantStatuses: activeStream.participantStatuses,
             roundComplete: false,
-            // Signal to client that auto-trigger was queued
-            autoTriggerQueued: triggered,
+            roundNumber: activeStream.roundNumber,
+            totalParticipants: activeStream.totalParticipants,
           });
         }
         return Responses.noContentWithHeaders();
@@ -305,15 +305,15 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       });
 
       return Responses.sse(liveStream, {
-        streamId: streamIdToResume,
-        phase: StreamPhases.PARTICIPANT,
-        roundNumber: activeStream.roundNumber,
-        participantIndex: activeStream.participantIndex,
-        totalParticipants: activeStream.totalParticipants,
-        participantStatuses: activeStream.participantStatuses,
         isActive: isStreamActive,
-        roundComplete,
+        participantIndex: activeStream.participantIndex,
+        participantStatuses: activeStream.participantStatuses,
+        phase: StreamPhases.PARTICIPANT,
         resumedFromBuffer: true,
+        roundComplete,
+        roundNumber: activeStream.roundNumber,
+        streamId: streamIdToResume,
+        totalParticipants: activeStream.totalParticipants,
         ...(nextParticipant ? { nextParticipantIndex: nextParticipant.participantIndex } : {}),
       });
     }
@@ -342,11 +342,11 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           });
 
           return Responses.sse(liveStream, {
-            streamId: moderatorStreamId,
-            phase: StreamPhases.MODERATOR,
-            roundNumber: currentRound,
             isActive: isStreamActive,
+            phase: StreamPhases.MODERATOR,
             resumedFromBuffer: true,
+            roundNumber: currentRound,
+            streamId: moderatorStreamId,
           });
         }
       }
@@ -422,8 +422,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
+      columns: { enableWebSearch: true, id: true, userId: true },
       where: eq(tables.chatThread.id, threadId),
-      columns: { id: true, userId: true, enableWebSearch: true },
     });
 
     if (!thread) {
@@ -435,34 +435,34 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     }
 
     const createIdleResponse = (): ThreadStreamResumptionState => ({
-      roundNumber: null,
       currentPhase: RoundPhases.IDLE,
-      preSearch: null,
-      participants: {
-        hasActiveStream: false,
-        streamId: null,
-        totalParticipants: null,
-        currentParticipantIndex: null,
-        participantStatuses: null,
-        nextParticipantToTrigger: null,
-        allComplete: true,
-      },
-      moderator: null,
-      roundComplete: true,
       // Top-level duplicates (required by schema)
       hasActiveStream: false,
+      moderator: null,
+      nextParticipantToTrigger: null,
+      participants: {
+        allComplete: true,
+        currentParticipantIndex: null,
+        hasActiveStream: false,
+        nextParticipantToTrigger: null,
+        participantStatuses: null,
+        streamId: null,
+        totalParticipants: null,
+      },
+      participantStatuses: null,
+      preSearch: null,
+      roundComplete: true,
+      roundNumber: null,
       streamId: null,
       totalParticipants: null,
-      participantStatuses: null,
-      nextParticipantToTrigger: null,
     });
 
     const hasKV = !!c.env?.KV;
 
     const latestMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.threadId, threadId),
-      orderBy: desc(tables.chatMessage.createdAt),
       columns: { roundNumber: true },
+      orderBy: desc(tables.chatMessage.createdAt),
+      where: eq(tables.chatMessage.threadId, threadId),
     });
 
     const currentRoundNumber = latestMessage?.roundNumber ?? 0;
@@ -471,11 +471,11 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     if (thread.enableWebSearch) {
       const preSearchRecord = await db.query.chatPreSearch.findFirst({
+        columns: { id: true, status: true },
         where: and(
           eq(tables.chatPreSearch.threadId, threadId),
           eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
         ),
-        columns: { id: true, status: true },
       });
 
       let preSearchStreamId: string | null = null;
@@ -514,26 +514,26 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
       preSearchStatus = {
         enabled: true,
+        preSearchId: preSearchRecord?.id ?? null,
         status: effectiveStatus,
         streamId: preSearchStreamId,
-        preSearchId: preSearchRecord?.id ?? null,
       };
     }
 
     let participantStatus: ParticipantPhaseStatus = {
+      allComplete: true,
+      currentParticipantIndex: null,
       hasActiveStream: false,
+      nextParticipantToTrigger: null,
+      participantStatuses: null,
       streamId: null,
       totalParticipants: null,
-      currentParticipantIndex: null,
-      participantStatuses: null,
-      nextParticipantToTrigger: null,
-      allComplete: true,
     };
 
     if (hasKV) {
       const activeStream = await getThreadActiveStream(threadId, c.env);
 
-      if (activeStream && activeStream.roundNumber === currentRoundNumber) {
+      if (activeStream?.roundNumber === currentRoundNumber) {
         const chunks = await getParticipantStreamChunks(activeStream.streamId, c.env);
         const lastChunkTime = chunks && chunks.length > 0
           ? Math.max(...chunks.map(chunk => chunk.timestamp))
@@ -566,12 +566,12 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         // KV can have stale data (e.g., participant marked completed but message never saved)
         // Query DB to find which participants actually have messages
         const participantMessagesForValidation = await db.query.chatMessage.findMany({
+          columns: { id: true, metadata: true },
           where: and(
             eq(tables.chatMessage.threadId, threadId),
             eq(tables.chatMessage.roundNumber, currentRoundNumber),
             eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
           ),
-          columns: { id: true, metadata: true },
         });
 
         // Get participant indices that have actual DB messages (excluding moderator)
@@ -608,10 +608,10 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
               continue;
             }
             // Override KV result if different
-            if (!kvNextParticipant || kvNextParticipant.participantIndex !== i) {
+            if (kvNextParticipant?.participantIndex !== i) {
               nextParticipant = {
-                roundNumber: activeStream.roundNumber,
                 participantIndex: i,
+                roundNumber: activeStream.roundNumber,
                 totalParticipants: activeStream.totalParticipants,
               };
             }
@@ -631,13 +631,13 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
             : null;
 
           participantStatus = {
+            allComplete,
+            currentParticipantIndex: activeStream.participantIndex,
             hasActiveStream: !stale,
+            nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
+            participantStatuses: participantStatusesStringKeyed,
             streamId: stale ? null : activeStream.streamId,
             totalParticipants: activeStream.totalParticipants,
-            currentParticipantIndex: activeStream.participantIndex,
-            participantStatuses: participantStatusesStringKeyed,
-            nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
-            allComplete,
           };
         }
       }
@@ -645,11 +645,11 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     if (!hasKV || !participantStatus.hasActiveStream) {
       const participants = await db.query.chatParticipant.findMany({
+        columns: { id: true },
         where: and(
           eq(tables.chatParticipant.threadId, threadId),
           eq(tables.chatParticipant.isEnabled, true),
         ),
-        columns: { id: true },
       });
 
       const totalParticipants = participants.length;
@@ -657,12 +657,12 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       // ✅ FIX: Query all assistant messages then filter out moderators
       // Previously counted moderators as participants, causing premature allComplete=true
       const assistantMessages = await db.query.chatMessage.findMany({
+        columns: { id: true, metadata: true },
         where: and(
           eq(tables.chatMessage.threadId, threadId),
           eq(tables.chatMessage.roundNumber, currentRoundNumber),
           eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
         ),
-        columns: { id: true, metadata: true },
       });
 
       // Filter out moderator messages (they have isModerator: true in metadata)
@@ -702,12 +702,12 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     let moderatorStatus: ModeratorPhaseStatus | null = null;
 
     const moderatorMessages = await db.query.chatMessage.findMany({
+      columns: { id: true, metadata: true },
       where: and(
         eq(tables.chatMessage.threadId, threadId),
         eq(tables.chatMessage.roundNumber, currentRoundNumber),
         eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
       ),
-      columns: { id: true, metadata: true },
     });
 
     const moderatorRecord = moderatorMessages.find((msg) => {
@@ -755,9 +755,9 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     if (moderatorRecordData || moderatorStreamId) {
       moderatorStatus = {
+        moderatorMessageId: moderatorRecordData?.id ?? null,
         status: effectiveMessageStatus,
         streamId: moderatorStreamId,
-        moderatorMessageId: moderatorRecordData?.id ?? null,
       };
     }
 
@@ -769,17 +769,17 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     }
 
     return Responses.ok(c, {
-      roundNumber: currentRoundNumber,
       currentPhase,
-      preSearch: preSearchStatus,
-      participants: participantStatus,
-      moderator: moderatorStatus,
-      roundComplete,
       hasActiveStream: participantStatus.hasActiveStream,
+      moderator: moderatorStatus,
+      nextParticipantToTrigger: participantStatus.nextParticipantToTrigger,
+      participants: participantStatus,
+      participantStatuses: participantStatus.participantStatuses,
+      preSearch: preSearchStatus,
+      roundComplete,
+      roundNumber: currentRoundNumber,
       streamId: participantStatus.streamId,
       totalParticipants: participantStatus.totalParticipants,
-      participantStatuses: participantStatus.participantStatuses,
-      nextParticipantToTrigger: participantStatus.nextParticipantToTrigger,
     });
   },
 );

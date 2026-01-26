@@ -25,14 +25,14 @@ import { createChatStore } from '../store';
 // Test helper: Create mock participant
 function createMockParticipant(id: string, modelId: string, priority: number): ChatParticipant {
   return {
+    createdAt: new Date(),
+    customRoleId: null,
+    enabled: true,
     id,
     modelId,
     priority,
-    enabled: true,
     role: null,
-    customRoleId: null,
     threadId: 'thread-1',
-    createdAt: new Date(),
     updatedAt: new Date(),
   };
 }
@@ -44,15 +44,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Round 0 complete, about to submit Round 1 with config changes
       store.getState().setThread({
-        id: 'thread-1',
-        slug: 'thread-1',
-        userId: 'user-1',
-        mode: 'debating',
-        enableWebSearch: false,
-        title: 'Test Thread',
-        isAiGeneratedTitle: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-1',
+        isAiGeneratedTitle: false,
+        mode: 'debating',
+        slug: 'thread-1',
+        title: 'Test Thread',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       store.getState().setParticipants([
@@ -63,23 +63,23 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Round 0 messages exist
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'First question' }],
-          metadata: { roundNumber: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_user',
+          metadata: { roundNumber: 0 },
+          parts: [{ text: 'First question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 Round 0 response' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'P0 Round 0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -101,11 +101,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // It must ONLY be cleared by use-changelog-sync.ts after changelog is fetched
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
       // The changelog flag remains true - it will be cleared by the changelog sync
       // hook when it detects the stop or when the changelog fetch completes
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should allow changelog PATCH to create new participant even after stop', () => {
@@ -113,15 +113,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Round 0 complete
       store.getState().setThread({
-        id: 'thread-1',
-        slug: 'thread-1',
-        userId: 'user-1',
-        mode: 'brainstorming',
-        enableWebSearch: false,
-        title: 'Test',
-        isAiGeneratedTitle: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-1',
+        isAiGeneratedTitle: false,
+        mode: 'brainstorming',
+        slug: 'thread-1',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       const originalParticipants = [createMockParticipant('p0', 'gpt-4o', 0)];
@@ -152,7 +152,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // New participant should exist
       const participants = store.getState().participants;
       expect(participants).toHaveLength(2);
-      expect(participants.some(p => p.id === 'p1')).toBe(true);
+      expect(participants.some(p => p.id === 'p1')).toBeTruthy();
     });
   });
 
@@ -162,15 +162,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: PATCH complete, waiting for changelog fetch
       store.getState().setThread({
-        id: 'thread-1',
-        slug: 'thread-1',
-        userId: 'user-1',
-        mode: 'analyzing',
-        enableWebSearch: false,
-        title: 'Test',
-        isAiGeneratedTitle: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-1',
+        isAiGeneratedTitle: false,
+        mode: 'analyzing',
+        slug: 'thread-1',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       store.getState().setIsWaitingForChangelog(true);
@@ -182,8 +182,8 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // The changelog flag must ONLY be cleared by use-changelog-sync.ts
       // This ensures correct ordering: PATCH → changelog → pre-search/streaming
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
-      expect(state.isWaitingForChangelog).toBe(true); // NOT cleared by completeStreaming
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.isWaitingForChangelog).toBeTruthy(); // NOT cleared by completeStreaming
     });
 
     it('should allow continuation after changelog timeout when stopped', () => {
@@ -197,9 +197,9 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // System should allow continuation (provider handles timeout logic)
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       // Changelog still waiting but stop prevents streaming continuation
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
     });
   });
 
@@ -209,11 +209,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Round 1 with PENDING pre-search
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'presearch-r1',
-        threadId: 'thread-1',
         roundNumber: 1,
         status: MessageStatuses.PENDING,
-        createdAt: new Date(),
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -232,7 +232,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       expect(roundPreSearch?.status).toBe(MessageStatuses.PENDING);
 
       // Streaming stopped
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
     });
 
@@ -241,11 +241,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Pre-search actively streaming
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'presearch-r1',
-        threadId: 'thread-1',
         roundNumber: 1,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(),
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -257,7 +257,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Streaming state cleared
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.currentResumptionPhase).toBeNull();
 
       // Pre-search remains (provider handles cleanup)
@@ -270,12 +270,12 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Pre-search complete but streaming stopped
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'thread-1',
-        roundNumber: 1,
-        status: MessageStatuses.COMPLETE,
         completedAt: new Date(),
         createdAt: new Date(),
+        id: 'presearch-r1',
+        roundNumber: 1,
+        status: MessageStatuses.COMPLETE,
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -294,7 +294,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       const state = store.getState();
       expect(state.nextParticipantToTrigger).toBeNull();
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
     });
   });
 
@@ -310,23 +310,23 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Second question' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread-1_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Second question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Partial response from P0 in Round' }],
           metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
             participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 1,
             // No finishReason - streaming
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Partial response from P0 in Round', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -339,7 +339,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Streaming stopped
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.currentParticipantIndex).toBe(0); // Reset
       expect(state.currentResumptionPhase).toBeNull();
@@ -363,35 +363,35 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Second question' }],
           metadata: { roundNumber: 1 },
-          createdAt: new Date(),
+          parts: [{ text: 'Second question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete' }],
           metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            participantId: 'p0',
             finishReason: FinishReasons.STOP,
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 1,
           },
-          createdAt: new Date(),
+          parts: [{ text: 'P0 complete', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 partial' }],
           metadata: {
-            roundNumber: 1,
-            participantIndex: 1,
             participantId: 'p1',
+            participantIndex: 1,
+            roundNumber: 1,
             // Streaming - no finishReason
           },
-          createdAt: new Date(),
+          parts: [{ text: 'P1 partial', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -404,7 +404,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // P2 should NOT start
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.nextParticipantToTrigger).toBeNull();
 
       // Only P0 and P1 messages exist (no P2)
@@ -427,25 +427,25 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().completeStreaming();
 
       // State should stay stopped even if in-flight messages arrive
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Simulate in-flight message arriving after stop
       store.getState().setMessages([
         {
-          id: 'thread-1_r2_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Late message' }],
-          metadata: {
-            roundNumber: 2,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r2_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 2,
+          },
+          parts: [{ text: 'Late message', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
       // isStreaming should remain false
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -461,23 +461,23 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread-1_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            participantId: 'p0',
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'P0 complete', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -491,7 +491,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // P1 should NOT trigger
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.nextParticipantToTrigger).toBeNull();
 
       // Only P0 message exists
@@ -514,26 +514,26 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 done' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'P0 done', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         {
-          id: 'thread-1_r1_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 done' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 1,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p1',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 1,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'P1 done', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -545,7 +545,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().completeStreaming();
 
       // P2 should not start
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().currentParticipantIndex).toBe(0); // Reset
 
       // Only 2 participant messages
@@ -561,37 +561,37 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Setup: Round 1, all participants complete, moderator streaming
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
           metadata: {
-            roundNumber: 1,
+            finishReason: FinishReasons.STOP,
             participantIndex: 0,
-            finishReason: FinishReasons.STOP,
+            roundNumber: 1,
           },
-          createdAt: new Date(),
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 response' }],
           metadata: {
-            roundNumber: 1,
-            participantIndex: 1,
             finishReason: FinishReasons.STOP,
+            participantIndex: 1,
+            roundNumber: 1,
           },
-          createdAt: new Date(),
+          parts: [{ text: 'P1 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_moderator',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Summary: Based on the responses ab' }],
           metadata: {
-            roundNumber: 1,
             isModerator: true,
+            roundNumber: 1,
             // Streaming - no finishReason
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Summary: Based on the responses ab', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -603,7 +603,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Moderator streaming stopped
       const state = store.getState();
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
       expect(state.currentResumptionPhase).toBeNull();
 
       // Partial moderator message preserved
@@ -618,15 +618,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Setup: Round 1, all participants complete, BUT stopped before moderator creation
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -639,7 +639,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // No moderator should exist
       const messages = store.getState().messages;
       const hasModerator = messages.some(m => m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata);
-      expect(hasModerator).toBe(false);
+      expect(hasModerator).toBeFalsy();
     });
 
     it('should preserve partial moderator content when stopped mid-streaming', () => {
@@ -647,16 +647,16 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Moderator partially streamed
       const partialModeratorMessage = {
-        id: 'thread-1_r1_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          { type: MessagePartTypes.TEXT, text: 'Analysis:\n\n**Leaderboard:**\n1. GPT-4: 9/\n2. Claude: 8/' },
-        ],
-        metadata: {
-          roundNumber: 1,
-          isModerator: true,
-        },
         createdAt: new Date(),
+        id: 'thread-1_r1_moderator',
+        metadata: {
+          isModerator: true,
+          roundNumber: 1,
+        },
+        parts: [
+          { text: 'Analysis:\n\n**Leaderboard:**\n1. GPT-4: 9/\n2. Claude: 8/', type: MessagePartTypes.TEXT },
+        ],
+        role: MessageRoles.ASSISTANT,
       };
 
       store.getState().setMessages([partialModeratorMessage]);
@@ -684,12 +684,12 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(1);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Stop
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should keep isStreaming=false after stop even if messages arrive', () => {
@@ -700,25 +700,25 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setStreamingRoundNumber(1);
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Message arrives after stop
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'In-flight' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'In-flight', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
       // isStreaming stays false
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should handle multiple rapid isStreaming toggles in Round 2', () => {
@@ -727,25 +727,25 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Cycle 1: Round 2 start
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(2);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Cycle 1: Stop
       store.getState().completeStreaming();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().streamingRoundNumber).toBeNull();
 
       // Cycle 2: Round 3 start
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(3);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Cycle 2: Stop
       store.getState().completeStreaming();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // State should be clean
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.currentParticipantIndex).toBe(0);
     });
@@ -757,37 +757,37 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // Setup: Round 1 stopped mid-stream
       store.getState().setThread({
-        id: 'thread-1',
-        slug: 'thread-1',
-        userId: 'user-1',
-        mode: 'debating',
-        enableWebSearch: false,
-        title: 'Test',
-        isAiGeneratedTitle: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-1',
+        isAiGeneratedTitle: false,
+        mode: 'debating',
+        slug: 'thread-1',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       store.getState().setParticipants([createMockParticipant('p0', 'gpt-4o', 0)]);
 
       store.getState().setMessages([
         {
-          id: 'thread-1_r1_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'First question' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread-1_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'First question', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Partial' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            participantId: 'p0',
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'Partial', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -799,9 +799,9 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // State should allow new submission
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.isCreatingThread).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
+      expect(state.isCreatingThread).toBeFalsy();
 
       // User can now submit Round 2 message
       store.getState().setInputValue('Second question for Round 2');
@@ -811,7 +811,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(2);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(2);
     });
 
@@ -829,16 +829,16 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
       // All streaming state should reset
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
 
       // Ready for Round 3
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(3);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(3);
     });
 
@@ -863,13 +863,13 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Now ready for Round 2
       const state = store.getState();
       expect(state.error).toBeNull();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
 
       // Can start Round 2
       store.getState().setIsStreaming(true);
       store.getState().setStreamingRoundNumber(2);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().error).toBeNull();
     });
   });
@@ -879,19 +879,19 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       const store = createChatStore();
 
       // Initially not streaming
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       let canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(false);
+      expect(canShowStop).toBeFalsy();
 
       // Start Round 1 participant streaming
       store.getState().setIsStreaming(true);
       canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(true);
+      expect(canShowStop).toBeTruthy();
 
       // Stop
       store.getState().completeStreaming();
       canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(false);
+      expect(canShowStop).toBeFalsy();
     });
 
     it('should show stop button during moderator streaming in Round 1', () => {
@@ -900,12 +900,12 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Moderator streaming
       store.getState().setIsModeratorStreaming(true);
       const canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(true);
+      expect(canShowStop).toBeTruthy();
 
       // Stop moderator
       store.getState().completeModeratorStream();
       const canShowStopAfter = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStopAfter).toBe(false);
+      expect(canShowStopAfter).toBeFalsy();
     });
 
     it('should hide stop button during changelog PATCH phase in Round 1', () => {
@@ -915,7 +915,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       const canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(false); // Stop button hidden during PATCH
+      expect(canShowStop).toBeFalsy(); // Stop button hidden during PATCH
     });
 
     it('should hide stop button during changelog fetch in Round 1', () => {
@@ -925,7 +925,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       const canShowStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canShowStop).toBe(false); // Stop button hidden during fetch
+      expect(canShowStop).toBeFalsy(); // Stop button hidden during fetch
     });
   });
 
@@ -937,79 +937,79 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       store.getState().setMessages([
         // Round 0 messages
         {
-          id: 'thread-1_r0_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Q0' }],
-          metadata: { roundNumber: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r0_user',
+          metadata: { roundNumber: 0 },
+          parts: [{ text: 'Q0', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'A0' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'A0', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         // Round 1 messages
         {
-          id: 'thread-1_r1_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Q1' }],
-          metadata: { roundNumber: 1 },
           createdAt: new Date(),
+          id: 'thread-1_r1_user',
+          metadata: { roundNumber: 1 },
+          parts: [{ text: 'Q1', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'A1' }],
-          metadata: {
-            roundNumber: 1,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'A1', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         // Round 2 messages
         {
-          id: 'thread-1_r2_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Q2' }],
-          metadata: { roundNumber: 2 },
           createdAt: new Date(),
+          id: 'thread-1_r2_user',
+          metadata: { roundNumber: 2 },
+          parts: [{ text: 'Q2', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r2_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'A2' }],
-          metadata: {
-            roundNumber: 2,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r2_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 2,
+          },
+          parts: [{ text: 'A2', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         // Round 3 partial
         {
-          id: 'thread-1_r3_user',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Q3' }],
-          metadata: { roundNumber: 3 },
           createdAt: new Date(),
+          id: 'thread-1_r3_user',
+          metadata: { roundNumber: 3 },
+          parts: [{ text: 'Q3', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r3_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Partial A3' }],
           metadata: {
-            roundNumber: 3,
             participantIndex: 0,
+            roundNumber: 3,
             // Streaming
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Partial A3', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -1022,7 +1022,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Previous rounds should be preserved
       const messages = store.getState().messages;
       expect(messages).toHaveLength(8); // All messages preserved
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should handle stop when web search enabled in Round 2', () => {
@@ -1031,11 +1031,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Setup: Round 2 with pre-search enabled
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'presearch-r2',
-        threadId: 'thread-1',
         roundNumber: 2,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(),
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -1048,7 +1048,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
       // Pre-search should remain (provider handles status update)
       const preSearches = store.getState().preSearches;
       expect(preSearches).toHaveLength(1);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -1058,14 +1058,14 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         const store = createChatStore();
 
         // Before streaming starts
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
 
         // Start streaming
         store.getState().setIsStreaming(true);
         store.getState().setStreamingRoundNumber(1);
 
         // Stop button should be visible (isStreaming=true)
-        expect(store.getState().isStreaming).toBe(true);
+        expect(store.getState().isStreaming).toBeTruthy();
       });
 
       it('should hide stop button when isStreaming=false after stop in Round 1', () => {
@@ -1074,13 +1074,13 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Start streaming
         store.getState().setIsStreaming(true);
         store.getState().setStreamingRoundNumber(1);
-        expect(store.getState().isStreaming).toBe(true);
+        expect(store.getState().isStreaming).toBeTruthy();
 
         // Stop streaming
         store.getState().completeStreaming();
 
         // Stop button should be hidden (isStreaming=false)
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
       });
 
       it('should show stop button during Round 2 participant streaming', () => {
@@ -1090,7 +1090,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().setIsStreaming(true);
         store.getState().setStreamingRoundNumber(2);
 
-        expect(store.getState().isStreaming).toBe(true);
+        expect(store.getState().isStreaming).toBeTruthy();
       });
 
       it('should show stop button during moderator streaming in Round 1', () => {
@@ -1099,7 +1099,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Moderator streaming
         store.getState().setIsModeratorStreaming(true);
 
-        expect(store.getState().isModeratorStreaming).toBe(true);
+        expect(store.getState().isModeratorStreaming).toBeTruthy();
       });
 
       it('should NOT show stop button during PATCH/changelog phase in Round 1', () => {
@@ -1109,8 +1109,8 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().setIsWaitingForChangelog(true);
 
         // isStreaming should be false during PATCH
-        expect(store.getState().isStreaming).toBe(false);
-        expect(store.getState().isModeratorStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
+        expect(store.getState().isModeratorStreaming).toBeFalsy();
       });
     });
 
@@ -1122,16 +1122,16 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().setParticipants([createMockParticipant('p0', 'gpt-4o', 0)]);
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Streaming content...' }],
             metadata: {
-              roundNumber: 1,
-              participantIndex: 0,
               participantId: 'p0',
+              participantIndex: 0,
+              roundNumber: 1,
               // No finishReason - streaming
             },
-            createdAt: new Date(),
+            parts: [{ text: 'Streaming content...', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1144,10 +1144,10 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // Verify streaming terminated
         const state = store.getState();
-        expect(state.isStreaming).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
         expect(state.streamingRoundNumber).toBeNull();
         expect(state.currentParticipantIndex).toBe(0); // Reset
-        expect(state.waitingToStartStreaming).toBe(false);
+        expect(state.waitingToStartStreaming).toBeFalsy();
       });
 
       it('should terminate moderator streaming immediately when stopped in Round 1', () => {
@@ -1156,15 +1156,15 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: Moderator streaming
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r1_moderator',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Summary: Based on...' }],
             metadata: {
-              roundNumber: 1,
               isModerator: true,
+              roundNumber: 1,
               // No finishReason - streaming
             },
-            createdAt: new Date(),
+            parts: [{ text: 'Summary: Based on...', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1176,7 +1176,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // Verify moderator streaming terminated
         const state = store.getState();
-        expect(state.isModeratorStreaming).toBe(false);
+        expect(state.isModeratorStreaming).toBeFalsy();
       });
 
       it('should clear all streaming state when stopped during Round 2', () => {
@@ -1193,10 +1193,10 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // All streaming state should be cleared
         const state = store.getState();
-        expect(state.isStreaming).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
         expect(state.streamingRoundNumber).toBeNull();
         expect(state.currentParticipantIndex).toBe(0);
-        expect(state.waitingToStartStreaming).toBe(false);
+        expect(state.waitingToStartStreaming).toBeFalsy();
         expect(state.currentResumptionPhase).toBeNull();
       });
     });
@@ -1210,16 +1210,16 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: P0 streaming with partial content
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: partialContent }],
             metadata: {
-              roundNumber: 1,
-              participantIndex: 0,
               participantId: 'p0',
+              participantIndex: 0,
+              roundNumber: 1,
               // No finishReason - streaming
             },
-            createdAt: new Date(),
+            parts: [{ text: partialContent, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1244,14 +1244,14 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: Moderator streaming with partial content
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_moderator',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: partialModeratorContent }],
-            metadata: {
-              roundNumber: 1,
-              isModerator: true,
-            },
             createdAt: new Date(),
+            id: 'thread-1_r1_moderator',
+            metadata: {
+              isModerator: true,
+              roundNumber: 1,
+            },
+            parts: [{ text: partialModeratorContent, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1273,28 +1273,28 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: Multiple participants, some complete, some partial
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete response' }],
-            metadata: {
-              roundNumber: 1,
-              participantIndex: 0,
-              participantId: 'p0',
-              finishReason: FinishReasons.STOP,
-            },
             createdAt: new Date(),
+            id: 'thread-1_r1_p0',
+            metadata: {
+              finishReason: FinishReasons.STOP,
+              participantId: 'p0',
+              participantIndex: 0,
+              roundNumber: 1,
+            },
+            parts: [{ text: 'P0 complete response', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
           {
+            createdAt: new Date(),
             id: 'thread-1_r1_p1',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'P1 partial respo' }],
             metadata: {
-              roundNumber: 1,
-              participantIndex: 1,
               participantId: 'p1',
+              participantIndex: 1,
+              roundNumber: 1,
               // No finishReason - streaming
             },
-            createdAt: new Date(),
+            parts: [{ text: 'P1 partial respo', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1320,14 +1320,14 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: partialText }],
-            metadata: {
-              roundNumber: 1,
-              participantIndex: 0,
-            },
             createdAt: new Date(),
+            id: 'thread-1_r1_p0',
+            metadata: {
+              participantIndex: 0,
+              roundNumber: 1,
+            },
+            parts: [{ text: partialText, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1348,11 +1348,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: Partial message exists
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Partial' }],
-            metadata: { roundNumber: 1, participantIndex: 0 },
             createdAt: new Date(),
+            id: 'thread-1_r1_p0',
+            metadata: { participantIndex: 0, roundNumber: 1 },
+            parts: [{ text: 'Partial', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1373,25 +1373,25 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Setup: Multiple messages in order
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r2_user',
-            role: MessageRoles.USER,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Question' }],
             metadata: { roundNumber: 2 },
-            createdAt: new Date(),
+            parts: [{ text: 'Question', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.USER,
           },
           {
+            createdAt: new Date(),
             id: 'thread-1_r2_p0',
+            metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 2 },
+            parts: [{ text: 'Answer 1', type: MessagePartTypes.TEXT }],
             role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Answer 1' }],
-            metadata: { roundNumber: 2, participantIndex: 0, finishReason: FinishReasons.STOP },
-            createdAt: new Date(),
           },
           {
-            id: 'thread-1_r2_p1',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Partial answer' }],
-            metadata: { roundNumber: 2, participantIndex: 1 },
             createdAt: new Date(),
+            id: 'thread-1_r2_p1',
+            metadata: { participantIndex: 1, roundNumber: 2 },
+            parts: [{ text: 'Partial answer', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1413,11 +1413,11 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Partial' }],
-            metadata: { roundNumber: 1, participantIndex: 0 },
             createdAt: new Date(),
+            id: 'thread-1_r1_p0',
+            metadata: { participantIndex: 0, roundNumber: 1 },
+            parts: [{ text: 'Partial', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1431,7 +1431,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         const state = store.getState();
 
         // Streaming state cleared
-        expect(state.isStreaming).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
         expect(state.streamingRoundNumber).toBeNull();
         expect(state.currentParticipantIndex).toBe(0);
 
@@ -1470,22 +1470,22 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().completeStreaming();
 
         // Flag cleared
-        expect(store.getState().waitingToStartStreaming).toBe(false);
+        expect(store.getState().waitingToStartStreaming).toBeFalsy();
       });
 
       it('should preserve thread and participant data after stop in Round 1', () => {
         const store = createChatStore();
 
         const thread = {
-          id: 'thread-1',
-          slug: 'thread-1',
-          userId: 'user-1',
-          mode: 'debating' as const,
-          enableWebSearch: false,
-          title: 'Test Thread',
-          isAiGeneratedTitle: false,
           createdAt: new Date(),
+          enableWebSearch: false,
+          id: 'thread-1',
+          isAiGeneratedTitle: false,
+          mode: 'debating' as const,
+          slug: 'thread-1',
+          title: 'Test Thread',
           updatedAt: new Date(),
+          userId: 'user-1',
         };
 
         const participants = [
@@ -1511,24 +1511,24 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // Setup: Round 1 stopped
         store.getState().setThread({
-          id: 'thread-1',
-          slug: 'thread-1',
-          userId: 'user-1',
-          mode: 'debating',
-          enableWebSearch: false,
-          title: 'Test',
-          isAiGeneratedTitle: false,
           createdAt: new Date(),
+          enableWebSearch: false,
+          id: 'thread-1',
+          isAiGeneratedTitle: false,
+          mode: 'debating',
+          slug: 'thread-1',
+          title: 'Test',
           updatedAt: new Date(),
+          userId: 'user-1',
         });
 
         store.getState().setMessages([
           {
-            id: 'thread-1_r1_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Partial' }],
-            metadata: { roundNumber: 1, participantIndex: 0 },
             createdAt: new Date(),
+            id: 'thread-1_r1_p0',
+            metadata: { participantIndex: 0, roundNumber: 1 },
+            parts: [{ text: 'Partial', type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
 
@@ -1538,9 +1538,9 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // Verify ready for new submission
         const state = store.getState();
-        expect(state.isStreaming).toBe(false);
-        expect(state.waitingToStartStreaming).toBe(false);
-        expect(state.isCreatingThread).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
+        expect(state.waitingToStartStreaming).toBeFalsy();
+        expect(state.isCreatingThread).toBeFalsy();
 
         // User can type new message
         store.getState().setInputValue('Second question');
@@ -1550,7 +1550,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().setIsStreaming(true);
         store.getState().setStreamingRoundNumber(2);
 
-        expect(store.getState().isStreaming).toBe(true);
+        expect(store.getState().isStreaming).toBeTruthy();
         expect(store.getState().streamingRoundNumber).toBe(2);
       });
 
@@ -1570,7 +1570,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
 
         // Ready for new submission
         expect(store.getState().error).toBeNull();
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
       });
     });
 
@@ -1584,7 +1584,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Immediate stop
         store.getState().completeStreaming();
 
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
       });
 
       it('should handle multiple rapid stop calls in Round 1 (idempotent)', () => {
@@ -1598,7 +1598,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         store.getState().completeStreaming();
 
         // State remains consistent
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
         expect(store.getState().streamingRoundNumber).toBeNull();
       });
 
@@ -1606,13 +1606,13 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         const store = createChatStore();
 
         // No streaming
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
 
         // Call stop anyway
         store.getState().completeStreaming();
 
         // No errors, state unchanged
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
       });
 
       it('should handle stop during transition between Round 1 and Round 2', () => {
@@ -1631,7 +1631,7 @@ describe('stop Button Non-Initial Rounds E2E', () => {
         // Immediately stop Round 2
         store.getState().completeStreaming();
 
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
         expect(store.getState().streamingRoundNumber).toBeNull();
       });
     });

@@ -44,37 +44,37 @@ type MockTimelineItem = {
 
 function createMockThread(threadId: string) {
   return {
-    id: threadId,
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active' as const,
+    createdAt: new Date(),
     enableWebSearch: true,
+    id: threadId,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createMockParticipants(threadId: string, count: number): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId,
-    modelId: `provider/model-${i}`,
-    role: null,
-    customRoleId: null,
-    priority: i,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `provider/model-${i}`,
+    priority: i,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: new Date(),
   }));
 }
@@ -86,9 +86,9 @@ function createUserMessage(threadId: string, roundNumber: number, text: string):
   };
   return {
     id: `${threadId}_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -100,23 +100,23 @@ function createAssistantMessage(
   text: string,
 ): ApiMessage {
   const metadata: DbAssistantMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    roundNumber,
+    finishReason: 'stop',
+    hasError: false,
+    isPartialResponse: false,
+    isTransient: false,
+    model: `provider/model-${participantIndex}`,
     participantId,
     participantIndex,
     participantRole: null,
-    model: `provider/model-${participantIndex}`,
-    finishReason: 'stop',
-    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-    hasError: false,
-    isTransient: false,
-    isPartialResponse: false,
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
+    usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
   };
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -126,17 +126,17 @@ function createModeratorMessage(
   text: string,
 ): ApiMessage {
   const metadata: DbModeratorMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    isModerator: true,
-    roundNumber,
-    model: 'moderator-model',
     hasError: false,
+    isModerator: true,
+    model: 'moderator-model',
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
   };
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -146,15 +146,15 @@ function createPlaceholderPreSearch(
   userQuery: string,
 ): StoredPreSearch {
   return {
-    id: `presearch-${threadId}-r${roundNumber}`,
-    threadId,
-    roundNumber,
-    userQuery,
-    status: MessageStatuses.PENDING,
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-${threadId}-r${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status: MessageStatuses.PENDING,
+    threadId,
+    userQuery,
   } as StoredPreSearch;
 }
 
@@ -164,23 +164,23 @@ function createCompletePreSearch(
   userQuery: string,
 ): StoredPreSearch {
   return {
+    completedAt: new Date(),
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${threadId}-r${roundNumber}`,
-    threadId,
     roundNumber,
-    userQuery,
-    status: MessageStatuses.COMPLETE,
     searchData: {
-      queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-      results: [],
-      summary: 'test summary',
-      successCount: 1,
       failureCount: 0,
+      queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+      results: [],
+      successCount: 1,
+      summary: 'test summary',
       totalResults: 0,
       totalTime: 100,
     },
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: new Date(),
+    status: MessageStatuses.COMPLETE,
+    threadId,
+    userQuery,
   } as StoredPreSearch;
 }
 
@@ -202,11 +202,13 @@ function verifyTimelineOrder(
 
   const messagesByRound = new Map<number, ApiMessage[]>();
   for (const msg of messages) {
-    if (!msg.metadata)
+    if (!msg.metadata) {
       continue;
+    }
 
-    if ('isModerator' in msg.metadata && msg.metadata.isModerator)
+    if ('isModerator' in msg.metadata && msg.metadata.isModerator) {
       continue;
+    }
 
     const roundNum = msg.metadata.roundNumber;
     const existing = messagesByRound.get(roundNum);
@@ -224,8 +226,9 @@ function verifyTimelineOrder(
 
   const moderatorByRound = new Map<number, boolean>();
   for (const msg of messages) {
-    if (!msg.metadata)
+    if (!msg.metadata) {
       continue;
+    }
     if ('isModerator' in msg.metadata && msg.metadata.isModerator) {
       moderatorByRound.set(msg.metadata.roundNumber, true);
     }
@@ -240,21 +243,22 @@ function verifyTimelineOrder(
   for (const roundNumber of rounds) {
     const preSearch = preSearchByRound.get(roundNumber);
     if (preSearch) {
-      actualItems.push({ type: 'pre-search', roundNumber });
+      actualItems.push({ roundNumber, type: 'pre-search' });
     }
 
     const roundMessages = messagesByRound.get(roundNumber) || [];
     for (const msg of roundMessages) {
-      if (!msg.metadata)
+      if (!msg.metadata) {
         continue;
+      }
 
       if (msg.role === MessageRoles.USER) {
-        actualItems.push({ type: 'user-message', roundNumber });
+        actualItems.push({ roundNumber, type: 'user-message' });
       } else if (msg.role === MessageRoles.ASSISTANT && 'participantIndex' in msg.metadata) {
         actualItems.push({
-          type: 'assistant-message',
-          roundNumber,
           participantIndex: msg.metadata.participantIndex,
+          roundNumber,
+          type: 'assistant-message',
         });
       }
     }
@@ -262,7 +266,7 @@ function verifyTimelineOrder(
     const moderator = moderatorByRound.get(roundNumber);
     if (moderator) {
       // Moderator message rendered inline, appears last in round
-      actualItems.push({ type: 'round-moderator', roundNumber });
+      actualItems.push({ roundNumber, type: 'round-moderator' });
     }
   }
 
@@ -355,16 +359,16 @@ describe('timeline ordering during streaming', () => {
       ]);
 
       verifyTimelineOrder(store, [
-        { type: 'pre-search', roundNumber: 0 },
-        { type: 'user-message', roundNumber: 0 },
-        { type: 'assistant-message', roundNumber: 0, participantIndex: 0 },
-        { type: 'assistant-message', roundNumber: 0, participantIndex: 1 },
-        { type: 'round-moderator', roundNumber: 0 },
-        { type: 'pre-search', roundNumber: 1 },
-        { type: 'user-message', roundNumber: 1 },
-        { type: 'assistant-message', roundNumber: 1, participantIndex: 0 },
-        { type: 'assistant-message', roundNumber: 1, participantIndex: 1 },
-        { type: 'round-moderator', roundNumber: 1 },
+        { roundNumber: 0, type: 'pre-search' },
+        { roundNumber: 0, type: 'user-message' },
+        { participantIndex: 0, roundNumber: 0, type: 'assistant-message' },
+        { participantIndex: 1, roundNumber: 0, type: 'assistant-message' },
+        { roundNumber: 0, type: 'round-moderator' },
+        { roundNumber: 1, type: 'pre-search' },
+        { roundNumber: 1, type: 'user-message' },
+        { participantIndex: 0, roundNumber: 1, type: 'assistant-message' },
+        { participantIndex: 1, roundNumber: 1, type: 'assistant-message' },
+        { roundNumber: 1, type: 'round-moderator' },
       ]);
     });
   });
@@ -381,11 +385,11 @@ describe('timeline ordering during streaming', () => {
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.STREAMING);
 
       store.getState().updatePreSearchData(0, {
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-        results: [],
-        summary: 'done',
-        successCount: 1,
         failureCount: 0,
+        queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+        results: [],
+        successCount: 1,
+        summary: 'done',
         totalResults: 0,
         totalTime: 100,
       });
@@ -453,8 +457,8 @@ describe('timeline ordering during streaming', () => {
         throw new Error('Test assertion failed: expected metadata on messages');
       }
 
-      expect(isAssistantMessageMetadata(firstMetadata)).toBe(true);
-      expect(isAssistantMessageMetadata(secondMetadata)).toBe(true);
+      expect(isAssistantMessageMetadata(firstMetadata)).toBeTruthy();
+      expect(isAssistantMessageMetadata(secondMetadata)).toBeTruthy();
 
       expect(isAssistantMessageMetadata(firstMetadata) && firstMetadata.participantId).toBe(p0.id);
       expect(isAssistantMessageMetadata(secondMetadata) && secondMetadata.participantId).toBe(p1.id);
@@ -489,13 +493,13 @@ describe('timeline ordering during streaming', () => {
       store.getState().setIsStreaming(true);
 
       expect(store.getState().streamingRoundNumber).toBe(0);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       store.getState().setIsStreaming(false);
       store.getState().setStreamingRoundNumber(null);
 
       expect(store.getState().streamingRoundNumber).toBeNull();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 

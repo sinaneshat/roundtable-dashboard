@@ -12,18 +12,18 @@ type MessageCopyActionProps = {
 };
 
 function MessageCopyActionComponent({
-  messageText,
   className,
-  tooltip,
   label,
+  messageText,
+  tooltip,
 }: MessageCopyActionProps) {
   const t = useTranslations();
 
   const messages = useMemo(() => ({
-    successTitle: t('chat.messageActions.copySuccess'),
-    successDescription: t('chat.messageActions.copySuccessDescription'),
-    errorTitle: t('chat.messageActions.copyError'),
     errorDescription: t('chat.messageActions.copyErrorDescription'),
+    errorTitle: t('chat.messageActions.copyError'),
+    successDescription: t('chat.messageActions.copySuccessDescription'),
+    successTitle: t('chat.messageActions.copySuccess'),
   }), [t]);
 
   const { copied, copy } = useCopyToClipboard({ messages });

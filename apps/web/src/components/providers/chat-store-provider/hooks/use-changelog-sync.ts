@@ -17,15 +17,15 @@ type UseChangelogSyncParams = {
 };
 
 export function useChangelogSync({
-  store,
   effectiveThreadId,
   queryClientRef,
+  store,
 }: UseChangelogSyncParams) {
-  const { isWaitingForChangelog, configChangeRoundNumber } = useStore(
+  const { configChangeRoundNumber, isWaitingForChangelog } = useStore(
     store,
     useShallow(s => ({
-      isWaitingForChangelog: s.isWaitingForChangelog,
       configChangeRoundNumber: s.configChangeRoundNumber,
+      isWaitingForChangelog: s.isWaitingForChangelog,
     })),
   );
 
@@ -39,7 +39,7 @@ export function useChangelogSync({
 
   const shouldFetch = isWaitingForChangelog && configChangeRoundNumber !== null && !!effectiveThreadId;
 
-  const { data: roundChangelogData, isSuccess: roundChangelogSuccess, isFetching: roundChangelogFetching } = useThreadRoundChangelogQuery(
+  const { data: roundChangelogData, isFetching: roundChangelogFetching, isSuccess: roundChangelogSuccess } = useThreadRoundChangelogQuery(
     effectiveThreadId,
     configChangeRoundNumber ?? 0,
     shouldFetch,
@@ -105,8 +105,8 @@ export function useChangelogSync({
         if (!existingCache || !existingCache.data) {
           rlog.changelog('merge-fresh', `r${configChangeRoundNumber} new=${newItems.length} existing=0`);
           return {
-            success: true,
             data: { items: newItems },
+            success: true,
           };
         }
 
@@ -146,8 +146,9 @@ export function useChangelogSync({
   ]);
 
   useEffect(() => {
-    if (!isWaitingForChangelog)
+    if (!isWaitingForChangelog) {
       return;
+    }
 
     const timeout = setTimeout(() => {
       const state = store.getState();

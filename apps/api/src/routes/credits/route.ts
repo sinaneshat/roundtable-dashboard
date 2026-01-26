@@ -21,54 +21,52 @@ import {
  * Get current credit balance
  */
 export const getCreditBalanceRoute = createRoute({
+  description: 'Retrieve current credit balance and plan information',
   method: 'get',
   path: '/credits/balance',
-  tags: ['credits'],
-  summary: 'Get credit balance',
-  description: 'Retrieve current credit balance and plan information',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Credit balance retrieved successfully',
       content: {
         'application/json': { schema: CreditBalanceResponseSchema },
       },
+      description: 'Credit balance retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get credit balance',
+  tags: ['credits'],
 });
 
 /**
  * Get credit transaction history
  */
 export const getCreditTransactionsRoute = createRoute({
+  description: 'Retrieve credit transaction history with pagination',
   method: 'get',
   path: '/credits/transactions',
-  tags: ['credits'],
-  summary: 'Get credit transactions',
-  description: 'Retrieve credit transaction history with pagination',
   request: {
     query: CreditTransactionsQuerySchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Credit transactions retrieved successfully',
       content: {
         'application/json': { schema: CreditTransactionsResponseSchema },
       },
+      description: 'Credit transactions retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get credit transactions',
+  tags: ['credits'],
 });
 
 /**
  * Estimate credit cost for an action
  */
 export const estimateCreditCostRoute = createRoute({
+  description: 'Estimate credit cost for a given action before executing it',
   method: 'post',
   path: '/credits/estimate',
-  tags: ['credits'],
-  summary: 'Estimate credit cost',
-  description: 'Estimate credit cost for a given action before executing it',
   request: {
     body: {
       content: {
@@ -78,11 +76,13 @@ export const estimateCreditCostRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Credit estimate calculated successfully',
       content: {
         'application/json': { schema: CreditEstimateResponseSchema },
       },
+      description: 'Credit estimate calculated successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Estimate credit cost',
+  tags: ['credits'],
 });

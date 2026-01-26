@@ -48,10 +48,11 @@ import { GC_TIMES } from '@/lib/data/stale-times';
  * }
  */
 export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
-  const { isAuthenticated, handleAuthError } = useAuthCheck();
+  const { handleAuthError, isAuthenticated } = useAuthCheck();
 
   const query = useQuery({
     ...usageQueryOptions,
+    enabled: options?.forceEnabled ?? isAuthenticated,
     gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     // NO POLLING - stats are prefetched server-side and invalidated after:
     // - Chat operations (via afterChatOperation invalidation pattern)
@@ -59,7 +60,6 @@ export function useUsageStatsQuery(options?: { forceEnabled?: boolean }) {
     // - Checkout completion (via afterCheckout invalidation pattern)
     // This prevents unnecessary client-side requests
     retry: false,
-    enabled: options?.forceEnabled ?? isAuthenticated,
     throwOnError: false,
   });
 

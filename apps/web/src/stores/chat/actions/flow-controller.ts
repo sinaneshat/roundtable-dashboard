@@ -31,14 +31,14 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // Use store API for imperative access inside effects (avoids dependency loops)
   const storeApi = useChatStoreApi();
   const streamingState = useChatStore(useShallow(s => ({
-    showInitialUI: s.showInitialUI,
     isStreaming: s.isStreaming,
     screenMode: s.screenMode,
+    showInitialUI: s.showInitialUI,
   })));
 
   const threadState = useChatStore(useShallow(s => ({
-    currentThread: s.thread,
     createdThreadId: s.createdThreadId,
+    currentThread: s.thread,
     setThread: s.setThread,
   })));
 
@@ -66,36 +66,37 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     const currentMessages = state.messages;
     const currentPreSearches = state.preSearches;
 
-    if (!thread)
+    if (!thread) {
       return;
+    }
 
     // Build the thread data object once for reuse
     const threadData = {
-      success: true,
       data: {
-        thread: {
-          ...thread,
-          createdAt: toISOString(thread.createdAt),
-          updatedAt: toISOString(thread.updatedAt),
-          lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-        },
-        participants: currentParticipants.map(p => ({
-          ...p,
-          createdAt: toISOString(p.createdAt),
-          updatedAt: toISOString(p.updatedAt),
-        })),
         // Messages from store - add createdAt for server format compatibility
         // ✅ TYPE-SAFE: Use getCreatedAt utility instead of force casts
         messages: currentMessages.map(m => ({
           ...m,
           createdAt: getCreatedAt(m) ?? new Date().toISOString(),
         })),
+        participants: currentParticipants.map(p => ({
+          ...p,
+          createdAt: toISOString(p.createdAt),
+          updatedAt: toISOString(p.updatedAt),
+        })),
+        thread: {
+          ...thread,
+          createdAt: toISOString(thread.createdAt),
+          lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+          updatedAt: toISOString(thread.updatedAt),
+        },
         user: {
-          name: currentSession?.user?.name || 'You',
           image: currentSession?.user?.image || null,
+          name: currentSession?.user?.name || 'You',
         },
       },
       meta: createPrefetchMeta(),
+      success: true,
     };
 
     // 1. Pre-populate thread detail by ID
@@ -110,17 +111,17 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     queryClient.setQueryData(
       queryKeys.threads.preSearches(threadId),
       {
-        success: true,
         data: {
           items: currentPreSearches.length > 0
             ? currentPreSearches.map(ps => ({
                 ...ps,
-                createdAt: toISOString(ps.createdAt),
                 completedAt: toISOStringOrNull(ps.completedAt),
+                createdAt: toISOString(ps.createdAt),
               }))
             : [],
         },
         meta: createPrefetchMeta(),
+        success: true,
       },
     );
 
@@ -193,14 +194,18 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    * Only handles URL navigation - polling and cache updates handled by useTitlePolling
    */
   useEffect(() => {
-    if (!isActive)
+    if (!isActive) {
       return;
-    if (!threadState.currentThread?.isAiGeneratedTitle)
+    }
+    if (!threadState.currentThread?.isAiGeneratedTitle) {
       return;
-    if (!threadState.currentThread?.slug)
+    }
+    if (!threadState.currentThread?.slug) {
       return;
-    if (hasUpdatedUrlRef.current)
+    }
+    if (hasUpdatedUrlRef.current) {
       return;
+    }
 
     const slug = threadState.currentThread.slug;
     const threadId = threadState.createdThreadId;
@@ -252,8 +257,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   const hasAiSlug = Boolean(threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug);
 
   useEffect(() => {
-    if (!isActive)
+    if (!isActive) {
       return;
+    }
 
     // Only navigate if initial UI is hidden
     if (streamingState.showInitialUI) {

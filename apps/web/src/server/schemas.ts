@@ -28,8 +28,8 @@ export const idSchema = z.string().min(1).max(255);
  * Used when service calls fail.
  */
 export const serverFnErrorResponseSchema = z.object({
-  success: z.literal(false),
   data: z.null(),
+  success: z.literal(false),
 });
 
 export type ServerFnErrorResponse = z.infer<typeof serverFnErrorResponseSchema>;
@@ -41,11 +41,11 @@ export type ServerFnErrorResponse = z.infer<typeof serverFnErrorResponseSchema>;
  * from server runtime to client.
  */
 export const publicEnvSchema = z.object({
-  VITE_WEBAPP_ENV: WebAppEnvSchema,
-  VITE_POSTHOG_API_KEY: z.string(),
   VITE_MAINTENANCE: z.string(),
-  VITE_TURNSTILE_SITE_KEY: z.string(),
+  VITE_POSTHOG_API_KEY: z.string(),
   VITE_STRIPE_PUBLISHABLE_KEY: z.string(),
+  VITE_TURNSTILE_SITE_KEY: z.string(),
+  VITE_WEBAPP_ENV: WebAppEnvSchema,
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
@@ -54,9 +54,9 @@ export type PublicEnv = z.infer<typeof publicEnvSchema>;
  * Default public env values for error boundaries where loader may not have run.
  */
 export const DEFAULT_PUBLIC_ENV: PublicEnv = {
-  VITE_WEBAPP_ENV: DEFAULT_WEBAPP_ENV,
-  VITE_POSTHOG_API_KEY: '',
   VITE_MAINTENANCE: BooleanStrings.FALSE,
-  VITE_TURNSTILE_SITE_KEY: '',
+  VITE_POSTHOG_API_KEY: '',
   VITE_STRIPE_PUBLISHABLE_KEY: '',
+  VITE_TURNSTILE_SITE_KEY: '',
+  VITE_WEBAPP_ENV: DEFAULT_WEBAPP_ENV,
 };

@@ -66,12 +66,12 @@ function createPartialRoundMessages(
     includeEmptyLastMessage?: boolean;
   },
 ) {
-  const { lastParticipantFinishReason = FinishReasons.STOP, includeEmptyLastMessage = false } = options ?? {};
+  const { includeEmptyLastMessage = false, lastParticipantFinishReason = FinishReasons.STOP } = options ?? {};
 
-  const messages: Array<ReturnType<typeof createTestUserMessage> | ReturnType<typeof createTestAssistantMessage>> = [
+  const messages: (ReturnType<typeof createTestUserMessage> | ReturnType<typeof createTestAssistantMessage>)[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -84,30 +84,30 @@ function createPartialRoundMessages(
       // Empty message (interrupted before content)
       messages.push({
         id: `thread-123_r${roundNumber}_p${i}`,
-        role: MessageRoles.ASSISTANT as const,
-        parts: [],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber,
+          finishReason: FinishReasons.UNKNOWN,
+          hasError: false,
+          isPartialResponse: false,
+          isTransient: false,
+          model: 'gpt-4',
           participantId: `participant-${i}`,
           participantIndex: i,
           participantRole: null,
-          model: 'gpt-4',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: false,
+          role: MessageRoles.ASSISTANT,
+          roundNumber,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [],
+        role: MessageRoles.ASSISTANT as const,
       });
     } else {
       messages.push(createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Participant ${i} response`,
-        roundNumber,
+        finishReason,
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason,
+        roundNumber,
       }));
     }
   }
@@ -124,13 +124,13 @@ describe('refresh During Pre-Search', () => {
     it('detects incomplete pre-search on refresh', () => {
       const preSearch = createMockStoredPreSearch(0, MessageStatuses.STREAMING);
       const _messages = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
       ];
 
       const hasIncompletePreSearch = preSearch.status === MessageStatuses.PENDING
         || preSearch.status === MessageStatuses.STREAMING;
 
-      expect(hasIncompletePreSearch).toBe(true);
+      expect(hasIncompletePreSearch).toBeTruthy();
     });
 
     it('blocks participant streaming while pre-search incomplete', () => {
@@ -139,7 +139,7 @@ describe('refresh During Pre-Search', () => {
       const shouldWaitForPreSearch = preSearch.status === MessageStatuses.PENDING
         || preSearch.status === MessageStatuses.STREAMING;
 
-      expect(shouldWaitForPreSearch).toBe(true);
+      expect(shouldWaitForPreSearch).toBeTruthy();
     });
 
     it('resumes participants after pre-search completes', () => {
@@ -148,7 +148,7 @@ describe('refresh During Pre-Search', () => {
       const shouldWaitForPreSearch = preSearch.status === MessageStatuses.PENDING
         || preSearch.status === MessageStatuses.STREAMING;
 
-      expect(shouldWaitForPreSearch).toBe(false);
+      expect(shouldWaitForPreSearch).toBeFalsy();
     });
   });
 
@@ -160,7 +160,7 @@ describe('refresh During Pre-Search', () => {
 
       const hasOrphanedPreSearch = preSearch && messages.length === 0;
 
-      expect(hasOrphanedPreSearch).toBe(true);
+      expect(hasOrphanedPreSearch).toBeTruthy();
     });
 
     it('recovers user query from orphaned pre-search', () => {
@@ -170,9 +170,9 @@ describe('refresh During Pre-Search', () => {
       // Should create optimistic user message from userQuery
       const recoveredMessage = {
         id: `optimistic-user-${Date.now()}-r0`,
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: preSearch.userQuery, type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: preSearch.userQuery }],
-        metadata: { role: MessageRoles.USER, roundNumber: 0, isOptimistic: true },
       };
 
       expect(recoveredMessage.parts[0]?.text).toBe('Recovered query text');
@@ -199,7 +199,7 @@ describe('refresh During Participant Streaming', () => {
       const isComplete = metadata?.finishReason === FinishReasons.STOP
         || metadata?.finishReason === FinishReasons.LENGTH;
 
-      expect(isComplete).toBe(false);
+      expect(isComplete).toBeFalsy();
     });
 
     it('identifies P0 as next participant to trigger when empty parts', () => {
@@ -245,17 +245,17 @@ describe('refresh During Participant Streaming', () => {
 
       expect(completedCount).toBe(1);
       expect(nextParticipantIndex).toBe(1);
-      expect(isRoundComplete).toBe(false);
+      expect(isRoundComplete).toBeFalsy();
     });
 
     it('sets waitingToStartStreaming AND nextParticipantToTrigger', () => {
       // Bug fix: Both must be set for provider to trigger next participant
       const state = {
-        waitingToStartStreaming: true,
         nextParticipantToTrigger: 1,
+        waitingToStartStreaming: true,
       };
 
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
       expect(state.nextParticipantToTrigger).toBe(1);
     });
   });
@@ -263,22 +263,22 @@ describe('refresh During Participant Streaming', () => {
   describe('refresh While Middle Participant (P1) Streaming', () => {
     it('detects P0 complete, P1 incomplete', () => {
       const messages = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0',
           content: 'P0 complete',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1',
           content: 'P1 partial...',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 0,
         }),
       ];
 
@@ -291,27 +291,27 @@ describe('refresh During Participant Streaming', () => {
 
     it('identifies P1 as next to trigger (not P2)', () => {
       const messages = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0',
           content: 'P0 complete',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // P1 has partial content but no complete finishReason
         {
           id: 'p1',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Partial response...' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
             participantId: 'participant-1',
             participantIndex: 1,
-            finishReason: FinishReasons.UNKNOWN,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           } as DbAssistantMessageMetadata,
+          parts: [{ text: 'Partial response...', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -336,22 +336,22 @@ describe('refresh During Participant Streaming', () => {
   describe('refresh While Last Participant Streaming', () => {
     it('detects round NOT complete until last participant finishes', () => {
       const messages = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1',
           content: 'P1 partial',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          id: 'p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          roundNumber: 0,
         }),
       ];
       const participantCount = 2;
@@ -362,7 +362,7 @@ describe('refresh During Participant Streaming', () => {
         return metadata.finishReason === FinishReasons.STOP || metadata.finishReason === FinishReasons.LENGTH;
       }) && assistantMessages.length === participantCount;
 
-      expect(allComplete).toBe(false);
+      expect(allComplete).toBeFalsy();
     });
   });
 });
@@ -379,7 +379,7 @@ describe('refresh During Moderator', () => {
       const isModeratorComplete = moderatorStatus === MessageStatuses.COMPLETE
         || moderatorStatus === MessageStatuses.FAILED;
 
-      expect(isModeratorComplete).toBe(false);
+      expect(isModeratorComplete).toBeFalsy();
     });
 
     it('allows round to complete even if moderator fails', () => {
@@ -390,7 +390,7 @@ describe('refresh During Moderator', () => {
       // User can still send new message
       const canProceed = allParticipantsComplete;
 
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
   });
 
@@ -404,7 +404,7 @@ describe('refresh During Moderator', () => {
         && moderatorStatus === MessageStatuses.COMPLETE
         && hasAiGeneratedTitle;
 
-      expect(canNavigate).toBe(false);
+      expect(canNavigate).toBeFalsy();
     });
 
     it('allows navigation when moderator complete', () => {
@@ -418,7 +418,7 @@ describe('refresh During Moderator', () => {
         && hasAiGeneratedTitle
         && !!threadSlug;
 
-      expect(canNavigate).toBe(true);
+      expect(canNavigate).toBeTruthy();
     });
   });
 });
@@ -431,22 +431,22 @@ describe('refresh After Round Complete', () => {
   describe('complete Round Detection', () => {
     it('detects round complete when all participants finished', () => {
       const messages = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1',
           content: 'P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
       const participantCount = 2;
@@ -457,7 +457,7 @@ describe('refresh After Round Complete', () => {
         return metadata.finishReason === FinishReasons.STOP || metadata.finishReason === FinishReasons.LENGTH;
       }) && assistantMessages.length === participantCount;
 
-      expect(allComplete).toBe(true);
+      expect(allComplete).toBeTruthy();
     });
 
     it('does NOT trigger resumption for complete round', () => {
@@ -467,7 +467,7 @@ describe('refresh After Round Complete', () => {
 
       const shouldResume = !isRoundComplete && !isStreaming && !waitingToStartStreaming;
 
-      expect(shouldResume).toBe(false);
+      expect(shouldResume).toBeFalsy();
     });
   });
 
@@ -479,7 +479,7 @@ describe('refresh After Round Complete', () => {
 
       const canSubmit = isRoundComplete && !isStreaming && pendingMessage === null;
 
-      expect(canSubmit).toBe(true);
+      expect(canSubmit).toBeTruthy();
     });
   });
 });
@@ -495,17 +495,17 @@ describe('stream Completion Detection (KV)', () => {
 
       const hasActiveStream = streamStatus !== null;
 
-      expect(hasActiveStream).toBe(false);
+      expect(hasActiveStream).toBeFalsy();
     });
 
     it('returns stream info when stream is active', () => {
       const streamStatus = {
+        createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        status: StreamStatuses.ACTIVE,
         streamId: 'thread-123_r0_p0',
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        status: StreamStatuses.ACTIVE,
-        createdAt: new Date(),
       };
 
       expect(streamStatus.status).toBe(StreamStatuses.ACTIVE);
@@ -513,13 +513,13 @@ describe('stream Completion Detection (KV)', () => {
 
     it('returns stream info when stream completed', () => {
       const streamStatus = {
+        completedAt: new Date(),
+        messageId: 'thread-123_r0_p0',
+        participantIndex: 0,
+        roundNumber: 0,
+        status: StreamStatuses.COMPLETED,
         streamId: 'thread-123_r0_p0',
         threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        status: StreamStatuses.COMPLETED,
-        messageId: 'thread-123_r0_p0',
-        completedAt: new Date(),
       };
 
       expect(streamStatus.status).toBe(StreamStatuses.COMPLETED);
@@ -552,14 +552,14 @@ describe('stream Completion Detection (KV)', () => {
 
     it('fetches complete message from DB if stream completed during refresh', () => {
       const streamStatus = {
-        status: StreamStatuses.COMPLETED,
         messageId: 'thread-123_r0_p0',
+        status: StreamStatuses.COMPLETED,
       };
 
       // Should fetch message from DB using messageId
       const shouldFetchFromDb = streamStatus.status === StreamStatuses.COMPLETED;
 
-      expect(shouldFetchFromDb).toBe(true);
+      expect(shouldFetchFromDb).toBeTruthy();
     });
   });
 });
@@ -573,17 +573,17 @@ describe('multi-Round Resumption', () => {
     it('only checks latest round for incompleteness', () => {
       const messages = [
         // Round 0 - complete
-        createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - incomplete
-        createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
       ];
 
       // Find max round
@@ -600,32 +600,32 @@ describe('multi-Round Resumption', () => {
     it('ignores incomplete earlier rounds', () => {
       const messages = [
         // Round 0 - incomplete (missing P1)
-        createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - complete
-        createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'p0-r1',
           content: 'R1P0',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'p1-r1',
           content: 'R1P1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
       const participantCount = 2;
@@ -642,7 +642,7 @@ describe('multi-Round Resumption', () => {
           return meta.finishReason === FinishReasons.STOP || meta.finishReason === FinishReasons.LENGTH;
         });
 
-      expect(round1Complete).toBe(true);
+      expect(round1Complete).toBeTruthy();
     });
   });
 });
@@ -669,7 +669,7 @@ describe('race Condition Prevention', () => {
       // Second trigger should be blocked
       const canTrigger = !triggeredParticipants.has(key);
 
-      expect(canTrigger).toBe(false);
+      expect(canTrigger).toBeFalsy();
     });
 
     it('clears trigger refs on thread change', () => {
@@ -690,7 +690,7 @@ describe('race Condition Prevention', () => {
 
       const shouldBlockResumption = hasEarlyOptimisticMessage || pendingMessage !== null;
 
-      expect(shouldBlockResumption).toBe(true);
+      expect(shouldBlockResumption).toBeTruthy();
     });
   });
 
@@ -700,7 +700,7 @@ describe('race Condition Prevention', () => {
 
       const shouldBlockResumption = isStreaming;
 
-      expect(shouldBlockResumption).toBe(true);
+      expect(shouldBlockResumption).toBeTruthy();
     });
   });
 });
@@ -718,7 +718,7 @@ describe('stale State Cleanup', () => {
 
       const isStale = waitingToStartStreaming && pendingMessage === null && !isStreaming;
 
-      expect(isStale).toBe(true);
+      expect(isStale).toBeTruthy();
     });
 
     it('clears stale waitingToStartStreaming', () => {
@@ -727,7 +727,7 @@ describe('stale State Cleanup', () => {
       // Clear stale flag
       waitingToStartStreaming = false;
 
-      expect(waitingToStartStreaming).toBe(false);
+      expect(waitingToStartStreaming).toBeFalsy();
     });
   });
 
@@ -738,7 +738,7 @@ describe('stale State Cleanup', () => {
 
       const isStuck = Date.now() - streamingStartTime > TIMEOUT_MS;
 
-      expect(isStuck).toBe(true);
+      expect(isStuck).toBeTruthy();
     });
 
     it('clears stuck isStreaming after timeout', () => {
@@ -747,7 +747,7 @@ describe('stale State Cleanup', () => {
       // Timeout handler clears flag
       isStreaming = false;
 
-      expect(isStreaming).toBe(false);
+      expect(isStreaming).toBeFalsy();
     });
   });
 });
@@ -762,7 +762,7 @@ describe('edge Cases', () => {
       const messages: unknown[] = [];
       const hasMessages = messages.length > 0;
 
-      expect(hasMessages).toBe(false);
+      expect(hasMessages).toBeFalsy();
     });
   });
 
@@ -777,7 +777,7 @@ describe('edge Cases', () => {
         p => p.id === messageParticipantId,
       );
 
-      expect(participantExists).toBe(false);
+      expect(participantExists).toBeFalsy();
     });
 
     it('skips resumption on participant mismatch', () => {
@@ -785,7 +785,7 @@ describe('edge Cases', () => {
 
       const shouldResume = !hasParticipantMismatch;
 
-      expect(shouldResume).toBe(false);
+      expect(shouldResume).toBeFalsy();
     });
   });
 
@@ -808,8 +808,8 @@ describe('edge Cases', () => {
       const messages = [
         {
           id: 'optimistic-user-123',
-          role: MessageRoles.USER,
           metadata: { isOptimistic: true },
+          role: MessageRoles.USER,
         },
       ];
 
@@ -817,7 +817,7 @@ describe('edge Cases', () => {
         m => (m.metadata as { isOptimistic?: boolean }).isOptimistic,
       );
 
-      expect(hasOptimistic).toBe(true);
+      expect(hasOptimistic).toBeTruthy();
     });
   });
 });

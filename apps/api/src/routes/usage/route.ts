@@ -19,18 +19,18 @@ import { UsageStatsResponseSchema } from './schema';
  * Frontend derives quota blocking from: remaining === 0 or used >= limit
  */
 export const getUserUsageStatsRoute = createRoute({
+  description: 'Retrieve comprehensive usage statistics with quota limits for all resource types',
   method: 'get',
   path: '/usage/stats',
-  tags: ['usage'],
-  summary: 'Get user usage statistics',
-  description: 'Retrieve comprehensive usage statistics with quota limits for all resource types',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Usage statistics retrieved successfully',
       content: {
         'application/json': { schema: UsageStatsResponseSchema },
       },
+      description: 'Usage statistics retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get user usage statistics',
+  tags: ['usage'],
 });

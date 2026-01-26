@@ -46,7 +46,7 @@ function isAssistantMessage(msg: TestUserMessage | TestAssistantMessage): msg is
  * Get assistant messages with proper typing
  * ✅ TYPE-SAFE: Returns narrowed array without casting
  */
-function getAssistantMessages(messages: Array<TestUserMessage | TestAssistantMessage>): TestAssistantMessage[] {
+function getAssistantMessages(messages: (TestUserMessage | TestAssistantMessage)[]): TestAssistantMessage[] {
   return messages.filter(isAssistantMessage);
 }
 
@@ -58,17 +58,17 @@ function createCompleteRound(
   roundNumber: number,
   participantCount: number,
   options?: {
-    participantFinishReasons?: Array<DbAssistantMessageMetadata['finishReason']>;
+    participantFinishReasons?: DbAssistantMessageMetadata['finishReason'][];
     includeUserMessage?: boolean;
   },
-): Array<TestUserMessage | TestAssistantMessage> {
-  const messages: Array<TestUserMessage | TestAssistantMessage> = [];
-  const { participantFinishReasons, includeUserMessage = true } = options ?? {};
+): (TestUserMessage | TestAssistantMessage)[] {
+  const messages: (TestUserMessage | TestAssistantMessage)[] = [];
+  const { includeUserMessage = true, participantFinishReasons } = options ?? {};
 
   if (includeUserMessage) {
     messages.push(createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }));
   }
@@ -76,12 +76,12 @@ function createCompleteRound(
   for (let i = 0; i < participantCount; i++) {
     const finishReason = participantFinishReasons?.[i] ?? FinishReasons.STOP;
     messages.push(createTestAssistantMessage({
-      id: `thread-123_r${roundNumber}_p${i}`,
       content: `Participant ${i} response for round ${roundNumber}`,
-      roundNumber,
+      finishReason,
+      id: `thread-123_r${roundNumber}_p${i}`,
       participantId: `participant-${i}`,
       participantIndex: i,
-      finishReason,
+      roundNumber,
     }));
   }
 
@@ -96,8 +96,8 @@ describe('round Numbering', () => {
   describe('initial Round', () => {
     it('first round should be numbered 0', () => {
       const userMessage = createTestUserMessage({
-        id: 'msg-1',
         content: 'First message',
+        id: 'msg-1',
         roundNumber: 0,
       });
 
@@ -106,11 +106,11 @@ describe('round Numbering', () => {
 
     it('first participant response should have roundNumber 0', () => {
       const assistantMessage = createTestAssistantMessage({
-        id: 'msg-2',
         content: 'First response',
-        roundNumber: 0,
+        id: 'msg-2',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
 
       expect(assistantMessage.metadata.roundNumber).toBe(0);
@@ -266,7 +266,7 @@ describe('round Completion Detection', () => {
       const isComplete = assistantMessages.every(msg =>
         msg.metadata.finishReason === FinishReasons.STOP || msg.metadata.finishReason === FinishReasons.LENGTH);
 
-      expect(isComplete).toBe(true);
+      expect(isComplete).toBeTruthy();
     });
 
     it('round is NOT complete when participant has finishReason=unknown', () => {
@@ -278,7 +278,7 @@ describe('round Completion Detection', () => {
       const isComplete = assistantMessages.every(msg =>
         msg.metadata.finishReason === FinishReasons.STOP || msg.metadata.finishReason === FinishReasons.LENGTH);
 
-      expect(isComplete).toBe(false);
+      expect(isComplete).toBeFalsy();
     });
 
     it('round is NOT complete when participants are missing', () => {
@@ -291,36 +291,36 @@ describe('round Completion Detection', () => {
 
       const allResponded = assistantMessages.length === expectedParticipantCount;
 
-      expect(allResponded).toBe(false);
+      expect(allResponded).toBeFalsy();
     });
   });
 
   describe('error States', () => {
     it('participant with hasError=true still counts as responded', () => {
       const errorMessage = createTestAssistantMessage({
-        id: 'error-msg',
         content: 'Error occurred',
-        roundNumber: 0,
+        finishReason: FinishReasons.ERROR,
+        hasError: true,
+        id: 'error-msg',
         participantId: 'participant-0',
         participantIndex: 0,
-        hasError: true,
-        finishReason: FinishReasons.ERROR,
+        roundNumber: 0,
       });
 
       // ✅ TYPE-SAFE: Direct property access on properly typed message
-      expect(errorMessage.metadata.hasError).toBe(true);
+      expect(errorMessage.metadata.hasError).toBeTruthy();
       // Even with error, participant has responded
       expect(errorMessage.role).toBe(UIMessageRoles.ASSISTANT);
     });
 
     it('finishReason=error indicates participant failed', () => {
       const errorMessage = createTestAssistantMessage({
-        id: 'error-msg',
         content: '',
-        roundNumber: 0,
+        finishReason: FinishReasons.ERROR,
+        id: 'error-msg',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.ERROR,
+        roundNumber: 0,
       });
 
       // ✅ TYPE-SAFE: Direct property access on properly typed message
@@ -338,24 +338,24 @@ describe('round State Transitions', () => {
     it('isStreaming=true when round is in progress', () => {
       // Simulate state during streaming
       const state = {
+        currentParticipantIndex: 1,
         isStreaming: true,
         streamingRoundNumber: 0,
-        currentParticipantIndex: 1,
       };
 
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(0);
     });
 
     it('isStreaming=false when round completes', () => {
       // Simulate state after completion
       const state = {
+        currentParticipantIndex: 0,
         isStreaming: false,
         streamingRoundNumber: null,
-        currentParticipantIndex: 0,
       };
 
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
     });
 
@@ -377,21 +377,21 @@ describe('round State Transitions', () => {
   describe('waitingToStartStreaming State', () => {
     it('true when preparing to stream (before first participant)', () => {
       const state = {
-        waitingToStartStreaming: true,
         isStreaming: false,
+        waitingToStartStreaming: true,
       };
 
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('false once streaming actually begins', () => {
       const state = {
-        waitingToStartStreaming: false,
         isStreaming: true,
+        waitingToStartStreaming: false,
       };
 
-      expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.isStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeFalsy();
+      expect(state.isStreaming).toBeTruthy();
     });
   });
 });
@@ -410,7 +410,7 @@ describe('pre-Search Phase', () => {
         && (preSearch.status === MessageStatuses.PENDING
           || preSearch.status === MessageStatuses.STREAMING);
 
-      expect(shouldWait).toBe(true);
+      expect(shouldWait).toBeTruthy();
     });
 
     it('participants proceed when pre-search complete', () => {
@@ -421,7 +421,7 @@ describe('pre-Search Phase', () => {
         && (preSearch.status === MessageStatuses.PENDING
           || preSearch.status === MessageStatuses.STREAMING);
 
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
 
     it('participants proceed when web search disabled', () => {
@@ -432,7 +432,7 @@ describe('pre-Search Phase', () => {
         && (preSearch.status === MessageStatuses.PENDING
           || preSearch.status === MessageStatuses.STREAMING);
 
-      expect(shouldWait).toBe(false);
+      expect(shouldWait).toBeFalsy();
     });
   });
 

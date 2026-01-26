@@ -69,14 +69,14 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
   const method = init?.method || 'GET';
   const body = init?.body ? String(init.body) : undefined;
 
-  fetchCalls.push({ url, method, body, timestamp: Date.now() });
+  fetchCalls.push({ body, method, timestamp: Date.now(), url });
 
   // Track telemetry event for request start
   telemetryEvents.push({
-    type: 'span_start',
+    attributes: { method, url },
     name: 'http.request',
-    attributes: { url, method },
     timestamp: Date.now(),
+    type: 'span_start',
   });
 
   if (url.includes('/stream') && method === 'POST') {
@@ -95,10 +95,10 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
   }
 
   return Promise.resolve({
-    ok: true,
-    status: 200,
     headers: new Headers({ 'content-type': 'application/json' }),
     json: async () => ({ success: true }),
+    ok: true,
+    status: 200,
   } as Response);
 }
 
@@ -111,7 +111,7 @@ describe('streaming Telemetry E2E', () => {
     telemetryEvents.length = 0;
     fetchCalls.length = 0;
     originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(mockFetchImplementation);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mockFetchImplementation);
   });
 
   afterEach(() => {
@@ -125,8 +125,8 @@ describe('streaming Telemetry E2E', () => {
       const threadId = 'thread_e2e_test';
       const roundNumber = 0;
       const participants = [
-        createMockParticipant({ id: 'p1', threadId, priority: 0, modelId: ModelIds.OPENAI_GPT_4O_MINI }),
-        createMockParticipant({ id: 'p2', threadId, priority: 1, modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5 }),
+        createMockParticipant({ id: 'p1', modelId: ModelIds.OPENAI_GPT_4O_MINI, priority: 0, threadId }),
+        createMockParticipant({ id: 'p2', modelId: ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5, priority: 1, threadId }),
       ];
 
       // Initialize store state
@@ -141,17 +141,17 @@ describe('streaming Telemetry E2E', () => {
           const response = await fetch(
             `/api/v1/chat/threads/${threadId}/stream`,
             {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 id: threadId,
                 message: {
                   id: `${threadId}_r${roundNumber}_user`,
+                  parts: [{ text: 'Test question for E2E', type: 'text' }],
                   role: MessageRoles.USER,
-                  parts: [{ type: 'text', text: 'Test question for E2E' }],
                 },
                 participantIndex: i,
               }),
+              headers: { 'Content-Type': 'application/json' },
+              method: 'POST',
             },
           );
 
@@ -159,8 +159,9 @@ describe('streaming Telemetry E2E', () => {
           if (reader) {
             while (true) {
               const { done } = await reader.read();
-              if (done)
+              if (done) {
                 break;
+              }
             }
           }
         });
@@ -183,14 +184,14 @@ describe('streaming Telemetry E2E', () => {
         const response = await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               participantMessageIds: [
                 `${threadId}_r${roundNumber}_p0`,
                 `${threadId}_r${roundNumber}_p1`,
               ],
             }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
 
@@ -198,8 +199,9 @@ describe('streaming Telemetry E2E', () => {
         if (reader) {
           while (true) {
             const { done } = await reader.read();
-            if (done)
+            if (done) {
               break;
+            }
           }
         }
       });
@@ -214,14 +216,14 @@ describe('streaming Telemetry E2E', () => {
       // Stream request
       await act(async () => {
         await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
           body: JSON.stringify({ id: threadId, participantIndex: 0 }),
+          method: 'POST',
         });
       });
 
       // Verify telemetry events were recorded
       expect(telemetryEvents.length).toBeGreaterThan(0);
-      expect(telemetryEvents.some(e => e.type === 'span_start')).toBe(true);
+      expect(telemetryEvents.some(e => e.type === 'span_start')).toBeTruthy();
     });
   });
 
@@ -235,8 +237,8 @@ describe('streaming Telemetry E2E', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,
           {
-            method: 'POST',
             body: JSON.stringify({ userQuery: 'Test query for web search' }),
+            method: 'POST',
           },
         );
       });
@@ -244,8 +246,8 @@ describe('streaming Telemetry E2E', () => {
       // Participant stream
       await act(async () => {
         await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
           body: JSON.stringify({ id: threadId, participantIndex: 0 }),
+          method: 'POST',
         });
       });
 
@@ -268,24 +270,24 @@ describe('streaming Telemetry E2E', () => {
       // Override mock to simulate failure
       const failingFetch = vi.fn().mockImplementation((input) => {
         const url = typeof input === 'string' ? input : input.toString();
-        fetchCalls.push({ url, method: 'POST', timestamp: Date.now() });
+        fetchCalls.push({ method: 'POST', timestamp: Date.now(), url });
 
         if (url.includes('/stream')) {
           return Promise.resolve({
-            ok: false,
-            status: 500,
             headers: new Headers({ 'content-type': 'application/json' }),
             json: async () => ({
-              success: false,
               error: { message: 'Model unavailable' },
+              success: false,
             }),
+            ok: false,
+            status: 500,
           } as Response);
         }
 
         return Promise.resolve({
+          json: async () => ({ success: true }),
           ok: true,
           status: 200,
-          json: async () => ({ success: true }),
         } as Response);
       });
 
@@ -295,8 +297,8 @@ describe('streaming Telemetry E2E', () => {
 
       try {
         await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
           body: JSON.stringify({ id: threadId, participantIndex: 0 }),
+          method: 'POST',
         });
       } catch {
         // Expected to handle gracefully
@@ -342,18 +344,18 @@ describe('streaming Telemetry E2E', () => {
       // Regeneration request
       await act(async () => {
         await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: threadId,
-            participantIndex: 0,
-            regenerateRound: roundNumber,
             message: {
               id: `${threadId}_r${roundNumber}_user`,
+              parts: [{ text: 'Original question', type: 'text' }],
               role: MessageRoles.USER,
-              parts: [{ type: 'text', text: 'Original question' }],
             },
+            participantIndex: 0,
+            regenerateRound: roundNumber,
           }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
         });
       });
 
@@ -361,11 +363,13 @@ describe('streaming Telemetry E2E', () => {
       expect(streamCalls).toHaveLength(1);
 
       const streamCall = streamCalls[0];
-      if (!streamCall)
+      if (!streamCall) {
         throw new Error('expected streamCall');
+      }
       const streamCallBody = streamCall.body;
-      if (!streamCallBody)
+      if (!streamCallBody) {
         throw new Error('expected streamCall.body');
+      }
       const body = JSON.parse(streamCallBody);
       expect(body.regenerateRound).toBe(roundNumber);
     });
@@ -381,7 +385,7 @@ describe('streaming Telemetry E2E', () => {
         store.getState().setIsStreaming(true);
       });
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Complete streaming
       act(() => {
@@ -389,7 +393,7 @@ describe('streaming Telemetry E2E', () => {
         store.getState().completeStreaming();
       });
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should track moderator streaming state separately', async () => {
@@ -401,14 +405,14 @@ describe('streaming Telemetry E2E', () => {
         store.getState().setIsModeratorStreaming(true);
       });
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
+      expect(store.getState().isStreaming).toBeFalsy();
 
       act(() => {
         store.getState().completeModeratorStream();
       });
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
 
     it('should maintain message state across round transitions', async () => {
@@ -420,15 +424,15 @@ describe('streaming Telemetry E2E', () => {
         store.getState().setMessages([
           {
             id: `${threadId}_r0_user`,
-            role: MessageRoles.USER,
-            parts: [{ type: 'text', text: 'Round 0 question' }],
             metadata: { roundNumber: 0 },
+            parts: [{ text: 'Round 0 question', type: 'text' }],
+            role: MessageRoles.USER,
           },
           {
             id: `${threadId}_r0_p0`,
+            metadata: { participantIndex: 0, roundNumber: 0 },
+            parts: [{ text: 'Round 0 response', type: 'text' }],
             role: MessageRoles.ASSISTANT,
-            parts: [{ type: 'text', text: 'Round 0 response' }],
-            metadata: { roundNumber: 0, participantIndex: 0 },
           },
         ]);
       });
@@ -439,9 +443,9 @@ describe('streaming Telemetry E2E', () => {
           ...current,
           {
             id: `${threadId}_r1_user`,
-            role: MessageRoles.USER,
-            parts: [{ type: 'text', text: 'Round 1 question' }],
             metadata: { roundNumber: 1 },
+            parts: [{ text: 'Round 1 question', type: 'text' }],
+            role: MessageRoles.USER,
           },
         ]);
       });
@@ -469,26 +473,28 @@ describe('streaming Telemetry E2E', () => {
 
       await act(async () => {
         await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: threadId,
             message: {
               id: `${threadId}_r0_user`,
+              parts: [{ text: 'Test', type: 'text' }],
               role: MessageRoles.USER,
-              parts: [{ type: 'text', text: 'Test' }],
             },
             participantIndex: 0,
           }),
+          headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
         });
       });
 
       const streamCall = fetchCalls.find(c => c.url.includes('/stream'));
-      if (!streamCall)
+      if (!streamCall) {
         throw new Error('expected streamCall');
+      }
       const streamCallBody = streamCall.body;
-      if (!streamCallBody)
+      if (!streamCallBody) {
         throw new Error('expected streamCall.body');
+      }
 
       const body = JSON.parse(streamCallBody);
       expect(body.id).toBe(threadId);
@@ -509,19 +515,21 @@ describe('streaming Telemetry E2E', () => {
         await fetch(
           `/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
           {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ participantMessageIds }),
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
           },
         );
       });
 
       const moderatorCall = fetchCalls.find(c => c.url.includes('/moderator'));
-      if (!moderatorCall)
+      if (!moderatorCall) {
         throw new Error('expected moderatorCall');
+      }
       const moderatorCallBody = moderatorCall.body;
-      if (!moderatorCallBody)
+      if (!moderatorCallBody) {
         throw new Error('expected moderatorCall.body');
+      }
 
       const body = JSON.parse(moderatorCallBody);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
@@ -535,16 +543,17 @@ describe('streaming Telemetry E2E', () => {
 
       await act(async () => {
         const response = await fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-          method: 'POST',
           body: JSON.stringify({ id: threadId, participantIndex: 0 }),
+          method: 'POST',
         });
 
         const reader = response.body?.getReader();
         if (reader) {
           while (true) {
             const { done } = await reader.read();
-            if (done)
+            if (done) {
               break;
+            }
           }
         }
       });
@@ -574,16 +583,16 @@ describe('streaming Telemetry E2E', () => {
       await act(async () => {
         await Promise.all([
           fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-            method: 'POST',
             body: JSON.stringify({ id: threadId, participantIndex: 0 }),
+            method: 'POST',
           }),
           fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-            method: 'POST',
             body: JSON.stringify({ id: threadId, participantIndex: 1 }),
+            method: 'POST',
           }),
           fetch(`/api/v1/chat/threads/${threadId}/stream`, {
-            method: 'POST',
             body: JSON.stringify({ id: threadId, participantIndex: 2 }),
+            method: 'POST',
           }),
         ]);
       });
@@ -605,7 +614,7 @@ describe('streaming Telemetry E2E', () => {
 
       // Check if already triggered
       const hasBeenTriggered = store.getState().hasModeratorStreamBeenTriggered(moderatorId, roundNumber);
-      expect(hasBeenTriggered).toBe(true);
+      expect(hasBeenTriggered).toBeTruthy();
     });
   });
 });
@@ -618,10 +627,10 @@ describe('telemetry Purpose Verification', () => {
   describe('observability Goals', () => {
     it('should provide request tracing capability', () => {
       const traceContext = {
-        traceId: 'trace_abc123',
-        spanId: 'span_xyz789',
         parentSpanId: null,
         sampled: true,
+        spanId: 'span_xyz789',
+        traceId: 'trace_abc123',
       };
 
       expect(traceContext.traceId).toBeDefined();
@@ -630,13 +639,13 @@ describe('telemetry Purpose Verification', () => {
 
     it('should enable cost attribution by user and model', () => {
       const costAttribution = {
+        inputCostPerMillion: 2.5,
+        inputTokens: 1500,
+        modelId: ModelIds.OPENAI_GPT_4O_MINI,
+        outputCostPerMillion: 10.0,
+        outputTokens: 800,
         userId: 'user_123',
         userTier: 'pro',
-        modelId: ModelIds.OPENAI_GPT_4O_MINI,
-        inputTokens: 1500,
-        outputTokens: 800,
-        inputCostPerMillion: 2.5,
-        outputCostPerMillion: 10.0,
       };
 
       const estimatedCost
@@ -650,8 +659,8 @@ describe('telemetry Purpose Verification', () => {
       const latencyMetrics = {
         modelId: ModelIds.OPENAI_GPT_4O_MINI,
         timeToFirstToken: 450, // ms
-        totalDuration: 2500, // ms
         tokensPerSecond: 32,
+        totalDuration: 2500, // ms
       };
 
       expect(latencyMetrics.timeToFirstToken).toBeLessThan(latencyMetrics.totalDuration);
@@ -662,15 +671,15 @@ describe('telemetry Purpose Verification', () => {
   describe('debugging Goals', () => {
     it('should capture error context for debugging', () => {
       const errorContext = {
-        errorType: 'provider_rate_limit',
         errorMessage: 'Rate limit exceeded',
-        traceId: 'trace_error_123',
-        participantId: 'participant_1',
+        errorType: 'provider_rate_limit',
         modelId: ModelIds.OPENAI_GPT_4O_MINI,
+        participantId: 'participant_1',
+        retryAttempt: 3,
         roundNumber: 2,
         threadId: 'thread_abc',
-        retryAttempt: 3,
         timestamp: new Date().toISOString(),
+        traceId: 'trace_error_123',
       };
 
       expect(errorContext.traceId).toBeDefined();
@@ -680,10 +689,10 @@ describe('telemetry Purpose Verification', () => {
 
     it('should link errors to session for replay', () => {
       const sessionContext = {
-        userId: 'user_123',
+        errorTraceId: 'trace_error_456',
         sessionId: 'session_xyz',
         threadId: 'thread_abc',
-        errorTraceId: 'trace_error_456',
+        userId: 'user_123',
       };
 
       expect(sessionContext.sessionId).toBeDefined();
@@ -694,13 +703,13 @@ describe('telemetry Purpose Verification', () => {
   describe('analytics Goals', () => {
     it('should enable usage pattern analysis', () => {
       const usagePattern = {
-        userId: 'user_123',
-        userTier: 'enterprise',
-        modelsUsed: [ModelIds.OPENAI_GPT_4O_MINI, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5],
-        totalRounds: 15,
         averageParticipantsPerRound: 2.5,
+        modelsUsed: [ModelIds.OPENAI_GPT_4O_MINI, ModelIds.ANTHROPIC_CLAUDE_SONNET_4_5],
         moderatorUsageRate: 0.8, // 80% of rounds use moderator
         ragUsageRate: 0.3, // 30% of messages use RAG
+        totalRounds: 15,
+        userId: 'user_123',
+        userTier: 'enterprise',
       };
 
       expect(usagePattern.modelsUsed).toHaveLength(2);
@@ -709,26 +718,26 @@ describe('telemetry Purpose Verification', () => {
 
     it('should track feature adoption', () => {
       const featureAdoption = {
-        reasoningModelsUsed: 150,
-        webSearchEnabled: 45,
-        customSystemPrompts: 23,
-        regenerations: 12,
         attachmentsUsed: 8,
+        customSystemPrompts: 23,
+        reasoningModelsUsed: 150,
+        regenerations: 12,
+        webSearchEnabled: 45,
       };
 
-      expect(Object.values(featureAdoption).every(v => typeof v === 'number')).toBe(true);
+      expect(Object.values(featureAdoption).every(v => typeof v === 'number')).toBeTruthy();
     });
 
     it('should enable A/B testing of prompts', () => {
       const promptExperiment = {
+        conversionMetrics: {
+          moderatorUsageRate: 0.85,
+          regenerationRate: 0.05,
+          userSatisfactionScore: 4.2,
+        },
         promptId: 'moderator_summary',
         promptVersion: 'v3.0',
         variantId: 'A',
-        conversionMetrics: {
-          userSatisfactionScore: 4.2,
-          regenerationRate: 0.05,
-          moderatorUsageRate: 0.85,
-        },
       };
 
       expect(promptExperiment.promptVersion).toBeDefined();

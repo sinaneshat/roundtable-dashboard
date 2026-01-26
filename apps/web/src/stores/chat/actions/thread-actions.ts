@@ -46,10 +46,10 @@ export type UseThreadActionsOptions = {
  * <ChatModeSelector onModeChange={threadActions.handleModeChange} />
  */
 export function useThreadActions(options: UseThreadActionsOptions): UseConfigChangeHandlersReturn {
-  const { slug, isRoundInProgress } = options;
+  const { isRoundInProgress, slug } = options;
 
   // ✅ REFACTORED: Use shared hook for config change handlers
-  const configHandlers = useConfigChangeHandlers({ slug, isRoundInProgress });
+  const configHandlers = useConfigChangeHandlers({ isRoundInProgress, slug });
 
   // Flags - batch with useShallow
   const { contextParticipants, hasPendingConfigChanges } = useChatStore(useShallow(s => ({
@@ -70,30 +70,34 @@ export function useThreadActions(options: UseThreadActionsOptions): UseConfigCha
    * Allows users to modify participants and have changes staged until next message
    */
   useEffect(() => {
-    if (contextParticipants.length === 0)
+    if (contextParticipants.length === 0) {
       return;
-    if (isRoundInProgress || hasPendingConfigChanges)
+    }
+    if (isRoundInProgress || hasPendingConfigChanges) {
       return;
+    }
 
     // ✅ FIX: Detect new participants by checking if id === modelId (not persisted yet)
     const hasNewParticipants = contextParticipants.some(p => p.id === p.modelId);
-    if (hasNewParticipants)
+    if (hasNewParticipants) {
       return;
+    }
 
     // Use participant comparison utility (with ID for context tracking)
     const enabledParticipants = getEnabledSortedParticipants(contextParticipants);
     const contextKey = enabledParticipants.map(p => `${p.id}:${p.modelId}:${p.priority}`).join('|');
 
-    if (contextKey === lastSyncedContextRef.current)
+    if (contextKey === lastSyncedContextRef.current) {
       return;
+    }
 
     lastSyncedContextRef.current = contextKey;
     actions.setSelectedParticipants(enabledParticipants.map((p, index) => ({
+      customRoleId: p.customRoleId || undefined,
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
-      customRoleId: p.customRoleId || undefined,
       priority: index,
+      role: p.role,
     })));
   }, [contextParticipants, isRoundInProgress, hasPendingConfigChanges, actions]);
 

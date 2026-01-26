@@ -35,14 +35,16 @@ export function buildSessionAuthHeaders(sessionToken: string): Record<string, st
  */
 export async function drainStream(response: Response): Promise<void> {
   const reader = response.body?.getReader();
-  if (!reader)
+  if (!reader) {
     return;
+  }
 
   try {
     while (true) {
       const { done } = await reader.read();
-      if (done)
+      if (done) {
         break;
+      }
     }
   } finally {
     reader.releaseLock();

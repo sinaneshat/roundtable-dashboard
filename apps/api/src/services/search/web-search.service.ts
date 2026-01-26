@@ -89,9 +89,9 @@ export async function streamSearchQuery(
 ): Promise<ReturnType<typeof streamText>> {
   try {
     validateModelForOperation(AIModels.WEB_SEARCH, 'web-search-query-generation', {
-      structuredOutput: true,
-      streaming: true,
       minJsonQuality: 'good',
+      streaming: true,
+      structuredOutput: true,
     });
 
     initializeOpenRouter(env);
@@ -111,27 +111,27 @@ export async function streamSearchQuery(
     }
 
     return streamText({
-      model: client.chat(AIModels.WEB_SEARCH),
-      output: Output.object({ schema: MultiQueryGenerationSchema }),
-      system: systemPrompt,
-      prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
+      model: client.chat(AIModels.WEB_SEARCH),
       onError: (error) => {
         if (logger) {
           logger.error('Stream generation error', {
+            error: normalizeError(error).message,
             logType: LogTypes.OPERATION,
             operationName: 'streamSearchQuery',
-            error: normalizeError(error).message,
           });
         }
       },
+      output: Output.object({ schema: MultiQueryGenerationSchema }),
+      prompt: buildWebSearchQueryPrompt(userMessage),
+      system: systemPrompt,
     });
   } catch (error) {
     if (logger) {
       logger.error('Search query generation failed', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'streamSearchQuery',
-        error: normalizeError(error).message,
       });
     }
 
@@ -139,8 +139,8 @@ export async function streamSearchQuery(
       'Failed to generate search query. Try using a more capable model.',
       {
         errorType: 'external_service',
-        service: 'openrouter',
         operation: 'query_generation',
+        service: 'openrouter',
       },
     );
   }
@@ -173,8 +173,8 @@ export async function generateSearchQuery(
 
   try {
     validateModelForOperation(modelId, 'web-search-query-generation-sync', {
-      structuredOutput: true,
       minJsonQuality: 'good',
+      structuredOutput: true,
     });
 
     initializeOpenRouter(env);
@@ -194,16 +194,15 @@ export async function generateSearchQuery(
     }
 
     const result = await generateText({
+      maxRetries: 3,
       model: client.chat(modelId),
       output: Output.object({ schema: MultiQueryGenerationSchema }),
-      system: systemPrompt,
       prompt: buildWebSearchQueryPrompt(userMessage),
-      maxRetries: 3,
+      system: systemPrompt,
     });
 
     if (
-      !result.output
-      || !result.output.queries
+      !result.output?.queries
       || result.output.queries.length === 0
     ) {
       const errorContext: ErrorContext = {
@@ -245,17 +244,17 @@ export async function generateSearchQuery(
     };
   } catch (error) {
     const errorDetails = {
-      modelId,
-      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
+      errorType: error instanceof Error ? error.constructor.name : 'Unknown',
+      modelId,
       userMessage: userMessage.substring(0, 100),
     };
 
     if (logger) {
       logger.error('Search query generation failed (non-streaming)', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'generateSearchQuery',
-        error: normalizeError(error).message,
         ...errorDetails,
       });
     }
@@ -264,8 +263,8 @@ export async function generateSearchQuery(
       `Failed to generate search query using ${modelId}. The model may not support structured output properly.`,
       {
         errorType: 'external_service',
-        service: 'openrouter',
         operation: 'query_generation_sync',
+        service: 'openrouter',
       },
     );
   }
@@ -296,40 +295,40 @@ type BrowserResult
     | null;
 
 const _PageOperationConfigSchema = z.object({
-  url: z.string().url(),
-  waitUntil: PageWaitStrategySchema,
-  timeout: z.number().positive(),
-  userAgent: z.string().optional(),
-  viewport: z.object({ width: z.number(), height: z.number() }).strict().optional(),
   blockResourceTypes: z.array(z.string()).optional(),
-  waitForSelector: z.string().optional(),
   selectorTimeout: z.number().optional(),
+  timeout: z.number().positive(),
+  url: z.string().url(),
+  userAgent: z.string().optional(),
+  viewport: z.object({ height: z.number(), width: z.number() }).strict().optional(),
+  waitForSelector: z.string().optional(),
+  waitUntil: PageWaitStrategySchema,
 }).strict();
 
 type PageOperationConfig = z.infer<typeof _PageOperationConfigSchema>;
 
 const _ExtractedContentSchema = z.object({
   content: z.string(),
+  images: z.array(z.object({ alt: z.union([z.string(), z.undefined()]).optional(), url: z.string() }).strict()),
   markdown: z.string(),
   metadata: z.object({
-    title: z.string(),
-    author: z.string().optional(),
-    publishedDate: z.string().optional(),
-    description: z.string().optional(),
-    imageUrl: z.string().optional(),
-    faviconUrl: z.string().optional(),
-    wordCount: z.number(),
+    author: z.union([z.string(), z.undefined()]).optional(),
+    description: z.union([z.string(), z.undefined()]).optional(),
+    faviconUrl: z.union([z.string(), z.undefined()]).optional(),
+    imageUrl: z.union([z.string(), z.undefined()]).optional(),
+    publishedDate: z.union([z.string(), z.undefined()]).optional(),
     readingTime: z.number(),
+    title: z.union([z.string(), z.undefined()]).optional(),
+    wordCount: z.number(),
   }).strict(),
-  images: z.array(z.object({ url: z.string(), alt: z.string().optional() }).strict()),
 }).strict();
 
 type ExtractedContent = z.infer<typeof _ExtractedContentSchema>;
 
 const _ExtractedSearchResultSchema = z.object({
+  snippet: z.string(),
   title: z.string(),
   url: z.string().url(),
-  snippet: z.string(),
 }).strict();
 
 type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
@@ -351,8 +350,9 @@ async function extractWithCloudflareBrowser(
     if (config.blockResourceTypes?.length) {
       await page.setRequestInterception(true);
       page.on('request', (req: PuppeteerRequestHandler) => {
-        if (req.isInterceptResolutionHandled())
+        if (req.isInterceptResolutionHandled()) {
           return;
+        }
         if (config.blockResourceTypes?.includes(req.resourceType())) {
           req.abort();
         } else {
@@ -362,8 +362,8 @@ async function extractWithCloudflareBrowser(
     }
 
     await page.goto(config.url, {
-      waitUntil: config.waitUntil,
       timeout: config.timeout,
+      waitUntil: config.waitUntil,
     });
 
     if (config.waitForSelector) {
@@ -395,8 +395,8 @@ async function searchWithCloudflareBrowser(
   try {
     await page.setUserAgent(userAgent);
     await page.goto(searchUrl, {
-      waitUntil: PageWaitStrategies.DOM_CONTENT_LOADED,
       timeout: 15000,
+      waitUntil: PageWaitStrategies.DOM_CONTENT_LOADED,
     });
 
     const searchFn = createSearchExtractor();
@@ -478,8 +478,9 @@ function createContentExtractor(): ContentExtractorFn {
           // Links
           case 'a': {
             const href = el.getAttribute('href') || '';
-            if (!href || href.startsWith('javascript:'))
+            if (!href || href.startsWith('javascript:')) {
               return children;
+            }
             return `[${children}](${href})`;
           }
 
@@ -487,8 +488,9 @@ function createContentExtractor(): ContentExtractorFn {
           case 'img': {
             const src = el.getAttribute('src') || '';
             const alt = el.getAttribute('alt') || '';
-            if (!src || src.startsWith('data:'))
+            if (!src || src.startsWith('data:')) {
               return '';
+            }
             return `![${alt}](${src})`;
           }
 
@@ -612,14 +614,19 @@ function createContentExtractor(): ContentExtractorFn {
     }
 
     // Extract images
-    const images: Array<{ url: string; alt?: string }> = [];
+    const images: { url: string; alt?: string | undefined }[] = [];
     if (mainElement) {
       const imgElements = mainElement.querySelectorAll('img');
       imgElements.forEach((img) => {
         const src = img.src;
         const alt = img.alt;
         if (src && !src.includes('data:image')) {
-          images.push({ url: src, alt: alt || undefined });
+          // Only include alt if it has a value (satisfies exactOptionalPropertyTypes)
+          const imageEntry: { url: string; alt?: string } = { url: src };
+          if (alt) {
+            imageEntry.alt = alt;
+          }
+          images.push(imageEntry);
         }
       });
     }
@@ -673,18 +680,18 @@ function createContentExtractor(): ContentExtractorFn {
 
     return {
       content: cleanedContent.substring(0, 15000),
+      images: images.slice(0, 10),
       markdown: markdown.substring(0, 20000),
       metadata: {
-        title: cleanText(title),
         author: author ? cleanText(author) : undefined,
-        publishedDate: publishedDate || undefined,
         description: description ? cleanText(description) : undefined,
-        imageUrl: imageUrl || undefined,
         faviconUrl: faviconUrl || undefined,
-        wordCount,
+        imageUrl: imageUrl || undefined,
+        publishedDate: publishedDate || undefined,
         readingTime,
+        title: cleanText(title),
+        wordCount,
       },
-      images: images.slice(0, 10),
     };
   };
 }
@@ -717,7 +724,7 @@ function createSearchExtractor(): SearchExtractorFn {
         let url = href;
         if (href.includes('uddg=')) {
           const match = href.match(/uddg=([^&]+)/);
-          if (match && match[1]) {
+          if (match?.[1]) {
             url = decodeURIComponent(match[1]);
           }
         } else if (urlEl) {
@@ -729,9 +736,9 @@ function createSearchExtractor(): SearchExtractorFn {
         }
 
         items.push({
+          snippet: snippetEl?.textContent?.trim() || '',
           title: titleEl.textContent?.trim() || '',
           url,
-          snippet: snippetEl?.textContent?.trim() || '',
         });
       }
     }
@@ -751,7 +758,7 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
       const browser = await cfPuppeteer.default.launch(env.BROWSER, {
         keep_alive: 600000, // 10 minutes idle timeout
       });
-      return { type: BrowserEnvironments.CLOUDFLARE, browser };
+      return { browser, type: BrowserEnvironments.CLOUDFLARE };
     } catch (error) {
       console.error('[Browser] Cloudflare puppeteer failed:', error instanceof Error ? error.message : error);
       // Fall through to fetch-based fallback
@@ -780,11 +787,11 @@ async function extractLightweightContent(url: string): Promise<{
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch(url, {
-      signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; RoundtableBot/1.0)',
         'Accept': 'text/html',
+        'User-Agent': 'Mozilla/5.0 (compatible; RoundtableBot/1.0)',
       },
+      signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
@@ -896,13 +903,36 @@ async function extractLightweightContent(url: string): Promise<{
       content = `${content.substring(0, 50000)}...`;
     }
 
-    return {
-      imageUrl: imageUrl || twitterImageMatch?.[1],
-      faviconUrl,
-      description: descMatch?.[1]?.substring(0, 300),
-      title: titleMatch?.[1]?.substring(0, 200),
-      content: content || undefined,
-    };
+    // Filter out undefined values to satisfy exactOptionalPropertyTypes
+    const result: {
+      imageUrl?: string;
+      faviconUrl?: string;
+      description?: string;
+      title?: string;
+      content?: string;
+    } = { faviconUrl };
+
+    const contentValue = content || undefined;
+    if (contentValue !== undefined) {
+      result.content = contentValue;
+    }
+
+    const descValue = descMatch?.[1]?.substring(0, 300);
+    if (descValue !== undefined) {
+      result.description = descValue;
+    }
+
+    const imageValue = imageUrl || twitterImageMatch?.[1];
+    if (imageValue !== undefined) {
+      result.imageUrl = imageValue;
+    }
+
+    const titleValue = titleMatch?.[1]?.substring(0, 200);
+    if (titleValue !== undefined) {
+      result.title = titleValue;
+    }
+
+    return result;
   } catch {
     return {};
   }
@@ -942,10 +972,10 @@ async function extractPageContent(
     wordCount: number;
     readingTime: number;
   };
-  images?: Array<{
+  images?: {
     url: string;
     alt?: string;
-  }>;
+  }[];
 }> {
   const browserResult = await initBrowser(env);
 
@@ -955,29 +985,50 @@ async function extractPageContent(
     const lightContent = await extractLightweightContent(url);
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
+    const metadata: {
+      title?: string;
+      author?: string;
+      publishedDate?: string;
+      description?: string;
+      imageUrl?: string;
+      faviconUrl?: string;
+      wordCount: number;
+      readingTime: number;
+    } = {
+      readingTime: Math.ceil(wordCount / 200),
+      wordCount,
+    };
+    if (lightContent.description !== undefined) {
+      metadata.description = lightContent.description;
+    }
+    if (lightContent.faviconUrl !== undefined) {
+      metadata.faviconUrl = lightContent.faviconUrl;
+    }
+    if (lightContent.imageUrl !== undefined) {
+      metadata.imageUrl = lightContent.imageUrl;
+    }
+    if (lightContent.title !== undefined) {
+      metadata.title = lightContent.title;
+    }
+
     return {
       content,
+      metadata,
       rawContent: content,
-      metadata: {
-        title: lightContent.title,
-        description: lightContent.description,
-        imageUrl: lightContent.imageUrl,
-        faviconUrl: lightContent.faviconUrl,
-        wordCount,
-        readingTime: Math.ceil(wordCount / 200),
-      },
     };
   }
 
   // Build config for page operations
   const config: PageOperationConfig = {
-    url,
-    waitUntil: PageWaitStrategies.NETWORK_IDLE_2,
-    timeout,
-    viewport: { width: 1280, height: 800 },
     blockResourceTypes: DEFAULT_BLOCKED_RESOURCE_TYPES,
-    waitForSelector: 'article, main, [role="main"], .content, .post-content',
     selectorTimeout: 3000,
+    timeout,
+    url,
+    viewport: { height: 800, width: 1280 },
+    waitForSelector: 'article, main, [role="main"], .content, .post-content',
+    waitUntil: PageWaitStrategies.NETWORK_IDLE_2,
   };
 
   try {
@@ -997,12 +1048,65 @@ async function extractPageContent(
       rawContent = extracted.content;
     }
 
-    return {
-      content: extracted.content,
-      rawContent,
-      metadata: extracted.metadata,
-      images: extracted.images,
+    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
+    // extracted.metadata has properties with type `string | undefined` but return type expects `string?`
+    const resultMetadata: {
+      title?: string;
+      author?: string;
+      publishedDate?: string;
+      description?: string;
+      imageUrl?: string;
+      faviconUrl?: string;
+      wordCount: number;
+      readingTime: number;
+    } = {
+      readingTime: extracted.metadata.readingTime,
+      wordCount: extracted.metadata.wordCount,
     };
+    if (extracted.metadata.title !== undefined) {
+      resultMetadata.title = extracted.metadata.title;
+    }
+    if (extracted.metadata.author !== undefined) {
+      resultMetadata.author = extracted.metadata.author;
+    }
+    if (extracted.metadata.publishedDate !== undefined) {
+      resultMetadata.publishedDate = extracted.metadata.publishedDate;
+    }
+    if (extracted.metadata.description !== undefined) {
+      resultMetadata.description = extracted.metadata.description;
+    }
+    if (extracted.metadata.imageUrl !== undefined) {
+      resultMetadata.imageUrl = extracted.metadata.imageUrl;
+    }
+    if (extracted.metadata.faviconUrl !== undefined) {
+      resultMetadata.faviconUrl = extracted.metadata.faviconUrl;
+    }
+
+    // Build result with images only if present (satisfies exactOptionalPropertyTypes)
+    const result: {
+      content: string;
+      rawContent?: string;
+      metadata: typeof resultMetadata;
+      images?: { url: string; alt?: string }[];
+    } = {
+      content: extracted.content,
+      metadata: resultMetadata,
+    };
+
+    // Convert images to the correct type, filtering out undefined alt values
+    if (extracted.images !== undefined && extracted.images.length > 0) {
+      result.images = extracted.images.map((img) => {
+        const imageEntry: { url: string; alt?: string } = { url: img.url };
+        if (img.alt !== undefined) {
+          imageEntry.alt = img.alt;
+        }
+        return imageEntry;
+      });
+    }
+    if (rawContent !== undefined) {
+      result.rawContent = rawContent;
+    }
+    return result;
   } catch (browserError) {
     // Close browser on error
     try {
@@ -1016,17 +1120,37 @@ async function extractPageContent(
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
 
+    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
+    const fallbackMetadata: {
+      title?: string;
+      author?: string;
+      publishedDate?: string;
+      description?: string;
+      imageUrl?: string;
+      faviconUrl?: string;
+      wordCount: number;
+      readingTime: number;
+    } = {
+      readingTime: Math.ceil(wordCount / 200),
+      wordCount,
+    };
+    if (lightContent.description !== undefined) {
+      fallbackMetadata.description = lightContent.description;
+    }
+    if (lightContent.faviconUrl !== undefined) {
+      fallbackMetadata.faviconUrl = lightContent.faviconUrl;
+    }
+    if (lightContent.imageUrl !== undefined) {
+      fallbackMetadata.imageUrl = lightContent.imageUrl;
+    }
+    if (lightContent.title !== undefined) {
+      fallbackMetadata.title = lightContent.title;
+    }
+
     return {
       content,
+      metadata: fallbackMetadata,
       rawContent: content,
-      metadata: {
-        title: lightContent.title,
-        description: lightContent.description,
-        imageUrl: lightContent.imageUrl,
-        faviconUrl: lightContent.faviconUrl,
-        wordCount,
-        readingTime: Math.ceil(wordCount / 200),
-      },
     };
   }
 }
@@ -1050,8 +1174,8 @@ async function searchWithBrowser(
   maxResults: number,
   env: ApiEnv['Bindings'],
   params?: Partial<WebSearchParameters>,
-): Promise<Array<{ title: string; url: string; snippet: string }>> {
-  if (!query || !query.trim()) {
+): Promise<{ title: string; url: string; snippet: string }[]> {
+  if (!query?.trim()) {
     return [];
   }
 
@@ -1069,14 +1193,14 @@ async function searchWithBrowser(
   // Add time filter to query if specified
   if (params?.timeRange) {
     const timeFilterMap: Record<string, string> = {
-      day: 'past day',
-      week: 'past week',
-      month: 'past month',
-      year: 'past year',
       d: 'past day',
-      w: 'past week',
+      day: 'past day',
       m: 'past month',
+      month: 'past month',
+      w: 'past week',
+      week: 'past week',
       y: 'past year',
+      year: 'past year',
     };
     const timeFilter = timeFilterMap[params.timeRange];
     if (timeFilter) {
@@ -1087,7 +1211,7 @@ async function searchWithBrowser(
   const browserResult = await initBrowser(env);
   if (!browserResult) {
     // Fallback to fetch-based search when browser unavailable
-    return searchWithFetch(finalQuery, maxResults);
+    return await searchWithFetch(finalQuery, maxResults);
   }
 
   // DuckDuckGo HTML search URL
@@ -1113,7 +1237,7 @@ async function searchWithBrowser(
       await browserResult.browser.close();
     } catch {}
     // Fallback to fetch-based search
-    return searchWithFetch(finalQuery, maxResults);
+    return await searchWithFetch(finalQuery, maxResults);
   }
 }
 
@@ -1124,15 +1248,15 @@ async function searchWithBrowser(
 async function searchWithFetch(
   query: string,
   maxResults: number,
-): Promise<Array<{ title: string; url: string; snippet: string }>> {
+): Promise<{ title: string; url: string; snippet: string }[]> {
   try {
     const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
 
     const response = await fetch(searchUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
     });
 
@@ -1154,7 +1278,7 @@ async function searchWithFetch(
     }
 
     // Parse results from HTML
-    const results: Array<{ title: string; url: string; snippet: string }> = [];
+    const results: { title: string; url: string; snippet: string }[] = [];
 
     // Match result blocks using matchAll to avoid assignment in while
     const resultRegex = /<div[^>]*class="[^"]*result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
@@ -1175,12 +1299,12 @@ async function searchWithFetch(
       const titleMatch = titleRegex.exec(block);
       const snippetMatch = snippetRegex.exec(block);
 
-      if (titleMatch && titleMatch[1] && titleMatch[2]) {
+      if (titleMatch?.[1] && titleMatch[2]) {
         let url = titleMatch[1];
         // Extract actual URL from DuckDuckGo redirect
         if (url.includes('uddg=')) {
           const uddgMatch = url.match(/uddg=([^&]+)/);
-          if (uddgMatch && uddgMatch[1]) {
+          if (uddgMatch?.[1]) {
             url = decodeURIComponent(uddgMatch[1]);
           }
         }
@@ -1191,9 +1315,9 @@ async function searchWithFetch(
         }
 
         results.push({
+          snippet: snippetMatch?.[1] ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '',
           title: titleMatch[2].trim(),
           url,
-          snippet: snippetMatch && snippetMatch[1] ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '',
         });
       }
     }
@@ -1221,13 +1345,14 @@ async function searchWithFetch(
  * @returns Images with AI-generated descriptions
  */
 async function generateImageDescriptions(
-  images: Array<{ url: string; alt?: string }>,
+  images: { url: string; alt?: string | undefined }[],
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
   billingContext?: BillingContext,
-): Promise<Array<{ url: string; description?: string; alt?: string }>> {
-  if (images.length === 0)
+): Promise<{ url: string; description?: string | undefined; alt?: string | undefined }[]> {
+  if (images.length === 0) {
     return [];
+  }
 
   try {
     initializeOpenRouter(env);
@@ -1235,7 +1360,7 @@ async function generateImageDescriptions(
 
     // Process images in batches of 3 for efficiency
     const batchSize = 3;
-    const results: Array<{ url: string; description?: string; alt?: string }>
+    const results: { url: string; description?: string | undefined; alt?: string | undefined }[]
       = [];
 
     for (let i = 0; i < Math.min(images.length, 10); i += batchSize) {
@@ -1250,31 +1375,34 @@ async function generateImageDescriptions(
               logger,
             );
             if (cached) {
-              return {
-                url: image.url,
+              const result: { url: string; description?: string | undefined; alt?: string | undefined } = {
                 description: cached,
-                alt: image.alt,
+                url: image.url,
               };
+              if (image.alt !== undefined) {
+                result.alt = image.alt;
+              }
+              return result;
             }
 
             // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
             const result = await generateText({
-              model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               messages: [
                 {
-                  role: UIMessageRoles.USER,
                   content: [
                     {
-                      type: 'text',
                       text: IMAGE_DESCRIPTION_PROMPT,
+                      type: 'text',
                     },
                     {
-                      type: 'image',
                       image: image.url, // ✅ CRITICAL: Send actual image URL, not text
+                      type: 'image',
                     },
                   ],
+                  role: UIMessageRoles.USER,
                 },
               ],
+              model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
               temperature: 0.3, // Low temperature for factual descriptions
               // Note: maxTokens not supported in AI SDK v6 generateText with messages
             });
@@ -1290,11 +1418,11 @@ async function generateImageDescriptions(
               if (safeInputTokens > 0 || safeOutputTokens > 0) {
                 try {
                   await finalizeCredits(billingContext.userId, `img-desc-${ulid()}`, {
-                    inputTokens: safeInputTokens,
-                    outputTokens: safeOutputTokens,
                     action: CreditActions.AI_RESPONSE,
-                    threadId: billingContext.threadId,
+                    inputTokens: safeInputTokens,
                     modelId: AIModels.WEB_SEARCH,
+                    outputTokens: safeOutputTokens,
+                    threadId: billingContext.threadId,
                   });
                 } catch (billingError) {
                   console.error('[WebSearch] Image description billing failed:', billingError);
@@ -1302,24 +1430,30 @@ async function generateImageDescriptions(
               }
             }
 
-            return {
-              url: image.url,
+            const successResult: { url: string; description?: string | undefined; alt?: string | undefined } = {
               description: result.text,
-              alt: image.alt,
+              url: image.url,
             };
+            if (image.alt !== undefined) {
+              successResult.alt = image.alt;
+            }
+            return successResult;
           } catch (error) {
             if (logger) {
               logger.warn('Failed to generate image description', {
-                logType: LogTypes.EDGE_CASE,
-                scenario: 'image_description_failed',
                 context: `URL: ${image.url}`,
                 error: normalizeError(error).message,
+                logType: LogTypes.EDGE_CASE,
+                scenario: 'image_description_failed',
               });
             }
-            return {
+            const errorResult: { url: string; description?: string | undefined; alt?: string | undefined } = {
               url: image.url,
-              alt: image.alt,
             };
+            if (image.alt !== undefined) {
+              errorResult.alt = image.alt;
+            }
+            return errorResult;
           }
         }),
       );
@@ -1331,9 +1465,9 @@ async function generateImageDescriptions(
   } catch (error) {
     if (logger) {
       logger.error('Image description generation failed', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'generateImageDescriptions',
-        error: normalizeError(error).message,
       });
     }
     // Return images without descriptions on error
@@ -1390,25 +1524,25 @@ export async function streamAnswerSummary(
 
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
-      system: systemPrompt,
       prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+      system: systemPrompt,
       temperature: 0.5,
       // Note: maxTokens controlled by model config, not streamText params
     });
   } catch (error) {
     if (logger) {
       logger.error('Answer summary streaming failed', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'streamAnswerSummary',
         query,
-        error: normalizeError(error).message,
       });
     }
 
     throw createError.internal('Failed to stream answer summary', {
       errorType: 'external_service',
-      service: 'openrouter',
       operation: 'answer_summary_streaming',
+      service: 'openrouter',
     });
   }
 }
@@ -1438,8 +1572,9 @@ async function generateAnswerSummary(
   logger?: TypedLogger,
   billingContext?: BillingContext,
 ): Promise<string | null> {
-  if (results.length === 0)
+  if (results.length === 0) {
     return null;
+  }
 
   try {
     initializeOpenRouter(env);
@@ -1456,21 +1591,21 @@ async function generateAnswerSummary(
     const systemPrompt = getAnswerSummaryPrompt(mode);
 
     const result = await openRouterService.generateText({
-      modelId: AIModels.WEB_SEARCH,
+      maxTokens: mode === WebSearchActiveAnswerModes.ADVANCED ? 500 : 200,
       messages: [
         {
           id: 'answer-gen',
-          role: UIMessageRoles.USER,
           parts: [
             {
-              type: 'text',
               text: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+              type: 'text',
             },
           ],
+          role: UIMessageRoles.USER,
         },
       ],
+      modelId: AIModels.WEB_SEARCH,
       system: systemPrompt,
-      maxTokens: mode === WebSearchActiveAnswerModes.ADVANCED ? 500 : 200,
       temperature: 0.5,
     });
 
@@ -1483,11 +1618,11 @@ async function generateAnswerSummary(
       if (safeInputTokens > 0 || safeOutputTokens > 0) {
         try {
           await finalizeCredits(billingContext.userId, `answer-summary-${ulid()}`, {
-            inputTokens: safeInputTokens,
-            outputTokens: safeOutputTokens,
             action: CreditActions.AI_RESPONSE,
-            threadId: billingContext.threadId,
+            inputTokens: safeInputTokens,
             modelId: AIModels.WEB_SEARCH,
+            outputTokens: safeOutputTokens,
+            threadId: billingContext.threadId,
           });
         } catch (billingError) {
           console.error('[WebSearch] Answer summary billing failed:', billingError);
@@ -1499,10 +1634,10 @@ async function generateAnswerSummary(
   } catch (error) {
     if (logger) {
       logger.error('Answer summary generation failed', {
+        error: normalizeError(error).message,
         logType: LogTypes.OPERATION,
         operationName: 'generateAnswerSummary',
         query,
-        error: normalizeError(error).message,
       });
     }
     return null;
@@ -1538,20 +1673,20 @@ async function detectSearchParameters(
     initializeOpenRouter(env);
 
     const result = await openRouterService.generateText({
-      modelId: AIModels.WEB_SEARCH,
+      maxTokens: 200,
       messages: [
         {
           id: 'param-detect',
-          role: UIMessageRoles.USER,
           parts: [
             {
-              type: 'text',
               text: buildAutoParameterDetectionPrompt(query),
+              type: 'text',
             },
           ],
+          role: UIMessageRoles.USER,
         },
       ],
-      maxTokens: 200,
+      modelId: AIModels.WEB_SEARCH,
       temperature: 0.3,
     });
 
@@ -1564,11 +1699,11 @@ async function detectSearchParameters(
       if (safeInputTokens > 0 || safeOutputTokens > 0) {
         try {
           await finalizeCredits(billingContext.userId, `param-detect-${ulid()}`, {
-            inputTokens: safeInputTokens,
-            outputTokens: safeOutputTokens,
             action: CreditActions.AI_RESPONSE,
-            threadId: billingContext.threadId,
+            inputTokens: safeInputTokens,
             modelId: AIModels.WEB_SEARCH,
+            outputTokens: safeOutputTokens,
+            threadId: billingContext.threadId,
           });
         } catch (billingError) {
           console.error('[WebSearch] Parameter detection billing failed:', billingError);
@@ -1579,18 +1714,18 @@ async function detectSearchParameters(
     // Parse JSON response
     const parsed = JSON.parse(result.text);
     return {
-      topic: parsed.topic !== 'null' ? parsed.topic : undefined,
-      timeRange: parsed.timeRange !== 'null' ? parsed.timeRange : undefined,
-      searchDepth: parsed.searchDepth,
       reasoning: parsed.reasoning,
+      searchDepth: parsed.searchDepth,
+      timeRange: parsed.timeRange !== 'null' ? parsed.timeRange : undefined,
+      topic: parsed.topic !== 'null' ? parsed.topic : undefined,
     };
   } catch (error) {
     if (logger) {
       logger.warn('Auto-parameter detection failed', {
-        logType: LogTypes.EDGE_CASE,
-        scenario: 'auto_parameter_detection_failed',
-        query,
         error: normalizeError(error).message,
+        logType: LogTypes.EDGE_CASE,
+        query,
+        scenario: 'auto_parameter_detection_failed',
       });
     }
     return null;
@@ -1623,7 +1758,9 @@ async function withRetry<T>(
 
       // Don't retry on last attempt
       if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, initialDelay));
+        await new Promise((resolve) => {
+          setTimeout(resolve, initialDelay);
+        });
       }
     }
   }
@@ -1698,21 +1835,21 @@ export async function* streamSearchResults(
   logger?: TypedLogger,
   billingContext?: BillingContext,
 ): AsyncGenerator<StreamSearchEvent> {
-  const { query, maxResults = 10, searchDepth = 'advanced' } = params;
+  const { maxResults = 10, query, searchDepth = 'advanced' } = params;
   const startTime = performance.now();
   const requestId = generateId();
 
   try {
     // PHASE 1: Yield Metadata Immediately
     yield {
-      type: WebSearchStreamEventTypes.METADATA,
       data: {
-        query,
         maxResults,
-        searchDepth,
+        query,
         requestId,
+        searchDepth,
         startedAt: new Date().toISOString(),
       },
+      type: WebSearchStreamEventTypes.METADATA,
     };
 
     // PHASE 2: Get Basic Search Results
@@ -1723,8 +1860,8 @@ export async function* streamSearchResults(
     });
 
     const searchResults = await withRetry(
-      () =>
-        searchWithBrowser(
+      async () =>
+        await searchWithBrowser(
           query,
           maxResults + 2, // Fetch extra for filtering
           env,
@@ -1735,12 +1872,12 @@ export async function* streamSearchResults(
 
     if (searchResults.length === 0) {
       yield {
-        type: WebSearchStreamEventTypes.COMPLETE,
         data: {
-          totalResults: 0,
-          responseTime: performance.now() - startTime,
           requestId,
+          responseTime: performance.now() - startTime,
+          totalResults: 0,
         },
+        type: WebSearchStreamEventTypes.COMPLETE,
       };
       return;
     }
@@ -1751,29 +1888,30 @@ export async function* streamSearchResults(
     // PHASE 3: Stream Each Result Progressively
     for (let i = 0; i < resultsToProcess.length; i++) {
       const result = resultsToProcess[i];
-      if (!result)
-        continue; // Skip if undefined
+      if (!result) {
+        continue;
+      } // Skip if undefined
       const domain = extractDomain(result.url);
 
       const basicResult: WebSearchResultItem = {
+        content: result.snippet,
+        domain,
+        excerpt: result.snippet,
+        publishedDate: null,
+        score: 0.5 + 0.5 * (1 - i / resultsToProcess.length), // Decay score
         title: result.title,
         url: result.url,
-        content: result.snippet,
-        excerpt: result.snippet,
-        score: 0.5 + 0.5 * (1 - i / resultsToProcess.length), // Decay score
-        publishedDate: null,
-        domain,
       };
 
       yield {
-        type: WebSearchStreamEventTypes.RESULT,
         data: {
-          result: basicResult,
-          index: i,
-          total: resultsToProcess.length,
           enhanced: false,
+          index: i,
           requestId,
+          result: basicResult,
+          total: resultsToProcess.length,
         },
+        type: WebSearchStreamEventTypes.RESULT,
       };
 
       // Extract full content in background - if it fails, basic result already sent
@@ -1808,13 +1946,13 @@ export async function* streamSearchResults(
             ...basicResult,
             metadata: {
               author: extracted.metadata.author,
-              readingTime: extracted.metadata.readingTime,
-              wordCount: extracted.metadata.wordCount,
               description: extracted.metadata.description,
-              imageUrl: extracted.metadata.imageUrl,
               faviconUrl: params.includeFavicon
                 ? extracted.metadata.faviconUrl
                 : undefined,
+              imageUrl: extracted.metadata.imageUrl,
+              readingTime: extracted.metadata.readingTime,
+              wordCount: extracted.metadata.wordCount,
             },
             publishedDate: extracted.metadata.publishedDate || null,
           };
@@ -1850,22 +1988,22 @@ export async function* streamSearchResults(
           }
 
           yield {
-            type: WebSearchStreamEventTypes.RESULT,
             data: {
-              result: enhancedResult,
-              index: i,
-              total: resultsToProcess.length,
               enhanced: true,
+              index: i,
               requestId,
+              result: enhancedResult,
+              total: resultsToProcess.length,
             },
+            type: WebSearchStreamEventTypes.RESULT,
           };
         }
       } catch (extractError) {
         logger?.warn('Content extraction failed for result', {
-          logType: LogTypes.EDGE_CASE,
-          scenario: 'content_extraction_failed',
           context: `URL: ${result.url}, index: ${i}`,
           error: normalizeError(extractError).message,
+          logType: LogTypes.EDGE_CASE,
+          scenario: 'content_extraction_failed',
         });
         // Basic result already sent - continue to next
       }
@@ -1873,29 +2011,29 @@ export async function* streamSearchResults(
 
     // PHASE 4: Yield Completion
     yield {
-      type: WebSearchStreamEventTypes.COMPLETE,
       data: {
-        totalResults: resultsToProcess.length,
-        responseTime: performance.now() - startTime,
         requestId,
+        responseTime: performance.now() - startTime,
+        totalResults: resultsToProcess.length,
       },
+      type: WebSearchStreamEventTypes.COMPLETE,
     };
   } catch (error) {
     logger?.error('Progressive search streaming failed', {
+      error: normalizeError(error).message,
       logType: LogTypes.OPERATION,
       operationName: 'streamSearchResults',
       query,
-      error: normalizeError(error).message,
     });
 
     // Yield error event
     yield {
-      type: WebSearchStreamEventTypes.ERROR,
       data: {
         error: error instanceof Error ? error.message : 'Search failed',
         requestId,
         responseTime: performance.now() - startTime,
       },
+      type: WebSearchStreamEventTypes.ERROR,
     };
   }
 }
@@ -1943,20 +2081,20 @@ export async function performWebSearch(
   );
   if (cached) {
     logger?.info('Cache hit for search query', {
+      duration: performance.now() - startTime,
       logType: LogTypes.PERFORMANCE,
       query: params.query.substring(0, 50),
-      duration: performance.now() - startTime,
     });
 
     return {
       ...cached,
-      requestId, // Use new request ID even for cached results
-      responseTime: performance.now() - startTime, // Update response time
       _meta: {
         ...cached._meta,
         cached: true, // Mark as cached
         complexity,
       },
+      requestId, // Use new request ID even for cached results
+      responseTime: performance.now() - startTime, // Update response time
     };
   }
 
@@ -1968,18 +2106,21 @@ export async function performWebSearch(
       if (detected) {
         autoParams = detected;
         // Apply auto-detected parameters
-        if (!params.topic && detected.topic)
+        if (!params.topic && detected.topic) {
           params.topic = detected.topic;
-        if (!params.timeRange && detected.timeRange)
+        }
+        if (!params.timeRange && detected.timeRange) {
           params.timeRange = detected.timeRange;
-        if (!params.searchDepth && detected.searchDepth)
+        }
+        if (!params.searchDepth && detected.searchDepth) {
           params.searchDepth = detected.searchDepth;
+        }
       }
     }
 
     const searchResults = await withRetry(
-      () =>
-        searchWithBrowser(
+      async () =>
+        await searchWithBrowser(
           params.query,
           maxResults + 2, // Fetch extra for filtering
           env,
@@ -1991,21 +2132,21 @@ export async function performWebSearch(
     if (searchResults.length === 0) {
       if (logger) {
         logger.warn('Web search returned no results', {
-          logType: LogTypes.EDGE_CASE,
-          scenario: 'no_search_results',
-          query: params.query,
           context: `Search depth: ${params.searchDepth || 'advanced'}`,
+          logType: LogTypes.EDGE_CASE,
+          query: params.query,
+          scenario: 'no_search_results',
         });
       }
 
       return {
-        query: params.query,
-        answer: null,
-        results: [],
-        responseTime: performance.now() - startTime,
-        requestId, // ✅ P0 FIX: Add request ID
-        autoParameters: autoParams,
         _meta: complexity ? { complexity } : undefined,
+        answer: null,
+        autoParameters: autoParams,
+        query: params.query,
+        requestId, // ✅ P0 FIX: Add request ID
+        responseTime: performance.now() - startTime,
+        results: [],
       };
     }
 
@@ -2063,13 +2204,13 @@ export async function performWebSearch(
 
         // Start with basic result
         const baseResult: WebSearchResultItem = {
+          content: result.snippet,
+          domain,
+          excerpt: result.snippet,
+          publishedDate: null,
+          score: finalScore,
           title: result.title,
           url: result.url,
-          content: result.snippet,
-          excerpt: result.snippet,
-          score: finalScore,
-          publishedDate: null,
-          domain,
         };
 
         // Extract full content
@@ -2101,13 +2242,13 @@ export async function performWebSearch(
             // Add metadata - apply even without full content (lightweight extraction)
             baseResult.metadata = {
               author: extracted.metadata.author,
-              readingTime: extracted.metadata.readingTime,
-              wordCount: extracted.metadata.wordCount,
               description: extracted.metadata.description,
-              imageUrl: extracted.metadata.imageUrl,
               faviconUrl: params.includeFavicon
                 ? extracted.metadata.faviconUrl
                 : undefined,
+              imageUrl: extracted.metadata.imageUrl,
+              readingTime: extracted.metadata.readingTime,
+              wordCount: extracted.metadata.wordCount,
             };
 
             if (extracted.metadata.publishedDate) {
@@ -2143,10 +2284,10 @@ export async function performWebSearch(
         } catch (extractError) {
           if (logger) {
             logger.warn('Failed to extract page content', {
-              logType: LogTypes.EDGE_CASE,
-              scenario: 'page_content_extraction_failed',
               context: `URL: ${result.url}`,
               error: normalizeError(extractError).message,
+              logType: LogTypes.EDGE_CASE,
+              scenario: 'page_content_extraction_failed',
             });
           }
 
@@ -2168,7 +2309,7 @@ export async function performWebSearch(
 
     // Consolidate images from all results (Tavily-style)
     let consolidatedImages:
-      | Array<{ url: string; description?: string }>
+      | { url: string; description?: string | undefined; alt?: string | undefined }[]
       | undefined;
     if (params.includeImages) {
       const allImages = results.flatMap(r => r.images || []);
@@ -2201,14 +2342,14 @@ export async function performWebSearch(
     }
 
     const finalResult: WebSearchResult = {
-      query: params.query,
-      answer,
-      results,
-      responseTime: performance.now() - startTime,
-      requestId, // ✅ P0 FIX: Add request ID for tracking
-      images: consolidatedImages,
-      autoParameters: autoParams,
       _meta: complexity ? { complexity } : undefined,
+      answer,
+      autoParameters: autoParams,
+      images: consolidatedImages,
+      query: params.query,
+      requestId, // ✅ P0 FIX: Add request ID for tracking
+      responseTime: performance.now() - startTime,
+      results,
     };
 
     await cacheSearchResult(
@@ -2224,22 +2365,22 @@ export async function performWebSearch(
   } catch (error) {
     if (logger) {
       logger.error('Web search failed completely', {
-        logType: LogTypes.EDGE_CASE,
-        scenario: 'complete_search_failure',
-        query: params.query,
         context: `Search depth: ${params.searchDepth || 'advanced'}`,
         error: normalizeError(error).message,
+        logType: LogTypes.EDGE_CASE,
+        query: params.query,
+        scenario: 'complete_search_failure',
       });
     }
 
     // Return empty result instead of throwing (graceful degradation)
     return {
-      query: params.query,
-      answer: null,
-      results: [],
-      responseTime: performance.now() - startTime,
-      requestId, // ✅ P0 FIX: Include request ID even in error case
       _meta: complexity ? { complexity } : undefined,
+      answer: null,
+      query: params.query,
+      requestId, // ✅ P0 FIX: Include request ID even in error case
+      responseTime: performance.now() - startTime,
+      results: [],
     };
   }
 }
@@ -2276,11 +2417,11 @@ export function createSearchCache() {
   };
 
   return {
-    has: (query: string): boolean => {
-      return cache.has(normalizeQuery(query));
-    },
     get: (query: string): WebSearchResult | null => {
       return cache.get(normalizeQuery(query)) || null;
+    },
+    has: (query: string): boolean => {
+      return cache.has(normalizeQuery(query));
     },
     set: (query: string, result: WebSearchResult): void => {
       cache.set(normalizeQuery(query), result);

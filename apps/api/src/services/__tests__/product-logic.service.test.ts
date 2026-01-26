@@ -110,32 +110,32 @@ describe('product Logic Service', () => {
       const newTier = getTierFromProductId(MOCK_PRO_PRODUCT_ID);
 
       const comparison = {
-        oldPlan: {
-          tier: oldTier,
-          name: SUBSCRIPTION_TIER_NAMES[oldTier],
-          maxModels: getMaxModelsForTier(oldTier),
-          monthlyCredits: getMonthlyCreditsForTier(oldTier),
-        },
         newPlan: {
-          tier: newTier,
-          name: SUBSCRIPTION_TIER_NAMES[newTier],
           maxModels: getMaxModelsForTier(newTier),
           monthlyCredits: getMonthlyCreditsForTier(newTier),
+          name: SUBSCRIPTION_TIER_NAMES[newTier],
+          tier: newTier,
+        },
+        oldPlan: {
+          maxModels: getMaxModelsForTier(oldTier),
+          monthlyCredits: getMonthlyCreditsForTier(oldTier),
+          name: SUBSCRIPTION_TIER_NAMES[oldTier],
+          tier: oldTier,
         },
       };
 
       expect(comparison.oldPlan).toEqual({
-        tier: SubscriptionTiers.FREE,
-        name: 'Free',
         maxModels: 3,
         monthlyCredits: 0,
+        name: 'Free',
+        tier: SubscriptionTiers.FREE,
       });
 
       expect(comparison.newPlan).toEqual({
-        tier: SubscriptionTiers.PRO,
-        name: 'Pro',
         maxModels: 12,
         monthlyCredits: 2_000_000,
+        name: 'Pro',
+        tier: SubscriptionTiers.PRO,
       });
     });
   });

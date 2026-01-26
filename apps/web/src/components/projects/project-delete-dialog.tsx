@@ -16,25 +16,26 @@ type ProjectDeleteDialogProps = {
   } | null;
 };
 
-export function ProjectDeleteDialog({ open, onOpenChange, project }: ProjectDeleteDialogProps) {
+export function ProjectDeleteDialog({ onOpenChange, open, project }: ProjectDeleteDialogProps) {
   const t = useTranslations();
   const navigate = useNavigate();
   const deleteMutation = useDeleteProjectMutation();
 
   const handleConfirm = () => {
-    if (!project)
+    if (!project) {
       return;
+    }
 
     deleteMutation.mutate(
       { param: { id: project.id } },
       {
+        onError: () => {
+          toastManager.error(t('projects.deleteError'));
+        },
         onSuccess: () => {
           toastManager.success(t('projects.deleted'));
           onOpenChange(false);
           navigate({ to: '/chat' });
-        },
-        onError: () => {
-          toastManager.error(t('projects.deleteError'));
         },
       },
     );

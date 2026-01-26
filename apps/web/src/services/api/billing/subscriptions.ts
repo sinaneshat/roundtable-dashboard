@@ -36,8 +36,8 @@ export type GetSubscriptionResponse = InferResponseType<GetSubscriptionEndpoint,
  */
 export async function getSubscriptionsService(options?: ServiceOptions): Promise<ListSubscriptionsResponse> {
   const client = createApiClient({
-    cookieHeader: options?.cookieHeader,
     bypassCache: options?.bypassCache,
+    cookieHeader: options?.cookieHeader,
   });
   const res = await client.billing.subscriptions.$get();
   if (!res.ok) {
@@ -64,9 +64,36 @@ export async function getSubscriptionService(data: GetSubscriptionRequest): Prom
 // ============================================================================
 
 type SubscriptionsSuccessData = Extract<ListSubscriptionsResponse, { success: true }> extends { data: infer D } ? D : never;
-type SubscriptionItem = SubscriptionsSuccessData extends { items: Array<infer S> } ? S : never;
+type SubscriptionItem = SubscriptionsSuccessData extends { items: (infer S)[] } ? S : never;
 
 /**
  * Subscription - Subscription item derived from API response
  */
 export type Subscription = SubscriptionItem;
+
+// ============================================================================
+// Type Guards - Accept both service response and server function result types
+// ============================================================================
+
+type SuccessResponse = Extract<ListSubscriptionsResponse, { success: true }>;
+
+/**
+ * Type guard to check if subscriptions response is successful
+ * Accepts ListSubscriptionsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function isSubscriptionsSuccess(response: { success: boolean; data?: unknown } | null | undefined): response is SuccessResponse {
+  return response !== undefined && response !== null && response.success === true && 'data' in response;
+}
+
+/**
+ * Extract subscriptions array from response safely
+ * Accepts ListSubscriptionsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function getSubscriptionsFromResponse(response: { success: boolean; data?: unknown } | null | undefined): Subscription[] {
+  if (!isSubscriptionsSuccess(response)) {
+    return [];
+  }
+  return response.data.items;
+}

@@ -33,32 +33,32 @@ import { createChatStore } from '@/stores/chat';
 
 function createMockThread(enableWebSearch = false): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORMING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORMING,
+    slug: 'test-thread',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: new Date(),
   };
 }
 
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -87,11 +87,11 @@ describe('pre-Search Changelog Blocking', () => {
       const state = store.getState();
 
       // Pre-search should be blocked
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // Simulate the blocking check from PreSearchStream
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
     });
 
     it('should block pre-search when configChangeRoundNumber is set', () => {
@@ -108,7 +108,7 @@ describe('pre-Search Changelog Blocking', () => {
 
       // Simulate the blocking check from PreSearchStream
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
     });
 
     it('should block pre-search when both flags are set', () => {
@@ -123,11 +123,11 @@ describe('pre-Search Changelog Blocking', () => {
 
       // Both flags set
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // Pre-search should be blocked
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
     });
 
     it('should allow pre-search when both flags are cleared', () => {
@@ -137,11 +137,11 @@ describe('pre-Search Changelog Blocking', () => {
       // Initially both flags are clear
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search should NOT be blocked
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(false);
+      expect(shouldBlockPreSearch).toBeFalsy();
     });
 
     it('should still block if only configChangeRoundNumber is cleared', () => {
@@ -157,11 +157,11 @@ describe('pre-Search Changelog Blocking', () => {
 
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // Pre-search should still be blocked
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
     });
 
     it('should still block if only isWaitingForChangelog is cleared', () => {
@@ -177,11 +177,11 @@ describe('pre-Search Changelog Blocking', () => {
 
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search should still be blocked
       const shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
     });
   });
 
@@ -194,7 +194,7 @@ describe('pre-Search Changelog Blocking', () => {
 
       // Step 1: User enables web search
       store.getState().setEnableWebSearch(true);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
 
       // Step 2: Before PATCH - set configChangeRoundNumber
       store.getState().setConfigChangeRoundNumber(1);
@@ -210,7 +210,7 @@ describe('pre-Search Changelog Blocking', () => {
       // At this point, pre-search should be blocked
       let state = store.getState();
       let shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       // Step 5: Changelog sync completes - clears both flags
       store.getState().setConfigChangeRoundNumber(null);
@@ -220,7 +220,7 @@ describe('pre-Search Changelog Blocking', () => {
       // Now pre-search should be allowed
       state = store.getState();
       shouldBlockPreSearch = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(false);
+      expect(shouldBlockPreSearch).toBeFalsy();
 
       // Step 6: Pre-search executes
       executionOrder.push('pre-search-execute');
@@ -242,7 +242,7 @@ describe('pre-Search Changelog Blocking', () => {
       // Round 1: No config change
       let state = store.getState();
       let shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(false); // Pre-search OK
+      expect(shouldBlock).toBeFalsy(); // Pre-search OK
 
       // Round 2: Config change
       store.getState().setConfigChangeRoundNumber(2);
@@ -250,7 +250,7 @@ describe('pre-Search Changelog Blocking', () => {
 
       state = store.getState();
       shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(true); // Pre-search blocked
+      expect(shouldBlock).toBeTruthy(); // Pre-search blocked
 
       // Changelog syncs for round 2
       store.getState().setConfigChangeRoundNumber(null);
@@ -258,7 +258,7 @@ describe('pre-Search Changelog Blocking', () => {
 
       state = store.getState();
       shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(false); // Pre-search OK again
+      expect(shouldBlock).toBeFalsy(); // Pre-search OK again
     });
   });
 
@@ -277,11 +277,11 @@ describe('pre-Search Changelog Blocking', () => {
 
       // Final state should be what matters
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(2);
 
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should handle round number 0 correctly', () => {
@@ -296,7 +296,7 @@ describe('pre-Search Changelog Blocking', () => {
 
       // 0 !== null, so should still block
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should handle thread without web search initially', () => {
@@ -309,11 +309,11 @@ describe('pre-Search Changelog Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       const state = store.getState();
-      expect(state.enableWebSearch).toBe(true);
+      expect(state.enableWebSearch).toBeTruthy();
 
       // Pre-search should be blocked until changelog syncs
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
   });
 
@@ -330,11 +330,11 @@ describe('pre-Search Changelog Blocking', () => {
 
       // Check blocking condition first (simulating PreSearchStream logic)
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
 
       // If blocked, tryMarkPreSearchTriggered should NOT be called
       // This is the behavior we're testing - component returns early before calling tryMark
-      expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('should allow tryMarkPreSearchTriggered after unblock', () => {
@@ -351,12 +351,12 @@ describe('pre-Search Changelog Blocking', () => {
 
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
 
       // Now tryMarkPreSearchTriggered can be called
       const didMark = store.getState().tryMarkPreSearchTriggered(1);
-      expect(didMark).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(didMark).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
     });
   });
 });

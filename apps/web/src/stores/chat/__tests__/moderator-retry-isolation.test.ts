@@ -53,66 +53,69 @@ describe('moderator Retry Isolation', () => {
 
       // Round 0: All participants succeed
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'First response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p1Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'Second response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       const p2Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p2',
         content: 'Third response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, p1Message, p2Message]);
 
       // Moderator marked as created (simulating first attempt)
       state.tryMarkModeratorCreated(0);
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
 
       // Moderator fails - clear tracking to allow retry
       state.clearModeratorTracking(0);
-      expect(state.hasModeratorBeenCreated(0)).toBe(false);
+      expect(state.hasModeratorBeenCreated(0)).toBeFalsy();
 
       // CRITICAL: Participant messages should still exist
       expect(getStoreState(store).messages).toHaveLength(4);
       const msg1 = getStoreState(store).messages[1];
-      if (!msg1)
+      if (!msg1) {
         throw new Error('expected message at index 1');
+      }
       const msg2 = getStoreState(store).messages[2];
-      if (!msg2)
+      if (!msg2) {
         throw new Error('expected message at index 2');
+      }
       const msg3 = getStoreState(store).messages[3];
-      if (!msg3)
+      if (!msg3) {
         throw new Error('expected message at index 3');
-      expect(msg1.parts?.[0]).toEqual({ type: 'text', text: 'First response' });
-      expect(msg2.parts?.[0]).toEqual({ type: 'text', text: 'Second response' });
-      expect(msg3.parts?.[0]).toEqual({ type: 'text', text: 'Third response' });
+      }
+      expect(msg1.parts?.[0]).toEqual({ text: 'First response', type: 'text' });
+      expect(msg2.parts?.[0]).toEqual({ text: 'Second response', type: 'text' });
+      expect(msg3.parts?.[0]).toEqual({ text: 'Third response', type: 'text' });
 
       // Retry moderator - can mark created again
       const canRetry = state.tryMarkModeratorCreated(0);
-      expect(canRetry).toBe(true);
+      expect(canRetry).toBeTruthy();
 
       // Participant messages unchanged
       expect(getStoreState(store).messages).toHaveLength(4);
@@ -125,36 +128,36 @@ describe('moderator Retry Isolation', () => {
       state.setCurrentParticipantIndex(0); // Reset after round completion
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const messages = [
         userMessage,
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p1',
           content: 'P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p2',
           content: 'P2',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p2',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -183,15 +186,15 @@ describe('moderator Retry Isolation', () => {
 
       // Initial creation
       state.tryMarkModeratorCreated(roundNumber);
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(true);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeTruthy();
 
       // Clear tracking (simulating failure + retry)
       state.clearModeratorTracking(roundNumber);
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(false);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeFalsy();
 
       // Can create again
       const canRetry = state.tryMarkModeratorCreated(roundNumber);
-      expect(canRetry).toBe(true);
+      expect(canRetry).toBeTruthy();
     });
 
     it('clearModeratorTracking clears both createdModeratorRounds and triggeredModeratorRounds', () => {
@@ -202,12 +205,12 @@ describe('moderator Retry Isolation', () => {
       // Mark as created (triggeredModeratorRounds is managed internally)
       state.tryMarkModeratorCreated(roundNumber);
 
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(true);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeTruthy();
 
       // Clear tracking (both createdModeratorRounds and internal tracking)
       state.clearModeratorTracking(roundNumber);
 
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(false);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeFalsy();
       // triggeredModeratorRounds is internal to the store and cleared by clearModeratorTracking
     });
 
@@ -219,17 +222,17 @@ describe('moderator Retry Isolation', () => {
       state.tryMarkModeratorCreated(1);
       state.tryMarkModeratorCreated(2);
 
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
-      expect(state.hasModeratorBeenCreated(1)).toBe(true);
-      expect(state.hasModeratorBeenCreated(2)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(state.hasModeratorBeenCreated(1)).toBeTruthy();
+      expect(state.hasModeratorBeenCreated(2)).toBeTruthy();
 
       // Clear only round 1
       state.clearModeratorTracking(1);
 
       // Round 1 cleared, others preserved
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
-      expect(state.hasModeratorBeenCreated(1)).toBe(false);
-      expect(state.hasModeratorBeenCreated(2)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(state.hasModeratorBeenCreated(1)).toBeFalsy();
+      expect(state.hasModeratorBeenCreated(2)).toBeTruthy();
     });
   });
 
@@ -239,28 +242,28 @@ describe('moderator Retry Isolation', () => {
 
       // Round 0 complete with failed moderator (tracking cleared)
       const round0User = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Question 1',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const round0Messages = [
         round0User,
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'R0 P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p1',
           content: 'R0 P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -268,12 +271,12 @@ describe('moderator Retry Isolation', () => {
 
       // Moderator created but failed (tracking still exists - NOT cleared)
       state.tryMarkModeratorCreated(0);
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
 
       // User submits round 1 message anyway
       const round1User = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Question 2',
+        id: 'thread-123_r1_user',
         roundNumber: 1,
       });
 
@@ -284,17 +287,17 @@ describe('moderator Retry Isolation', () => {
       state.setStreamingRoundNumber(1);
       state.setCurrentParticipantIndex(0);
 
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
       expect(getStoreState(store).streamingRoundNumber).toBe(1);
 
       // Round 1 participants stream successfully
       const round1P0 = createTestAssistantMessage({
-        id: 'thread-123_r1_p0',
         content: 'R1 P0',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       });
 
       state.setMessages([...round0Messages, round1User, round1P0]);
@@ -308,21 +311,21 @@ describe('moderator Retry Isolation', () => {
 
       // Round 0: Moderator succeeded
       state.tryMarkModeratorCreated(0);
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
 
       // Round 1: Moderator failed and tracking cleared
       state.tryMarkModeratorCreated(1);
       state.clearModeratorTracking(1);
-      expect(state.hasModeratorBeenCreated(1)).toBe(false);
+      expect(state.hasModeratorBeenCreated(1)).toBeFalsy();
 
       // Round 2: Moderator succeeded
       state.tryMarkModeratorCreated(2);
-      expect(state.hasModeratorBeenCreated(2)).toBe(true);
+      expect(state.hasModeratorBeenCreated(2)).toBeTruthy();
 
       // Each round has independent tracking
-      expect(state.hasModeratorBeenCreated(0)).toBe(true);
-      expect(state.hasModeratorBeenCreated(1)).toBe(false);
-      expect(state.hasModeratorBeenCreated(2)).toBe(true);
+      expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(state.hasModeratorBeenCreated(1)).toBeFalsy();
+      expect(state.hasModeratorBeenCreated(2)).toBeTruthy();
     });
   });
 
@@ -332,18 +335,18 @@ describe('moderator Retry Isolation', () => {
 
       // Moderator starts streaming
       state.setIsModeratorStreaming(true);
-      expect(getStoreState(store).isModeratorStreaming).toBe(true);
+      expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
 
       // Error occurs - clear streaming flag
       state.setIsModeratorStreaming(false);
-      expect(getStoreState(store).isModeratorStreaming).toBe(false);
+      expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
       // Retry moderator - flag starts false
-      expect(getStoreState(store).isModeratorStreaming).toBe(false);
+      expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
       // Retry starts streaming
       state.setIsModeratorStreaming(true);
-      expect(getStoreState(store).isModeratorStreaming).toBe(true);
+      expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
     });
 
     it('isModeratorStreaming independent of isStreaming', () => {
@@ -355,22 +358,22 @@ describe('moderator Retry Isolation', () => {
       // Moderator starts streaming (participants done)
       state.setIsModeratorStreaming(true);
 
-      expect(getStoreState(store).isStreaming).toBe(false);
-      expect(getStoreState(store).isModeratorStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
+      expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
 
       // Moderator fails
       state.setIsModeratorStreaming(false);
 
       // Both flags false
-      expect(getStoreState(store).isStreaming).toBe(false);
-      expect(getStoreState(store).isModeratorStreaming).toBe(false);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
+      expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
 
       // Retry moderator (not participants)
       state.setIsModeratorStreaming(true);
 
       // Only moderator streaming flag set
-      expect(getStoreState(store).isStreaming).toBe(false);
-      expect(getStoreState(store).isModeratorStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
+      expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
     });
   });
 
@@ -379,20 +382,20 @@ describe('moderator Retry Isolation', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const messages = [
         userMessage,
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -425,36 +428,36 @@ describe('moderator Retry Isolation', () => {
       const state = getStoreState(store);
 
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Test',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const p0Message = createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Participant response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       // Initial moderator message (failed)
       const failedModeratorMessage = createTestAssistantMessage({
-        id: 'thread-123_r0_moderator',
         content: 'Partial moderator before error...',
-        roundNumber: 0,
+        finishReason: FinishReasons.ERROR,
+        hasError: true,
+        id: 'thread-123_r0_moderator',
+        isModerator: true,
         participantId: null,
         participantIndex: null,
-        finishReason: FinishReasons.ERROR,
-        isModerator: true,
-        hasError: true,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, failedModeratorMessage]);
 
       expect(getStoreState(store).messages).toHaveLength(3);
-      expect((getStoreState(store).messages[2]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[2]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
 
       // Clear tracking for retry
       state.clearModeratorTracking(0);
@@ -464,27 +467,29 @@ describe('moderator Retry Isolation', () => {
 
       // Retry moderator - new message created
       const retriedModeratorMessage = createTestAssistantMessage({
-        id: 'thread-123_r0_moderator_retry',
         content: 'Complete moderator analysis...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_moderator_retry',
+        isModerator: true,
         participantId: null,
         participantIndex: null,
-        finishReason: FinishReasons.STOP,
-        isModerator: true,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, p0Message, retriedModeratorMessage]);
 
       // Participant message unchanged
       const participantMsg = getStoreState(store).messages[1];
-      if (!participantMsg)
+      if (!participantMsg) {
         throw new Error('expected participant message at index 1');
-      expect(participantMsg.parts?.[0]).toEqual({ type: 'text', text: 'Participant response' });
+      }
+      expect(participantMsg.parts?.[0]).toEqual({ text: 'Participant response', type: 'text' });
       // Moderator message replaced with successful retry
       const moderatorMsg = getStoreState(store).messages[2];
-      if (!moderatorMsg)
+      if (!moderatorMsg) {
         throw new Error('expected moderator message at index 2');
-      expect(moderatorMsg.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis...' });
+      }
+      expect(moderatorMsg.parts?.[0]).toEqual({ text: 'Complete moderator analysis...', type: 'text' });
       expect((moderatorMsg.metadata as { hasError?: boolean }).hasError).toBeFalsy();
     });
   });
@@ -498,16 +503,16 @@ describe('moderator Retry Isolation', () => {
       // Mark moderator as created (tracking managed internally)
       state.tryMarkModeratorCreated(roundNumber);
 
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(true);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeTruthy();
 
       // Clear tracking (clears all internal tracking sets)
       state.clearModeratorTracking(roundNumber);
 
-      expect(state.hasModeratorBeenCreated(roundNumber)).toBe(false);
+      expect(state.hasModeratorBeenCreated(roundNumber)).toBeFalsy();
 
       // Can create again after clearing
       const canRetry = state.tryMarkModeratorCreated(roundNumber);
-      expect(canRetry).toBe(true);
+      expect(canRetry).toBeTruthy();
     });
   });
 
@@ -517,35 +522,35 @@ describe('moderator Retry Isolation', () => {
 
       // === ROUND 0: All participants succeed ===
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
       const participants = [
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p1',
           content: 'Response 1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p2',
           content: 'Response 2',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p2',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -562,14 +567,14 @@ describe('moderator Retry Isolation', () => {
       state.tryMarkModeratorCreated(0);
 
       const failedModerator = createTestAssistantMessage({
-        id: 'thread-123_r0_moderator_fail',
         content: 'Partial...',
-        roundNumber: 0,
+        finishReason: FinishReasons.ERROR,
+        hasError: true,
+        id: 'thread-123_r0_moderator_fail',
+        isModerator: true,
         participantId: null,
         participantIndex: null,
-        finishReason: FinishReasons.ERROR,
-        isModerator: true,
-        hasError: true,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, ...participants, failedModerator]);
@@ -577,7 +582,7 @@ describe('moderator Retry Isolation', () => {
       state.setError(new Error('Moderator failed'));
 
       expect(getStoreState(store).messages).toHaveLength(5);
-      expect((getStoreState(store).messages[4]?.metadata as { hasError: boolean }).hasError).toBe(true);
+      expect((getStoreState(store).messages[4]?.metadata as { hasError: boolean }).hasError).toBeTruthy();
 
       // === RETRY MODERATOR ===
       // Clear error and tracking
@@ -590,30 +595,33 @@ describe('moderator Retry Isolation', () => {
       expect(getStoreState(store).messages).toHaveLength(4);
       // Participant messages unchanged
       const resp0 = getStoreState(store).messages[1];
-      if (!resp0)
+      if (!resp0) {
         throw new Error('expected response 0 at index 1');
+      }
       const resp1 = getStoreState(store).messages[2];
-      if (!resp1)
+      if (!resp1) {
         throw new Error('expected response 1 at index 2');
+      }
       const resp2 = getStoreState(store).messages[3];
-      if (!resp2)
+      if (!resp2) {
         throw new Error('expected response 2 at index 3');
-      expect(resp0.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
-      expect(resp1.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
-      expect(resp2.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
+      }
+      expect(resp0.parts?.[0]).toEqual({ text: 'Response 0', type: 'text' });
+      expect(resp1.parts?.[0]).toEqual({ text: 'Response 1', type: 'text' });
+      expect(resp2.parts?.[0]).toEqual({ text: 'Response 2', type: 'text' });
 
       // === MODERATOR ATTEMPT 2: Succeeds ===
       state.setIsModeratorStreaming(true);
       state.tryMarkModeratorCreated(0);
 
       const successModerator = createTestAssistantMessage({
-        id: 'thread-123_r0_moderator_success',
         content: 'Complete moderator analysis',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_moderator_success',
+        isModerator: true,
         participantId: null,
         participantIndex: null,
-        finishReason: FinishReasons.STOP,
-        isModerator: true,
+        roundNumber: 0,
       });
 
       state.setMessages([userMessage, ...participants, successModerator]);
@@ -625,7 +633,7 @@ describe('moderator Retry Isolation', () => {
       // Verify moderator message exists (message 5 is the moderator)
       const moderatorMessage = getStoreState(store).messages[4];
       expect(moderatorMessage).toBeDefined();
-      expect(moderatorMessage?.parts?.[0]).toEqual({ type: 'text', text: 'Complete moderator analysis' });
+      expect(moderatorMessage?.parts?.[0]).toEqual({ text: 'Complete moderator analysis', type: 'text' });
 
       // Metadata might not have isModerator flag set by test helper, but we can verify it's not a participant
       const moderatorMetadata = moderatorMessage?.metadata as { participantId?: string | null; hasError?: boolean };
@@ -633,9 +641,9 @@ describe('moderator Retry Isolation', () => {
       expect(moderatorMetadata.hasError).toBeFalsy(); // No error
 
       // Participant messages STILL unchanged
-      expect(getStoreState(store).messages[1]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 0' });
-      expect(getStoreState(store).messages[2]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 1' });
-      expect(getStoreState(store).messages[3]?.parts?.[0]).toEqual({ type: 'text', text: 'Response 2' });
+      expect(getStoreState(store).messages[1]?.parts?.[0]).toEqual({ text: 'Response 0', type: 'text' });
+      expect(getStoreState(store).messages[2]?.parts?.[0]).toEqual({ text: 'Response 1', type: 'text' });
+      expect(getStoreState(store).messages[3]?.parts?.[0]).toEqual({ text: 'Response 2', type: 'text' });
     });
   });
 });

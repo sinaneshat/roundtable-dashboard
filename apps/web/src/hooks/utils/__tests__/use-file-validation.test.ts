@@ -62,7 +62,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.error).toBeUndefined();
       expect(validation.fileCategory).toBe(FileCategories.DOCUMENT);
     });
@@ -73,7 +73,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.error).toBeUndefined();
     });
 
@@ -83,7 +83,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(false);
+      expect(validation.valid).toBeFalsy();
       expect(validation.error?.code).toBe('visual_file_too_large');
       expect(validation.error?.message).toContain('PDF');
       expect(validation.error?.message).toContain('512 MB');
@@ -98,7 +98,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.error).toBeUndefined();
     });
   });
@@ -123,7 +123,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.fileCategory).toBe(FileCategories.IMAGE);
     });
 
@@ -133,7 +133,7 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(false);
+      expect(validation.valid).toBeFalsy();
       expect(validation.error?.code).toBe('visual_file_too_large');
       expect(validation.error?.message).toContain('Image');
       expect(validation.error?.message).toContain('20 MB');
@@ -153,7 +153,7 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.fileCategory).toBe(FileCategories.TEXT);
     });
 
@@ -163,7 +163,7 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.error).toBeUndefined();
     });
   });
@@ -175,7 +175,7 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.fileCategory).toBe(FileCategories.CODE);
     });
   });
@@ -187,7 +187,7 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
       expect(validation.fileCategory).toBe(FileCategories.TEXT);
     });
   });
@@ -205,7 +205,7 @@ describe('useFileValidation - Spreadsheet File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
     });
 
     it('should accept CSV exactly at 50MB limit', () => {
@@ -214,7 +214,7 @@ describe('useFileValidation - Spreadsheet File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
     });
 
     it('should reject CSV over 50MB limit', () => {
@@ -223,7 +223,7 @@ describe('useFileValidation - Spreadsheet File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(false);
+      expect(validation.valid).toBeFalsy();
       expect(validation.error?.code).toBe('file_too_large');
       expect(validation.error?.message).toContain('Spreadsheet');
       expect(validation.error?.details?.maxSize).toBe(MAX_SPREADSHEET_FILE_SIZE);
@@ -237,7 +237,7 @@ describe('useFileValidation - Spreadsheet File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(true);
+      expect(validation.valid).toBeTruthy();
     });
 
     it('should reject XLSX over 50MB limit', () => {
@@ -246,7 +246,7 @@ describe('useFileValidation - Spreadsheet File Size Limits', () => {
 
       const validation = result.current.validateFile(file);
 
-      expect(validation.valid).toBe(false);
+      expect(validation.valid).toBeFalsy();
       expect(validation.error?.message).toContain('Spreadsheet');
     });
   });
@@ -263,7 +263,7 @@ describe('useFileValidation - Basic Validation', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('empty_file');
   });
 
@@ -274,7 +274,7 @@ describe('useFileValidation - Basic Validation', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('filename_too_long');
   });
 
@@ -284,7 +284,7 @@ describe('useFileValidation - Basic Validation', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('invalid_type');
     expect(validation.error?.message).toContain('video/mp4');
   });
@@ -301,7 +301,7 @@ describe('useFileValidation - Upload Strategy', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(true);
+    expect(validation.valid).toBeTruthy();
     expect(validation.uploadStrategy).toBe(UploadStrategies.SINGLE);
   });
 
@@ -313,7 +313,7 @@ describe('useFileValidation - Upload Strategy', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('file_too_large');
     expect(validation.error?.message).toContain('512 MB');
   });
@@ -326,7 +326,7 @@ describe('useFileValidation - Upload Strategy', () => {
     const validation = result.current.validateFile(file);
 
     // At exactly the limit, file is valid and uses single upload
-    expect(validation.valid).toBe(true);
+    expect(validation.valid).toBeTruthy();
     expect(validation.uploadStrategy).toBe(UploadStrategies.SINGLE);
   });
 
@@ -337,7 +337,7 @@ describe('useFileValidation - Upload Strategy', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('visual_file_too_large');
   });
 
@@ -348,7 +348,7 @@ describe('useFileValidation - Upload Strategy', () => {
 
     const validation = result.current.validateFile(file);
 
-    expect(validation.valid).toBe(false);
+    expect(validation.valid).toBeFalsy();
     expect(validation.error?.code).toBe('visual_file_too_large');
     expect(validation.error?.message).toContain('Image');
   });
@@ -406,13 +406,13 @@ describe('useFileValidation - Multiple Files', () => {
 
     const results = result.current.validateFiles(files);
 
-    expect(results.get(files[0])?.valid).toBe(true);
-    expect(results.get(files[1])?.valid).toBe(false);
+    expect(results.get(files[0])?.valid).toBeTruthy();
+    expect(results.get(files[1])?.valid).toBeFalsy();
     expect(results.get(files[1])?.error?.code).toBe('visual_file_too_large');
-    expect(results.get(files[2])?.valid).toBe(true);
-    expect(results.get(files[3])?.valid).toBe(false);
+    expect(results.get(files[2])?.valid).toBeTruthy();
+    expect(results.get(files[3])?.valid).toBeFalsy();
     expect(results.get(files[3])?.error?.code).toBe('visual_file_too_large');
-    expect(results.get(files[4])?.valid).toBe(false);
+    expect(results.get(files[4])?.valid).toBeFalsy();
     expect(results.get(files[4])?.error?.code).toBe('file_too_large');
   });
 });

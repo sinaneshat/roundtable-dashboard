@@ -54,6 +54,6 @@ export const cookieMiddleware = createMiddleware({ type: 'function' }).server(
  * Auth is handled client-side after hydration.
  */
 export const startInstance = createStart(() => ({
-  requestMiddleware: [requestMiddleware],
   functionMiddleware: [cookieMiddleware],
+  requestMiddleware: [requestMiddleware],
 }));

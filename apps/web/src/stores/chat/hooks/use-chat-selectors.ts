@@ -79,8 +79,8 @@ export function useThreadInfo() {
     useShallow(s => ({
       thread: s.thread,
       threadId: s.thread?.id ?? null,
-      threadTitle: s.thread?.title ?? null,
       threadSlug: s.thread?.slug ?? null,
+      threadTitle: s.thread?.title ?? null,
     })),
   );
 }
@@ -89,11 +89,11 @@ export function useThreadInfo() {
 export function useStreamingState() {
   return useChatStore(
     useShallow(s => ({
-      isStreaming: s.isStreaming,
-      isModeratorStreaming: s.isModeratorStreaming,
-      waitingToStartStreaming: s.waitingToStartStreaming,
-      streamingRoundNumber: s.streamingRoundNumber,
       currentParticipantIndex: s.currentParticipantIndex,
+      isModeratorStreaming: s.isModeratorStreaming,
+      isStreaming: s.isStreaming,
+      streamingRoundNumber: s.streamingRoundNumber,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 }
@@ -116,12 +116,12 @@ export function useIsBusy() {
 export function useFormState() {
   return useChatStore(
     useShallow(s => ({
+      autoMode: s.autoMode,
+      enableWebSearch: s.enableWebSearch,
+      inputValue: s.inputValue,
+      modelOrder: s.modelOrder,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
-      inputValue: s.inputValue,
-      enableWebSearch: s.enableWebSearch,
-      modelOrder: s.modelOrder,
-      autoMode: s.autoMode,
     })),
   );
 }
@@ -130,12 +130,12 @@ export function useFormState() {
 export function useFormActions() {
   return useChatStore(
     useShallow(s => ({
+      setAutoMode: s.setAutoMode,
+      setEnableWebSearch: s.setEnableWebSearch,
       setInputValue: s.setInputValue,
+      setModelOrder: s.setModelOrder,
       setSelectedMode: s.setSelectedMode,
       setSelectedParticipants: s.setSelectedParticipants,
-      setEnableWebSearch: s.setEnableWebSearch,
-      setModelOrder: s.setModelOrder,
-      setAutoMode: s.setAutoMode,
     })),
   );
 }
@@ -154,10 +154,10 @@ export function useMessagesAndParticipants() {
 export function useHeaderState() {
   return useChatStore(
     useShallow(s => ({
-      storeThreadTitle: s.thread?.title ?? null,
-      storeThreadId: s.thread?.id ?? null,
-      showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
+      showInitialUI: s.showInitialUI,
+      storeThreadId: s.thread?.id ?? null,
+      storeThreadTitle: s.thread?.title ?? null,
       thread: s.thread,
     })),
   );
@@ -167,8 +167,8 @@ export function useHeaderState() {
 export function useActiveThreadState() {
   return useChatStore(
     useShallow(s => ({
-      showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
+      showInitialUI: s.showInitialUI,
       thread: s.thread,
     })),
   );
@@ -188,9 +188,9 @@ export function useRegenerationState() {
 export function useResumptionState() {
   return useChatStore(
     useShallow(s => ({
-      preSearchResumption: s.preSearchResumption,
-      moderatorResumption: s.moderatorResumption,
       currentResumptionPhase: s.currentResumptionPhase,
+      moderatorResumption: s.moderatorResumption,
+      preSearchResumption: s.preSearchResumption,
       resumptionRoundNumber: s.resumptionRoundNumber,
     })),
   );
@@ -210,9 +210,9 @@ export function usePreSearchState() {
 export function useAnimationState() {
   return useChatStore(
     useShallow(s => ({
+      animatedMessageIds: s.animatedMessageIds,
       animationStartIndex: s.animationStartIndex,
       shouldSkipAnimation: s.shouldSkipAnimation,
-      animatedMessageIds: s.animatedMessageIds,
     })),
   );
 }
@@ -227,8 +227,8 @@ export function useAllFeedback() {
   return useChatStore(
     useShallow(s => ({
       feedbackByRound: s.feedbackByRound,
-      pendingFeedback: s.pendingFeedback,
       hasLoadedFeedback: s.hasLoadedFeedback,
+      pendingFeedback: s.pendingFeedback,
     })),
   );
 }
@@ -261,8 +261,8 @@ export function useIsSubmitBlocked() {
 export function useCurrentStreamingParticipant() {
   return useChatStore(
     useShallow(s => ({
-      participant: s.participants[s.currentParticipantIndex] || null,
       index: s.currentParticipantIndex,
+      participant: s.participants[s.currentParticipantIndex] || null,
     })),
   );
 }

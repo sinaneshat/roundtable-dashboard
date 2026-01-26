@@ -14,17 +14,17 @@ import { DbAutomatedJobMetadataSchema } from '@/db';
  * Create automated job request
  */
 export const CreateJobRequestSchema = z.object({
+  autoPublish: z.boolean().default(false).openapi({
+    description: 'Automatically publish the thread when complete',
+    example: false,
+  }),
   initialPrompt: z.string().min(10).max(2000).openapi({
-    example: 'What are the pros and cons of remote work?',
     description: 'The initial prompt to start the discussion (10-2000 characters)',
+    example: 'What are the pros and cons of remote work?',
   }),
   totalRounds: z.number().int().min(1).max(5).default(3).openapi({
-    example: 3,
     description: 'Number of rounds for the discussion (1-5)',
-  }),
-  autoPublish: z.boolean().default(false).openapi({
-    example: false,
-    description: 'Automatically publish the thread when complete',
+    example: 3,
   }),
 }).openapi('CreateJobRequest');
 
@@ -39,12 +39,12 @@ export type CreateJobRequest = z.infer<typeof CreateJobRequestSchema>;
  */
 export const UpdateJobRequestSchema = z.object({
   isPublic: z.boolean().optional().openapi({
-    example: true,
     description: 'Set thread visibility (only works for completed jobs)',
+    example: true,
   }),
   status: z.literal(AutomatedJobStatuses.RUNNING).optional().openapi({
-    example: AutomatedJobStatuses.RUNNING,
     description: 'Retry a failed job',
+    example: AutomatedJobStatuses.RUNNING,
   }),
 }).refine(
   data => Object.values(data).some(v => v !== undefined),
@@ -58,8 +58,8 @@ export type UpdateJobRequest = z.infer<typeof UpdateJobRequestSchema>;
  */
 export const DeleteJobQuerySchema = z.object({
   deleteThread: z.enum(['true', 'false']).optional().openapi({
-    example: 'true',
     description: 'Also delete the associated thread',
+    example: 'true',
   }),
 }).openapi('DeleteJobQuery');
 
@@ -69,17 +69,17 @@ export type DeleteJobQuery = z.infer<typeof DeleteJobQuerySchema>;
  * Job list query params
  */
 export const JobListQuerySchema = z.object({
-  status: AutomatedJobStatusSchema.optional().openapi({
-    example: AutomatedJobStatuses.RUNNING,
-    description: 'Filter by job status',
+  cursor: z.string().optional().openapi({
+    description: 'Pagination cursor for next page',
+    example: 'abc123',
   }),
   limit: z.coerce.number().min(1).max(50).default(20).optional().openapi({
-    example: 20,
     description: 'Number of results per page (max 50)',
+    example: 20,
   }),
-  cursor: z.string().optional().openapi({
-    example: 'abc123',
-    description: 'Pagination cursor for next page',
+  status: AutomatedJobStatusSchema.optional().openapi({
+    description: 'Filter by job status',
+    example: AutomatedJobStatuses.RUNNING,
   }),
 }).openapi('JobListQuery');
 
@@ -101,12 +101,33 @@ export type JobMetadata = z.infer<typeof JobMetadataSchema>;
  * Single job response
  */
 export const JobResponseSchema = z.object({
-  id: z.string().openapi({
-    example: '01HZ123ABC',
-    description: 'Job ID (ULID)',
+  autoPublish: z.boolean().openapi({
+    description: 'Whether to auto-publish when complete',
   }),
-  userId: z.string().openapi({
-    description: 'User who created the job',
+  createdAt: z.string().openapi({
+    description: 'ISO timestamp when job was created',
+  }),
+  currentRound: z.number().openapi({
+    description: 'Current round (0-based)',
+  }),
+  id: z.string().openapi({
+    description: 'Job ID (ULID)',
+    example: '01HZ123ABC',
+  }),
+  initialPrompt: z.string().openapi({
+    description: 'The initial discussion prompt',
+  }),
+  isPublic: z.boolean().optional().openapi({
+    description: 'Whether the thread is public',
+  }),
+  metadata: JobMetadataSchema.nullable().openapi({
+    description: 'Additional job metadata',
+  }),
+  selectedModels: z.array(z.string()).nullable().openapi({
+    description: 'Model IDs selected for this job',
+  }),
+  status: AutomatedJobStatusSchema.openapi({
+    description: 'Job status',
   }),
   threadId: z.string().nullable().openapi({
     description: 'Associated thread ID (null until started)',
@@ -114,35 +135,14 @@ export const JobResponseSchema = z.object({
   threadSlug: z.string().nullable().optional().openapi({
     description: 'Thread slug for navigation',
   }),
-  isPublic: z.boolean().optional().openapi({
-    description: 'Whether the thread is public',
-  }),
-  initialPrompt: z.string().openapi({
-    description: 'The initial discussion prompt',
-  }),
   totalRounds: z.number().openapi({
     description: 'Total number of rounds',
   }),
-  currentRound: z.number().openapi({
-    description: 'Current round (0-based)',
-  }),
-  autoPublish: z.boolean().openapi({
-    description: 'Whether to auto-publish when complete',
-  }),
-  status: AutomatedJobStatusSchema.openapi({
-    description: 'Job status',
-  }),
-  selectedModels: z.array(z.string()).nullable().openapi({
-    description: 'Model IDs selected for this job',
-  }),
-  metadata: JobMetadataSchema.nullable().openapi({
-    description: 'Additional job metadata',
-  }),
-  createdAt: z.string().openapi({
-    description: 'ISO timestamp when job was created',
-  }),
   updatedAt: z.string().openapi({
     description: 'ISO timestamp when job was last updated',
+  }),
+  userId: z.string().openapi({
+    description: 'User who created the job',
   }),
 }).openapi('JobResponse');
 
@@ -152,17 +152,17 @@ export type JobResponse = z.infer<typeof JobResponseSchema>;
  * Job list response
  */
 export const JobListResponseSchema = z.object({
-  jobs: z.array(JobResponseSchema).openapi({
-    description: 'List of jobs',
-  }),
-  total: z.number().openapi({
-    description: 'Total number of jobs matching filter',
-  }),
   hasMore: z.boolean().openapi({
     description: 'Whether there are more results',
   }),
+  jobs: z.array(JobResponseSchema).openapi({
+    description: 'List of jobs',
+  }),
   nextCursor: z.string().nullable().openapi({
     description: 'Cursor for next page',
+  }),
+  total: z.number().openapi({
+    description: 'Total number of jobs matching filter',
   }),
 }).openapi('JobListResponse');
 

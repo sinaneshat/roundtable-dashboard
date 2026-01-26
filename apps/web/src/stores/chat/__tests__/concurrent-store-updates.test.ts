@@ -34,9 +34,9 @@ describe('concurrent Store Updates', () => {
       // Initial user message
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       state.setMessages([userMsg]);
@@ -44,23 +44,23 @@ describe('concurrent Store Updates', () => {
       // Simulate rapid-fire updates from multiple sources
       const participant1: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response from P1', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response from P1' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       const participant2: UIMessage = {
         id: 'thread-r0_p1',
+        metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response from P2', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response from P2' }],
-        metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
       };
 
       const participant3: UIMessage = {
         id: 'thread-r0_p2',
+        metadata: { participantIndex: 2, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response from P3', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response from P3' }],
-        metadata: { roundNumber: 0, participantIndex: 2, role: MessageRoles.ASSISTANT },
       };
 
       // Race condition: Multiple components try to add their messages simultaneously
@@ -87,9 +87,9 @@ describe('concurrent Store Updates', () => {
       // Initial state
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       state.setMessages([userMsg]);
@@ -99,9 +99,9 @@ describe('concurrent Store Updates', () => {
         ...prev,
         {
           id: 'thread-r0_p0',
+          metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P1', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P1' }],
-          metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
         },
       ]);
 
@@ -109,9 +109,9 @@ describe('concurrent Store Updates', () => {
         ...prev,
         {
           id: 'thread-r0_p1',
+          metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P2', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P2' }],
-          metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
         },
       ]);
 
@@ -119,9 +119,9 @@ describe('concurrent Store Updates', () => {
         ...prev,
         {
           id: 'thread-r0_p2',
+          metadata: { participantIndex: 2, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P3', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P3' }],
-          metadata: { roundNumber: 0, participantIndex: 2, role: MessageRoles.ASSISTANT },
         },
       ]);
 
@@ -147,18 +147,18 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       state.setMessages([userMsg]);
 
       const participant1: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'P1', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'P1' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       // Race: Direct state update
@@ -168,9 +168,9 @@ describe('concurrent Store Updates', () => {
       state.setMessages((prev) => {
         const participant2: UIMessage = {
           id: 'thread-r0_p1',
+          metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P2', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P2' }],
-          metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
         };
         return [...prev, participant2];
       });
@@ -193,28 +193,28 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const participant1: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Streaming...', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Streaming...' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       const moderatorPlaceholder: UIMessage = {
         id: 'thread-r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [],
         metadata: {
-          roundNumber: 0,
-          participantIndex: MODERATOR_PARTICIPANT_INDEX,
           isModerator: true,
+          participantIndex: MODERATOR_PARTICIPANT_INDEX,
           role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       };
 
       state.setMessages([userMsg, participant1, moderatorPlaceholder]);
@@ -222,7 +222,7 @@ describe('concurrent Store Updates', () => {
       // Race: Participant stream continues updating (use-message-sync.ts line 954)
       state.setMessages([
         userMsg,
-        { ...participant1, parts: [{ type: 'text', text: 'Streaming... more content' }] },
+        { ...participant1, parts: [{ text: 'Streaming... more content', type: 'text' }] },
         moderatorPlaceholder,
       ]);
 
@@ -230,7 +230,7 @@ describe('concurrent Store Updates', () => {
       state.setMessages(currentMessages =>
         currentMessages.map(msg =>
           msg.id === 'thread-r0_moderator'
-            ? { ...msg, parts: [{ type: 'text', text: 'Moderator response' }] }
+            ? { ...msg, parts: [{ text: 'Moderator response', type: 'text' }] }
             : msg,
         ),
       );
@@ -250,29 +250,29 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const participant1: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Participant response', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Participant response' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       const moderatorWithContent: UIMessage = {
         id: 'thread-r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Moderator analysis complete' }],
         metadata: {
-          roundNumber: 0,
-          participantIndex: MODERATOR_PARTICIPANT_INDEX,
-          isModerator: true,
-          role: MessageRoles.ASSISTANT,
           finishReason: 'stop',
+          isModerator: true,
+          participantIndex: MODERATOR_PARTICIPANT_INDEX,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Moderator analysis complete', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       };
 
       state.setMessages([userMsg, participant1, moderatorWithContent]);
@@ -281,14 +281,14 @@ describe('concurrent Store Updates', () => {
       // This happens when round N+1 starts and AI SDK has stale empty moderator from hydration
       const emptyModeratorFromAiSdk: UIMessage = {
         id: 'thread-r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [], // Empty from AI SDK
         metadata: {
-          roundNumber: 0,
-          participantIndex: MODERATOR_PARTICIPANT_INDEX,
           isModerator: true,
+          participantIndex: MODERATOR_PARTICIPANT_INDEX,
           role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [], // Empty from AI SDK
+        role: MessageRoles.ASSISTANT,
       };
 
       state.setMessages([userMsg, participant1, emptyModeratorFromAiSdk]);
@@ -307,9 +307,9 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const moderatorId = 'thread-r0_moderator';
@@ -319,14 +319,14 @@ describe('concurrent Store Updates', () => {
         userMsg,
         {
           id: moderatorId,
-          role: MessageRoles.ASSISTANT,
-          parts: [],
           metadata: {
-            roundNumber: 0,
-            participantIndex: MODERATOR_PARTICIPANT_INDEX,
             isModerator: true,
+            participantIndex: MODERATOR_PARTICIPANT_INDEX,
             role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
           },
+          parts: [],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -344,7 +344,7 @@ describe('concurrent Store Updates', () => {
         state.setMessages(currentMessages =>
           currentMessages.map(msg =>
             msg.id === moderatorId
-              ? { ...msg, parts: [{ type: 'text', text }] }
+              ? { ...msg, parts: [{ text, type: 'text' }] }
               : msg,
           ),
         );
@@ -368,25 +368,25 @@ describe('concurrent Store Updates', () => {
 
       const messageWithContent: UIMessage = {
         id: 'thread-r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Complete response' }],
         metadata: {
-          roundNumber: 0,
+          finishReason: 'stop',
           participantIndex: 0,
           role: MessageRoles.ASSISTANT,
-          finishReason: 'stop',
+          roundNumber: 0,
         },
+        parts: [{ text: 'Complete response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       };
 
       const emptyMessage: UIMessage = {
         id: 'thread-r0_p0', // Same ID
-        role: MessageRoles.ASSISTANT,
-        parts: [],
         metadata: {
-          roundNumber: 0,
           participantIndex: 0,
           role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       };
 
       // Race: Two sources trying to update with same message ID
@@ -407,25 +407,25 @@ describe('concurrent Store Updates', () => {
 
       const partialMessage: UIMessage = {
         id: 'thread-r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Partial...' }],
         metadata: {
-          roundNumber: 0,
           participantIndex: 0,
           role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Partial...', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       };
 
       const completeMessage: UIMessage = {
         id: 'thread-r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Partial... and complete response' }],
         metadata: {
-          roundNumber: 0,
+          finishReason: 'stop',
           participantIndex: 0,
           role: MessageRoles.ASSISTANT,
-          finishReason: 'stop',
+          roundNumber: 0,
         },
+        parts: [{ text: 'Partial... and complete response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       };
 
       // Race: Streaming updates arrive out of order
@@ -448,23 +448,23 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const participant1a: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Version A', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Version A' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       const participant1b: UIMessage = {
         id: 'thread-r0_p0', // Same ID
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Version B - updated', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Version B - updated' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       // Race: Two components merge messages with same ID
@@ -486,13 +486,13 @@ describe('concurrent Store Updates', () => {
 
       const optimisticUser: UIMessage = {
         id: 'optimistic-user-123',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
         metadata: {
-          roundNumber: 0,
-          role: MessageRoles.USER,
           isOptimistic: true,
+          role: MessageRoles.USER,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Hello', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       state.setMessages([optimisticUser]);
@@ -500,19 +500,19 @@ describe('concurrent Store Updates', () => {
       // Server response arrives
       const serverUser: UIMessage = {
         id: 'user-r0',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
         metadata: {
-          roundNumber: 0,
           role: MessageRoles.USER,
+          roundNumber: 0,
         },
+        parts: [{ text: 'Hello', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const participant1: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       // Race: Server response arrives while optimistic still in state
@@ -532,16 +532,16 @@ describe('concurrent Store Updates', () => {
       // Round 0 complete
       const round0User: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'First message', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'First message' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const round0Response: UIMessage = {
         id: 'thread-r0_p0',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response to first', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response to first' }],
-        metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
       };
 
       state.setMessages([round0User, round0Response]);
@@ -549,13 +549,13 @@ describe('concurrent Store Updates', () => {
       // Round 1 optimistic
       const round1Optimistic: UIMessage = {
         id: 'optimistic-user-456',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second message' }],
         metadata: {
-          roundNumber: 1,
-          role: MessageRoles.USER,
           isOptimistic: true,
+          role: MessageRoles.USER,
+          roundNumber: 1,
         },
+        parts: [{ text: 'Second message', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Race: Optimistic for round 1 added while round 0 still processing
@@ -564,9 +564,9 @@ describe('concurrent Store Updates', () => {
       // Round 1 server response
       const round1User: UIMessage = {
         id: 'user-r1',
+        metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Second message', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Second message' }],
-        metadata: { roundNumber: 1, role: MessageRoles.USER },
       };
 
       state.setMessages([round0User, round0Response, round1User]);
@@ -587,21 +587,21 @@ describe('concurrent Store Updates', () => {
       const messages: UIMessage[] = [
         {
           id: 'user-r0',
+          metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'First', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'First' }],
-          metadata: { roundNumber: 0, role: MessageRoles.USER },
         },
         {
           id: 'thread-r0_p0',
+          metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P0', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P0' }],
-          metadata: { roundNumber: 0, participantIndex: 0, role: MessageRoles.ASSISTANT },
         },
         {
           id: 'thread-r0_p1',
+          metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+          parts: [{ text: 'P1', type: 'text' }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'P1' }],
-          metadata: { roundNumber: 0, participantIndex: 1, role: MessageRoles.ASSISTANT },
         },
       ];
 
@@ -611,8 +611,9 @@ describe('concurrent Store Updates', () => {
       const msg0 = messages[0];
       const msg1 = messages[1];
       const msg2 = messages[2];
-      if (!msg0 || !msg1 || !msg2)
+      if (!msg0 || !msg1 || !msg2) {
         throw new Error('expected messages');
+      }
       const update1 = [msg2, msg1, msg0]; // Reversed
       const update2 = [msg1, msg0, msg2]; // Mixed
       const update3 = messages; // Correct order
@@ -637,9 +638,9 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       state.setMessages([userMsg]);
@@ -653,9 +654,9 @@ describe('concurrent Store Updates', () => {
       // Rapid concurrent updates
       const updates = Array.from({ length: 10 }, (_, i) => ({
         id: `thread-r0_p${i}`,
+        metadata: { participantIndex: i, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: `Response ${i}`, type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: `Response ${i}` }],
-        metadata: { roundNumber: 0, participantIndex: i, role: MessageRoles.ASSISTANT },
       }));
 
       updates.forEach((msg) => {
@@ -684,9 +685,9 @@ describe('concurrent Store Updates', () => {
 
       const userMsg: UIMessage = {
         id: 'user-r0',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Stress test', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Stress test' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       state.setMessages([userMsg]);
@@ -698,13 +699,13 @@ describe('concurrent Store Updates', () => {
 
         return {
           id: `thread-r${roundNumber}_p${participantIndex}`,
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: `Response ${i}` }],
           metadata: {
-            roundNumber,
             participantIndex,
             role: MessageRoles.ASSISTANT,
+            roundNumber,
           },
+          parts: [{ text: `Response ${i}`, type: 'text' }],
+          role: MessageRoles.ASSISTANT,
         } satisfies UIMessage;
       });
 
@@ -733,8 +734,9 @@ describe('concurrent Store Updates', () => {
       for (let i = 1; i < finalMessages.length; i++) {
         const prev = finalMessages[i - 1];
         const curr = finalMessages[i];
-        if (!prev || !curr)
+        if (!prev || !curr) {
           throw new Error('expected messages at index');
+        }
 
         const prevRound = prev.metadata?.roundNumber ?? -1;
         const currRound = curr.metadata?.roundNumber ?? -1;
@@ -748,7 +750,7 @@ describe('concurrent Store Updates', () => {
         // Within same round, participant index should be increasing or it's a user message
         const isSameRoundAssistant = currRound === prevRound && curr.role !== MessageRoles.USER;
         const participantOrderValid = !isSameRoundAssistant || currParticipant >= prevParticipant;
-        expect(participantOrderValid).toBe(true);
+        expect(participantOrderValid).toBeTruthy();
       }
     });
   });

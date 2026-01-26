@@ -107,19 +107,24 @@ export function normalizeModeratorData<T>(data: T): T {
   if (isObject(normalized) && 'metrics' in normalized && isObject(normalized.metrics)) {
     const metrics = normalized.metrics;
     const clamp = (value: unknown): number | undefined => {
-      if (typeof value !== 'number')
+      if (typeof value !== 'number') {
         return undefined;
+      }
       return Math.max(0, Math.min(100, value));
     };
 
-    if ('engagement' in metrics)
+    if ('engagement' in metrics) {
       metrics.engagement = clamp(metrics.engagement);
-    if ('insight' in metrics)
+    }
+    if ('insight' in metrics) {
       metrics.insight = clamp(metrics.insight);
-    if ('balance' in metrics)
+    }
+    if ('balance' in metrics) {
       metrics.balance = clamp(metrics.balance);
-    if ('clarity' in metrics)
+    }
+    if ('clarity' in metrics) {
       metrics.clarity = clamp(metrics.clarity);
+    }
   }
 
   return normalized;
@@ -173,7 +178,7 @@ export function deduplicateModerators(
     excludeFailed?: boolean;
   },
 ): StoredModeratorData[] {
-  const { regeneratingRoundNumber, excludeFailed = true } = options || {};
+  const { excludeFailed = true, regeneratingRoundNumber } = options || {};
 
   // Step 1: Deduplicate by ID
   const seenIds = new Set<string>();

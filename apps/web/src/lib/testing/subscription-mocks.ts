@@ -43,18 +43,18 @@ export function createMockSubscription(data?: MockSubscriptionData): Subscriptio
     : new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000); // 15 days from now
 
   return {
-    id: data?.id ?? 'sub_test_active',
-    status: data?.status ?? StripeSubscriptionStatuses.ACTIVE,
-    priceId: data?.priceId ?? 'price_test_monthly',
     cancelAtPeriodEnd: data?.cancelAtPeriodEnd ?? false,
-    currentPeriodStart: periodStart.toISOString(),
-    currentPeriodEnd: periodEnd.toISOString(),
     canceledAt: data?.canceledAt ? new Date(data.canceledAt).toISOString() : null,
-    trialStart: data?.trialStart ? new Date(data.trialStart).toISOString() : null,
-    trialEnd: data?.trialEnd ? new Date(data.trialEnd).toISOString() : null,
+    currentPeriodEnd: periodEnd.toISOString(),
+    currentPeriodStart: periodStart.toISOString(),
+    id: data?.id ?? 'sub_test_active',
     price: {
       productId: data?.productId ?? 'prod_test_pro',
     },
+    priceId: data?.priceId ?? 'price_test_monthly',
+    status: data?.status ?? StripeSubscriptionStatuses.ACTIVE,
+    trialEnd: data?.trialEnd ? new Date(data.trialEnd).toISOString() : null,
+    trialStart: data?.trialStart ? new Date(data.trialStart).toISOString() : null,
   };
 }
 
@@ -65,9 +65,9 @@ export function createMockSubscription(data?: MockSubscriptionData): Subscriptio
 export function createActiveSubscription(overrides?: MockSubscriptionData | string): Subscription {
   const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
     id: 'sub_active_test',
     status: StripeSubscriptionStatuses.ACTIVE,
-    cancelAtPeriodEnd: false,
     ...data,
   });
 }
@@ -75,20 +75,20 @@ export function createActiveSubscription(overrides?: MockSubscriptionData | stri
 export function createCanceledSubscription(overrides?: MockSubscriptionData): Subscription {
   const now = new Date();
   return createMockSubscription({
-    id: 'sub_canceled',
-    status: StripeSubscriptionStatuses.CANCELED,
     cancelAtPeriodEnd: true,
     canceledAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
     currentPeriodEnd: new Date(now.getTime() + 13 * 24 * 60 * 60 * 1000), // 13 days from now
+    id: 'sub_canceled',
+    status: StripeSubscriptionStatuses.CANCELED,
     ...overrides,
   });
 }
 
 export function createPastDueSubscription(overrides?: MockSubscriptionData): Subscription {
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
     id: 'sub_past_due',
     status: StripeSubscriptionStatuses.PAST_DUE,
-    cancelAtPeriodEnd: false,
     ...overrides,
   });
 }
@@ -97,20 +97,20 @@ export function createTrialingSubscription(overrides?: MockSubscriptionData | st
   const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   const now = new Date();
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
     id: 'sub_trialing',
     status: StripeSubscriptionStatuses.TRIALING,
-    trialStart: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     trialEnd: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-    cancelAtPeriodEnd: false,
+    trialStart: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
     ...data,
   });
 }
 
 export function createIncompleteSubscription(overrides?: MockSubscriptionData): Subscription {
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
     id: 'sub_incomplete',
     status: StripeSubscriptionStatuses.INCOMPLETE,
-    cancelAtPeriodEnd: false,
     ...overrides,
   });
 }
@@ -118,9 +118,9 @@ export function createIncompleteSubscription(overrides?: MockSubscriptionData): 
 export function createCancelingSubscription(overrides?: MockSubscriptionData | string): Subscription {
   const data = typeof overrides === 'string' ? { priceId: overrides } : overrides;
   return createMockSubscription({
+    cancelAtPeriodEnd: true,
     id: 'sub_canceling',
     status: StripeSubscriptionStatuses.ACTIVE,
-    cancelAtPeriodEnd: true,
     ...data,
   });
 }
@@ -133,11 +133,11 @@ export function createSubscriptionListResponse(
   subscriptions: Subscription[],
 ): ListSubscriptionsResponse {
   return {
-    success: true,
     data: {
-      items: subscriptions,
       count: subscriptions.length,
+      items: subscriptions,
     },
+    success: true,
   };
 }
 
@@ -145,20 +145,20 @@ export function createSubscriptionDetailResponse(
   subscription: Subscription,
 ): GetSubscriptionResponse {
   return {
-    success: true,
     data: {
       subscription,
     },
+    success: true,
   };
 }
 
 export function createEmptySubscriptionListResponse(): ListSubscriptionsResponse {
   return {
-    success: true,
     data: {
-      items: [],
       count: 0,
+      items: [],
     },
+    success: true,
   };
 }
 
@@ -168,21 +168,21 @@ export function createEmptySubscriptionListResponse(): ListSubscriptionsResponse
 
 export function createSubscriptionErrorResponse(message = 'Subscription not found'): ApiErrorResponse {
   return {
-    success: false,
     error: {
       code: 'NOT_FOUND',
       message,
     },
+    success: false,
   };
 }
 
 export function createSubscriptionListErrorResponse(message = 'Failed to fetch subscriptions'): ApiErrorResponse {
   return {
-    success: false,
     error: {
       code: 'INTERNAL_SERVER_ERROR',
       message,
     },
+    success: false,
   };
 }
 
@@ -196,12 +196,12 @@ export function createSubscriptionListErrorResponse(message = 'Failed to fetch s
 export function createNearExpirySubscription(): Subscription {
   const now = new Date();
   return createMockSubscription({
-    id: 'sub_near_expiry',
-    status: StripeSubscriptionStatuses.ACTIVE,
     cancelAtPeriodEnd: true,
     canceledAt: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000), // Canceled 25 days ago
-    currentPeriodStart: new Date(now.getTime() - 27 * 24 * 60 * 60 * 1000),
     currentPeriodEnd: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
+    currentPeriodStart: new Date(now.getTime() - 27 * 24 * 60 * 60 * 1000),
+    id: 'sub_near_expiry',
+    status: StripeSubscriptionStatuses.ACTIVE,
   });
 }
 
@@ -211,11 +211,11 @@ export function createNearExpirySubscription(): Subscription {
 export function createGracePeriodSubscription(): Subscription {
   const now = new Date();
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // Expired 2 days ago
+    currentPeriodStart: new Date(now.getTime() - 32 * 24 * 60 * 60 * 1000),
     id: 'sub_grace_period',
     status: StripeSubscriptionStatuses.PAST_DUE,
-    cancelAtPeriodEnd: false,
-    currentPeriodStart: new Date(now.getTime() - 32 * 24 * 60 * 60 * 1000),
-    currentPeriodEnd: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000), // Expired 2 days ago
   });
 }
 
@@ -225,11 +225,11 @@ export function createGracePeriodSubscription(): Subscription {
 export function createNewSubscription(): Subscription {
   const now = new Date();
   return createMockSubscription({
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: new Date(now.getTime() + 29 * 24 * 60 * 60 * 1000), // 29 days from now
+    currentPeriodStart: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
     id: 'sub_new',
     status: StripeSubscriptionStatuses.ACTIVE,
-    cancelAtPeriodEnd: false,
-    currentPeriodStart: new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-    currentPeriodEnd: new Date(now.getTime() + 29 * 24 * 60 * 60 * 1000), // 29 days from now
   });
 }
 

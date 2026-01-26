@@ -37,10 +37,10 @@ export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
 
   return useQuery({
     ...options,
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
     // Preserve previous data during refetches to prevent flickering
     placeholderData: previousData => previousData,
-    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
     throwOnError: false,
   });
 }
@@ -68,15 +68,15 @@ export function useThreadRoundChangelogQuery(
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.threads.roundChangelog(threadId, roundNumber),
-    queryFn: () => getThreadRoundChangelogService({
-      param: { threadId, roundNumber: String(roundNumber) },
-    }),
-    staleTime: STALE_TIMES.threadChangelog, // Infinity - never stale
-    gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
     // ⚠️ NO placeholderData - prevents stale data from previous rounds causing race conditions
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
+    gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
+    queryFn: () => getThreadRoundChangelogService({
+      param: { roundNumber: String(roundNumber), threadId },
+    }),
+    queryKey: queryKeys.threads.roundChangelog(threadId, roundNumber),
     retry: false,
+    staleTime: STALE_TIMES.threadChangelog, // Infinity - never stale
     throwOnError: false,
   });
 }

@@ -25,56 +25,56 @@ import type { ModelForPricing } from '@/common/schemas/model-pricing';
 import { TITLE_GENERATION_PROMPT } from '@/services/prompts/prompts.service';
 
 const _TierConfigurationSchema = z.object({
-  name: z.string(),
-  maxOutputTokens: z.number(),
   maxModelPricing: z.number().nullable(),
   maxModels: z.number(),
+  maxOutputTokens: z.number(),
+  monthlyCredits: z.number(),
+  name: z.string(),
   quotas: z.object({
-    threadsPerMonth: z.number(),
-    messagesPerMonth: z.number(),
-    customRolesPerMonth: z.number(),
     analysisPerMonth: z.number(),
+    customRolesPerMonth: z.number(),
+    messagesPerMonth: z.number(),
     projectsPerUser: z.number(),
+    threadsPerMonth: z.number(),
     threadsPerProject: z.number(),
   }).strict(),
   upgradeMessage: z.string(),
-  monthlyCredits: z.number(),
 }).strict();
 
 type TierConfiguration = z.infer<typeof _TierConfigurationSchema>;
 
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
   free: {
-    name: 'Free',
-    maxOutputTokens: 512,
     maxModelPricing: 0.20, // 5 budget models: 3 OpenAI + 1 DeepSeek + 1 X-AI (<= $0.20/1M tokens)
     maxModels: 3,
+    maxOutputTokens: 512,
+    monthlyCredits: 0,
+    name: 'Free',
     quotas: {
-      threadsPerMonth: 1,
-      messagesPerMonth: 100,
-      customRolesPerMonth: 0,
       analysisPerMonth: 10,
+      customRolesPerMonth: 0,
+      messagesPerMonth: 100,
       projectsPerUser: 0, // PRO-only
+      threadsPerMonth: 1,
       threadsPerProject: 0,
     },
     upgradeMessage: 'Upgrade to Pro for unlimited access to all models',
-    monthlyCredits: 0,
   },
   pro: {
-    name: 'Pro',
-    maxOutputTokens: 4096,
     maxModelPricing: null,
     maxModels: 12,
+    maxOutputTokens: 4096,
+    monthlyCredits: CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
+    name: 'Pro',
     quotas: {
-      threadsPerMonth: 500,
-      messagesPerMonth: 10000,
-      customRolesPerMonth: 25,
       analysisPerMonth: 1000,
+      customRolesPerMonth: 25,
+      messagesPerMonth: 10000,
       projectsPerUser: PROJECT_LIMITS.MAX_PROJECTS_PER_USER,
+      threadsPerMonth: 500,
       threadsPerProject: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT,
     },
     upgradeMessage: 'You have access to all models',
-    monthlyCredits: CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
   },
 } as const;
 
@@ -139,7 +139,7 @@ export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_CO
 
 export function estimateStreamingCredits(
   participantCount: number,
-  estimatedInputTokens: number = 500,
+  estimatedInputTokens = 500,
 ): number {
   const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
   const totalTokens = estimatedInputTokens + estimatedOutputTokens;
@@ -324,21 +324,25 @@ export function isModelFree(model: ModelForPricing): boolean {
 }
 
 export function getModelCostCategory(model: ModelForPricing): ModelCostCategory {
-  if (isModelFree(model))
+  if (isModelFree(model)) {
     return ModelCostCategories.FREE;
+  }
 
   const inputPrice = parsePrice(model.pricing_display?.input || 0);
 
-  if (inputPrice <= 1.0)
+  if (inputPrice <= 1.0) {
     return ModelCostCategories.LOW;
-  if (inputPrice <= 10.0)
+  }
+  if (inputPrice <= 10.0) {
     return ModelCostCategories.MEDIUM;
+  }
   return ModelCostCategories.HIGH;
 }
 
 export function getModelPricingDisplay(model: ModelForPricing): string {
-  if (isModelFree(model))
+  if (isModelFree(model)) {
     return 'Free';
+  }
 
   const inputPrice = parsePrice(model.pricing_display?.input || 0);
   const outputPrice = parsePrice(model.pricing_display?.output || 0);
@@ -383,9 +387,9 @@ export type TierAccessInfo = z.infer<typeof _TierAccessInfoSchema>;
  * ✅ Used when enriching models (model always exists)
  */
 const _FullTierAccessInfoSchema = z.object({
+  is_accessible_to_user: z.boolean(),
   required_tier: SubscriptionTierSchema,
   required_tier_name: z.string(),
-  is_accessible_to_user: z.boolean(),
 }).strict();
 
 export type FullTierAccessInfo = z.infer<typeof _FullTierAccessInfoSchema>;
@@ -404,9 +408,9 @@ export function enrichModelWithTierAccessGeneric<T extends ModelForPricing>(
 
   return {
     ...model,
+    is_accessible_to_user: isAccessible,
     required_tier: requiredTier,
     required_tier_name: requiredTierName,
-    is_accessible_to_user: isAccessible,
   };
 }
 
@@ -442,7 +446,7 @@ export function canAccessByTier(userTier: SubscriptionTier, requiredTier: Subscr
 export function getQuickStartModelsByTier(
   models: ModelForPricing[],
   tier: SubscriptionTier,
-  count: number = 4,
+  count = 4,
 ): string[] {
   const accessibleModels = models.filter(model => canAccessModelByPricing(tier, model));
 
@@ -495,12 +499,15 @@ export function getFlagshipScore(model: ModelForPricing): number {
     score += 10;
   }
 
-  if (model.capabilities?.vision)
+  if (model.capabilities?.vision) {
     score += 5;
-  if (model.capabilities?.reasoning)
+  }
+  if (model.capabilities?.reasoning) {
     score += 5;
-  if (model.capabilities?.tools)
+  }
+  if (model.capabilities?.tools) {
     score += 5;
+  }
 
   return score;
 }
@@ -551,8 +558,8 @@ export function getFlagshipModels(
 }
 
 export const DEFAULT_AI_PARAMS = {
-  temperature: 0.7,
   maxTokens: 1024,
+  temperature: 0.7,
   topP: 0.9,
 } as const;
 
@@ -561,24 +568,24 @@ export const MODE_SPECIFIC_AI_PARAMS: Record<
   { temperature: number; topP: number; maxTokens: number }
 > = {
   [ChatModes.ANALYZING]: {
+    maxTokens: 1024,
     temperature: 0.3,
     topP: 0.7,
-    maxTokens: 1024,
   },
   [ChatModes.BRAINSTORMING]: {
+    maxTokens: 1024,
     temperature: 0.6,
     topP: 0.85,
-    maxTokens: 1024,
   },
   [ChatModes.DEBATING]: {
+    maxTokens: 1024,
     temperature: 0.5,
     topP: 0.8,
-    maxTokens: 1024,
   },
   [ChatModes.SOLVING]: {
+    maxTokens: 1024,
     temperature: 0.4,
     topP: 0.75,
-    maxTokens: 1024,
   },
 } as const;
 
@@ -595,10 +602,10 @@ export function getAIParamsForMode(mode: ChatMode): {
 }
 
 export const TITLE_GENERATION_CONFIG = {
-  temperature: 0.3,
   maxTokens: 15,
-  topP: 0.7,
   systemPrompt: TITLE_GENERATION_PROMPT,
+  temperature: 0.3,
+  topP: 0.7,
 } as const;
 
 /**
@@ -617,11 +624,31 @@ export const TITLE_GENERATION_CONFIG = {
  */
 export const AI_TIMEOUT_CONFIG = {
   /**
+   * Chunk timeout for stream health detection (90s)
+   * CRITICAL: Must be under Cloudflare's 100-second idle timeout.
+   * If no chunk received within this time, stream is considered stale.
+   * Set to 90s to catch issues before Cloudflare returns HTTP 524.
+   */
+  chunkMs: 90_000, // 90 seconds between chunks
+
+  /**
    * Default timeout for AI operations (30 min)
    * Cloudflare Workers have UNLIMITED wall-clock duration as long as client is connected.
    * @see https://developers.cloudflare.com/workers/platform/limits/
    */
   default: 30 * 60 * 1000, // 30 minutes
+
+  /** Moderator/council analysis timeout (15 min) - complex multi-response synthesis */
+  moderatorAnalysisMs: 15 * 60 * 1000, // 15 minutes
+
+  /** Per-attempt timeout for streaming (30 min) */
+  perAttemptMs: 30 * 60 * 1000, // 30 minutes
+
+  /**
+   * Per-step timeout for multi-step operations (15 min)
+   * Applies to each individual LLM call in agentic workflows.
+   */
+  stepMs: 15 * 60 * 1000, // 15 minutes per step
 
   /** Title generation timeout (15s) - quick operation with buffer */
   titleGeneration: 15_000,
@@ -632,43 +659,24 @@ export const AI_TIMEOUT_CONFIG = {
    * Set high to allow long AI responses (reasoning models, complex queries).
    */
   totalMs: 30 * 60 * 1000, // 30 minutes
-
-  /**
-   * Per-step timeout for multi-step operations (15 min)
-   * Applies to each individual LLM call in agentic workflows.
-   */
-  stepMs: 15 * 60 * 1000, // 15 minutes per step
-
-  /**
-   * Chunk timeout for stream health detection (90s)
-   * CRITICAL: Must be under Cloudflare's 100-second idle timeout.
-   * If no chunk received within this time, stream is considered stale.
-   * Set to 90s to catch issues before Cloudflare returns HTTP 524.
-   */
-  chunkMs: 90_000, // 90 seconds between chunks
-
-  /** Per-attempt timeout for streaming (30 min) */
-  perAttemptMs: 30 * 60 * 1000, // 30 minutes
-
-  /** Moderator/council analysis timeout (15 min) - complex multi-response synthesis */
-  moderatorAnalysisMs: 15 * 60 * 1000, // 15 minutes
 } as const;
 
 export const AI_RETRY_CONFIG = {
-  maxAttempts: 10,
   baseDelay: 500,
+  maxAttempts: 10,
 } as const;
 
 export const INFINITE_RETRY_CONFIG = {
-  maxInitialAttempts: 10,
+  extendedDelay: 120000,
   initialDelay: 2000,
   maxDelay: 60000,
-  extendedDelay: 120000,
+  maxInitialAttempts: 10,
 } as const;
 
 export function getExponentialBackoff(attempt: number): number {
-  if (attempt <= 0)
+  if (attempt <= 0) {
     return 0;
+  }
 
   if (attempt > INFINITE_RETRY_CONFIG.maxInitialAttempts) {
     return INFINITE_RETRY_CONFIG.extendedDelay;

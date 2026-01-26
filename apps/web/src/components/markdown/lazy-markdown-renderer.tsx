@@ -60,9 +60,9 @@ type LazyMarkdownRendererProps = {
  * ```
  */
 function LazyMarkdownRendererComponent({
-  content,
   className,
   components,
+  content,
 }: LazyMarkdownRendererProps) {
   // NO SKELETON: SSR pre-renders content, null fallback prevents flash
   return (

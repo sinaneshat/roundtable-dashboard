@@ -19,20 +19,20 @@ import { ListModelsResponseSchema } from './schema';
  * Returns curated top 20 AI models with user-specific tier access information
  */
 export const listModelsRoute = createRoute({
+  description: 'Returns top 20 AI models from models-config.service.ts with tier-based access control and flagship model recommendations.',
   method: 'get',
   path: '/models',
-  tags: ['models'],
-  summary: 'List curated AI models',
-  description: 'Returns top 20 AI models from models-config.service.ts with tier-based access control and flagship model recommendations.',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Models retrieved successfully',
       content: {
         'application/json': {
           schema: ListModelsResponseSchema,
         },
       },
+      description: 'Models retrieved successfully',
     },
     ...createPublicRouteResponses(),
   },
+  summary: 'List curated AI models',
+  tags: ['models'],
 });

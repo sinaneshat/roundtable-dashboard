@@ -9,7 +9,7 @@ import { CircuitBreakerStates, CircuitBreakerStateSchema } from '@roundtable/sha
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 import * as z from 'zod';
 
-import type { EnhancedHTTPException } from '@/core';
+import type { EnhancedHTTPException, HTTPExceptionFactoryOptions } from '@/core';
 import { HTTPExceptionFactory } from '@/core';
 
 // CloudflareEnv is globally available from cloudflare-env.d.ts
@@ -31,13 +31,13 @@ const CircuitBreakerConfigSchema = z.object({
  * Fetch configuration schema
  */
 export const FetchConfigSchema = z.object({
-  timeoutMs: z.number().int().positive().optional(),
-  maxRetries: z.number().int().nonnegative().optional(),
-  retryDelay: z.number().int().positive().optional(),
   backoffFactor: z.number().positive().optional(),
-  retryableStatuses: z.array(z.number().int()).optional(),
   circuitBreaker: CircuitBreakerConfigSchema.optional(),
   correlationId: z.string().optional(),
+  maxRetries: z.number().int().nonnegative().optional(),
+  retryableStatuses: z.array(z.number().int()).optional(),
+  retryDelay: z.number().int().positive().optional(),
+  timeoutMs: z.number().int().positive().optional(),
 });
 
 export type FetchConfig = z.infer<typeof FetchConfigSchema>;
@@ -46,9 +46,9 @@ export type FetchConfig = z.infer<typeof FetchConfigSchema>;
  * Retryable error result schema
  */
 export const RetryableErrorSchema = z.object({
+  delay: z.number().nonnegative(),
   isRetryable: z.boolean(),
   shouldCircuitBreak: z.boolean(),
-  delay: z.number().nonnegative(),
 });
 
 export type RetryableError = z.infer<typeof RetryableErrorSchema>;
@@ -144,8 +144,9 @@ function updateCircuitBreakerState(
 }
 
 function shouldAllowRequest(url: string, config: FetchConfig): boolean {
-  if (!config.circuitBreaker)
+  if (!config.circuitBreaker) {
     return true;
+  }
 
   const state = getCircuitBreakerState(url);
   const now = Date.now();
@@ -182,7 +183,7 @@ function calculateRetryDelay(attempt: number, config: FetchConfig): number {
 function isRetryableError(response?: Response, error?: Error): RetryableError {
   // Network errors are always retryable
   if (error && !response) {
-    return { isRetryable: true, shouldCircuitBreak: true, delay: 0 };
+    return { delay: 0, isRetryable: true, shouldCircuitBreak: true };
   }
 
   // HTTP status code based retry logic
@@ -200,12 +201,12 @@ function isRetryableError(response?: Response, error?: Error): RetryableError {
 
     // Rate limit specific delay
     const retryAfter = response.headers.get('retry-after');
-    const delay = retryAfter ? Number.parseInt(retryAfter) * 1000 : 0;
+    const delay = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : 0;
 
-    return { isRetryable, shouldCircuitBreak, delay };
+    return { delay, isRetryable, shouldCircuitBreak };
   }
 
-  return { isRetryable: false, shouldCircuitBreak: false, delay: 0 };
+  return { delay: 0, isRetryable: false, shouldCircuitBreak: false };
 }
 
 // ============================================================================
@@ -229,10 +230,13 @@ export async function fetchWithRetry<T = unknown>(
 
   // Default configuration
   const fetchConfig: Required<FetchConfig> = {
-    timeoutMs,
-    maxRetries,
-    retryDelay: 1000,
     backoffFactor: 2,
+    circuitBreaker: config.circuitBreaker || {
+      failureThreshold: 5,
+      resetTimeoutMs: 60000,
+    },
+    correlationId,
+    maxRetries,
     retryableStatuses: [
       HttpStatusCodes.REQUEST_TIMEOUT,
       HttpStatusCodes.TOO_MANY_REQUESTS,
@@ -241,11 +245,8 @@ export async function fetchWithRetry<T = unknown>(
       HttpStatusCodes.SERVICE_UNAVAILABLE,
       HttpStatusCodes.GATEWAY_TIMEOUT,
     ],
-    circuitBreaker: config.circuitBreaker || {
-      failureThreshold: 5,
-      resetTimeoutMs: 60000,
-    },
-    correlationId,
+    retryDelay: 1000,
+    timeoutMs,
   };
 
   // Circuit breaker check
@@ -253,10 +254,10 @@ export async function fetchWithRetry<T = unknown>(
     const duration = Date.now() - startTime;
 
     return {
-      success: false,
-      error: 'Circuit breaker is open',
       attempts: 0,
       duration,
+      error: 'Circuit breaker is open',
+      success: false,
     };
   }
 
@@ -291,11 +292,11 @@ export async function fetchWithRetry<T = unknown>(
           const duration = Date.now() - startTime;
 
           return {
-            success: false,
-            error: `Response parsing failed: ${parseResult.error}`,
-            response,
             attempts: attempt + 1,
             duration,
+            error: `Response parsing failed: ${parseResult.error}`,
+            response,
+            success: false,
           };
         }
 
@@ -304,11 +305,11 @@ export async function fetchWithRetry<T = unknown>(
         const duration = Date.now() - startTime;
 
         return {
-          success: true,
-          data,
-          response,
           attempts: attempt + 1,
+          data,
           duration,
+          response,
+          success: true,
         };
       }
 
@@ -330,7 +331,9 @@ export async function fetchWithRetry<T = unknown>(
       );
 
       if (delay > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => {
+          setTimeout(resolve, delay);
+        });
       }
     } catch (fetchError) {
       lastError = fetchError instanceof Error ? fetchError : new Error(String(fetchError));
@@ -346,7 +349,9 @@ export async function fetchWithRetry<T = unknown>(
       const delay = calculateRetryDelay(attempt, fetchConfig);
 
       if (delay > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => {
+          setTimeout(resolve, delay);
+        });
       }
     }
   }
@@ -357,12 +362,21 @@ export async function fetchWithRetry<T = unknown>(
   const duration = Date.now() - startTime;
   const errorMessage = lastError?.message || 'Unknown error';
 
+  // Return with or without response based on whether we have one (satisfies exactOptionalPropertyTypes)
+  if (lastResponse !== undefined) {
+    return {
+      attempts: maxRetries + 1,
+      duration,
+      error: errorMessage,
+      response: lastResponse,
+      success: false,
+    };
+  }
   return {
-    success: false,
-    error: errorMessage,
-    response: lastResponse,
     attempts: maxRetries + 1,
     duration,
+    error: errorMessage,
+    success: false,
   };
 }
 
@@ -378,12 +392,12 @@ export async function fetchJSON<T = unknown>(
   config: FetchConfig = {},
   schema?: z.ZodSchema<T>,
 ): Promise<FetchResult<T>> {
-  return fetchWithRetry<T>(url, {
-    method: 'GET',
+  return await fetchWithRetry<T>(url, {
     headers: {
       'Accept': 'application/json',
       'User-Agent': 'Roundtable/1.0',
     },
+    method: 'GET',
   }, config, schema);
 }
 
@@ -397,15 +411,15 @@ export async function postJSON<T = unknown>(
   headers: Record<string, string> = {},
   schema?: z.ZodSchema<T>,
 ): Promise<FetchResult<T>> {
-  return fetchWithRetry<T>(url, {
-    method: 'POST',
+  return await fetchWithRetry<T>(url, {
+    body: JSON.stringify(body),
     headers: {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Content-Type': 'application/json',
       'User-Agent': 'Roundtable/1.0',
       ...headers, // Custom headers override defaults
     },
-    body: JSON.stringify(body),
+    method: 'POST',
   }, config, schema);
 }
 
@@ -424,18 +438,24 @@ export function createHTTPExceptionFromFetchResult(
   const status = result.response?.status || HttpStatusCodes.SERVICE_UNAVAILABLE;
   const message = `${operation} failed: ${result.error}`;
 
-  return HTTPExceptionFactory.fromNumber(status, {
-    message,
-    correlationId: result.response?.headers.get('x-correlation-id') || undefined,
+  // Build options object, only including correlationId if defined (satisfies exactOptionalPropertyTypes)
+  const correlationId = result.response?.headers.get('x-correlation-id');
+  const options: HTTPExceptionFactoryOptions = {
     details: {
+      attempts: result.attempts,
       detailType: 'fetch_error',
+      duration: result.duration,
+      errorDetails: result.error,
       operation,
       originalStatus: status,
-      errorDetails: result.error,
-      attempts: result.attempts,
-      duration: result.duration,
     },
-  });
+    message,
+  };
+  if (correlationId) {
+    options.correlationId = correlationId;
+  }
+
+  return HTTPExceptionFactory.fromNumber(status, options);
 }
 
 /**
@@ -463,17 +483,17 @@ async function parseResponseSafely<T>(
         const parseResult = schema.safeParse(jsonData);
         if (!parseResult.success) {
           return {
-            success: false,
-            error: `JSON validation failed: ${parseResult.error.message}`,
             contentType,
+            error: `JSON validation failed: ${parseResult.error.message}`,
+            success: false,
           };
         }
-        return { success: true, data: parseResult.data, contentType };
+        return { contentType, data: parseResult.data, success: true };
       }
 
       // If no schema provided, return the raw JSON data as unknown
       // Consumers must handle type validation themselves
-      return { success: true, data: jsonData, contentType };
+      return { contentType, data: jsonData, success: true };
     }
 
     if (contentType.includes('text/')) {
@@ -483,16 +503,16 @@ async function parseResponseSafely<T>(
         const parseResult = schema.safeParse(textData);
         if (!parseResult.success) {
           return {
-            success: false,
-            error: `Text validation failed: ${parseResult.error.message}`,
             contentType,
+            error: `Text validation failed: ${parseResult.error.message}`,
+            success: false,
           };
         }
-        return { success: true, data: parseResult.data, contentType };
+        return { contentType, data: parseResult.data, success: true };
       }
 
       // For text responses without schema, return as unknown
-      return { success: true, data: textData, contentType };
+      return { contentType, data: textData, success: true };
     }
 
     // Binary data (ArrayBuffer)
@@ -502,21 +522,21 @@ async function parseResponseSafely<T>(
       const parseResult = schema.safeParse(bufferData);
       if (!parseResult.success) {
         return {
-          success: false,
-          error: `Binary validation failed: ${parseResult.error.message}`,
           contentType,
+          error: `Binary validation failed: ${parseResult.error.message}`,
+          success: false,
         };
       }
-      return { success: true, data: parseResult.data, contentType };
+      return { contentType, data: parseResult.data, success: true };
     }
 
     // For binary responses without schema, return as unknown
-    return { success: true, data: bufferData, contentType };
+    return { contentType, data: bufferData, success: true };
   } catch (parseError) {
     return {
-      success: false,
-      error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
       contentType,
+      error: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
+      success: false,
     };
   }
 }

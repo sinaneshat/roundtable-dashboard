@@ -40,7 +40,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
     it('should set configChangeRoundNumber BEFORE PATCH starts', () => {
       // Initial state: both flags cleared
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // Simulate handleUpdateThreadAndSend setting configChangeRoundNumber (line 309)
       // This happens BEFORE any async PATCH operation
@@ -49,7 +49,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Verify configChangeRoundNumber is set immediately
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should set isWaitingForChangelog AFTER PATCH completes', () => {
@@ -58,7 +58,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // Step 1: Set configChangeRoundNumber BEFORE PATCH (line 309)
       store.getState().setConfigChangeRoundNumber(roundNumber);
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // Step 2: Simulate PATCH completing (async operation finishes)
       // Then set isWaitingForChangelog (line 372)
@@ -66,7 +66,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Verify BOTH flags are now set
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should have BOTH flags set before pre-search can execute', () => {
@@ -78,7 +78,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       const stateBeforePatch = store.getState();
       expect(stateBeforePatch.configChangeRoundNumber).toBe(roundNumber);
-      expect(stateBeforePatch.isWaitingForChangelog).toBe(false);
+      expect(stateBeforePatch.isWaitingForChangelog).toBeFalsy();
 
       // At this point, pre-search would be blocked by configChangeRoundNumber
 
@@ -87,7 +87,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       const stateAfterPatch = store.getState();
       expect(stateAfterPatch.configChangeRoundNumber).toBe(roundNumber);
-      expect(stateAfterPatch.isWaitingForChangelog).toBe(true);
+      expect(stateAfterPatch.isWaitingForChangelog).toBeTruthy();
 
       // Now pre-search is blocked by BOTH flags
       // This ensures changelog is fetched before pre-search executes
@@ -101,7 +101,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Simulate changelog sync completing (use-changelog-sync.ts lines 118-120)
       // Clears BOTH flags atomically
@@ -110,7 +110,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Verify both flags cleared
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // NOW pre-search can execute
     });
@@ -125,7 +125,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
     });
 
@@ -136,8 +136,8 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(shouldBlock).toBeTruthy();
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should block when BOTH flags are set', () => {
@@ -149,9 +149,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should NOT block when BOTH flags are cleared', () => {
@@ -163,9 +163,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
 
     it('should still block if only configChangeRoundNumber is cleared', () => {
@@ -179,9 +179,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true); // Still blocked by isWaitingForChangelog
+      expect(shouldBlock).toBeTruthy(); // Still blocked by isWaitingForChangelog
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should still block if only isWaitingForChangelog is cleared', () => {
@@ -195,9 +195,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true); // Still blocked by configChangeRoundNumber
+      expect(shouldBlock).toBeTruthy(); // Still blocked by configChangeRoundNumber
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -210,7 +210,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
     });
 
@@ -221,8 +221,8 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(shouldBlock).toBeTruthy();
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should block when BOTH flags are set (non-initial round)', () => {
@@ -234,9 +234,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should NOT block when BOTH flags are cleared (non-initial round)', () => {
@@ -248,9 +248,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -260,7 +260,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial state: web search disabled
       store.getState().setEnableWebSearch(false);
-      expect(store.getState().enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeFalsy();
 
       // User toggles web search ON (mid-conversation)
       store.getState().setEnableWebSearch(true);
@@ -270,12 +270,12 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(roundNumber);
 
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
 
       // Step 2: PATCH completes, set isWaitingForChangelog
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
     });
 
@@ -284,7 +284,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial state: web search enabled
       store.getState().setEnableWebSearch(true);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
 
       // User toggles web search OFF (mid-conversation)
       store.getState().setEnableWebSearch(false);
@@ -294,12 +294,12 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(roundNumber);
 
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().enableWebSearch).toBe(false);
+      expect(store.getState().enableWebSearch).toBeFalsy();
 
       // Step 2: PATCH completes, set isWaitingForChangelog
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
     });
 
@@ -315,7 +315,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const shouldBlockPreSearch = stateBeforePatch.configChangeRoundNumber !== null
         || stateBeforePatch.isWaitingForChangelog;
 
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
@@ -325,7 +325,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const stillBlocked = stateAfterPatch.configChangeRoundNumber !== null
         || stateAfterPatch.isWaitingForChangelog;
 
-      expect(stillBlocked).toBe(true);
+      expect(stillBlocked).toBeTruthy();
 
       // Changelog sync completes, clears flags
       store.getState().setIsWaitingForChangelog(false);
@@ -336,7 +336,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const canExecutePreSearch = stateAfterChangelog.configChangeRoundNumber === null
         && !stateAfterChangelog.isWaitingForChangelog;
 
-      expect(canExecutePreSearch).toBe(true);
+      expect(canExecutePreSearch).toBeTruthy();
     });
   });
 
@@ -361,7 +361,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // Step 2: PATCH completes, set isWaitingForChangelog
       store.getState().setIsWaitingForChangelog(true);
 
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
     });
 
@@ -375,20 +375,20 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(roundNumber);
       const state1 = store.getState();
       expect(state1.configChangeRoundNumber).toBe(roundNumber);
-      expect(state1.isWaitingForChangelog).toBe(false);
+      expect(state1.isWaitingForChangelog).toBeFalsy();
 
       // Step 2: isWaitingForChangelog set SECOND (after PATCH)
       store.getState().setIsWaitingForChangelog(true);
       const state2 = store.getState();
       expect(state2.configChangeRoundNumber).toBe(roundNumber);
-      expect(state2.isWaitingForChangelog).toBe(true);
+      expect(state2.isWaitingForChangelog).toBeTruthy();
 
       // Step 3: Both cleared after changelog fetch
       store.getState().setIsWaitingForChangelog(false);
       store.getState().setConfigChangeRoundNumber(null);
       const state3 = store.getState();
       expect(state3.configChangeRoundNumber).toBeNull();
-      expect(state3.isWaitingForChangelog).toBe(false);
+      expect(state3.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -398,13 +398,13 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial participants
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
       ]);
 
       // Add a second participant
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       // handleUpdateThreadAndSend detects participant change
@@ -413,7 +413,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should set flags when participants are removed', () => {
@@ -421,13 +421,13 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial participants
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       // Remove a participant
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
       ]);
 
       // handleUpdateThreadAndSend detects participant change
@@ -436,7 +436,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should set flags when participant roles change', () => {
@@ -444,14 +444,14 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial participants
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       // Swap roles
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'analyst', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'specialist', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'analyst' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'specialist' },
       ]);
 
       // handleUpdateThreadAndSend detects participant change
@@ -460,7 +460,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should set flags when participant order changes', () => {
@@ -468,14 +468,14 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Initial participants
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       // Reorder participants
       store.getState().setSelectedParticipants([
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 0 },
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 1 },
+        { id: 'p2', modelId: 'claude-3', priority: 0, role: 'analyst' },
+        { id: 'p1', modelId: 'gpt-4', priority: 1, role: 'specialist' },
       ]);
 
       // handleUpdateThreadAndSend detects participant change
@@ -484,7 +484,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
   });
 
@@ -498,11 +498,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // Pre-search should be blocked
       const state = store.getState();
       const shouldBlockPreSearch = state.configChangeRoundNumber !== null;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       // Pre-search CANNOT execute at this point
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
 
     it('should prevent streaming from starting before changelog is fetched', () => {
@@ -517,11 +517,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // Streaming should be blocked
       const state = store.getState();
       const shouldBlockStreaming = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
-      expect(shouldBlockStreaming).toBe(true);
+      expect(shouldBlockStreaming).toBeTruthy();
 
       // Streaming CANNOT start at this point
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should allow pre-search only after changelog is fetched', () => {
@@ -533,13 +533,13 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Step 2: PATCH completes, isWaitingForChangelog set
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Pre-search still blocked
       let state = store.getState();
       let canExecutePreSearch = state.configChangeRoundNumber === null
         && !state.isWaitingForChangelog;
-      expect(canExecutePreSearch).toBe(false);
+      expect(canExecutePreSearch).toBeFalsy();
 
       // Step 3: Changelog fetched, flags cleared
       store.getState().setIsWaitingForChangelog(false);
@@ -549,7 +549,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       state = store.getState();
       canExecutePreSearch = state.configChangeRoundNumber === null
         && !state.isWaitingForChangelog;
-      expect(canExecutePreSearch).toBe(true);
+      expect(canExecutePreSearch).toBeTruthy();
     });
 
     it('should enforce complete ordering: PATCH → changelog → pre-search → streams', () => {
@@ -560,22 +560,22 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       let state = store.getState();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search blocked: true
       let preSearchBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(preSearchBlocked).toBe(true);
+      expect(preSearchBlocked).toBeTruthy();
 
       // STEP 2: PATCH completes - isWaitingForChangelog set
       store.getState().setIsWaitingForChangelog(true);
 
       state = store.getState();
       expect(state.configChangeRoundNumber).toBe(roundNumber);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // Pre-search blocked: true (waiting for changelog)
       preSearchBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(preSearchBlocked).toBe(true);
+      expect(preSearchBlocked).toBeTruthy();
 
       // STEP 3: Changelog fetched - flags cleared
       store.getState().setIsWaitingForChangelog(false);
@@ -583,11 +583,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       state = store.getState();
       expect(state.configChangeRoundNumber).toBeNull();
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Pre-search unblocked: can execute NOW
       preSearchBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(preSearchBlocked).toBe(false);
+      expect(preSearchBlocked).toBeFalsy();
 
       // STEP 4: Pre-search completes → streams can start
       // (streams would start after pre-search execution)
@@ -603,7 +603,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       expect(store.getState().configChangeRoundNumber).toBe(roundNumber);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Simulate changelog fetch timeout (30s timeout in use-changelog-sync.ts line 140)
       // Timeout handler clears flags
@@ -611,7 +611,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should handle inconsistent state: isWaitingForChangelog=true but configChangeRoundNumber=null', () => {
@@ -620,13 +620,13 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
       expect(state.configChangeRoundNumber).toBeNull();
 
       // Fix handler would clear isWaitingForChangelog
       store.getState().setIsWaitingForChangelog(false);
 
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
       expect(store.getState().configChangeRoundNumber).toBeNull();
     });
 
@@ -643,7 +643,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // isWaitingForChangelog is NOT set
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should handle error during PATCH by clearing flags', () => {
@@ -658,7 +658,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
     });
 
     it('should maintain flag isolation across different rounds', () => {
@@ -667,21 +667,21 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Changelog fetched, flags cleared
       store.getState().setIsWaitingForChangelog(false);
       store.getState().setConfigChangeRoundNumber(null);
 
       expect(store.getState().configChangeRoundNumber).toBeNull();
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // Round 2: New config change (independent of round 1)
       store.getState().setConfigChangeRoundNumber(2);
       store.getState().setIsWaitingForChangelog(true);
 
       expect(store.getState().configChangeRoundNumber).toBe(2);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Round 2 flags are independent of round 1
       // They were properly cleared and reset
@@ -702,12 +702,12 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Same blocking logic applies regardless of number of changes
       const state = store.getState();
       const shouldBlock = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should handle web search + participants + mode change together', () => {
@@ -717,9 +717,9 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       store.getState().setEnableWebSearch(true);
       store.getState().setSelectedMode('council');
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ]);
 
       // handleUpdateThreadAndSend detects ALL changes
@@ -728,12 +728,12 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // PATCH completes
       store.getState().setIsWaitingForChangelog(true);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // Blocking logic is the same
       const state = store.getState();
       const shouldBlock = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
 
       // Changelog sync clears flags (fetches all changelog entries for the round)
       store.getState().setIsWaitingForChangelog(false);
@@ -741,7 +741,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       const clearedState = store.getState();
       expect(clearedState.configChangeRoundNumber).toBeNull();
-      expect(clearedState.isWaitingForChangelog).toBe(false);
+      expect(clearedState.isWaitingForChangelog).toBeFalsy();
     });
   });
 
@@ -775,11 +775,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
 
       // Verify initial thread check is false for round 2 config changes
-      expect(isInitialThreadCreation).toBe(false);
+      expect(isInitialThreadCreation).toBeFalsy();
 
       // Blocking condition should work
       const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('should allow bypass for actual initial thread creation', () => {
@@ -794,11 +794,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       const fixedIsInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
 
       // For initial thread creation, bypass should be allowed
-      expect(fixedIsInitialThreadCreation).toBe(true);
+      expect(fixedIsInitialThreadCreation).toBeTruthy();
 
       // Blocking condition should NOT block (bypass allowed)
       const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !fixedIsInitialThreadCreation;
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
     });
 
     it('should block pre-search for web search enabled mid-conversation on OVERVIEW screen', () => {
@@ -815,11 +815,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // FIXED LOGIC: configChangeRoundNumber is set, so NOT initial thread creation
       const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
-      expect(isInitialThreadCreation).toBe(false);
+      expect(isInitialThreadCreation).toBeFalsy();
 
       // Pre-search should be blocked
       const shouldBlockPreSearch = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
-      expect(shouldBlockPreSearch).toBe(true);
+      expect(shouldBlockPreSearch).toBeTruthy();
 
       // PATCH completes, isWaitingForChangelog set
       store.getState().setIsWaitingForChangelog(true);
@@ -827,7 +827,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // Pre-search still blocked (waiting for changelog)
       const stateAfterPatch = store.getState();
       const stillBlocked = (stateAfterPatch.isWaitingForChangelog || stateAfterPatch.configChangeRoundNumber !== null);
-      expect(stillBlocked).toBe(true);
+      expect(stillBlocked).toBeTruthy();
 
       // Changelog completes, flags cleared
       store.getState().setIsWaitingForChangelog(false);
@@ -836,7 +836,7 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
       // NOW pre-search can execute
       const stateAfterChangelog = store.getState();
       const canExecutePreSearch = !stateAfterChangelog.isWaitingForChangelog && stateAfterChangelog.configChangeRoundNumber === null;
-      expect(canExecutePreSearch).toBe(true);
+      expect(canExecutePreSearch).toBeTruthy();
     });
 
     it('should block for mode-only changes on OVERVIEW screen', () => {
@@ -853,11 +853,11 @@ describe('config Change Flow Ordering - Flag States and Blocking', () => {
 
       // Should NOT be treated as initial thread creation
       const isInitialThreadCreation = state.waitingToStartStreaming && state.configChangeRoundNumber === null;
-      expect(isInitialThreadCreation).toBe(false);
+      expect(isInitialThreadCreation).toBeFalsy();
 
       // Blocking check should work
       const shouldBlock = (state.isWaitingForChangelog || state.configChangeRoundNumber !== null) && !isInitialThreadCreation;
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
   });
 });

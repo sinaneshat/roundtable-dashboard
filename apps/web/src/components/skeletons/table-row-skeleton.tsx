@@ -13,7 +13,7 @@ type TableRowSkeletonProps = {
  * Matches table row structure with configurable column count.
  * First column is wider for primary content.
  */
-export function TableRowSkeleton({ columns = 4, className, ...props }: TableRowSkeletonProps) {
+export function TableRowSkeleton({ className, columns = 4, ...props }: TableRowSkeletonProps) {
   return (
     <div className={cn('flex items-center space-x-4 p-4 border-b', className)} {...props}>
       {Array.from({ length: columns }, (_, i) => (

@@ -38,12 +38,12 @@ type VirtualizerOptions = {
 let lastVirtualizerOptions: VirtualizerOptions | null = null;
 
 const mockVirtualizerInstance = {
-  getVirtualItems: mockGetVirtualItems,
   getTotalSize: mockGetTotalSize,
+  getVirtualItems: mockGetVirtualItems,
   measureElement: mockMeasureElement,
+  options: { scrollMargin: 0 },
   scrollToIndex: mockScrollToIndex,
   scrollToOffset: mockScrollToOffset,
-  options: { scrollMargin: 0 },
   shouldAdjustScrollPositionOnItemSizeChange: undefined as unknown,
 };
 
@@ -65,17 +65,17 @@ function createMockTimelineItem(
 ): TimelineItem {
   if (type === 'messages') {
     return {
-      type: 'messages',
-      key: `round-${roundNumber}-messages`,
-      roundNumber,
       data: [
         {
-          id: `msg-${roundNumber}`,
-          role: MessageRoles.USER,
           content: 'Test message',
-          parts: [{ type: 'text', text: 'Test message' }],
+          id: `msg-${roundNumber}`,
+          parts: [{ text: 'Test message', type: 'text' }],
+          role: MessageRoles.USER,
         } satisfies UIMessage,
       ],
+      key: `round-${roundNumber}-messages`,
+      roundNumber,
+      type: 'messages',
     };
   }
 
@@ -130,8 +130,8 @@ describe('useVirtualizedTimeline', () => {
     it('returns virtualizer instance directly', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -141,8 +141,8 @@ describe('useVirtualizedTimeline', () => {
     it('returns measureElement from virtualizer', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -152,34 +152,34 @@ describe('useVirtualizedTimeline', () => {
     it('disables virtualizer when data is not ready', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: false,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
-      expect(lastVirtualizerOptions?.enabled).toBe(false);
+      expect(lastVirtualizerOptions?.enabled).toBeFalsy();
     });
 
     it('disables virtualizer when timeline items are empty', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [],
           isDataReady: true,
+          timelineItems: [],
         }),
       );
 
-      expect(lastVirtualizerOptions?.enabled).toBe(false);
+      expect(lastVirtualizerOptions?.enabled).toBeFalsy();
     });
 
     it('enables virtualizer when data is ready and items exist', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
-      expect(lastVirtualizerOptions?.enabled).toBe(true);
+      expect(lastVirtualizerOptions?.enabled).toBeTruthy();
     });
 
     it('passes correct count to virtualizer', () => {
@@ -191,8 +191,8 @@ describe('useVirtualizedTimeline', () => {
 
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: items,
           isDataReady: true,
+          timelineItems: items,
         }),
       );
 
@@ -208,8 +208,8 @@ describe('useVirtualizedTimeline', () => {
     it('provides scrollToIndex method', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -221,8 +221,8 @@ describe('useVirtualizedTimeline', () => {
     it('provides scrollToOffset method', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -234,8 +234,8 @@ describe('useVirtualizedTimeline', () => {
     it('provides scrollToBottom method', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0), createMockTimelineItem(1)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0), createMockTimelineItem(1)],
         }),
       );
 
@@ -252,8 +252,8 @@ describe('useVirtualizedTimeline', () => {
 
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [],
           isDataReady: true,
+          timelineItems: [],
         }),
       );
 
@@ -264,8 +264,8 @@ describe('useVirtualizedTimeline', () => {
     it('scrollToBottom accepts behavior option', () => {
       const { result } = renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -285,9 +285,9 @@ describe('useVirtualizedTimeline', () => {
     it('passes estimateSize to virtualizer', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
-          isDataReady: true,
           estimateSize: 300,
+          isDataReady: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -299,9 +299,9 @@ describe('useVirtualizedTimeline', () => {
     it('passes overscan to virtualizer', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
           overscan: 10,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -311,10 +311,10 @@ describe('useVirtualizedTimeline', () => {
     it('passes paddingStart and paddingEnd to virtualizer', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
-          paddingStart: 50,
           paddingEnd: 100,
+          paddingStart: 50,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -331,9 +331,9 @@ describe('useVirtualizedTimeline', () => {
     it('sets shouldAdjustScrollPositionOnItemSizeChange on virtualizer', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
           isStreaming: false,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -343,9 +343,9 @@ describe('useVirtualizedTimeline', () => {
     it('returns false during streaming to prevent scroll jumps', () => {
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
           isDataReady: true,
           isStreaming: true,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -358,10 +358,10 @@ describe('useVirtualizedTimeline', () => {
       const result = adjustFn(
         { start: 0 },
         100,
-        { scrollOffset: 500, scrollDirection: 'forward' },
+        { scrollDirection: 'forward', scrollOffset: 500 },
       );
 
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('uses getIsStreamingFromStore callback for real-time streaming state', () => {
@@ -369,10 +369,10 @@ describe('useVirtualizedTimeline', () => {
 
       renderHook(() =>
         useTestVirtualizedTimeline({
-          timelineItems: [createMockTimelineItem(0)],
+          getIsStreamingFromStore,
           isDataReady: true,
           isStreaming: false,
-          getIsStreamingFromStore,
+          timelineItems: [createMockTimelineItem(0)],
         }),
       );
 
@@ -385,11 +385,11 @@ describe('useVirtualizedTimeline', () => {
       const result = adjustFn(
         { start: 0 },
         100,
-        { scrollOffset: 500, scrollDirection: 'forward' },
+        { scrollDirection: 'forward', scrollOffset: 500 },
       );
 
-      expect(getIsStreamingFromStore).toHaveBeenCalled();
-      expect(result).toBe(false);
+      expect(getIsStreamingFromStore).toHaveBeenCalledWith();
+      expect(result).toBeFalsy();
     });
   });
 });

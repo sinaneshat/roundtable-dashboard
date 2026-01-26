@@ -25,6 +25,7 @@ import type { AvailableSource } from '@/types/citations';
 
 /**
  * Required parameters for creating participant message metadata
+ * Note: Optional properties include `| undefined` for exactOptionalPropertyTypes compatibility
  */
 export type ParticipantMetadataParams = {
   // Round tracking (0-based: first round is 0)
@@ -39,41 +40,41 @@ export type ParticipantMetadataParams = {
   model: string;
 
   // AI SDK core fields (will have defaults if not provided)
-  finishReason?: FinishReason;
+  finishReason?: FinishReason | undefined;
   usage?: {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
-  };
+  } | undefined;
 
   // Error state (defaults to false if not provided)
-  hasError?: boolean;
-  errorType?: ErrorType;
-  errorMessage?: string;
-  errorCategory?: string;
+  hasError?: boolean | undefined;
+  errorType?: ErrorType | undefined;
+  errorMessage?: string | undefined;
+  errorCategory?: string | undefined;
 
   // Error flags (defaults to false if not provided)
-  isTransient?: boolean;
-  isPartialResponse?: boolean;
+  isTransient?: boolean | undefined;
+  isPartialResponse?: boolean | undefined;
 
   // Optional backend fields
-  providerMessage?: string;
-  openRouterError?: Record<string, string | number | boolean | null>;
-  retryAttempts?: number;
-  isEmptyResponse?: boolean;
-  statusCode?: number;
-  responseBody?: string;
-  aborted?: boolean;
-  createdAt?: string;
+  providerMessage?: string | undefined;
+  openRouterError?: Record<string, string | number | boolean | null> | undefined;
+  retryAttempts?: number | undefined;
+  isEmptyResponse?: boolean | undefined;
+  statusCode?: number | undefined;
+  responseBody?: string | undefined;
+  aborted?: boolean | undefined;
+  createdAt?: string | undefined;
 
   // RAG citations (resolved source references from AI response)
-  citations?: DbCitation[];
+  citations?: DbCitation[] | undefined;
 
   // Available sources (files/context available to AI, shown even without inline citations)
-  availableSources?: AvailableSource[];
+  availableSources?: AvailableSource[] | undefined;
 
   // Reasoning duration in seconds (for "Thought for X seconds" display on page refresh)
-  reasoningDuration?: number;
+  reasoningDuration?: number | undefined;
 };
 
 // ============================================================================
@@ -87,26 +88,26 @@ export function createParticipantMetadata(
   params: ParticipantMetadataParams,
 ): DbAssistantMessageMetadata {
   return {
-    role: MessageRoles.ASSISTANT,
-
-    // Required fields (no defaults)
-    roundNumber: params.roundNumber,
-    participantId: params.participantId,
-    participantIndex: params.participantIndex,
-    participantRole: params.participantRole,
-    model: params.model,
-
     // AI SDK fields with defaults
     finishReason: params.finishReason ?? FinishReasons.UNKNOWN,
-    usage: params.usage ?? {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-    },
 
     hasError: params.hasError ?? false,
-    isTransient: params.isTransient ?? false,
     isPartialResponse: params.isPartialResponse ?? false,
+    isTransient: params.isTransient ?? false,
+    model: params.model,
+    participantId: params.participantId,
+
+    participantIndex: params.participantIndex,
+    participantRole: params.participantRole,
+
+    role: MessageRoles.ASSISTANT,
+    // Required fields (no defaults)
+    roundNumber: params.roundNumber,
+    usage: params.usage ?? {
+      completionTokens: 0,
+      promptTokens: 0,
+      totalTokens: 0,
+    },
 
     // Optional error details (only present if provided)
     ...(params.errorType && { errorType: params.errorType }),
@@ -154,30 +155,30 @@ export function updateParticipantMetadata(
   updates: Partial<ParticipantMetadataParams>,
 ): DbAssistantMessageMetadata {
   return createParticipantMetadata({
-    roundNumber: existing.roundNumber,
+    aborted: updates.aborted ?? existing.aborted,
+    availableSources: updates.availableSources ?? (existing.availableSources as ParticipantMetadataParams['availableSources']),
+    citations: updates.citations ?? existing.citations,
+    createdAt: updates.createdAt ?? existing.createdAt,
+    errorCategory: updates.errorCategory ?? existing.errorCategory,
+    errorMessage: updates.errorMessage ?? existing.errorMessage,
+    errorType: updates.errorType ?? existing.errorType,
+    finishReason: updates.finishReason ?? existing.finishReason,
+    hasError: updates.hasError ?? existing.hasError,
+    isEmptyResponse: updates.isEmptyResponse ?? existing.isEmptyResponse,
+    isPartialResponse: updates.isPartialResponse ?? existing.isPartialResponse,
+    isTransient: updates.isTransient ?? existing.isTransient,
+    model: existing.model,
+    openRouterError: updates.openRouterError ?? existing.openRouterError,
     participantId: existing.participantId,
     participantIndex: existing.participantIndex,
     participantRole: existing.participantRole,
-    model: existing.model,
-    finishReason: updates.finishReason ?? existing.finishReason,
-    usage: updates.usage ?? existing.usage,
-    hasError: updates.hasError ?? existing.hasError,
-    errorType: updates.errorType ?? existing.errorType,
-    errorMessage: updates.errorMessage ?? existing.errorMessage,
-    errorCategory: updates.errorCategory ?? existing.errorCategory,
-    isTransient: updates.isTransient ?? existing.isTransient,
-    isPartialResponse: updates.isPartialResponse ?? existing.isPartialResponse,
     providerMessage: updates.providerMessage ?? existing.providerMessage,
-    openRouterError: updates.openRouterError ?? existing.openRouterError,
-    retryAttempts: updates.retryAttempts ?? existing.retryAttempts,
-    isEmptyResponse: updates.isEmptyResponse ?? existing.isEmptyResponse,
-    statusCode: updates.statusCode ?? existing.statusCode,
-    responseBody: updates.responseBody ?? existing.responseBody,
-    aborted: updates.aborted ?? existing.aborted,
-    createdAt: updates.createdAt ?? existing.createdAt,
-    citations: updates.citations ?? existing.citations,
-    availableSources: updates.availableSources ?? (existing.availableSources as ParticipantMetadataParams['availableSources']),
     reasoningDuration: updates.reasoningDuration ?? existing.reasoningDuration,
+    responseBody: updates.responseBody ?? existing.responseBody,
+    retryAttempts: updates.retryAttempts ?? existing.retryAttempts,
+    roundNumber: existing.roundNumber,
+    statusCode: updates.statusCode ?? existing.statusCode,
+    usage: updates.usage ?? existing.usage,
   });
 }
 
@@ -196,8 +197,8 @@ export function createStreamingMetadata(
     ...params,
     finishReason: FinishReasons.UNKNOWN,
     usage: {
-      promptTokens: 0,
       completionTokens: 0,
+      promptTokens: 0,
       totalTokens: 0,
     },
   });
@@ -224,8 +225,8 @@ export function completeStreamingMetadata(
     finishReason: finishResult.finishReason,
     usage: usageData
       ? {
-          promptTokens,
           completionTokens,
+          promptTokens,
           totalTokens: totalTokens ?? promptTokens + completionTokens,
         }
       : streamMetadata.usage,
@@ -247,14 +248,14 @@ export function createStreamErrorMetadata(
   },
 ): DbAssistantMessageMetadata {
   return updateParticipantMetadata(streamMetadata, {
-    hasError: true,
+    errorCategory: error.errorCategory,
     errorMessage: error.message,
     errorType: error.errorType,
-    errorCategory: error.errorCategory,
-    isTransient: error.isTransient ?? false,
+    hasError: true,
     isPartialResponse: false,
-    statusCode: error.statusCode,
+    isTransient: error.isTransient ?? false,
     responseBody: error.responseBody,
+    statusCode: error.statusCode,
   });
 }
 
@@ -268,8 +269,9 @@ export function createStreamErrorMetadata(
 export function hasRequiredParticipantFields(
   metadata: unknown,
 ): metadata is DbAssistantMessageMetadata {
-  if (!metadata || typeof metadata !== 'object')
+  if (!metadata || typeof metadata !== 'object') {
     return false;
+  }
 
   return (
     'roundNumber' in metadata

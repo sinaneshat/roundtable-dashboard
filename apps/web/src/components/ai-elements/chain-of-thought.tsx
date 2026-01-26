@@ -52,20 +52,21 @@ type ChainOfThoughtProps = {
 } & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThought({
-  open: controlledOpen,
-  defaultOpen = false,
-  onOpenChange,
-  disabled = false,
-  className,
   children,
+  className,
+  defaultOpen = false,
+  disabled = false,
+  onOpenChange,
+  open: controlledOpen,
   ...props
 }: ChainOfThoughtProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const open = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
-    if (disabled)
+    if (disabled) {
       return;
+    }
     if (controlledOpen === undefined) {
       setUncontrolledOpen(newOpen);
     }
@@ -152,8 +153,8 @@ type ChainOfThoughtContentProps = {
 } & Omit<ComponentProps<typeof CollapsibleContent>, 'className' | 'children'>;
 
 export function ChainOfThoughtContent({
-  className,
   children,
+  className,
   ...props
 }: ChainOfThoughtContentProps) {
   return (
@@ -174,28 +175,28 @@ export function ChainOfThoughtContent({
 // ============================================================================
 
 const stepIconVariants = cva('mt-0.5 flex-shrink-0', {
-  variants: {
-    status: {
-      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
-      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-blue-500',
-      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-green-500',
-    },
-  },
   defaultVariants: {
     status: ChainOfThoughtStepStatuses.COMPLETE,
+  },
+  variants: {
+    status: {
+      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-blue-500',
+      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-green-500',
+      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+    },
   },
 });
 
 const stepLabelVariants = cva('text-sm font-medium', {
-  variants: {
-    status: {
-      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
-      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-foreground',
-      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-foreground',
-    },
-  },
   defaultVariants: {
     status: ChainOfThoughtStepStatuses.COMPLETE,
+  },
+  variants: {
+    status: {
+      [ChainOfThoughtStepStatuses.ACTIVE]: 'text-foreground',
+      [ChainOfThoughtStepStatuses.COMPLETE]: 'text-foreground',
+      [ChainOfThoughtStepStatuses.PENDING]: 'text-muted-foreground',
+    },
   },
 });
 
@@ -211,14 +212,14 @@ type ChainOfThoughtStepProps = {
 } & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThoughtStep({
+  badge,
+  children,
+  className,
+  description,
   icon: Icon,
   label,
-  description,
-  status = ChainOfThoughtStepStatuses.COMPLETE,
-  badge,
   metadata,
-  className,
-  children,
+  status = ChainOfThoughtStepStatuses.COMPLETE,
   ...props
 }: ChainOfThoughtStepProps) {
   const shouldAnimate = status === ChainOfThoughtStepStatuses.ACTIVE;
@@ -270,8 +271,8 @@ type ChainOfThoughtSearchResultsProps = {
 } & Omit<ComponentProps<'div'>, 'className' | 'children'>;
 
 export function ChainOfThoughtSearchResults({
-  className,
   children,
+  className,
   ...props
 }: ChainOfThoughtSearchResultsProps) {
   return (
@@ -287,8 +288,8 @@ type ChainOfThoughtSearchResultProps = {
 } & Omit<ComponentProps<typeof Badge>, 'className' | 'children' | 'variant'>;
 
 export function ChainOfThoughtSearchResult({
-  className,
   children,
+  className,
   ...props
 }: ChainOfThoughtSearchResultProps) {
   return (
@@ -310,8 +311,8 @@ type ChainOfThoughtImageProps = {
 
 export function ChainOfThoughtImage({
   caption,
-  className,
   children,
+  className,
   ...props
 }: ChainOfThoughtImageProps) {
   return (

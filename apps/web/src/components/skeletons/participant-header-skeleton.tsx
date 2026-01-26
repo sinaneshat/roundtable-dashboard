@@ -20,9 +20,9 @@ type ParticipantHeaderSkeletonProps = {
  * @param props.className - Optional CSS class names
  */
 export function ParticipantHeaderSkeleton({
+  className,
   showRole = true,
   showStatus = false,
-  className,
   ...props
 }: ParticipantHeaderSkeletonProps) {
   return (

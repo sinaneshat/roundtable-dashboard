@@ -42,6 +42,18 @@ import { AvailableSourceSchema } from '@/types/citations';
 import { isObject } from './type-guards';
 
 // ============================================================================
+// Safe Property Access Helper
+// ============================================================================
+
+/**
+ * Safely get a property from a Record using bracket notation
+ * This satisfies TS4111 noPropertyAccessFromIndexSignature
+ */
+function getRecordProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
+// ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
 
@@ -63,8 +75,9 @@ import { isObject } from './type-guards';
  * ```
  */
 export function getMessageMetadata(metadata: unknown): DbMessageMetadata | undefined {
-  if (!metadata)
+  if (!metadata) {
     return undefined;
+  }
 
   const result = DbMessageMetadataSchema.safeParse(metadata);
   return result.success ? result.data : undefined;
@@ -166,22 +179,26 @@ export function extractMessageMetadata(
 
   // Try each schema in order of likelihood
   const userResult = getUserMetadata(message.metadata);
-  if (userResult)
+  if (userResult) {
     return userResult;
+  }
 
   // ✅ TEXT STREAMING: Check moderator before regular assistant
   // (moderator is a specialized assistant type)
   const moderatorResult = getModeratorMetadata(message.metadata);
-  if (moderatorResult)
+  if (moderatorResult) {
     return moderatorResult;
+  }
 
   const assistantResult = getAssistantMetadata(message.metadata);
-  if (assistantResult)
+  if (assistantResult) {
     return assistantResult;
+  }
 
   const preSearchResult = getPreSearchMetadata(message.metadata);
-  if (preSearchResult)
+  if (preSearchResult) {
     return preSearchResult;
+  }
 
   return null;
 }
@@ -209,21 +226,24 @@ export function getCreatedAt(message: unknown): string | null {
   }
 
   // 1. Check direct createdAt property (ChatMessage or extended UIMessage)
-  if ('createdAt' in message && message.createdAt !== undefined) {
-    if (message.createdAt instanceof Date) {
-      return message.createdAt.toISOString();
+  const msgRecord = message as Record<string, unknown>;
+  const createdAt = getRecordProp(msgRecord, 'createdAt');
+  if (createdAt !== undefined) {
+    if (createdAt instanceof Date) {
+      return createdAt.toISOString();
     }
-    if (typeof message.createdAt === 'string') {
-      return message.createdAt;
+    if (typeof createdAt === 'string') {
+      return createdAt;
     }
   }
 
   // 2. Check metadata.createdAt (our custom metadata field)
-  if ('metadata' in message && isObject(message.metadata)) {
-    if ('createdAt' in message.metadata && message.metadata.createdAt !== undefined) {
-      if (typeof message.metadata.createdAt === 'string') {
-        return message.metadata.createdAt;
-      }
+  const metadata = getRecordProp(msgRecord, 'metadata');
+  if (isObject(metadata)) {
+    const metadataRecord = metadata as Record<string, unknown>;
+    const metaCreatedAt = getRecordProp(metadataRecord, 'createdAt');
+    if (metaCreatedAt !== undefined && typeof metaCreatedAt === 'string') {
+      return metaCreatedAt;
     }
   }
 
@@ -652,20 +672,20 @@ export function requirePreSearchMetadata(
 export function buildAssistantMetadata(
   baseMetadata: Partial<DbAssistantMessageMetadata>,
   options: {
-    participantId?: string;
-    participantIndex?: number;
-    participantRole?: string | null;
-    model?: string;
-    roundNumber?: number;
-    hasError?: boolean;
-    errorType?: string;
-    errorMessage?: string;
-    errorCategory?: string;
-    rawErrorMessage?: string;
-    providerMessage?: string;
-    statusCode?: number;
-    openRouterError?: Record<string, string | number | boolean | null>;
-    openRouterCode?: string | number;
+    participantId?: string | undefined;
+    participantIndex?: number | undefined;
+    participantRole?: string | null | undefined;
+    model?: string | undefined;
+    roundNumber?: number | undefined;
+    hasError?: boolean | undefined;
+    errorType?: string | undefined;
+    errorMessage?: string | undefined;
+    errorCategory?: string | undefined;
+    rawErrorMessage?: string | undefined;
+    providerMessage?: string | undefined;
+    statusCode?: number | undefined;
+    openRouterError?: Record<string, string | number | boolean | null> | undefined;
+    openRouterCode?: string | number | undefined;
   },
 ): DbAssistantMessageMetadata {
   // Build the metadata object with role as discriminator
@@ -733,8 +753,7 @@ export function buildAssistantMetadata(
  */
 export function hasParticipantEnrichment(metadata: unknown): boolean {
   const validated = getParticipantMetadata(metadata);
-  return validated !== null
-    && validated.participantId !== undefined
+  return validated?.participantId !== undefined
     && validated.participantIndex !== undefined
     && validated.model !== undefined;
 }
@@ -771,10 +790,10 @@ export function hasParticipantEnrichment(metadata: unknown): boolean {
  * Used to validate the enriched metadata result
  */
 const ParticipantEnrichmentSchema = z.object({
+  model: z.string().min(1),
   participantId: z.string().min(1),
   participantIndex: z.number().int().nonnegative(),
   participantRole: z.string().nullable().optional(),
-  model: z.string().min(1),
 });
 
 /**
@@ -801,10 +820,10 @@ export function enrichMessageWithParticipant(
 ): DbMessageMetadata {
   // Validate participant input first
   const enrichmentResult = ParticipantEnrichmentSchema.safeParse({
+    model: participant.modelId,
     participantId: participant.id,
     participantIndex: participant.index,
     participantRole: participant.role,
-    model: participant.modelId,
   });
 
   if (!enrichmentResult.success) {

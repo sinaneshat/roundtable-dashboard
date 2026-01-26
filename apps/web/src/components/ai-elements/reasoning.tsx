@@ -51,14 +51,14 @@ type ReasoningProps = {
 } & Omit<ComponentProps<typeof Collapsible>, 'open' | 'onOpenChange' | 'className' | 'children' | 'defaultOpen'>;
 
 export function Reasoning({
-  isStreaming: isStreamingProp = false,
-  initialContentLength = 0,
-  storedDuration,
-  className,
   children,
-  open: controlledOpen,
-  onOpenChange: controlledOnOpenChange,
+  className,
   defaultOpen = false,
+  initialContentLength = 0,
+  isStreaming: isStreamingProp = false,
+  onOpenChange: controlledOnOpenChange,
+  open: controlledOpen,
+  storedDuration,
   ...props
 }: ReasoningProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
@@ -68,14 +68,18 @@ export function Reasoning({
   const isOpen = isControlled ? controlledOpen : internalOpen;
 
   const state: ReasoningState = useMemo(() => {
-    if (storedDuration !== undefined)
+    if (storedDuration !== undefined) {
       return ReasoningStates.COMPLETE;
-    if (isStreamingProp)
+    }
+    if (isStreamingProp) {
       return ReasoningStates.THINKING;
-    if (calculatedDuration !== undefined)
+    }
+    if (calculatedDuration !== undefined) {
       return ReasoningStates.COMPLETE;
-    if (initialContentLength > 0)
+    }
+    if (initialContentLength > 0) {
       return ReasoningStates.COMPLETE;
+    }
     return ReasoningStates.IDLE;
   }, [isStreamingProp, storedDuration, calculatedDuration, initialContentLength]);
 
@@ -91,11 +95,11 @@ export function Reasoning({
 
   const contextValue = useMemo(
     () => ({
+      elapsedSeconds,
+      finalDuration,
       open: isOpen,
       setOpen: handleOpenChange,
       state,
-      elapsedSeconds,
-      finalDuration,
     }),
     [isOpen, handleOpenChange, state, elapsedSeconds, finalDuration],
   );
@@ -118,12 +122,13 @@ type ReasoningTriggerProps = {
   readonly className?: string;
 } & Omit<ComponentProps<typeof CollapsibleTrigger>, 'className'>;
 
-export function ReasoningTrigger({ title, className, ...props }: ReasoningTriggerProps) {
-  const { open, state, elapsedSeconds, finalDuration } = useReasoningContext();
+export function ReasoningTrigger({ className, title, ...props }: ReasoningTriggerProps) {
+  const { elapsedSeconds, finalDuration, open, state } = useReasoningContext();
 
   const getMessage = (): string => {
-    if (title)
+    if (title) {
       return title;
+    }
 
     if (state === ReasoningStates.THINKING) {
       return elapsedSeconds > 0 ? `Thinking... ${elapsedSeconds}s` : 'Thinking...';
@@ -158,7 +163,7 @@ type ReasoningContentProps = {
   readonly children?: ReactNode;
 } & Omit<ComponentProps<typeof CollapsibleContent>, 'className' | 'children'>;
 
-export function ReasoningContent({ className, children, ...props }: ReasoningContentProps) {
+export function ReasoningContent({ children, className, ...props }: ReasoningContentProps) {
   return (
     <CollapsibleContent className={cn('mt-2 text-sm text-muted-foreground', className)} {...props}>
       <div className="whitespace-pre-wrap leading-relaxed pl-5">{children}</div>

@@ -60,8 +60,8 @@ export const listApiKeysHandler: RouteHandler<typeof listApiKeysRoute, ApiEnv> =
 export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ApiKeyIdParamSchema,
     operationName: 'getApiKey',
+    validateParams: ApiKeyIdParamSchema,
   },
   async (c) => {
     // Verify authentication (ensures authenticated request)
@@ -71,8 +71,8 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
     // Use Better Auth's official API to get the API key
     // This ensures ownership validation and excludes sensitive key values
     const apiKey = await auth.api.getApiKey({
-      query: { id: keyId },
       headers: c.req.raw.headers, // Include headers for user context
+      query: { id: keyId },
     });
 
     if (!apiKey) {
@@ -90,8 +90,8 @@ export const getApiKeyHandler: RouteHandler<typeof getApiKeyRoute, ApiEnv> = cre
 export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateApiKeyRequestSchema,
     operationName: 'createApiKey',
+    validateBody: CreateApiKeyRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -112,14 +112,14 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
     // This ensures proper hashing and compatibility with Better Auth's validation
     const result = await auth.api.createApiKey({
       body: {
-        name: body.name ?? undefined, // Convert null to undefined for Better Auth
-        userId: user.id,
         expiresIn: body.expiresIn ? body.expiresIn * 24 * 60 * 60 : undefined, // Convert days to seconds
-        remaining: body.remaining ?? undefined, // Convert null to undefined
+        name: body.name ?? undefined, // Convert null to undefined for Better Auth
         prefix: 'rpnd_',
         rateLimitEnabled: true,
-        rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 24 hours
         rateLimitMax: 1000, // 1000 requests per day
+        rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 24 hours
+        remaining: body.remaining ?? undefined, // Convert null to undefined
+        userId: user.id,
       },
     });
 
@@ -142,9 +142,9 @@ export const createApiKeyHandler: RouteHandler<typeof createApiKeyRoute, ApiEnv>
 export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ApiKeyIdParamSchema,
-    validateBody: UpdateApiKeyRequestSchema,
     operationName: 'updateApiKey',
+    validateBody: UpdateApiKeyRequestSchema,
+    validateParams: ApiKeyIdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -155,16 +155,16 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
     // This ensures proper validation and maintains consistency
     const result = await auth.api.updateApiKey({
       body: {
-        keyId,
-        userId: user.id, // Server-only field for ownership verification
-        name: body.name ?? undefined, // Convert null to undefined for Better Auth
         enabled: body.enabled,
-        remaining: body.remaining ?? undefined, // Convert null to undefined
+        keyId,
+        name: body.name ?? undefined, // Convert null to undefined for Better Auth
+        rateLimitEnabled: body.rateLimitEnabled,
+        rateLimitMax: body.rateLimitMax ?? undefined, // Convert null to undefined
+        rateLimitTimeWindow: body.rateLimitTimeWindow ?? undefined, // Convert null to undefined
         refillAmount: body.refillAmount ?? undefined, // Convert null to undefined
         refillInterval: body.refillInterval ?? undefined, // Convert null to undefined
-        rateLimitEnabled: body.rateLimitEnabled,
-        rateLimitTimeWindow: body.rateLimitTimeWindow ?? undefined, // Convert null to undefined
-        rateLimitMax: body.rateLimitMax ?? undefined, // Convert null to undefined
+        remaining: body.remaining ?? undefined, // Convert null to undefined
+        userId: user.id, // Server-only field for ownership verification
       },
     });
 
@@ -183,8 +183,8 @@ export const updateApiKeyHandler: RouteHandler<typeof updateApiKeyRoute, ApiEnv>
 export const deleteApiKeyHandler: RouteHandler<typeof deleteApiKeyRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ApiKeyIdParamSchema,
     operationName: 'deleteApiKey',
+    validateParams: ApiKeyIdParamSchema,
   },
   async (c) => {
     // Verify authentication (ensures authenticated request)

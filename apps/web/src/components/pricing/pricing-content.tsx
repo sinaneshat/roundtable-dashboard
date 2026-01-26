@@ -37,16 +37,16 @@ type ProductGridProps = {
 };
 
 export function PricingContent({
-  products,
-  subscriptions,
-  error = null,
-  processingPriceId,
   cancelingSubscriptionId = null,
+  error = null,
   isManagingBilling = false,
-  onSubscribe,
   onCancel,
   onManageBilling,
+  onSubscribe,
+  processingPriceId,
+  products,
   showSubscriptionBanner = false,
+  subscriptions,
 }: PricingContentProps) {
   const t = useTranslations();
 
@@ -150,16 +150,16 @@ export function PricingContent({
 }
 
 function ProductGrid({
-  products,
-  hasActiveSubscription,
-  getSubscriptionForPrice,
-  hasAnyActiveSubscription,
-  processingPriceId,
   cancelingSubscriptionId,
+  getSubscriptionForPrice,
+  hasActiveSubscription,
+  hasAnyActiveSubscription,
   isManagingBilling,
-  onSubscribe,
   onCancel,
   onManageBilling,
+  onSubscribe,
+  processingPriceId,
+  products,
   showSubscriptionBanner,
 }: ProductGridProps) {
   const t = useTranslations();
@@ -200,7 +200,7 @@ function ProductGrid({
                 }}
                 features={product.features}
                 isCurrentPlan={!showSubscriptionBanner && hasSubscription}
-                isMostPopular={true}
+                isMostPopular
                 isProcessingSubscribe={processingPriceId === price.id}
                 isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
                 isProcessingManageBilling={hasSubscription ? isManagingBilling : false}

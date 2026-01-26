@@ -14,7 +14,7 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
-  staleTime: 0,
+  component: ProjectDetailRoute,
   validateSearch: searchSchema,
 
   loader: async ({ params, context }) => {
@@ -53,6 +53,8 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     };
   },
 
+  staleTime: 0,
+
   head: ({ loaderData }) => {
     const siteUrl = getAppBaseUrl();
     const displayTitle = loaderData?.projectName
@@ -69,8 +71,6 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
       ],
     };
   },
-
-  component: ProjectDetailRoute,
 });
 
 function ProjectDetailRoute() {

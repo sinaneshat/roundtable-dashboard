@@ -52,42 +52,42 @@ function createMockThread(overrides: {
   mode?: string;
 } = {}) {
   return {
+    createdAt: new Date(),
+    enableWebSearch: overrides.enableWebSearch ?? false,
     id: 'thread-123',
-    userId: 'user-1',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    mode: overrides.mode || 'brainstorm',
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: overrides.enableWebSearch ?? false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: overrides.mode || 'brainstorm',
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-1',
   };
 }
 
 function createMockParticipants() {
   return [
     {
-      id: 'participant-1',
-      threadId: 'thread-123',
-      modelId: 'model-a',
-      role: null,
-      priority: 0,
-      isEnabled: true,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'model-a',
+      priority: 0,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
     {
-      id: 'participant-2',
-      threadId: 'thread-123',
-      modelId: 'model-b',
-      role: null,
-      priority: 1,
-      isEnabled: true,
       createdAt: new Date(),
+      id: 'participant-2',
+      isEnabled: true,
+      modelId: 'model-b',
+      priority: 1,
+      role: null,
+      threadId: 'thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -96,22 +96,22 @@ function createMockParticipants() {
 function createUserMessage(roundNumber: number, text = 'Test message') {
   return {
     id: `user-msg-r${roundNumber}`,
+    metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' as const }],
     role: MessageRoles.USER as const,
-    parts: [{ type: 'text' as const, text }],
-    metadata: { roundNumber, role: MessageRoles.USER },
   };
 }
 
 function createPreSearch(roundNumber: number, status: typeof MessageStatuses[keyof typeof MessageStatuses]): StoredPreSearch {
   return {
-    id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    userQuery: 'Test query',
-    status,
-    searchData: null,
-    createdAt: new Date(),
     completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    createdAt: new Date(),
+    id: `presearch-r${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Test query',
   };
 }
 
@@ -163,8 +163,8 @@ function canStreamingProceed(state: ChatStore): {
   }
 
   return {
-    canProceed: blockReasons.length === 0,
     blockReasons,
+    canProceed: blockReasons.length === 0,
   };
 }
 
@@ -189,7 +189,7 @@ describe('streaming Trigger Blocking - configChangeRoundNumber', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -198,21 +198,21 @@ describe('streaming Trigger Blocking - configChangeRoundNumber', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
   it('blocks streaming immediately after setting configChangeRoundNumber', () => {
     // Initially can stream
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
 
     // Simulate config change
     store.getState().setConfigChangeRoundNumber(1);
 
     // Now blocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -220,14 +220,14 @@ describe('streaming Trigger Blocking - configChangeRoundNumber', () => {
     // Start blocked
     store.getState().setConfigChangeRoundNumber(1);
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear the flag (simulates changelog sync completing)
     store.getState().setConfigChangeRoundNumber(null);
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -252,7 +252,7 @@ describe('streaming Trigger Blocking - isWaitingForChangelog', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
 
@@ -261,21 +261,21 @@ describe('streaming Trigger Blocking - isWaitingForChangelog', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
   it('blocks streaming when isWaitingForChangelog is set after PATCH', () => {
     // Initially can stream
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
 
     // Simulate PATCH completing with config changes
     store.getState().setIsWaitingForChangelog(true);
 
     // Now blocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
 
@@ -283,14 +283,14 @@ describe('streaming Trigger Blocking - isWaitingForChangelog', () => {
     // Start blocked
     store.getState().setIsWaitingForChangelog(true);
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear the flag (simulates changelog sync completing)
     store.getState().setIsWaitingForChangelog(false);
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -316,7 +316,7 @@ describe('streaming Trigger Blocking - Both Flags', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
@@ -330,7 +330,7 @@ describe('streaming Trigger Blocking - Both Flags', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
 
@@ -343,7 +343,7 @@ describe('streaming Trigger Blocking - Both Flags', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -352,7 +352,7 @@ describe('streaming Trigger Blocking - Both Flags', () => {
     store.getState().setConfigChangeRoundNumber(1);
     store.getState().setIsWaitingForChangelog(true);
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear both flags (simulates changelog sync completing)
     store.getState().setConfigChangeRoundNumber(null);
@@ -360,7 +360,7 @@ describe('streaming Trigger Blocking - Both Flags', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -382,31 +382,31 @@ describe('streaming Trigger Unblocking - Sequence', () => {
   it('follows the correct unblocking sequence for config changes', () => {
     // Step 1: handleUpdateThreadAndSend sets configChangeRoundNumber
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 2: PATCH completes, sets isWaitingForChangelog
     store.getState().setIsWaitingForChangelog(true);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 3: Changelog fetch completes, clears both flags
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
 
     // Step 4: Streaming can now proceed
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 
   it('unblocks immediately when no config changes exist', () => {
     // Step 1: handleUpdateThreadAndSend sets configChangeRoundNumber
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Step 2: PATCH completes, NO config changes
     // Form-actions.ts:373 clears configChangeRoundNumber directly
     store.getState().setConfigChangeRoundNumber(null);
 
     // Step 3: Streaming can proceed immediately
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 });
 
@@ -432,7 +432,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search missing');
   });
 
@@ -441,7 +441,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -450,7 +450,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search streaming');
   });
 
@@ -459,7 +459,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
@@ -468,7 +468,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
@@ -480,7 +480,7 @@ describe('streaming Trigger Blocking - Pre-Search', () => {
     const result = canStreamingProceed(store.getState());
 
     // Should not check pre-search when web search disabled
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).not.toContain('pre-search missing');
   });
 });
@@ -511,7 +511,7 @@ describe('streaming Trigger Blocking - Combined Scenarios', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).toContain('pre-search pending');
@@ -530,7 +530,7 @@ describe('streaming Trigger Blocking - Combined Scenarios', () => {
     const result = canStreamingProceed(store.getState());
 
     // Still blocked by pre-search
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
   });
 
@@ -541,7 +541,7 @@ describe('streaming Trigger Blocking - Combined Scenarios', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear config flags
     store.getState().setConfigChangeRoundNumber(null);
@@ -552,7 +552,7 @@ describe('streaming Trigger Blocking - Combined Scenarios', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -578,16 +578,16 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
 
     // Rapid sequence of state changes
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     store.getState().setIsWaitingForChangelog(true);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     store.getState().setConfigChangeRoundNumber(null);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     store.getState().setIsWaitingForChangelog(false);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 
   it('handles pre-search status changes during changelog sync', () => {
@@ -599,7 +599,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Changelog completes first
     store.getState().setConfigChangeRoundNumber(null);
@@ -607,7 +607,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
 
     // Still blocked by pre-search
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
 
     // Pre-search completes
@@ -615,7 +615,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('handles changelog completing before pre-search starts', () => {
@@ -627,7 +627,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
     store.getState().setPreSearches([]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Changelog completes
     store.getState().setConfigChangeRoundNumber(null);
@@ -635,7 +635,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
 
     // Now blocked by missing pre-search
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search missing');
 
     // Pre-search created and completes
@@ -643,7 +643,7 @@ describe('streaming Trigger Blocking - Race Conditions', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -676,7 +676,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Simulate timeout: use-changelog-sync.ts:123 clears flag after 30s
     // In real code, this happens via setTimeout in the hook
@@ -688,7 +688,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
 
     // Should unblock after timeout
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('simulates pre-search timeout with stuck PENDING status', async () => {
@@ -696,7 +696,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Simulate timeout: checkStuckPreSearches marks as COMPLETE
     vi.advanceTimersByTime(10_000);
@@ -706,7 +706,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
 
     // Should unblock after timeout
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('handles both timeouts occurring', async () => {
@@ -716,7 +716,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.PENDING)]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Advance past pre-search timeout (10s)
     vi.advanceTimersByTime(10_000);
@@ -724,7 +724,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
 
     // Still blocked by changelog
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Advance to changelog timeout (30s total)
     vi.advanceTimersByTime(20_000);
@@ -733,7 +733,7 @@ describe('streaming Trigger Blocking - Timeout Protection', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -759,7 +759,7 @@ describe('streaming Trigger Blocking - Multi-Round', () => {
 
     // Round 0 can stream
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
 
     // Start Round 1 with config changes
     store.getState().setMessages([createUserMessage(0), createUserMessage(1)]);
@@ -772,7 +772,7 @@ describe('streaming Trigger Blocking - Multi-Round', () => {
 
     // Round 1 should be blocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).toContain('pre-search pending');
@@ -789,7 +789,7 @@ describe('streaming Trigger Blocking - Multi-Round', () => {
     ]);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Changelog completes
     store.getState().setConfigChangeRoundNumber(null);
@@ -797,14 +797,14 @@ describe('streaming Trigger Blocking - Multi-Round', () => {
 
     // Still blocked by pre-search
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Pre-search completes
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -831,7 +831,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -846,7 +846,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
     const result = canStreamingProceed(store.getState());
 
     // Still blocked by BOTH flags
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
@@ -858,7 +858,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Simulate use-changelog-sync clearing both flags (lines 106-107 use-changelog-sync.ts)
     store.getState().setConfigChangeRoundNumber(null);
@@ -866,7 +866,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('clears configChangeRoundNumber immediately when no config changes (line 373)', () => {
@@ -875,7 +875,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // No config changes: use-changelog-sync detects empty changelog and clears both flags immediately
     store.getState().setConfigChangeRoundNumber(null);
@@ -883,7 +883,7 @@ describe('streaming Trigger Blocking - PATCH Completion', () => {
 
     // Unblocked immediately
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -909,7 +909,7 @@ describe('streaming Trigger Blocking - Changelog Fetch', () => {
 
     const result = canStreamingProceed(store.getState());
 
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
@@ -919,14 +919,14 @@ describe('streaming Trigger Blocking - Changelog Fetch', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Simulate changelog fetch success (use-changelog-sync lines 105-107)
     store.getState().setIsWaitingForChangelog(false);
     store.getState().setConfigChangeRoundNumber(null);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('unblocks on changelog fetch timeout (30s safety)', () => {
@@ -936,7 +936,7 @@ describe('streaming Trigger Blocking - Changelog Fetch', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Advance past timeout (use-changelog-sync line 127)
     vi.advanceTimersByTime(30_000);
@@ -946,7 +946,7 @@ describe('streaming Trigger Blocking - Changelog Fetch', () => {
     store.getState().setConfigChangeRoundNumber(null);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
 
     vi.useRealTimers();
   });
@@ -956,14 +956,14 @@ describe('streaming Trigger Blocking - Changelog Fetch', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Simulate empty changelog (use-changelog-sync lines 67-72)
     store.getState().setIsWaitingForChangelog(false);
     store.getState().setConfigChangeRoundNumber(null);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 });
 
@@ -990,11 +990,11 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
     const state = store.getState();
 
     expect(state.configChangeRoundNumber).toBe(1);
-    expect(state.waitingToStartStreaming).toBe(true);
+    expect(state.waitingToStartStreaming).toBeTruthy();
 
     // Streaming should be blocked
     const result = canStreamingProceed(state);
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -1004,10 +1004,10 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
 
     // PATCH in flight, no flags cleared yet
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // waitingToStartStreaming remains true
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('keeps waitingToStartStreaming=true while changelog fetches', () => {
@@ -1018,11 +1018,11 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
 
     // Changelog fetching
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
 
     // waitingToStartStreaming still true, waiting for unblock
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('triggers streaming only after all flags clear', () => {
@@ -1032,7 +1032,7 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
 
     // Initially blocked
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear flags (changelog fetch completed)
     store.getState().setConfigChangeRoundNumber(null);
@@ -1040,10 +1040,10 @@ describe('streaming Trigger Blocking - waitingToStartStreaming + Flags', () => {
 
     // Now unblocked
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
 
     // waitingToStartStreaming still true, ready to trigger
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 });
 
@@ -1071,14 +1071,14 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setWaitingToStartStreaming(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
 
     // STEP 2: PATCH completes - sets isWaitingForChangelog
     store.getState().setIsWaitingForChangelog(true);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
 
@@ -1086,7 +1086,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setPreSearches([createPreSearch(1, MessageStatuses.PENDING)]);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).toContain('pre-search pending');
@@ -1096,7 +1096,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setIsWaitingForChangelog(false);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
     expect(result.blockReasons).not.toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).not.toContain('isWaitingForChangelog is true');
@@ -1105,7 +1105,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 
@@ -1121,21 +1121,21 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
 
     let result = canStreamingProceed(store.getState());
     // No pre-search yet - should block
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search missing');
 
     // Pre-search created
     store.getState().setPreSearches([createPreSearch(1, MessageStatuses.PENDING)]);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('pre-search pending');
 
     // Pre-search completes
     store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('blocks when pre-search completes before changelog', () => {
@@ -1149,7 +1149,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
 
     let result = canStreamingProceed(store.getState());
     // Pre-search complete but changelog still pending
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
     expect(result.blockReasons).not.toContain('pre-search');
@@ -1159,7 +1159,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setIsWaitingForChangelog(false);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('handles config changes WITHOUT web search (no pre-search blocking)', () => {
@@ -1172,14 +1172,14 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setWaitingToStartStreaming(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
 
     // PATCH completes
     store.getState().setIsWaitingForChangelog(true);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
 
     // Changelog completes - should unblock immediately (no pre-search)
@@ -1187,7 +1187,7 @@ describe('streaming Trigger Blocking - Complete Flow', () => {
     store.getState().setIsWaitingForChangelog(false);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
     expect(result.blockReasons).toHaveLength(0);
   });
 });
@@ -1215,7 +1215,7 @@ describe('streaming Trigger Blocking - Flag Clearing Order', () => {
     store.getState().setConfigChangeRoundNumber(null);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('isWaitingForChangelog is true');
   });
 
@@ -1227,7 +1227,7 @@ describe('streaming Trigger Blocking - Flag Clearing Order', () => {
     store.getState().setIsWaitingForChangelog(false);
 
     const result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
     expect(result.blockReasons).toContain('configChangeRoundNumber is set');
   });
 
@@ -1236,29 +1236,29 @@ describe('streaming Trigger Blocking - Flag Clearing Order', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     let result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(false);
+    expect(result.canProceed).toBeFalsy();
 
     // Clear both flags atomically (as use-changelog-sync does)
     store.getState().setConfigChangeRoundNumber(null);
     store.getState().setIsWaitingForChangelog(false);
 
     result = canStreamingProceed(store.getState());
-    expect(result.canProceed).toBe(true);
+    expect(result.canProceed).toBeTruthy();
   });
 
   it('handles rapid flag state changes without race conditions', () => {
     // Rapid sequence simulating async operations
     store.getState().setConfigChangeRoundNumber(1);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     store.getState().setIsWaitingForChangelog(true);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     // Clear in opposite order
     store.getState().setIsWaitingForChangelog(false);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(false);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeFalsy();
 
     store.getState().setConfigChangeRoundNumber(null);
-    expect(canStreamingProceed(store.getState()).canProceed).toBe(true);
+    expect(canStreamingProceed(store.getState()).canProceed).toBeTruthy();
   });
 });

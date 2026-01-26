@@ -36,46 +36,46 @@ const THREAD_ID = 'thread-first-round-test';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: THREAD_ID,
-    userId: 'user-123',
-    title: 'New Chat',
-    slug: 'initial-slug-abc123',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: THREAD_ID,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'initial-slug-abc123',
+    status: 'active',
+    title: 'New Chat',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createParticipant(index: number): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: THREAD_ID,
-    modelId: `model-${index}`,
-    role: `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: `Participant ${index}`,
+    settings: null,
+    threadId: THREAD_ID,
     updatedAt: new Date(),
   } as ChatParticipant;
 }
 
 function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
-    id: `${THREAD_ID}_r${roundNumber}_user`,
     content,
+    id: `${THREAD_ID}_r${roundNumber}_user`,
     roundNumber,
   });
 }
@@ -87,21 +87,21 @@ function createAssistantMsg(
   finishReason = FinishReasons.STOP,
 ): ApiMessage {
   return createTestAssistantMessage({
-    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     content,
-    roundNumber,
+    finishReason,
+    id: `${THREAD_ID}_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason,
+    roundNumber,
   });
 }
 
 function createModeratorMsg(roundNumber: number, content = `Summary R${roundNumber}`): ApiMessage {
   return createTestModeratorMessage({
-    id: `${THREAD_ID}_r${roundNumber}_moderator`,
     content,
-    roundNumber,
     finishReason: FinishReasons.STOP,
+    id: `${THREAD_ID}_r${roundNumber}_moderator`,
+    roundNumber,
   });
 }
 
@@ -110,31 +110,31 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
   const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
     complete: MessageStatuses.COMPLETE,
     failed: MessageStatuses.FAILED,
+    pending: MessageStatuses.PENDING,
+    streaming: MessageStatuses.STREAMING,
   };
   return {
+    completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${THREAD_ID}-r${roundNumber}`,
-    threadId: THREAD_ID,
     roundNumber,
-    userQuery: `Query ${roundNumber}`,
-    status: statusMap[status],
     searchData: status === 'complete'
       ? {
+          failureCount: 0,
+          moderatorSummary: 'Search complete',
           queries: [],
           results: [],
-          moderatorSummary: 'Search complete',
           successCount: 1,
-          failureCount: 0,
           totalResults: 0,
           totalTime: 100,
         }
       : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    status: statusMap[status],
+    threadId: THREAD_ID,
+    userQuery: `Query ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -172,7 +172,7 @@ describe('behavior 1: User submits first message on /chat overview screen', () =
     // After submission (thread creation initiated)
     store.getState().setIsCreatingThread(true);
 
-    expect(store.getState().isCreatingThread).toBe(true);
+    expect(store.getState().isCreatingThread).toBeTruthy();
     expect(store.getState().pendingMessage).toBe('Test question');
   });
 });
@@ -185,14 +185,14 @@ describe('behavior 2: Thread created with auto-generated slug', () => {
   it('should initialize thread with auto-generated slug', () => {
     const store = createChatStore();
     const thread = createThread({
-      slug: 'what-is-the-best-approach-abc123',
       isAiGeneratedTitle: false, // Initial slug from user message
+      slug: 'what-is-the-best-approach-abc123',
     });
 
     store.getState().initializeThread(thread, [], []);
 
     expect(store.getState().thread?.slug).toBe('what-is-the-best-approach-abc123');
-    expect(store.getState().thread?.isAiGeneratedTitle).toBe(false);
+    expect(store.getState().thread?.isAiGeneratedTitle).toBeFalsy();
     expect(store.getState().thread?.title).toBe('New Chat');
   });
 
@@ -210,22 +210,22 @@ describe('behavior 2: Thread created with auto-generated slug', () => {
   it('should update slug when AI-generated title ready', () => {
     const store = createChatStore();
     const thread = createThread({
-      slug: 'initial-slug-abc123',
       isAiGeneratedTitle: false,
+      slug: 'initial-slug-abc123',
     });
 
     store.getState().initializeThread(thread, [], []);
 
     // AI title ready (async) - simulate server update
     const updatedThread = createThread({
-      slug: 'ai-generated-slug-xyz789',
       isAiGeneratedTitle: true,
+      slug: 'ai-generated-slug-xyz789',
       title: 'Best Approach for Problem Solving',
     });
     store.getState().setThread(updatedThread);
 
     expect(store.getState().thread?.slug).toBe('ai-generated-slug-xyz789');
-    expect(store.getState().thread?.isAiGeneratedTitle).toBe(true);
+    expect(store.getState().thread?.isAiGeneratedTitle).toBeTruthy();
     expect(store.getState().thread?.title).toBe('Best Approach for Problem Solving');
   });
 });
@@ -251,7 +251,7 @@ describe('behavior 3: ChatOverviewScreen REMAINS MOUNTED during streaming', () =
 
     // CRITICAL ASSERTION: Screen mode stays OVERVIEW during streaming
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     // First participant completes
     store.getState().setMessages([
@@ -306,8 +306,8 @@ describe('behavior 3: ChatOverviewScreen REMAINS MOUNTED during streaming', () =
 
     // AI title ready
     const updatedThread = createThread({
-      slug: 'ai-slug',
       isAiGeneratedTitle: true,
+      slug: 'ai-slug',
     });
     store.getState().setThread(updatedThread);
 
@@ -400,7 +400,7 @@ describe('behavior 4: All participants stream sequentially', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     expect(store.getState().currentParticipantIndex).toBe(0);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 });
 
@@ -436,8 +436,9 @@ describe('behavior 5: Council moderator generates after last participant', () =>
 
     expect(moderators).toHaveLength(1);
     const firstModerator = moderators[0];
-    if (!firstModerator)
+    if (!firstModerator) {
       throw new Error('expected moderator message');
+    }
     expect(firstModerator.metadata.roundNumber).toBe(0);
   });
 
@@ -512,9 +513,9 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
 
       const canNavigate = isAiGeneratedTitle && hasModeratorForRound0;
 
-      expect(hasModeratorForRound0).toBe(true);
-      expect(isAiGeneratedTitle).toBe(false);
-      expect(canNavigate).toBe(false); // Should NOT navigate
+      expect(hasModeratorForRound0).toBeTruthy();
+      expect(isAiGeneratedTitle).toBeFalsy();
+      expect(canNavigate).toBeFalsy(); // Should NOT navigate
     });
 
     it('should NOT navigate if moderator incomplete (AI title ready)', () => {
@@ -539,9 +540,9 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
 
       const canNavigate = isAiGeneratedTitle && hasModeratorForRound0;
 
-      expect(hasModeratorForRound0).toBe(false);
-      expect(isAiGeneratedTitle).toBe(true);
-      expect(canNavigate).toBe(false); // Should NOT navigate
+      expect(hasModeratorForRound0).toBeFalsy();
+      expect(isAiGeneratedTitle).toBeTruthy();
+      expect(canNavigate).toBeFalsy(); // Should NOT navigate
     });
 
     it('should ALLOW navigation when BOTH AI title AND moderator ready', () => {
@@ -558,8 +559,8 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
 
       // AI title ready
       const updatedThread = createThread({
-        slug: 'ai-slug',
         isAiGeneratedTitle: true,
+        slug: 'ai-slug',
         title: 'AI Title',
       });
       store.getState().setThread(updatedThread);
@@ -575,9 +576,9 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
 
       const canNavigate = isAiGeneratedTitle && hasModeratorForRound0;
 
-      expect(hasModeratorForRound0).toBe(true);
-      expect(isAiGeneratedTitle).toBe(true);
-      expect(canNavigate).toBe(true); // Should navigate
+      expect(hasModeratorForRound0).toBeTruthy();
+      expect(isAiGeneratedTitle).toBeTruthy();
+      expect(canNavigate).toBeTruthy(); // Should navigate
     });
   });
 
@@ -604,8 +605,8 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
       const isAiGeneratedTitle = store.getState().thread?.isAiGeneratedTitle ?? false;
 
       // Both conditions met - component would trigger navigation
-      expect(hasModeratorForRound0).toBe(true);
-      expect(isAiGeneratedTitle).toBe(true);
+      expect(hasModeratorForRound0).toBeTruthy();
+      expect(isAiGeneratedTitle).toBeTruthy();
     });
 
     it('should reset screen mode when returning to overview', () => {
@@ -647,8 +648,8 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
 
     it('should maintain thread data after navigation', () => {
       const thread = createThread({
-        slug: 'ai-slug',
         isAiGeneratedTitle: true,
+        slug: 'ai-slug',
         title: 'AI Title',
       });
       store.getState().initializeThread(thread, [createParticipant(0)], []);
@@ -667,7 +668,7 @@ describe('behavior 6: Automatic navigation to /chat/[slug] after moderator + AI 
       // Thread data preserved
       expect(store.getState().thread?.id).toBe(THREAD_ID);
       expect(store.getState().thread?.slug).toBe('ai-slug');
-      expect(store.getState().thread?.isAiGeneratedTitle).toBe(true);
+      expect(store.getState().thread?.isAiGeneratedTitle).toBeTruthy();
       expect(store.getState().messages).toHaveLength(3);
     });
   });
@@ -692,7 +693,7 @@ describe('slug polling during first round', () => {
     const shouldPoll = store.getState().createdThreadId !== null
       && !store.getState().thread?.isAiGeneratedTitle;
 
-    expect(shouldPoll).toBe(true);
+    expect(shouldPoll).toBeTruthy();
   });
 
   it('should stop polling when AI title detected', () => {
@@ -703,7 +704,7 @@ describe('slug polling during first round', () => {
     // Polling active
     let shouldPoll = store.getState().createdThreadId !== null
       && !store.getState().thread?.isAiGeneratedTitle;
-    expect(shouldPoll).toBe(true);
+    expect(shouldPoll).toBeTruthy();
 
     // AI title ready
     const updatedThread = createThread({ isAiGeneratedTitle: true });
@@ -712,7 +713,7 @@ describe('slug polling during first round', () => {
     // Polling stops
     shouldPoll = store.getState().createdThreadId !== null
       && !store.getState().thread?.isAiGeneratedTitle;
-    expect(shouldPoll).toBe(false);
+    expect(shouldPoll).toBeFalsy();
   });
 
   it('should poll during participant streaming', () => {
@@ -732,8 +733,8 @@ describe('slug polling during first round', () => {
     const shouldPoll = store.getState().createdThreadId !== null
       && !store.getState().thread?.isAiGeneratedTitle;
 
-    expect(shouldPoll).toBe(true);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(shouldPoll).toBeTruthy();
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 });
 
@@ -752,7 +753,7 @@ describe('web search integration on first round', () => {
     const shouldWait = preSearch?.status === MessageStatuses.STREAMING
       || preSearch?.status === MessageStatuses.PENDING;
 
-    expect(shouldWait).toBe(true);
+    expect(shouldWait).toBeTruthy();
   });
 
   it('should allow participants after pre-search completes', () => {
@@ -765,7 +766,7 @@ describe('web search integration on first round', () => {
     const shouldWait = preSearch?.status === MessageStatuses.STREAMING
       || preSearch?.status === MessageStatuses.PENDING;
 
-    expect(shouldWait).toBe(false);
+    expect(shouldWait).toBeFalsy();
   });
 
   it('should proceed after pre-search FAILED status', () => {
@@ -778,7 +779,7 @@ describe('web search integration on first round', () => {
     const canProceed = preSearch?.status === MessageStatuses.COMPLETE
       || preSearch?.status === MessageStatuses.FAILED;
 
-    expect(canProceed).toBe(true);
+    expect(canProceed).toBeTruthy();
   });
 });
 
@@ -802,14 +803,14 @@ describe('complete first round journey (e2e)', () => {
     // STEP 3: Thread created
     store.getState().initializeThread(
       createThread({
-        slug: 'what-is-the-best-approach-abc123',
         isAiGeneratedTitle: false,
+        slug: 'what-is-the-best-approach-abc123',
       }),
       participants,
       [],
     );
     expect(store.getState().thread?.id).toBe(THREAD_ID);
-    expect(store.getState().thread?.isAiGeneratedTitle).toBe(false);
+    expect(store.getState().thread?.isAiGeneratedTitle).toBeFalsy();
 
     // STEP 4: URL still /chat (screen mode still OVERVIEW)
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
@@ -852,20 +853,20 @@ describe('complete first round journey (e2e)', () => {
         && metadata.isModerator === true
         && metadata.roundNumber === 0;
     });
-    expect(hasModeratorForRound0).toBe(true);
+    expect(hasModeratorForRound0).toBeTruthy();
 
     // STEP 8: AI title ready (async, happens during streaming)
     const updatedThread = createThread({
-      slug: 'best-approach-for-problem-solving',
       isAiGeneratedTitle: true,
+      slug: 'best-approach-for-problem-solving',
       title: 'Best Approach for Problem Solving',
     });
     store.getState().setThread(updatedThread);
-    expect(store.getState().thread?.isAiGeneratedTitle).toBe(true);
+    expect(store.getState().thread?.isAiGeneratedTitle).toBeTruthy();
 
     // STEP 9: Navigation conditions met
     const canNavigate = store.getState().thread?.isAiGeneratedTitle && hasModeratorForRound0;
-    expect(canNavigate).toBe(true);
+    expect(canNavigate).toBeTruthy();
 
     // STEP 10: Navigation happens (component triggers this)
     store.getState().setScreenMode(ScreenModes.THREAD);
@@ -875,7 +876,7 @@ describe('complete first round journey (e2e)', () => {
     // FINAL STATE VALIDATION
     expect(store.getState().messages).toHaveLength(4); // user + 2 assistants + moderator
     expect(store.getState().thread?.slug).toBe('best-approach-for-problem-solving');
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should handle web search enabled on first round', () => {
@@ -971,6 +972,6 @@ describe('error recovery on first round', () => {
       || preSearch?.status === MessageStatuses.COMPLETE;
 
     // Should allow participants to proceed
-    expect(canProceed).toBe(true);
+    expect(canProceed).toBeTruthy();
   });
 });

@@ -38,23 +38,23 @@ export type BaseUrlConfig = {
  */
 export const BASE_URL_CONFIG: Record<WebAppEnv, BaseUrlConfig> = {
   [WebAppEnvs.LOCAL]: {
-    app: 'http://localhost:5173',
     api: 'http://localhost:8787/api/v1',
     apiOrigin: 'http://localhost:8787',
+    app: 'http://localhost:5173',
     cookieDomain: undefined, // localhost doesn't need domain
     useSecureCookies: false,
   },
   [WebAppEnvs.PREVIEW]: {
-    app: 'https://web-preview.roundtable.now',
     api: 'https://api-preview.roundtable.now/api/v1',
     apiOrigin: 'https://api-preview.roundtable.now',
+    app: 'https://web-preview.roundtable.now',
     cookieDomain: '.roundtable.now',
     useSecureCookies: true,
   },
   [WebAppEnvs.PROD]: {
-    app: 'https://roundtable.now',
     api: 'https://api.roundtable.now/api/v1',
     apiOrigin: 'https://api.roundtable.now',
+    app: 'https://roundtable.now',
     cookieDomain: '.roundtable.now',
     useSecureCookies: true,
   },
@@ -124,12 +124,19 @@ export function resolveAppUrlFromHostname(hostname: string): string {
 // ============================================================================
 
 /**
+ * Check if a string is a valid WebAppEnv
+ */
+function isValidWebAppEnv(env: string): env is WebAppEnv {
+  return env in BASE_URL_CONFIG;
+}
+
+/**
  * Get URL configuration for a specific environment
  * Falls back to production if env is invalid
  */
-export function getUrlConfig(env: WebAppEnv | string | undefined): BaseUrlConfig {
-  if (env && env in BASE_URL_CONFIG) {
-    return BASE_URL_CONFIG[env as WebAppEnv];
+export function getUrlConfig(env: WebAppEnv | undefined): BaseUrlConfig {
+  if (env !== undefined && isValidWebAppEnv(env)) {
+    return BASE_URL_CONFIG[env];
   }
   return FALLBACK_URLS;
 }
@@ -137,28 +144,28 @@ export function getUrlConfig(env: WebAppEnv | string | undefined): BaseUrlConfig
 /**
  * Get API base URL for an environment (with /api/v1 path)
  */
-export function getApiUrl(env: WebAppEnv | string | undefined): string {
+export function getApiUrl(env: WebAppEnv | undefined): string {
   return getUrlConfig(env).api;
 }
 
 /**
  * Get API origin URL for an environment (without path, for Better Auth)
  */
-export function getApiOrigin(env: WebAppEnv | string | undefined): string {
+export function getApiOrigin(env: WebAppEnv | undefined): string {
   return getUrlConfig(env).apiOrigin;
 }
 
 /**
  * Get web app URL for an environment
  */
-export function getAppUrl(env: WebAppEnv | string | undefined): string {
+export function getAppUrl(env: WebAppEnv | undefined): string {
   return getUrlConfig(env).app;
 }
 
 /**
  * Get cookie configuration for an environment
  */
-export function getCookieConfig(env: WebAppEnv | string | undefined): { domain: string | undefined; secure: boolean } {
+export function getCookieConfig(env: WebAppEnv | undefined): { domain: string | undefined; secure: boolean } {
   const config = getUrlConfig(env);
   return {
     domain: config.cookieDomain,
@@ -193,7 +200,7 @@ export const LOCALHOST_ORIGINS = [
  * @param env - The webapp environment
  * @param isDevelopment - Whether in development mode (adds localhost origins)
  */
-export function getAllowedOrigins(env: WebAppEnv | string | undefined, isDevelopment = false): string[] {
+export function getAllowedOrigins(env: WebAppEnv | undefined, isDevelopment = false): string[] {
   const origins: string[] = [];
 
   // Add localhost in development
@@ -216,7 +223,7 @@ export function getAllowedOrigins(env: WebAppEnv | string | undefined, isDevelop
 /**
  * Check if an origin is allowed for a given environment
  */
-export function isOriginAllowed(origin: string, env: WebAppEnv | string | undefined, isDevelopment = false): boolean {
+export function isOriginAllowed(origin: string, env: WebAppEnv | undefined, isDevelopment = false): boolean {
   const allowedOrigins = getAllowedOrigins(env, isDevelopment);
   return allowedOrigins.includes(origin);
 }

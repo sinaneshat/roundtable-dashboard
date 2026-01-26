@@ -34,7 +34,7 @@ type Platform = (typeof PLATFORMS)[number];
 export type TrendDiscoveryFormValues = {
   keyword: string;
   platforms: Platform[];
-  suggestions: Array<{
+  suggestions: {
     topic: string;
     platform: Platform;
     relevanceScore: number;
@@ -42,7 +42,7 @@ export type TrendDiscoveryFormValues = {
     prompt: string;
     rounds: number;
     selected: boolean;
-  }>;
+  }[];
 };
 
 type TrendDiscoveryDialogProps = {
@@ -50,17 +50,17 @@ type TrendDiscoveryDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialogProps) {
+export function TrendDiscoveryDialog({ onOpenChange, open }: TrendDiscoveryDialogProps) {
   const t = useTranslations();
 
   const SuggestionItemSchema = z.object({
-    topic: z.string(),
     platform: z.enum(PLATFORMS),
-    relevanceScore: z.number(),
-    reasoning: z.string(),
     prompt: z.string().min(10, t('admin.jobs.validation.promptMinLength')).max(2000),
+    reasoning: z.string(),
+    relevanceScore: z.number(),
     rounds: z.number().min(1).max(5),
     selected: z.boolean(),
+    topic: z.string(),
   });
 
   const TrendDiscoveryFormSchema = z.object({
@@ -70,9 +70,9 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
   });
 
   const PLATFORM_CONFIG: { id: Platform; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-    { id: 'reddit', label: t('admin.jobs.trends.platformLabels.reddit'), icon: Icons.reddit },
-    { id: 'twitter', label: t('admin.jobs.trends.platformLabels.twitter'), icon: Icons.twitter },
-    { id: 'instagram', label: t('admin.jobs.trends.platformLabels.instagram'), icon: Icons.instagram },
+    { icon: Icons.reddit, id: 'reddit', label: t('admin.jobs.trends.platformLabels.reddit') },
+    { icon: Icons.twitter, id: 'twitter', label: t('admin.jobs.trends.platformLabels.twitter') },
+    { icon: Icons.instagram, id: 'instagram', label: t('admin.jobs.trends.platformLabels.instagram') },
   ];
   const [isCreatingBatch, setIsCreatingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
@@ -81,13 +81,13 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
   const createJobMutation = useCreateJobMutation();
 
   const methods = useForm<TrendDiscoveryFormValues>({
-    resolver: zodResolver(TrendDiscoveryFormSchema),
     defaultValues: {
       keyword: '',
       platforms: ['reddit', 'twitter'],
       suggestions: [],
     },
     mode: 'onChange',
+    resolver: zodResolver(TrendDiscoveryFormSchema),
   });
 
   const { fields, replace } = useFieldArray({
@@ -123,15 +123,16 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
 
   const handleDiscover = () => {
     const values = methods.getValues();
-    if (values.keyword.trim().length < 2 || values.platforms.length === 0)
+    if (values.keyword.trim().length < 2 || values.platforms.length === 0) {
       return;
+    }
 
     discoverMutation.mutate(
       {
         json: {
           keyword: values.keyword.trim(),
-          platforms: values.platforms,
           maxSuggestions: 5,
+          platforms: values.platforms,
         },
       },
       {
@@ -139,13 +140,13 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
           if (response.success) {
             replace(
               response.data.suggestions.map((s: TrendSuggestion) => ({
-                topic: s.topic,
                 platform: s.platform as Platform,
-                relevanceScore: s.relevanceScore,
-                reasoning: s.reasoning,
                 prompt: s.prompt,
+                reasoning: s.reasoning,
+                relevanceScore: s.relevanceScore,
                 rounds: s.suggestedRounds,
                 selected: false,
+                topic: s.topic,
               })),
             );
           }
@@ -173,8 +174,9 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
   const handleCreateSelectedJobs = async () => {
     const values = methods.getValues();
     const selected = values.suggestions.filter(s => s.selected && s.prompt.trim().length >= 10);
-    if (selected.length === 0)
+    if (selected.length === 0) {
       return;
+    }
 
     setIsCreatingBatch(true);
     setBatchProgress({ current: 0, total: selected.length });
@@ -183,26 +185,28 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
 
     for (let i = 0; i < selected.length; i++) {
       const item = selected[i];
-      if (!item)
+      if (!item) {
         continue;
+      }
       setBatchProgress({ current: i + 1, total: selected.length });
       try {
         await new Promise<void>((resolve, reject) => {
           createJobMutation.mutate(
             {
               json: {
+                autoPublish: false,
                 initialPrompt: item.prompt,
                 totalRounds: item.rounds,
-                autoPublish: false,
               },
             },
             {
+              onError: err => reject(err),
               onSuccess: (response) => {
-                if (response.success)
+                if (response.success) {
                   successCount++;
+                }
                 resolve();
               },
-              onError: err => reject(err),
             },
           );
         });
@@ -227,8 +231,9 @@ export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialo
   };
 
   const handleOpenChange = (isOpen: boolean) => {
-    if (isCreatingBatch)
+    if (isCreatingBatch) {
       return;
+    }
     onOpenChange(isOpen);
   };
 

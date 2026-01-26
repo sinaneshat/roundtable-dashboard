@@ -33,9 +33,9 @@ type StoreUpdateTracker = {
 
 function createUpdateTracker(): StoreUpdateTracker {
   return {
+    lastState: null,
     updateCount: 0,
     updateTimestamps: [],
-    lastState: null,
   };
 }
 
@@ -46,17 +46,21 @@ function trackUpdate(tracker: StoreUpdateTracker, state: unknown): void {
 }
 
 function getUpdatesPerSecond(tracker: StoreUpdateTracker): number {
-  if (tracker.updateTimestamps.length < 2)
+  if (tracker.updateTimestamps.length < 2) {
     return 0;
+  }
   const first = tracker.updateTimestamps[0];
   const last = tracker.updateTimestamps[tracker.updateTimestamps.length - 1];
-  if (!first)
+  if (!first) {
     throw new Error('expected first timestamp');
-  if (!last)
+  }
+  if (!last) {
     throw new Error('expected last timestamp');
+  }
   const durationSeconds = (last - first) / 1000;
-  if (durationSeconds === 0)
+  if (durationSeconds === 0) {
     return tracker.updateCount;
+  }
   return tracker.updateCount / durationSeconds;
 }
 
@@ -69,17 +73,17 @@ function createStreamingMessage(
 ): UIMessage {
   return createTestAssistantMessage({
     id: `thread_r${roundNumber}_p${participantIndex}`,
-    parts: textContent
-      ? [{ type: MessagePartTypes.TEXT, text: textContent }]
-      : [],
     metadata: {
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: textContent.length, totalTokens: textContent.length },
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      roundNumber,
+      usage: { completionTokens: textContent.length, promptTokens: 0, totalTokens: textContent.length },
     },
+    parts: textContent
+      ? [{ text: textContent, type: MessagePartTypes.TEXT }]
+      : [],
   });
 }
 
@@ -140,18 +144,17 @@ describe('participant Transition Flashing', () => {
 
         // Track this update
         trackUpdate(tracker, {
-          messages: [...messages, updatedMessage],
           isStreaming: true,
+          messages: [...messages, updatedMessage],
         });
       }
 
       // Final message with finishReason='stop'
       trackUpdate(tracker, {
-        messages: [...messages, createStreamingMessage(0, 0, streamingText, FinishReasons.STOP)],
         isStreaming: false,
+        messages: [...messages, createStreamingMessage(0, 0, streamingText, FinishReasons.STOP)],
       });
 
-      // eslint-disable-next-line no-console
       console.log(`[TEST] Total updates: ${tracker.updateCount}, per second: ${getUpdatesPerSecond(tracker).toFixed(2)}`);
 
       // Should not have excessive updates
@@ -168,52 +171,52 @@ describe('participant Transition Flashing', () => {
       // Participant 0 streaming
       for (let i = 0; i < 10; i++) {
         trackUpdate(tracker, {
+          currentParticipantIndex: 0,
+          isStreaming: true,
           messages: [
             ...messages,
             createStreamingMessage(0, 0, `Chunk ${i}`, FinishReasons.UNKNOWN),
           ],
-          currentParticipantIndex: 0,
-          isStreaming: true,
         });
       }
 
       // Participant 0 completes
       trackUpdate(tracker, {
+        currentParticipantIndex: 0,
+        isStreaming: true,
         messages: [
           ...messages,
           createStreamingMessage(0, 0, 'Complete response', FinishReasons.STOP),
         ],
-        currentParticipantIndex: 0,
-        isStreaming: true,
       });
 
       // Transition to participant 1 - THIS IS WHERE FLASH HAPPENS
       const updatesBeforeTransition = tracker.updateCount;
 
       trackUpdate(tracker, {
+        currentParticipantIndex: 1, // Index changes
+        isStreaming: true,
         messages: [
           ...messages,
           createStreamingMessage(0, 0, 'Complete response', FinishReasons.STOP),
         ],
-        currentParticipantIndex: 1, // Index changes
-        isStreaming: true,
       });
 
       // Participant 1 starts streaming
       for (let i = 0; i < 5; i++) {
         trackUpdate(tracker, {
+          currentParticipantIndex: 1,
+          isStreaming: true,
           messages: [
             ...messages,
             createStreamingMessage(0, 0, 'Complete response', FinishReasons.STOP),
             createStreamingMessage(1, 0, `P1 Chunk ${i}`, FinishReasons.UNKNOWN),
           ],
-          currentParticipantIndex: 1,
-          isStreaming: true,
         });
       }
 
       const transitionUpdates = tracker.updateCount - updatesBeforeTransition;
-      // eslint-disable-next-line no-console
+
       console.log(`[TEST] Updates during transition: ${transitionUpdates}`);
 
       // The transition itself should be 1-2 updates, not more
@@ -227,35 +230,35 @@ describe('participant Transition Flashing', () => {
       isRoundComplete: boolean,
       allParticipantsHaveContent: boolean,
       isStreaming: boolean,
-      preSearchActive: boolean = false,
-      preSearchComplete: boolean = false,
+      preSearchActive = false,
+      preSearchComplete = false,
     ): boolean {
       return !isRoundComplete && !allParticipantsHaveContent && (preSearchActive || preSearchComplete || isStreaming);
     }
 
     it('returns true when streaming with no content yet', () => {
-      expect(shouldShowPendingCards(false, false, true)).toBe(true);
+      expect(shouldShowPendingCards(false, false, true)).toBeTruthy();
     });
 
     it('returns true when some participants have content but not all', () => {
       // This is the state where pending cards render WITH content
-      expect(shouldShowPendingCards(false, false, true)).toBe(true);
+      expect(shouldShowPendingCards(false, false, true)).toBeTruthy();
     });
 
     it('returns FALSE when all participants have content - CAUSES TRANSITION', () => {
       // This is where the flash happens!
       // Pending cards return null, and messageGroups takes over
-      expect(shouldShowPendingCards(false, true, true)).toBe(false);
+      expect(shouldShowPendingCards(false, true, true)).toBeFalsy();
     });
 
     it('the false->true transition causes remounting', () => {
       // State 1: Not all have content
       const state1 = shouldShowPendingCards(false, false, true);
-      expect(state1).toBe(true); // Pending cards render
+      expect(state1).toBeTruthy(); // Pending cards render
 
       // State 2: All have content
       const state2 = shouldShowPendingCards(false, true, true);
-      expect(state2).toBe(false); // Pending cards return null
+      expect(state2).toBeFalsy(); // Pending cards return null
 
       // This boolean flip causes:
       // 1. Pending cards section returns null (unmounts all participant cards)
@@ -286,8 +289,8 @@ describe('participant Transition Flashing', () => {
         isRoundComplete: boolean,
         _allParticipantsHaveContent: boolean, // IGNORED in new logic
         isStreaming: boolean,
-        preSearchActive: boolean = false,
-        preSearchComplete: boolean = false,
+        preSearchActive = false,
+        preSearchComplete = false,
       ): boolean {
         // Keep rendering pending cards until round is truly complete
         // Don't transition just because all have content
@@ -295,10 +298,10 @@ describe('participant Transition Flashing', () => {
       }
 
       // Still rendering when all have content but streaming continues
-      expect(shouldShowPendingCardsFixed(false, true, true)).toBe(true);
+      expect(shouldShowPendingCardsFixed(false, true, true)).toBeTruthy();
 
       // Only stops when round is complete
-      expect(shouldShowPendingCardsFixed(true, true, false)).toBe(false);
+      expect(shouldShowPendingCardsFixed(true, true, false)).toBeFalsy();
     });
 
     it('messageGroups should skip assistant messages from streaming round', () => {
@@ -308,16 +311,16 @@ describe('participant Transition Flashing', () => {
       // Create mock messages directly without utilities
       const userMessage = {
         id: 'user_r0',
-        role: MessageRoles.USER as const,
-        parts: [{ type: 'text' as const, text: 'Hello' }],
         metadata: { roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' as const }],
+        role: MessageRoles.USER as const,
       };
 
       const assistantMessage = {
         id: 'assistant_r0_p0',
+        metadata: { participantIndex: 0, roundNumber: 0 },
+        parts: [{ text: 'Response', type: 'text' as const }],
         role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: 'text' as const, text: 'Response' }],
-        metadata: { roundNumber: 0, participantIndex: 0 },
       };
 
       const messages = [userMessage, assistantMessage];
@@ -325,8 +328,9 @@ describe('participant Transition Flashing', () => {
 
       // Filter for messageGroups - only skip ASSISTANT messages from streaming round
       const assistantMessagesForGroups = messages.filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
-          return false; // User messages handled separately
+        if (m.role !== MessageRoles.ASSISTANT) {
+          return false;
+        } // User messages handled separately
         const round = (m.metadata as { roundNumber?: number })?.roundNumber ?? -1;
         return round !== streamingRoundNumber;
       });

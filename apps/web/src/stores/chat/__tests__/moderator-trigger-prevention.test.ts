@@ -40,7 +40,7 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-abc', 0);
 
       // Both levels should be tracked
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-abc', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-abc', 0)).toBeTruthy();
     });
 
     it('blocks duplicate trigger by same moderator ID', () => {
@@ -49,7 +49,7 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-abc', 0);
 
       // Different round, same ID - should be blocked (ID-level)
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-abc', 1)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-abc', 1)).toBeTruthy();
     });
 
     it('blocks duplicate trigger by same round number', () => {
@@ -58,7 +58,7 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-abc', 0);
 
       // Same round, different ID - should be blocked (round-level)
-      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBeTruthy();
     });
 
     it('allows trigger for completely different moderator', () => {
@@ -67,7 +67,7 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-abc', 0);
 
       // Different round AND different ID - should NOT be blocked
-      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 1)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 1)).toBeFalsy();
     });
   });
 
@@ -75,7 +75,7 @@ describe('moderator Stream Trigger Prevention', () => {
     it('returns false for untriggered moderator', () => {
       const store = createChatStore();
 
-      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBeFalsy();
     });
 
     it('returns true immediately after marking triggered', () => {
@@ -83,14 +83,14 @@ describe('moderator Stream Trigger Prevention', () => {
 
       // Simulate what useModeratorStream does
       const alreadyTriggered = store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0);
-      expect(alreadyTriggered).toBe(false);
+      expect(alreadyTriggered).toBeFalsy();
 
       // First trigger - should proceed
       store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
       // Second check - should be blocked
       const secondCheck = store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0);
-      expect(secondCheck).toBe(true);
+      expect(secondCheck).toBeTruthy();
     });
 
     it('prevents multiple triggers in rapid succession', () => {
@@ -120,15 +120,15 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-r1', 1);
 
       // Verify both are tracked
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r0', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r0', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBeTruthy();
 
       // Clear round 0 (regeneration)
       store.getState().clearModeratorStreamTracking(0);
 
       // Round 0 should be untracked, round 1 still tracked
-      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBe(false);
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBeFalsy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBeTruthy();
     });
 
     it('allows re-trigger after clearing', () => {
@@ -136,15 +136,15 @@ describe('moderator Stream Trigger Prevention', () => {
 
       // Initial trigger
       store.getState().markModeratorStreamTriggered('moderator-123', 0);
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeTruthy();
 
       // Clear
       store.getState().clearModeratorStreamTracking(0);
 
       // Should allow re-trigger with new ID
-      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBeFalsy();
       store.getState().markModeratorStreamTriggered('new-moderator', 0);
-      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('new-moderator', 0)).toBeTruthy();
     });
   });
 
@@ -156,16 +156,16 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('moderator-r0', 0);
 
       // Round 1 should be independent
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBeFalsy();
 
       // Trigger round 1
       store.getState().markModeratorStreamTriggered('moderator-r1', 1);
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-r1', 1)).toBeTruthy();
 
       // Both rounds tracked independently
-      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 1)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 2)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 1)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('any-id', 2)).toBeFalsy();
     });
 
     it('clears only specified round', () => {
@@ -180,9 +180,9 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().clearModeratorStreamTracking(1);
 
       // Verify only round 1 is cleared
-      expect(store.getState().hasModeratorStreamBeenTriggered('any', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('any', 1)).toBe(false);
-      expect(store.getState().hasModeratorStreamBeenTriggered('any', 2)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('any', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('any', 1)).toBeFalsy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('any', 2)).toBeTruthy();
     });
   });
 
@@ -192,7 +192,7 @@ describe('moderator Stream Trigger Prevention', () => {
       const store = createChatStore();
 
       // Should allow trigger in fresh state
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeFalsy();
     });
 
     it('prevents duplicate during single page session', () => {
@@ -203,7 +203,7 @@ describe('moderator Stream Trigger Prevention', () => {
 
       // Simulate component unmount/remount (React Strict Mode, parent re-render)
       // Same store, so tracking persists
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeTruthy();
     });
   });
 
@@ -214,8 +214,8 @@ describe('moderator Stream Trigger Prevention', () => {
       store.getState().markModeratorStreamTriggered('', 0);
 
       // Should still track by round
-      expect(store.getState().hasModeratorStreamBeenTriggered('', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('other', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('other', 0)).toBeTruthy();
     });
 
     it('handles placeholder moderator IDs', () => {
@@ -224,11 +224,11 @@ describe('moderator Stream Trigger Prevention', () => {
       // Placeholder IDs used during optimistic updates
       store.getState().markModeratorStreamTriggered('placeholder-round-0', 0);
 
-      expect(store.getState().hasModeratorStreamBeenTriggered('placeholder-round-0', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('placeholder-round-0', 0)).toBeTruthy();
 
       // Clear should handle placeholder format
       store.getState().clearModeratorStreamTracking(0);
-      expect(store.getState().hasModeratorStreamBeenTriggered('new-id', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('new-id', 0)).toBeFalsy();
     });
 
     it('handles large round numbers', () => {
@@ -236,8 +236,8 @@ describe('moderator Stream Trigger Prevention', () => {
 
       store.getState().markModeratorStreamTriggered('moderator-123', 999);
 
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 999)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('other', 999)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 999)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('other', 999)).toBeTruthy();
     });
   });
 });
@@ -250,14 +250,14 @@ describe('moderator Stream vs Pre-Search Trigger Independence', () => {
     store.getState().markPreSearchTriggered(0);
 
     // Moderator should be independent
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBeFalsy();
 
     // Trigger moderator
     store.getState().markModeratorStreamTriggered('moderator', 0);
 
     // Both should be tracked independently
-    expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBe(true);
+    expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBeTruthy();
   });
 
   it('clearing moderator does not affect pre-search', () => {
@@ -270,9 +270,9 @@ describe('moderator Stream vs Pre-Search Trigger Independence', () => {
     store.getState().clearModeratorStreamTracking(0);
 
     // Pre-search still tracked
-    expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
     // Moderator cleared
-    expect(store.getState().hasModeratorStreamBeenTriggered('new', 0)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('new', 0)).toBeFalsy();
   });
 });
 
@@ -284,14 +284,14 @@ describe('moderator Creation vs Stream Trigger', () => {
     store.getState().markModeratorCreated(0);
 
     // Stream trigger is separate
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBeFalsy();
 
     // Mark stream triggered
     store.getState().markModeratorStreamTriggered('moderator', 0);
 
     // Both should be tracked
-    expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator', 0)).toBeTruthy();
   });
 });
 
@@ -306,9 +306,9 @@ describe('concurrent Operations', () => {
     const check3 = store.getState().hasModeratorStreamBeenTriggered('moderator', 0);
 
     // All checks should return false (not yet triggered)
-    expect(check1).toBe(false);
-    expect(check2).toBe(false);
-    expect(check3).toBe(false);
+    expect(check1).toBeFalsy();
+    expect(check2).toBeFalsy();
+    expect(check3).toBeFalsy();
 
     // But only first to call mark should proceed (in real code)
     if (!check1) {
@@ -317,7 +317,7 @@ describe('concurrent Operations', () => {
     }
     // Subsequent checks after mark should block
     const afterMark = store.getState().hasModeratorStreamBeenTriggered('moderator', 0);
-    expect(afterMark).toBe(true);
+    expect(afterMark).toBeTruthy();
     expect(triggers).toHaveLength(1);
   });
 });

@@ -16,10 +16,10 @@ type ModelAvatarWithRoleProps = {
 };
 
 export function ModelAvatarWithRole({
+  isIncompatible = false,
   model,
   role,
   size = DEFAULT_AVATAR_SIZE,
-  isIncompatible = false,
 }: ModelAvatarWithRoleProps) {
   const shortRole = role ? getShortRoleName(role) : null;
   const roleColors = useMemo(() => getRoleColors(shortRole ?? ''), [shortRole]);

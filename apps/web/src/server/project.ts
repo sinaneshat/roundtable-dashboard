@@ -21,13 +21,13 @@ type ListProjectMemoriesResult = ListProjectMemoriesResponse | ServerFnErrorResp
 
 export const getProjectById = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<GetProjectResult> => {
+  .handler(async ({ context, data }): Promise<GetProjectResult> => {
     return await getProjectService({ param: { id: data } }, { cookieHeader: context.cookieHeader });
   });
 
 export const getProjectAttachments = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<ListProjectAttachmentsResult> => {
+  .handler(async ({ context, data }): Promise<ListProjectAttachmentsResult> => {
     return await listProjectAttachmentsService(
       { param: { id: data }, query: { limit: 50 } },
       { cookieHeader: context.cookieHeader },
@@ -36,7 +36,7 @@ export const getProjectAttachments = createServerFn({ method: 'GET' })
 
 export const getProjectMemories = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<ListProjectMemoriesResult> => {
+  .handler(async ({ context, data }): Promise<ListProjectMemoriesResult> => {
     return await listProjectMemoriesService(
       { param: { id: data }, query: { limit: 50 } },
       { cookieHeader: context.cookieHeader },

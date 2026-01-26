@@ -48,10 +48,10 @@ const UserMessage = memo(({ text }: { text: string }) => {
 });
 
 const ParticipantMessage = memo(({
+  isStreaming,
   modelId,
   role,
   text,
-  isStreaming,
 }: {
   modelId: string;
   role: string;
@@ -82,8 +82,8 @@ const ParticipantMessage = memo(({
 });
 
 const ModeratorMessage = memo(({
-  text,
   isStreaming,
+  text,
 }: {
   text: string;
   isStreaming: boolean;
@@ -116,8 +116,9 @@ export function LiveChatDemo() {
   }, []);
 
   useEffect(() => {
-    if (!isMounted)
+    if (!isMounted) {
       return;
+    }
     const t = setTimeout(() => setActiveIdx(0), 500);
     return () => clearTimeout(t);
   }, [isMounted]);
@@ -126,8 +127,9 @@ export function LiveChatDemo() {
     const fullText = idx === 3 ? DEMO_MODERATOR : (DEMO_RESPONSES[idx] ?? '');
     let charIdx = 0;
 
-    if (intervalRef.current)
+    if (intervalRef.current) {
       clearInterval(intervalRef.current);
+    }
 
     intervalRef.current = setInterval(() => {
       charIdx += TYPING_CHARS_PER_FRAME;
@@ -140,20 +142,23 @@ export function LiveChatDemo() {
       });
 
       if (charIdx >= fullText.length) {
-        if (intervalRef.current)
+        if (intervalRef.current) {
           clearInterval(intervalRef.current);
+        }
         intervalRef.current = null;
         setTimeout(() => {
-          if (idx < 3)
+          if (idx < 3) {
             setActiveIdx(idx + 1);
+          }
         }, 400);
       }
     }, TYPING_FRAME_INTERVAL);
   }, []);
 
   useEffect(() => {
-    if (!isMounted || activeIdx < 0 || activeIdx > 3)
+    if (!isMounted || activeIdx < 0 || activeIdx > 3) {
       return;
+    }
     runAnimation(activeIdx);
     return () => {
       if (intervalRef.current) {
@@ -170,8 +175,9 @@ export function LiveChatDemo() {
           <UserMessage text={DEMO_USER_MESSAGE} />
 
           {DEMO_PARTICIPANT_CONFIG.map((p, idx) => {
-            if (activeIdx < idx)
+            if (activeIdx < idx) {
               return null;
+            }
             const isActive = activeIdx === idx;
             const text = isActive ? texts[idx] : (activeIdx > idx ? DEMO_RESPONSES[idx] : '');
 

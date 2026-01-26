@@ -21,16 +21,16 @@ import { extractAISdkError, getErrorMessage, getErrorName } from './error-types'
 
 const ServiceErrorDetailsSchema = z.object({
   detailType: z.literal('service_error'),
-  serviceName: z.string(),
   originalError: z.string().optional(),
+  serviceName: z.string(),
 });
 
 const ValidationErrorDetailsSchema = z.object({
   detailType: z.literal('validation_error'),
   fields: z.array(z.object({
+    code: z.string().optional(),
     field: z.string(),
     message: z.string(),
-    code: z.string().optional(),
   })),
 });
 
@@ -40,10 +40,10 @@ const GenericErrorDetailsSchema = z.object({
 });
 
 const BatchErrorDetailsSchema = z.object({
-  detailType: z.literal('batch'),
   currentSize: z.number().optional(),
-  statementCount: z.number().optional(),
+  detailType: z.literal('batch'),
   originalError: z.string().optional(),
+  statementCount: z.number().optional(),
 });
 
 export const ErrorDetailsSchema = z.discriminatedUnion('detailType', [
@@ -60,13 +60,13 @@ export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
 // ============================================================================
 
 export const AppErrorConfigSchema = z.object({
-  message: z.string().min(1),
   code: ErrorCodeSchema,
-  statusCode: z.number().int().min(100).max(599),
-  severity: ApiErrorSeveritySchema.optional().default('medium'),
-  details: ErrorDetailsSchema.optional(),
   context: ErrorContextSchema.optional(),
   correlationId: z.string().optional(),
+  details: ErrorDetailsSchema.optional(),
+  message: z.string().min(1),
+  severity: ApiErrorSeveritySchema.optional().default('medium'),
+  statusCode: z.number().int().min(100).max(599),
 });
 
 export type AppErrorConfig = z.input<typeof AppErrorConfigSchema>;
@@ -92,10 +92,17 @@ class AppError extends Error {
     this.code = validated.code;
     this.statusCode = validated.statusCode;
     this.severity = validated.severity;
-    this.details = validated.details;
-    this.context = validated.context;
     this.timestamp = new Date();
-    this.correlationId = validated.correlationId;
+    // Filter out undefined values for optional properties
+    if (validated.details !== undefined) {
+      this.details = validated.details;
+    }
+    if (validated.context !== undefined) {
+      this.context = validated.context;
+    }
+    if (validated.correlationId !== undefined) {
+      this.correlationId = validated.correlationId;
+    }
 
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
@@ -104,16 +111,16 @@ class AppError extends Error {
 
   toJSON() {
     return {
-      name: this.name,
-      message: this.message,
       code: this.code,
-      statusCode: this.statusCode,
-      severity: this.severity,
-      details: this.details,
       context: this.sanitizeContext(),
-      timestamp: this.timestamp.toISOString(),
       correlationId: this.correlationId,
+      details: this.details,
+      message: this.message,
+      name: this.name,
+      severity: this.severity,
       stack: this.stack,
+      statusCode: this.statusCode,
+      timestamp: this.timestamp.toISOString(),
     };
   }
 
@@ -138,12 +145,12 @@ class ExternalServiceError extends AppError {
   public readonly originalError?: Error;
 
   constructor({
-    message,
-    serviceName,
     code = ErrorCodes.EXTERNAL_SERVICE_ERROR,
-    originalError,
     context,
     correlationId,
+    message,
+    originalError,
+    serviceName,
   }: {
     message: string;
     serviceName: string;
@@ -152,22 +159,30 @@ class ExternalServiceError extends AppError {
     context?: ErrorContext;
     correlationId?: string;
   }) {
-    super({
-      message,
+    // Build config object, only including defined optional properties
+    const config: AppErrorConfig = {
       code,
-      statusCode: HttpStatusCodes.BAD_GATEWAY,
-      severity: ApiErrorSeverities.HIGH,
       details: {
         detailType: 'service_error',
-        serviceName,
         originalError: originalError?.message,
+        serviceName,
       },
-      context,
-      correlationId,
-    });
+      message,
+      severity: ApiErrorSeverities.HIGH,
+      statusCode: HttpStatusCodes.BAD_GATEWAY,
+    };
+    if (context !== undefined) {
+      config.context = context;
+    }
+    if (correlationId !== undefined) {
+      config.correlationId = correlationId;
+    }
+    super(config);
 
     this.serviceName = serviceName;
-    this.originalError = originalError;
+    if (originalError !== undefined) {
+      this.originalError = originalError;
+    }
   }
 }
 
@@ -175,136 +190,151 @@ class ExternalServiceError extends AppError {
 // ERROR FACTORY FUNCTIONS
 // ============================================================================
 
+/**
+ * Helper to build AppErrorConfig with optional properties filtered out.
+ * This satisfies exactOptionalPropertyTypes by only including defined values.
+ */
+function buildErrorConfig(
+  base: {
+    code: ErrorCode;
+    message: string;
+    severity: ApiErrorSeverity;
+    statusCode: number;
+  },
+  context?: ErrorContext,
+  correlationId?: string,
+): AppErrorConfig {
+  const config: AppErrorConfig = { ...base };
+  if (context !== undefined) {
+    config.context = context;
+  }
+  if (correlationId !== undefined) {
+    config.correlationId = correlationId;
+  }
+  return config;
+}
+
 export const createError = {
-  unauthenticated: (message = 'Authentication required', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
-      code: ErrorCodes.UNAUTHENTICATED,
-      statusCode: HttpStatusCodes.UNAUTHORIZED,
-      severity: ApiErrorSeverities.MEDIUM,
-      context,
-      correlationId,
-    }),
-
-  unauthorized: (message = 'Insufficient permissions', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
-      code: ErrorCodes.UNAUTHORIZED,
-      statusCode: HttpStatusCodes.FORBIDDEN,
-      severity: ApiErrorSeverities.MEDIUM,
-      context,
-      correlationId,
-    }),
-
-  tokenExpired: (message = 'Authentication token has expired', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
-      code: ErrorCodes.TOKEN_EXPIRED,
-      statusCode: HttpStatusCodes.UNAUTHORIZED,
-      severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
-
-  notFound: (resource = 'Resource', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message: `${resource} not found`,
-      code: ErrorCodes.RESOURCE_NOT_FOUND,
-      statusCode: HttpStatusCodes.NOT_FOUND,
-      severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
-
   alreadyExists: (resource = 'Resource', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message: `${resource} already exists`,
+    new AppError(buildErrorConfig({
       code: ErrorCodes.RESOURCE_ALREADY_EXISTS,
-      statusCode: HttpStatusCodes.CONFLICT,
+      message: `${resource} already exists`,
       severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
-
-  conflict: (message = 'Resource conflict', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
-      code: ErrorCodes.RESOURCE_CONFLICT,
       statusCode: HttpStatusCodes.CONFLICT,
-      severity: ApiErrorSeverities.MEDIUM,
-      context,
-      correlationId,
-    }),
-
-  gone: (message = 'Resource no longer available', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
-      code: ErrorCodes.RESOURCE_NOT_FOUND,
-      statusCode: HttpStatusCodes.GONE,
-      severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
+    }, context, correlationId)),
 
   badRequest: (message = 'Invalid request', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
+    new AppError(buildErrorConfig({
       code: ErrorCodes.VALIDATION_ERROR,
-      statusCode: HttpStatusCodes.BAD_REQUEST,
-      severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
-
-  validation: (message = 'Validation failed', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
       message,
-      code: ErrorCodes.VALIDATION_ERROR,
-      statusCode: HttpStatusCodes.BAD_REQUEST,
       severity: ApiErrorSeverities.LOW,
-      context,
-      correlationId,
-    }),
+      statusCode: HttpStatusCodes.BAD_REQUEST,
+    }, context, correlationId)),
 
-  internal: (message = 'Internal server error', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
+  conflict: (message = 'Resource conflict', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.RESOURCE_CONFLICT,
       message,
-      code: ErrorCodes.INTERNAL_SERVER_ERROR,
-      statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
-      severity: ApiErrorSeverities.CRITICAL,
-      context,
-      correlationId,
-    }),
+      severity: ApiErrorSeverities.MEDIUM,
+      statusCode: HttpStatusCodes.CONFLICT,
+    }, context, correlationId)),
 
   database: (message = 'Database operation failed', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
-      message,
+    new AppError(buildErrorConfig({
       code: ErrorCodes.DATABASE_ERROR,
-      statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
-      severity: ApiErrorSeverities.CRITICAL,
-      context,
-      correlationId,
-    }),
-
-  rateLimit: (message = 'Too many requests', context?: ErrorContext, correlationId?: string) =>
-    new AppError({
       message,
-      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
-      statusCode: HttpStatusCodes.TOO_MANY_REQUESTS,
-      severity: ApiErrorSeverities.MEDIUM,
-      context,
-      correlationId,
-    }),
+      severity: ApiErrorSeverities.CRITICAL,
+      statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
+    }, context, correlationId)),
 
-  emailService: (message = 'Email service error', originalError?: Error, context?: ErrorContext, correlationId?: string) =>
-    new ExternalServiceError({
+  emailService: (message = 'Email service error', originalError?: Error, context?: ErrorContext, correlationId?: string) => {
+    const config: {
+      message: string;
+      serviceName: string;
+      code: ErrorCode;
+      originalError?: Error;
+      context?: ErrorContext;
+      correlationId?: string;
+    } = {
+      code: ErrorCodes.EMAIL_SERVICE_ERROR,
       message,
       serviceName: 'Email',
-      code: ErrorCodes.EMAIL_SERVICE_ERROR,
-      originalError,
-      context,
-      correlationId,
-    }),
+    };
+    if (originalError !== undefined) {
+      config.originalError = originalError;
+    }
+    if (context !== undefined) {
+      config.context = context;
+    }
+    if (correlationId !== undefined) {
+      config.correlationId = correlationId;
+    }
+    return new ExternalServiceError(config);
+  },
+
+  gone: (message = 'Resource no longer available', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.RESOURCE_NOT_FOUND,
+      message,
+      severity: ApiErrorSeverities.LOW,
+      statusCode: HttpStatusCodes.GONE,
+    }, context, correlationId)),
+
+  internal: (message = 'Internal server error', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.INTERNAL_SERVER_ERROR,
+      message,
+      severity: ApiErrorSeverities.CRITICAL,
+      statusCode: HttpStatusCodes.INTERNAL_SERVER_ERROR,
+    }, context, correlationId)),
+
+  notFound: (resource = 'Resource', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.RESOURCE_NOT_FOUND,
+      message: `${resource} not found`,
+      severity: ApiErrorSeverities.LOW,
+      statusCode: HttpStatusCodes.NOT_FOUND,
+    }, context, correlationId)),
+
+  rateLimit: (message = 'Too many requests', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.RATE_LIMIT_EXCEEDED,
+      message,
+      severity: ApiErrorSeverities.MEDIUM,
+      statusCode: HttpStatusCodes.TOO_MANY_REQUESTS,
+    }, context, correlationId)),
+
+  tokenExpired: (message = 'Authentication token has expired', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.TOKEN_EXPIRED,
+      message,
+      severity: ApiErrorSeverities.LOW,
+      statusCode: HttpStatusCodes.UNAUTHORIZED,
+    }, context, correlationId)),
+
+  unauthenticated: (message = 'Authentication required', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.UNAUTHENTICATED,
+      message,
+      severity: ApiErrorSeverities.MEDIUM,
+      statusCode: HttpStatusCodes.UNAUTHORIZED,
+    }, context, correlationId)),
+
+  unauthorized: (message = 'Insufficient permissions', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.UNAUTHORIZED,
+      message,
+      severity: ApiErrorSeverities.MEDIUM,
+      statusCode: HttpStatusCodes.FORBIDDEN,
+    }, context, correlationId)),
+
+  validation: (message = 'Validation failed', context?: ErrorContext, correlationId?: string) =>
+    new AppError(buildErrorConfig({
+      code: ErrorCodes.VALIDATION_ERROR,
+      message,
+      severity: ApiErrorSeverities.LOW,
+      statusCode: HttpStatusCodes.BAD_REQUEST,
+    }, context, correlationId)),
 
 };
 
@@ -329,10 +359,10 @@ export function normalizeError(error: unknown): Error {
  */
 const ProviderMetadataSchema = z.discriminatedUnion('metaType', [
   z.object({
-    metaType: z.literal('rate_limit'),
-    retryAfter: z.number().optional(),
-    remaining: z.number().optional(),
     limit: z.number().optional(),
+    metaType: z.literal('rate_limit'),
+    remaining: z.number().optional(),
+    retryAfter: z.number().optional(),
   }),
   z.object({
     metaType: z.literal('model_info'),
@@ -341,8 +371,8 @@ const ProviderMetadataSchema = z.discriminatedUnion('metaType', [
     reason: z.string().optional(),
   }),
   z.object({
-    metaType: z.literal('raw'),
     data: z.record(z.string(), z.string()).optional(),
+    metaType: z.literal('raw'),
   }),
 ]);
 
@@ -351,10 +381,10 @@ type ProviderMetadata = z.infer<typeof ProviderMetadataSchema>;
 export type { ProviderMetadata };
 
 export const ProviderErrorDetailsSchema = z.object({
-  message: z.string().optional(),
   code: z.string().optional(),
-  type: z.string().optional(),
+  message: z.string().optional(),
   metadata: ProviderMetadataSchema.optional(),
+  type: z.string().optional(),
 });
 
 export type ProviderErrorDetails = z.infer<typeof ProviderErrorDetailsSchema>;
@@ -365,38 +395,38 @@ export type ProviderErrorDetails = z.infer<typeof ProviderErrorDetailsSchema>;
 
 const ProviderNestedErrorResponseSchema = z.object({
   error: z.object({
-    message: z.string().optional(),
     code: z.string().optional(),
-    type: z.string().optional(),
+    message: z.string().optional(),
     metadata: ProviderMetadataSchema.optional(),
+    type: z.string().optional(),
   }),
 });
 
 const ProviderFlatErrorResponseSchema = z.object({
-  message: z.string(),
   code: z.string().optional(),
+  message: z.string(),
 });
 
 export const AIProviderErrorMetadataSchema = z.object({
-  errorName: z.string(),
-  errorType: z.string(),
+  cause: z.string().optional(),
   errorCategory: ErrorCategorySchema,
   errorMessage: z.string(),
-  openRouterError: z.string().optional(),
-  openRouterCode: z.string().optional(),
-  openRouterType: z.string().optional(),
-  openRouterMetadata: ProviderMetadataSchema.optional(),
-  statusCode: z.number().optional(),
-  requestId: z.string().optional(),
-  rawErrorMessage: z.string(),
-  responseBody: z.string().optional(),
-  cause: z.string().optional(),
-  traceId: z.string().optional(),
+  errorName: z.string(),
+  errorType: z.string(),
   isTransient: z.boolean(),
-  shouldRetry: z.boolean(),
+  modelId: z.string().optional(),
+  openRouterCode: z.string().optional(),
+  openRouterError: z.string().optional(),
+  openRouterMetadata: ProviderMetadataSchema.optional(),
+  openRouterType: z.string().optional(),
   participantId: z.string().optional(),
   participantRole: z.string().nullable().optional(),
-  modelId: z.string().optional(),
+  rawErrorMessage: z.string(),
+  requestId: z.string().optional(),
+  responseBody: z.string().optional(),
+  shouldRetry: z.boolean(),
+  statusCode: z.number().optional(),
+  traceId: z.string().optional(),
 });
 
 export type AIProviderErrorMetadata = z.infer<typeof AIProviderErrorMetadataSchema>;
@@ -447,10 +477,10 @@ export function structureAIProviderError(
       if (nestedResult.success) {
         const { error } = nestedResult.data;
         providerError = {
-          message: error.message ?? String(nestedResult.data.error),
           code: error.code,
-          type: error.type,
+          message: error.message ?? String(nestedResult.data.error),
           metadata: error.metadata,
+          type: error.type,
         };
         if (providerError.message) {
           errorMessage = providerError.message;
@@ -460,8 +490,8 @@ export function structureAIProviderError(
         const flatResult = ProviderFlatErrorResponseSchema.safeParse(parsed);
         if (flatResult.success) {
           providerError = {
-            message: flatResult.data.message,
             code: flatResult.data.code,
+            message: flatResult.data.message,
           };
           errorMessage = flatResult.data.message;
         }
@@ -567,25 +597,25 @@ export function structureAIProviderError(
   const requestId = responseHeaders?.['x-request-id'] || responseHeaders?.['x-trace-id'];
 
   return {
-    errorName,
-    errorType,
+    cause: cause ? String(cause) : undefined,
     errorCategory,
     errorMessage,
-    openRouterError: providerError?.message,
-    openRouterCode: providerError?.code,
-    openRouterType: providerError?.type,
-    openRouterMetadata: providerError?.metadata,
-    statusCode,
-    requestId,
-    rawErrorMessage: errorMessage,
-    responseBody: responseBody?.substring(0, 1000),
-    cause: cause ? String(cause) : undefined,
-    traceId,
+    errorName,
+    errorType,
     isTransient: errorIsTransient,
-    shouldRetry,
+    modelId: participantContext?.modelId,
+    openRouterCode: providerError?.code,
+    openRouterError: providerError?.message,
+    openRouterMetadata: providerError?.metadata,
+    openRouterType: providerError?.type,
     participantId: participantContext?.id,
     participantRole: participantContext?.role,
-    modelId: participantContext?.modelId,
+    rawErrorMessage: errorMessage,
+    requestId,
+    responseBody: responseBody?.substring(0, 1000),
+    shouldRetry,
+    statusCode,
+    traceId,
   };
 }
 

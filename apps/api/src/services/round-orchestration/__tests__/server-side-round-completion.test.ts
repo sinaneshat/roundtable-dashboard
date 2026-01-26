@@ -73,8 +73,9 @@ describe('server-side round completion', () => {
       KV: {
         get: vi.fn().mockImplementation(async (key: string, format?: string) => {
           const raw = currentState[key];
-          if (!raw)
+          if (!raw) {
             return null;
+          }
           return format === 'json' ? JSON.parse(raw) : raw;
         }),
         put: vi.fn().mockImplementation(async (key: string, value: string) => {
@@ -97,14 +98,14 @@ describe('server-side round completion', () => {
     describe('checkRoundCompletionQueueMessage', () => {
       it('validates correct message with stale_stream reason', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           messageId: 'check-thread123-r0-123456',
-          threadId: 'thread123',
-          roundNumber: 0,
-          userId: 'user123',
-          sessionToken: 'a'.repeat(32), // Min 32 chars required
-          reason: CheckRoundCompletionReasons.STALE_STREAM,
           queuedAt: new Date().toISOString(),
+          reason: CheckRoundCompletionReasons.STALE_STREAM,
+          roundNumber: 0,
+          sessionToken: 'a'.repeat(32), // Min 32 chars required
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+          userId: 'user123',
         };
 
         const result = CheckRoundCompletionQueueMessageSchema.safeParse(message);
@@ -113,14 +114,14 @@ describe('server-side round completion', () => {
 
       it('validates correct message with resume_trigger reason', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           messageId: 'check-thread123-r1-789',
-          threadId: 'thread123',
-          roundNumber: 1,
-          userId: 'user456',
-          sessionToken: 'b'.repeat(32), // Min 32 chars required
-          reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
           queuedAt: new Date().toISOString(),
+          reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
+          roundNumber: 1,
+          sessionToken: 'b'.repeat(32), // Min 32 chars required
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+          userId: 'user456',
         };
 
         const result = CheckRoundCompletionQueueMessageSchema.safeParse(message);
@@ -129,14 +130,14 @@ describe('server-side round completion', () => {
 
       it('validates correct message with scheduled_check reason', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           messageId: 'check-thread123-r2-999',
-          threadId: 'thread123',
-          roundNumber: 2,
-          userId: 'user789',
-          sessionToken: 'c'.repeat(32), // Min 32 chars required
-          reason: CheckRoundCompletionReasons.SCHEDULED_CHECK,
           queuedAt: new Date().toISOString(),
+          reason: CheckRoundCompletionReasons.SCHEDULED_CHECK,
+          roundNumber: 2,
+          sessionToken: 'c'.repeat(32), // Min 32 chars required
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+          userId: 'user789',
         };
 
         const result = CheckRoundCompletionQueueMessageSchema.safeParse(message);
@@ -145,13 +146,13 @@ describe('server-side round completion', () => {
 
       it('rejects message with invalid reason', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           messageId: 'check-thread123-r0-123456',
-          threadId: 'thread123',
-          roundNumber: 0,
-          userId: 'user123',
-          reason: 'invalid_reason',
           queuedAt: new Date().toISOString(),
+          reason: 'invalid_reason',
+          roundNumber: 0,
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+          userId: 'user123',
         };
 
         const result = CheckRoundCompletionQueueMessageSchema.safeParse(message);
@@ -160,8 +161,8 @@ describe('server-side round completion', () => {
 
       it('rejects message with missing required fields', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
           // Missing messageId, roundNumber, userId, reason, queuedAt
         };
 
@@ -173,14 +174,14 @@ describe('server-side round completion', () => {
     describe('triggerPreSearchQueueMessage', () => {
       it('validates correct message without attachments', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
           messageId: 'trigger-thread123-r0-presearch',
-          threadId: 'thread123',
-          roundNumber: 0,
-          userId: 'user123',
-          sessionToken: 'd'.repeat(32), // Min 32 chars required
-          userQuery: 'What is the weather like?',
           queuedAt: new Date().toISOString(),
+          roundNumber: 0,
+          sessionToken: 'd'.repeat(32), // Min 32 chars required
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
+          userId: 'user123',
+          userQuery: 'What is the weather like?',
         };
 
         const result = TriggerPreSearchQueueMessageSchema.safeParse(message);
@@ -189,15 +190,15 @@ describe('server-side round completion', () => {
 
       it('validates correct message with attachments', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
-          messageId: 'trigger-thread123-r0-presearch',
-          threadId: 'thread123',
-          roundNumber: 0,
-          userId: 'user123',
-          sessionToken: 'e'.repeat(32), // Min 32 chars required
-          userQuery: 'Analyze this document',
           attachmentIds: ['attach1', 'attach2'],
+          messageId: 'trigger-thread123-r0-presearch',
           queuedAt: new Date().toISOString(),
+          roundNumber: 0,
+          sessionToken: 'e'.repeat(32), // Min 32 chars required
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
+          userId: 'user123',
+          userQuery: 'Analyze this document',
         };
 
         const result = TriggerPreSearchQueueMessageSchema.safeParse(message);
@@ -209,12 +210,12 @@ describe('server-side round completion', () => {
 
       it('rejects message with missing userQuery', () => {
         const message = {
-          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
           messageId: 'trigger-thread123-r0-presearch',
-          threadId: 'thread123',
-          roundNumber: 0,
-          userId: 'user123',
           queuedAt: new Date().toISOString(),
+          roundNumber: 0,
+          threadId: 'thread123',
+          type: RoundOrchestrationMessageTypes.TRIGGER_PRE_SEARCH,
+          userId: 'user123',
         };
 
         const result = TriggerPreSearchQueueMessageSchema.safeParse(message);
@@ -290,11 +291,13 @@ describe('server-side round completion', () => {
 
       const state = getState('thread-123', 0);
       expect(state).not.toBeNull();
-      if (!state)
+      if (!state) {
         throw new Error('State not found');
+      }
       expect(state.lastActivityAt).toBeDefined();
-      if (!state.lastActivityAt)
+      if (!state.lastActivityAt) {
         throw new Error('Last activity timestamp not set');
+      }
       expect(new Date(state.lastActivityAt).getTime()).toBeGreaterThanOrEqual(
         new Date(beforeInit).getTime(),
       );
@@ -416,7 +419,9 @@ describe('server-side round completion', () => {
       const initialActivity = initialState?.lastActivityAt;
 
       // Small delay to ensure timestamp difference
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
 
       await incrementRecoveryAttempts('thread-123', 0, mockEnv as never);
 
@@ -514,7 +519,9 @@ describe('server-side round completion', () => {
       const initialState = getState('thread-123', 0);
       const initialActivity = initialState?.lastActivityAt;
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
 
       await updatePreSearchStatus(
         'thread-123',
@@ -536,22 +543,22 @@ describe('server-side round completion', () => {
   describe('staleness detection', () => {
     it('detects stale round when no activity for threshold duration', () => {
       const staleState: RoundExecutionState = {
-        threadId: 'thread-123',
-        roundNumber: 0,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date(Date.now() - 60_000).toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
-        triggeredParticipants: [],
+        failedParticipants: 0,
         lastActivityAt: new Date(Date.now() - 60_000).toISOString(), // 60s ago
-        recoveryAttempts: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 0,
+        startedAt: new Date(Date.now() - 60_000).toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
+        triggeredParticipants: [],
       };
 
       // Default threshold is 30s
@@ -560,22 +567,22 @@ describe('server-side round completion', () => {
 
     it('does not detect fresh round as stale', () => {
       const freshState: RoundExecutionState = {
-        threadId: 'thread-123',
-        roundNumber: 0,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
-        triggeredParticipants: [],
+        failedParticipants: 0,
         lastActivityAt: new Date().toISOString(), // Just now
-        recoveryAttempts: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 0,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
+        triggeredParticipants: [],
       };
 
       expect(isRoundStale(freshState)).toBe(false);
@@ -583,22 +590,22 @@ describe('server-side round completion', () => {
 
     it('uses startedAt when lastActivityAt is missing', () => {
       const stateWithoutActivity: RoundExecutionState = {
-        threadId: 'thread-123',
-        roundNumber: 0,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date(Date.now() - 60_000).toISOString(), // 60s ago
         completedAt: null,
+        completedParticipants: 0,
         error: null,
-        triggeredParticipants: [],
+        failedParticipants: 0,
+        maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
         // lastActivityAt missing
         recoveryAttempts: 0,
-        maxRecoveryAttempts: 3,
+        roundNumber: 0,
+        startedAt: new Date(Date.now() - 60_000).toISOString(), // 60s ago
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
+        triggeredParticipants: [],
       };
 
       expect(isRoundStale(stateWithoutActivity)).toBe(true);
@@ -606,22 +613,22 @@ describe('server-side round completion', () => {
 
     it('respects custom stale threshold', () => {
       const state: RoundExecutionState = {
-        threadId: 'thread-123',
-        roundNumber: 0,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        participantStatuses: {},
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
         completedAt: null,
+        completedParticipants: 0,
         error: null,
-        triggeredParticipants: [],
+        failedParticipants: 0,
         lastActivityAt: new Date(Date.now() - 15_000).toISOString(), // 15s ago
-        recoveryAttempts: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: {},
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 0,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
+        triggeredParticipants: [],
       };
 
       // With 10s threshold, should be stale
@@ -649,18 +656,23 @@ describe('server-side round completion', () => {
       const initialState = getState('thread-123', 0);
       const initialActivity = initialState?.lastActivityAt;
 
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
 
       await updateRoundActivity('thread-123', 0, mockEnv as never);
 
       const updatedState = getState('thread-123', 0);
-      if (!updatedState)
+      if (!updatedState) {
         throw new Error('Updated state not found');
+      }
       expect(updatedState.lastActivityAt).not.toBe(initialActivity);
-      if (!updatedState.lastActivityAt)
+      if (!updatedState.lastActivityAt) {
         throw new Error('Updated activity timestamp not set');
-      if (!initialActivity)
+      }
+      if (!initialActivity) {
         throw new Error('Initial activity timestamp not set');
+      }
       expect(new Date(updatedState.lastActivityAt).getTime()).toBeGreaterThan(
         new Date(initialActivity).getTime(),
       );

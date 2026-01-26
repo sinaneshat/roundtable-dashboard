@@ -51,23 +51,23 @@ export function createBaseMockThread(overrides?: Partial<ChatThread>): ChatThrea
   const now = new Date().toISOString();
 
   return {
+    createdAt: now,
+    enableWebSearch: false,
     id: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
-    userId: '35981ef3-3267-4af7-9fdb-2e3c47149c2c',
-    projectId: null,
-    title: 'Test Thread',
-    slug: 'test-thread-abc123',
-    previousSlug: null,
-    mode: ChatModes.DEBATING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    metadata: {},
-    version: 1,
-    createdAt: now,
-    updatedAt: now,
     lastMessageAt: now,
+    metadata: {},
+    mode: ChatModes.DEBATING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread-abc123',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: now,
+    userId: '35981ef3-3267-4af7-9fdb-2e3c47149c2c',
+    version: 1,
     ...overrides,
   };
 }
@@ -76,15 +76,15 @@ export function createBaseMockParticipant(overrides?: Partial<ChatParticipant>):
   const now = new Date().toISOString();
 
   return {
-    id: '01KA1K2GD9KG4KNC9GX1RJH288',
-    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
-    modelId: 'meta-llama/llama-3.3-70b-instruct:free',
-    customRoleId: null,
-    role: null,
-    priority: 0,
-    isEnabled: true,
-    settings: null,
     createdAt: now,
+    customRoleId: null,
+    id: '01KA1K2GD9KG4KNC9GX1RJH288',
+    isEnabled: true,
+    modelId: 'meta-llama/llama-3.3-70b-instruct:free',
+    priority: 0,
+    role: null,
+    settings: null,
+    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
     updatedAt: now,
     ...overrides,
   };
@@ -94,18 +94,18 @@ export function createMockMessage(overrides?: Partial<ApiMessage>): ApiMessage {
   const now = new Date().toISOString();
 
   return {
+    createdAt: now,
     id: '01KA1K2GDR317P155TYWY6G4C0',
-    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
-    participantId: null,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: 'Test message' }],
-    roundNumber: 0,
-    toolCalls: null,
     metadata: {
       role: MessageRoles.USER,
       roundNumber: 0,
     },
-    createdAt: now,
+    participantId: null,
+    parts: [{ text: 'Test message', type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
+    roundNumber: 0,
+    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
+    toolCalls: null,
     ...overrides,
   };
 }
@@ -120,31 +120,31 @@ export function createMockAssistantMessage(
   const participantId = `participant_${participantIndex}`;
 
   return {
+    createdAt: now,
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    threadId,
-    participantId,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: `Response from participant ${participantIndex}` }],
-    roundNumber,
-    toolCalls: null,
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
       participantId,
       participantIndex,
       participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.STOP,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
       usage: {
-        promptTokens: 100,
         completionTokens: 50,
+        promptTokens: 100,
         totalTokens: 150,
       },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
     },
-    createdAt: now,
+    participantId,
+    parts: [{ text: `Response from participant ${participantIndex}`, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
+    threadId,
+    toolCalls: null,
     ...overrides,
   };
 }
@@ -159,38 +159,38 @@ export function createMockThreadDetailResponse(
     : [createBaseMockParticipant({ threadId: thread.id })];
 
   return {
-    success: true,
     data: {
-      thread,
-      participants,
-      messages: [],
       changelog: [],
+      messages: [],
+      participants,
+      thread,
       user: {
         id: '35981ef3-3267-4af7-9fdb-2e3c47149c2c',
-        name: 'Test User',
         image: null,
+        name: 'Test User',
       },
     },
+    success: true,
   };
 }
 
 export function createMockMessagesListResponse(
   threadId: string,
-  roundNumber: number = 0,
-  participantCount: number = 1,
+  roundNumber = 0,
+  participantCount = 1,
 ): MessagesListResponse {
   const messages: ApiMessage[] = [];
 
   messages.push(
     createMockMessage({
       id: `user_r${roundNumber}`,
-      threadId,
-      roundNumber,
-      parts: [{ type: MessagePartTypes.TEXT, text: `User question for round ${roundNumber}` }],
       metadata: {
         role: MessageRoles.USER,
         roundNumber,
       },
+      parts: [{ text: `User question for round ${roundNumber}`, type: MessagePartTypes.TEXT }],
+      roundNumber,
+      threadId,
     }),
   );
 
@@ -199,11 +199,11 @@ export function createMockMessagesListResponse(
   }
 
   return {
-    success: true,
     data: {
-      items: messages,
       count: messages.length,
+      items: messages,
     },
+    success: true,
   };
 }
 
@@ -211,123 +211,123 @@ export function createMockPreSearch(overrides?: Partial<StoredPreSearch>): Store
   const now = new Date().toISOString();
 
   return {
+    completedAt: now,
+    createdAt: now,
+    errorMessage: null,
     id: 'presearch_test_123',
-    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
     roundNumber: 0,
-    userQuery: 'Test search query',
-    status: PreSearchStatuses.COMPLETE,
     searchData: {
+      failureCount: 0,
       queries: [
         {
+          index: 0,
           query: 'test query',
           rationale: 'Test rationale',
           searchDepth: 'basic' as const,
-          index: 0,
           total: 1,
         },
       ],
       results: [
         {
-          query: 'test query',
           answer: 'Test answer',
+          index: 0,
+          query: 'test query',
+          responseTime: 100,
           results: [
             {
-              title: 'Test Result',
-              url: 'https://example.com',
               content: 'Test content',
               score: 0.95,
+              title: 'Test Result',
+              url: 'https://example.com',
             },
           ],
-          responseTime: 100,
-          index: 0,
         },
       ],
+      successCount: 1,
       summary: 'Test summary',
       totalResults: 1,
       totalTime: 100,
-      successCount: 1,
-      failureCount: 0,
     },
-    errorMessage: null,
-    createdAt: now,
-    completedAt: now,
+    status: PreSearchStatuses.COMPLETE,
+    threadId: '01KA1K2GD2PP0BJH2VZ9J6QRBA',
+    userQuery: 'Test search query',
     ...overrides,
   };
 }
 
 export function createMockPreSearchesListResponse(
   threadId: string,
-  roundNumber: number = 0,
+  roundNumber = 0,
   options?: {
     includeFullContent?: boolean;
     includeMetadata?: boolean;
     includeAnswer?: boolean;
   },
 ): PreSearchListResponse {
-  const { includeFullContent = false, includeMetadata = false, includeAnswer = false } = options || {};
+  const { includeAnswer = false, includeFullContent = false, includeMetadata = false } = options || {};
 
   return {
-    success: true,
     data: {
+      count: 1,
       items: [
         {
+          completedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          errorMessage: null,
           id: `presearch_${threadId}_${roundNumber}`,
-          threadId,
           roundNumber,
-          userQuery: `Question for round ${roundNumber}`,
-          status: PreSearchStatuses.COMPLETE,
           searchData: {
+            failureCount: 0,
             queries: [
               {
+                index: 0,
                 query: 'test search query',
                 rationale: 'Test rationale',
                 searchDepth: 'basic' as const,
-                index: 0,
                 total: 1,
               },
             ],
             results: [
               {
-                query: 'test search query',
                 answer: includeAnswer ? 'AI-generated answer based on search results' : 'Test answer',
+                index: 0,
+                query: 'test search query',
+                responseTime: 100,
                 results: [
                   {
-                    title: 'Test Result',
-                    url: 'https://example.com',
                     content: 'Test content',
-                    score: 0.95,
+                    domain: 'example.com',
                     excerpt: 'Test content',
                     fullContent: includeFullContent ? 'Full article content with comprehensive information...' : undefined,
-                    publishedDate: undefined,
-                    domain: 'example.com',
                     metadata: includeMetadata
                       ? {
                           author: 'Test Author',
+                          description: 'Test article description',
+                          faviconUrl: 'https://example.com/favicon.ico',
+                          imageUrl: 'https://example.com/image.jpg',
                           readingTime: 5,
                           wordCount: 1000,
-                          description: 'Test article description',
-                          imageUrl: 'https://example.com/image.jpg',
-                          faviconUrl: 'https://example.com/favicon.ico',
                         }
                       : undefined,
+                    publishedDate: undefined,
+                    score: 0.95,
+                    title: 'Test Result',
+                    url: 'https://example.com',
                   },
                 ],
-                responseTime: 100,
-                index: 0,
               },
             ],
+            successCount: 1,
             summary: 'Test summary',
             totalResults: 1,
             totalTime: 100,
-            successCount: 1,
-            failureCount: 0,
           },
-          errorMessage: null,
-          createdAt: new Date().toISOString(),
-          completedAt: new Date().toISOString(),
+          status: PreSearchStatuses.COMPLETE,
+          threadId,
+          userQuery: `Question for round ${roundNumber}`,
         },
       ],
-      count: 1,
     },
+    success: true,
   };
 }

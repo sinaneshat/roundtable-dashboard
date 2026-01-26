@@ -115,10 +115,11 @@ export async function invalidateAllUserCaches(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   userId: string,
 ): Promise<void> {
-  if (!db.$cache?.invalidate)
+  if (!db.$cache?.invalidate) {
     return;
+  }
 
-  const { UserCacheTags, SubscriptionCacheTags, CustomerCacheTags } = await import('@/db/cache/cache-tags');
+  const { CustomerCacheTags, SubscriptionCacheTags, UserCacheTags } = await import('@/db/cache/cache-tags');
 
   const tags = [
     // Thread-related caches

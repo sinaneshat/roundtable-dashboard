@@ -22,13 +22,13 @@ export const HttpMethodSchema = z.enum(HTTP_METHODS).openapi({
 export type HttpMethod = z.infer<typeof HttpMethodSchema>;
 
 export const HttpMethods = {
-  GET: 'GET' as const,
-  POST: 'POST' as const,
-  PUT: 'PUT' as const,
   DELETE: 'DELETE' as const,
-  PATCH: 'PATCH' as const,
+  GET: 'GET' as const,
   HEAD: 'HEAD' as const,
   OPTIONS: 'OPTIONS' as const,
+  PATCH: 'PATCH' as const,
+  POST: 'POST' as const,
+  PUT: 'PUT' as const,
 } as const;
 
 // ============================================================================
@@ -47,11 +47,11 @@ export const DatabaseOperationSchema = z.enum(DATABASE_OPERATIONS).openapi({
 export type DatabaseOperation = z.infer<typeof DatabaseOperationSchema>;
 
 export const DatabaseOperations = {
-  SELECT: 'select' as const,
-  INSERT: 'insert' as const,
-  UPDATE: 'update' as const,
-  DELETE: 'delete' as const,
   BATCH: 'batch' as const,
+  DELETE: 'delete' as const,
+  INSERT: 'insert' as const,
+  SELECT: 'select' as const,
+  UPDATE: 'update' as const,
 } as const;
 
 // ============================================================================
@@ -70,8 +70,8 @@ export const HealthStatusSchema = z.enum(HEALTH_STATUSES).openapi({
 export type HealthStatus = z.infer<typeof HealthStatusSchema>;
 
 export const HealthStatuses = {
-  HEALTHY: 'healthy' as const,
   DEGRADED: 'degraded' as const,
+  HEALTHY: 'healthy' as const,
   UNHEALTHY: 'unhealthy' as const,
 } as const;
 
@@ -116,10 +116,10 @@ export type Environment = z.infer<typeof EnvironmentSchema>;
 
 export const Environments = {
   DEVELOPMENT: 'development' as const,
+  LOCAL: 'local' as const,
   PREVIEW: 'preview' as const,
   PRODUCTION: 'production' as const,
   TEST: 'test' as const,
-  LOCAL: 'local' as const,
 } as const;
 
 // ============================================================================
@@ -173,9 +173,9 @@ export type NodeEnv = z.infer<typeof NodeEnvSchema>;
 
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const NodeEnvs = {
-  TEST: 'test' as const,
-  PRODUCTION: 'production' as const,
   DEVELOPMENT: 'development' as const,
+  PRODUCTION: 'production' as const,
+  TEST: 'test' as const,
 } as const;
 
 export function isNodeEnv(value: unknown): value is NodeEnv {
@@ -232,8 +232,8 @@ export const BooleanStringSchema = z.enum(BOOLEAN_STRINGS).openapi({
 export type BooleanString = z.infer<typeof BooleanStringSchema>;
 
 export const BooleanStrings = {
-  TRUE: 'true' as const,
   FALSE: 'false' as const,
+  TRUE: 'true' as const,
 } as const;
 
 // ============================================================================
@@ -274,8 +274,8 @@ export const DEFAULT_OAUTH_STATUS: OAuthStatus = 'missing';
 
 export const OAuthStatuses = {
   CONFIGURED: 'configured' as const,
-  MISSING: 'missing' as const,
   INVALID: 'invalid' as const,
+  MISSING: 'missing' as const,
 } as const;
 
 // ============================================================================
@@ -294,9 +294,9 @@ export type OgType = z.infer<typeof OgTypeSchema>;
 export const DEFAULT_OG_TYPE: OgType = 'website';
 
 export const OgTypes = {
-  WEBSITE: 'website' as const,
   ARTICLE: 'article' as const,
   PRODUCT: 'product' as const,
+  WEBSITE: 'website' as const,
 } as const;
 
 export function isValidOgType(value: unknown): value is OgType {
@@ -381,10 +381,10 @@ export type ApiErrorSeverity = z.infer<typeof ApiErrorSeveritySchema>;
 export const DEFAULT_API_ERROR_SEVERITY: ApiErrorSeverity = 'medium';
 
 export const ApiErrorSeverities = {
+  CRITICAL: 'critical' as const,
+  HIGH: 'high' as const,
   LOW: 'low' as const,
   MEDIUM: 'medium' as const,
-  HIGH: 'high' as const,
-  CRITICAL: 'critical' as const,
 } as const;
 
 // ============================================================================
@@ -403,11 +403,11 @@ export type StoragePurpose = z.infer<typeof StoragePurposeSchema>;
 export const DEFAULT_STORAGE_PURPOSE: StoragePurpose = 'temp';
 
 export const StoragePurposes = {
-  USER_AVATAR: 'user_avatar' as const,
-  COMPANY_LOGO: 'company_logo' as const,
   COMPANY_BANNER: 'company_banner' as const,
+  COMPANY_LOGO: 'company_logo' as const,
   DOCUMENT: 'document' as const,
   TEMP: 'temp' as const,
+  USER_AVATAR: 'user_avatar' as const,
 } as const;
 
 // ============================================================================
@@ -426,14 +426,14 @@ export type TextInputVariant = z.infer<typeof TextInputVariantSchema>;
 export const DEFAULT_TEXT_INPUT_VARIANT: TextInputVariant = 'text';
 
 export const TextInputVariants = {
-  TEXT: 'text' as const,
   CHECKBOX: 'checkbox' as const,
   DATE: 'date' as const,
-  SWITCH: 'switch' as const,
-  NUMBER: 'number' as const,
-  URL: 'url' as const,
   EMAIL: 'email' as const,
+  NUMBER: 'number' as const,
+  SWITCH: 'switch' as const,
+  TEXT: 'text' as const,
   TEXTAREA: 'textarea' as const,
+  URL: 'url' as const,
 } as const;
 
 // ============================================================================
@@ -452,9 +452,9 @@ export type WithOptionsVariant = z.infer<typeof WithOptionsVariantSchema>;
 export const DEFAULT_WITH_OPTIONS_VARIANT: WithOptionsVariant = 'select';
 
 export const WithOptionsVariants = {
+  COMBOBOX: 'combobox' as const,
   RADIO: 'radio' as const,
   SELECT: 'select' as const,
-  COMBOBOX: 'combobox' as const,
   TRIGGER_SCHEDULE: 'trigger_schedule' as const,
 } as const;
 
@@ -480,10 +480,10 @@ export const DEFAULT_CACHE_OPTION: CacheOption = 'default';
 // 5. CONSTANT OBJECT
 export const CacheOptions = {
   DEFAULT: 'default' as const,
-  NO_STORE: 'no-store' as const,
-  RELOAD: 'reload' as const,
   FORCE_CACHE: 'force-cache' as const,
+  NO_STORE: 'no-store' as const,
   ONLY_IF_CACHED: 'only-if-cached' as const,
+  RELOAD: 'reload' as const,
 } as const;
 
 // ============================================================================
@@ -508,8 +508,8 @@ export const DEFAULT_CIRCUIT_BREAKER_STATE: CircuitBreakerState = 'closed';
 // 5. CONSTANT OBJECT
 export const CircuitBreakerStates = {
   CLOSED: 'closed' as const,
-  OPEN: 'open' as const,
   HALF_OPEN: 'half-open' as const,
+  OPEN: 'open' as const,
 } as const;
 
 export function isCircuitBreakerState(value: unknown): value is CircuitBreakerState {
@@ -537,23 +537,23 @@ export const DEFAULT_DATE_FORMAT_VARIANT: DateFormatVariant = 'medium';
 
 // 5. CONSTANT OBJECT
 export const DateFormatVariants = {
-  SHORT: 'short' as const,
-  MEDIUM: 'medium' as const,
   LONG: 'long' as const,
+  MEDIUM: 'medium' as const,
+  SHORT: 'short' as const,
 } as const;
 
 // Labels for UI display
 export const DATE_FORMAT_VARIANT_LABELS: Record<DateFormatVariant, string> = {
-  [DateFormatVariants.SHORT]: 'Short',
-  [DateFormatVariants.MEDIUM]: 'Medium',
   [DateFormatVariants.LONG]: 'Long',
+  [DateFormatVariants.MEDIUM]: 'Medium',
+  [DateFormatVariants.SHORT]: 'Short',
 } as const;
 
 // Intl.DateTimeFormatOptions mapping
 export const DATE_FORMAT_VARIANT_OPTIONS: Record<DateFormatVariant, Intl.DateTimeFormatOptions> = {
-  [DateFormatVariants.SHORT]: { year: 'numeric', month: 'short', day: 'numeric' },
-  [DateFormatVariants.MEDIUM]: { year: 'numeric', month: 'long', day: 'numeric' },
-  [DateFormatVariants.LONG]: { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' },
+  [DateFormatVariants.LONG]: { day: 'numeric', month: 'long', weekday: 'long', year: 'numeric' },
+  [DateFormatVariants.MEDIUM]: { day: 'numeric', month: 'long', year: 'numeric' },
+  [DateFormatVariants.SHORT]: { day: 'numeric', month: 'short', year: 'numeric' },
 } as const;
 
 // ============================================================================
@@ -577,8 +577,8 @@ export type TaskPriority = z.infer<typeof TaskPrioritySchema>;
 
 // 5. CONSTANT OBJECT
 export const TaskPriorities = {
+  HIGH: 'high' as const,
   LOW: 'low' as const,
   MEDIUM: 'medium' as const,
-  HIGH: 'high' as const,
   URGENT: 'urgent' as const,
 } as const;

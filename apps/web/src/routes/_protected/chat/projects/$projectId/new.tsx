@@ -6,7 +6,7 @@ import { projectQueryOptions } from '@/lib/data/query-options';
 import type { GetProjectResponse } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/new')({
-  staleTime: 0,
+  component: ProjectChatRoute,
 
   loader: async ({ params, context }) => {
     const { queryClient } = context;
@@ -50,7 +50,7 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/new')
     };
   },
 
-  component: ProjectChatRoute,
+  staleTime: 0,
 });
 
 function ProjectChatRoute() {

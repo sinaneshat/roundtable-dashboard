@@ -51,12 +51,12 @@ export type CitedMessageContentProps = {
  * in a single Sources tooltip at the end of the response with carousel navigation.
  */
 export function CitedMessageContent({
-  text,
-  citations,
   availableSources,
-  isStreaming: _isStreaming = false,
+  citations,
   className,
+  isStreaming: _isStreaming = false,
   skipTransitions = false,
+  text,
 }: CitedMessageContentProps) {
   const parsedResult = useMemo(
     () => parseCitations(text),
@@ -93,27 +93,28 @@ export function CitedMessageContent({
         const { citation } = segment;
 
         // Skip duplicates
-        if (seenIds.has(citation.sourceId))
+        if (seenIds.has(citation.sourceId)) {
           continue;
+        }
         seenIds.add(citation.sourceId);
 
         const resolvedCitation = citationMap.get(citation.sourceId);
         const fallbackSource = availableSourceMap.get(citation.sourceId);
 
         sources.push({
+          description: fallbackSource?.description,
+          downloadUrl: resolvedCitation?.downloadUrl || fallbackSource?.downloadUrl,
+          // ✅ FIX: Use excerpt from resolved citation OR fallback source for quote display
+          excerpt: resolvedCitation?.excerpt || fallbackSource?.excerpt,
+          filename: resolvedCitation?.filename || fallbackSource?.filename,
+          fileSize: resolvedCitation?.fileSize || fallbackSource?.fileSize,
           id: citation.sourceId,
+          mimeType: resolvedCitation?.mimeType || fallbackSource?.mimeType,
           sourceType: citation.sourceType,
+          threadTitle: resolvedCitation?.threadTitle || fallbackSource?.threadTitle,
           // ✅ REQUIRED FIELD: AvailableSource.title is required per Zod schema
           title: resolvedCitation?.title || fallbackSource?.title || citation.sourceId,
           url: resolvedCitation?.url || fallbackSource?.url,
-          description: fallbackSource?.description,
-          // ✅ FIX: Use excerpt from resolved citation OR fallback source for quote display
-          excerpt: resolvedCitation?.excerpt || fallbackSource?.excerpt,
-          downloadUrl: resolvedCitation?.downloadUrl || fallbackSource?.downloadUrl,
-          filename: resolvedCitation?.filename || fallbackSource?.filename,
-          mimeType: resolvedCitation?.mimeType || fallbackSource?.mimeType,
-          fileSize: resolvedCitation?.fileSize || fallbackSource?.fileSize,
-          threadTitle: resolvedCitation?.threadTitle || fallbackSource?.threadTitle,
         });
       }
     }
@@ -131,17 +132,17 @@ export function CitedMessageContent({
       return [];
     }
     return availableSources.map(s => ({
+      description: s.description,
+      downloadUrl: s.downloadUrl,
+      excerpt: s.excerpt,
+      filename: s.filename,
+      fileSize: s.fileSize,
       id: s.id,
+      mimeType: s.mimeType,
       sourceType: s.sourceType,
+      threadTitle: s.threadTitle,
       title: s.title,
       url: s.url,
-      description: s.description,
-      excerpt: s.excerpt,
-      downloadUrl: s.downloadUrl,
-      filename: s.filename,
-      mimeType: s.mimeType,
-      fileSize: s.fileSize,
-      threadTitle: s.threadTitle,
     }));
   }, [sourceData.length, availableSources]);
 

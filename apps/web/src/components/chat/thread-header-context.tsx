@@ -26,8 +26,8 @@ export function ThreadHeaderProvider({ children }: { children: ReactNode }) {
   // ✅ RENDER OPTIMIZATION: setState is stable, only include state values
   const value = useMemo(
     () => ({
-      threadActions,
       setThreadActions,
+      threadActions,
     }),
     [threadActions],
   );
@@ -52,7 +52,7 @@ export function useThreadHeader() {
 export function useThreadHeaderOptional(): ThreadHeaderContextValue {
   const context = use(ThreadHeaderContext);
   return context ?? {
-    threadActions: null,
     setThreadActions: () => {},
+    threadActions: null,
   };
 }

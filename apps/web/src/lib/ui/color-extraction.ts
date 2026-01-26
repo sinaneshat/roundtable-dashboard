@@ -21,7 +21,7 @@ const colorCache = new Map<string, string>();
  */
 export async function extractColorFromImage(
   imageSrc: string,
-  isUser: boolean = false,
+  isUser = false,
 ): Promise<string> {
   // User always gets white text
   if (isUser) {
@@ -144,10 +144,12 @@ function mapToTailwindColor(color: chroma.Color): string {
   // Handle undefined hue (grayscale colors)
   if (h === undefined || Number.isNaN(h) || s < 0.1) {
     // Grayscale
-    if (l > 0.7)
+    if (l > 0.7) {
       return 'slate-400';
-    if (l > 0.4)
+    }
+    if (l > 0.4) {
       return 'slate-500';
+    }
     return 'slate-600';
   }
 

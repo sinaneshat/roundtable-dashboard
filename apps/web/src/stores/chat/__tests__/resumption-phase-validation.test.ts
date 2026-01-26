@@ -234,32 +234,32 @@ describe('participant completion counting', () => {
 
   it('counts only participant messages, not moderators', () => {
     const messages: Message[] = [
-      { id: 'p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
-      { id: 'mod', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, isModerator: true } },
+      { id: 'p0', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT },
+      { id: 'mod', metadata: { isModerator: true, roundNumber: 0 }, role: MessageRoles.ASSISTANT },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(1);
   });
 
   it('handles round with no participants', () => {
     const messages: Message[] = [
-      { id: 'user', role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+      { id: 'user', metadata: { roundNumber: 1 }, role: MessageRoles.USER },
     ];
     expect(countParticipantMessages(messages, 1)).toBe(0);
   });
 
   it('counts multiple participants correctly', () => {
     const messages: Message[] = [
-      { id: 'p0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
-      { id: 'p1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
-      { id: 'mod', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, isModerator: true } },
+      { id: 'p0', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT },
+      { id: 'p1', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT },
+      { id: 'mod', metadata: { isModerator: true, roundNumber: 0 }, role: MessageRoles.ASSISTANT },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(2);
   });
 
   it('filters by round number', () => {
     const messages: Message[] = [
-      { id: 'p0_r0', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } },
-      { id: 'p0_r1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } },
+      { id: 'p0_r0', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT },
+      { id: 'p0_r1', metadata: { roundNumber: 1 }, role: MessageRoles.ASSISTANT },
     ];
     expect(countParticipantMessages(messages, 0)).toBe(1);
     expect(countParticipantMessages(messages, 1)).toBe(1);
@@ -276,11 +276,11 @@ describe('client-side phase validation', () => {
   type StoreState = {
     currentResumptionPhase: string;
     resumptionRoundNumber: number;
-    messages: Array<{
+    messages: {
       role: string;
       metadata: { roundNumber: number; participantId?: string; isModerator?: boolean };
-    }>;
-    participants: Array<{ id: string; isEnabled: boolean }>;
+    }[];
+    participants: { id: string; isEnabled: boolean }[];
   };
 
   function shouldRedirectToParticipantsPhase(state: StoreState): boolean {
@@ -291,12 +291,15 @@ describe('client-side phase validation', () => {
     // Check if participants are actually complete
     const enabledParticipants = state.participants.filter(p => p.isEnabled);
     const completedParticipants = state.messages.filter((msg) => {
-      if (msg.role !== MessageRoles.ASSISTANT)
+      if (msg.role !== MessageRoles.ASSISTANT) {
         return false;
-      if (msg.metadata.roundNumber !== state.resumptionRoundNumber)
+      }
+      if (msg.metadata.roundNumber !== state.resumptionRoundNumber) {
         return false;
-      if (msg.metadata.isModerator)
+      }
+      if (msg.metadata.isModerator) {
         return false;
+      }
       return true;
     });
 
@@ -306,75 +309,75 @@ describe('client-side phase validation', () => {
   it('redirects when server says moderator but no participants responded', () => {
     const state: StoreState = {
       currentResumptionPhase: RoundPhases.MODERATOR,
-      resumptionRoundNumber: 1,
       messages: [
-        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
+        { metadata: { roundNumber: 1 }, role: MessageRoles.USER },
         // No participant messages for round 1
       ],
       participants: [{ id: 'p1', isEnabled: true }],
+      resumptionRoundNumber: 1,
     };
 
-    expect(shouldRedirectToParticipantsPhase(state)).toBe(true);
+    expect(shouldRedirectToParticipantsPhase(state)).toBeTruthy();
   });
 
   it('does NOT redirect when all participants have responded', () => {
     const state: StoreState = {
       currentResumptionPhase: RoundPhases.MODERATOR,
-      resumptionRoundNumber: 1,
       messages: [
-        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
+        { metadata: { roundNumber: 1 }, role: MessageRoles.USER },
+        { metadata: { participantId: 'p1', roundNumber: 1 }, role: MessageRoles.ASSISTANT },
       ],
       participants: [{ id: 'p1', isEnabled: true }],
+      resumptionRoundNumber: 1,
     };
 
-    expect(shouldRedirectToParticipantsPhase(state)).toBe(false);
+    expect(shouldRedirectToParticipantsPhase(state)).toBeFalsy();
   });
 
   it('redirects when only some participants have responded', () => {
     const state: StoreState = {
       currentResumptionPhase: RoundPhases.MODERATOR,
-      resumptionRoundNumber: 1,
       messages: [
-        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
+        { metadata: { roundNumber: 1 }, role: MessageRoles.USER },
+        { metadata: { participantId: 'p1', roundNumber: 1 }, role: MessageRoles.ASSISTANT },
         // Missing p2
       ],
       participants: [
         { id: 'p1', isEnabled: true },
         { id: 'p2', isEnabled: true },
       ],
+      resumptionRoundNumber: 1,
     };
 
-    expect(shouldRedirectToParticipantsPhase(state)).toBe(true);
+    expect(shouldRedirectToParticipantsPhase(state)).toBeTruthy();
   });
 
   it('ignores disabled participants', () => {
     const state: StoreState = {
       currentResumptionPhase: RoundPhases.MODERATOR,
-      resumptionRoundNumber: 1,
       messages: [
-        { role: MessageRoles.USER, metadata: { roundNumber: 1 } },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1, participantId: 'p1' } },
+        { metadata: { roundNumber: 1 }, role: MessageRoles.USER },
+        { metadata: { participantId: 'p1', roundNumber: 1 }, role: MessageRoles.ASSISTANT },
       ],
       participants: [
         { id: 'p1', isEnabled: true },
         { id: 'p2', isEnabled: false }, // Disabled - shouldn't count
       ],
+      resumptionRoundNumber: 1,
     };
 
-    expect(shouldRedirectToParticipantsPhase(state)).toBe(false);
+    expect(shouldRedirectToParticipantsPhase(state)).toBeFalsy();
   });
 
   it('does NOT redirect for non-moderator phases', () => {
     const state: StoreState = {
       currentResumptionPhase: RoundPhases.PARTICIPANTS,
-      resumptionRoundNumber: 1,
       messages: [],
       participants: [{ id: 'p1', isEnabled: true }],
+      resumptionRoundNumber: 1,
     };
 
-    expect(shouldRedirectToParticipantsPhase(state)).toBe(false);
+    expect(shouldRedirectToParticipantsPhase(state)).toBeFalsy();
   });
 });
 
@@ -391,13 +394,13 @@ describe('full resumption flow scenarios', () => {
       // 4. On reload, server should detect PARTICIPANTS phase (not MODERATOR)
 
       const serverState = {
-        roundNumber: 1,
-        preSearch: { enabled: true, status: MessageStatuses.COMPLETE },
+        moderator: null,
         participants: {
           allComplete: false, // No responses yet
           totalParticipants: 1,
         },
-        moderator: null,
+        preSearch: { enabled: true, status: MessageStatuses.COMPLETE },
+        roundNumber: 1,
       };
 
       // Server should return PARTICIPANTS phase
@@ -425,13 +428,13 @@ describe('full resumption flow scenarios', () => {
       // 4. On reload, server should detect MODERATOR phase
 
       const serverState = {
-        roundNumber: 1,
-        preSearch: null,
+        moderator: null, // Not started yet
         participants: {
           allComplete: true, // All responded
           totalParticipants: 1,
         },
-        moderator: null, // Not started yet
+        preSearch: null,
+        roundNumber: 1,
       };
 
       // Server should return MODERATOR phase
@@ -459,9 +462,9 @@ describe('full resumption flow scenarios', () => {
       // Then isRoundInProgress = false, isInputBlocked = false
 
       const storeState = {
-        streamingRoundNumber: 2,
-        isStreaming: false,
         isModeratorStreaming: false,
+        isStreaming: false,
+        streamingRoundNumber: 2,
         waitingToStartStreaming: false,
       };
 
@@ -472,7 +475,7 @@ describe('full resumption flow scenarios', () => {
         || isRoundInProgress;
 
       // Before cleanup: input IS blocked due to stale streamingRoundNumber
-      expect(isInputBlocked).toBe(true);
+      expect(isInputBlocked).toBeTruthy();
 
       // After cleanup: streamingRoundNumber = null
       const cleanedState = { ...storeState, streamingRoundNumber: null };
@@ -482,7 +485,7 @@ describe('full resumption flow scenarios', () => {
         || cleanedState.isModeratorStreaming
         || cleanedIsRoundInProgress;
 
-      expect(cleanedIsInputBlocked).toBe(false);
+      expect(cleanedIsInputBlocked).toBeFalsy();
     });
   });
 });

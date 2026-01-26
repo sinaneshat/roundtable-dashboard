@@ -33,39 +33,39 @@ type SimulatedStoreState = {
 
 function createInitialStoreState(): SimulatedStoreState {
   return {
+    isStreaming: false,
     messages: [
       {
         id: 'thread_r0_user',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Initial question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Initial question', type: 'text' }],
+        role: MessageRoles.USER,
       },
       {
         id: 'thread_r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'GPT response' }],
         metadata: {
+          model: 'gpt-4o',
+          participantIndex: 0,
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 0,
-          model: 'gpt-4o',
         },
+        parts: [{ text: 'GPT response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
       {
         id: 'thread_r0_p1',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Claude response' }],
         metadata: {
+          model: 'claude-3-5-sonnet',
+          participantIndex: 1,
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 1,
-          model: 'claude-3-5-sonnet',
         },
+        parts: [{ text: 'Claude response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
     ],
-    streamingRoundNumber: null,
-    isStreaming: false,
     preSearches: [],
+    streamingRoundNumber: null,
   };
 }
 
@@ -76,9 +76,9 @@ function addOptimisticUserMessage(
 ): SimulatedStoreState {
   const optimisticMessage: UIMessage = {
     id: `optimistic-user-${roundNumber}-${Date.now()}`,
+    metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' }],
     role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
-    metadata: { role: MessageRoles.USER, roundNumber, isOptimistic: true },
   };
 
   return {
@@ -103,18 +103,21 @@ function simulateUseThreadTimeline(
       messagesByRound.set(roundNumber, []);
     }
     const roundMessages = messagesByRound.get(roundNumber);
-    if (!roundMessages)
+    if (!roundMessages) {
       throw new Error(`expected round messages for round ${roundNumber}`);
+    }
     roundMessages.push(message);
   });
 
   // Sort messages within each round (user first, then by participantIndex)
   messagesByRound.forEach((roundMessages) => {
     roundMessages.sort((a, b) => {
-      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
         return -1;
-      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+      }
+      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
         return 1;
+      }
       const aIdx = (a.metadata?.participantIndex as number) ?? 999;
       const bIdx = (b.metadata?.participantIndex as number) ?? 999;
       return aIdx - bIdx;
@@ -138,26 +141,27 @@ function simulateUseThreadTimeline(
     const hasMessages = roundMessages && roundMessages.length > 0;
     const hasPreSearch = !!roundPreSearch;
 
-    if (!hasMessages && !hasPreSearch)
+    if (!hasMessages && !hasPreSearch) {
       return;
+    }
 
     // Pre-search timeline item only when NO messages exist
     if (hasPreSearch && !hasMessages) {
       timeline.push({
-        type: 'pre-search',
         data: roundPreSearch,
         key: `round-${roundNumber}-pre-search`,
         roundNumber,
+        type: 'pre-search',
       });
     }
 
     // Messages timeline item
     if (hasMessages) {
       timeline.push({
-        type: 'messages',
         data: roundMessages,
         key: `round-${roundNumber}-messages`,
         roundNumber,
+        type: 'messages',
       });
     }
   });
@@ -174,8 +178,9 @@ function simulateChatMessageListDeduplication(messages: UIMessage[]): UIMessage[
   const result: UIMessage[] = [];
 
   for (const message of messages) {
-    if (seenMessageIds.has(message.id))
+    if (seenMessageIds.has(message.id)) {
       continue;
+    }
 
     if (message.role === MessageRoles.USER) {
       const roundNum = message.metadata?.roundNumber as number | undefined;
@@ -183,8 +188,9 @@ function simulateChatMessageListDeduplication(messages: UIMessage[]): UIMessage[
         const existingIdx = userRoundToIdx.get(roundNum);
         if (existingIdx !== undefined) {
           const isOptimistic = message.id.startsWith('optimistic-');
-          if (isOptimistic)
+          if (isOptimistic) {
             continue;
+          }
           const isDeterministic = message.id.includes('_r') && message.id.includes('_user');
           if (isDeterministic) {
             result[existingIdx] = message;
@@ -211,7 +217,7 @@ function simulateChatMessageListDeduplication(messages: UIMessage[]): UIMessage[
 // =====================
 type MessageGroup = {
   type: 'user-group' | 'assistant-group';
-  messages: Array<{ message: UIMessage; index: number }>;
+  messages: { message: UIMessage; index: number }[];
   roundNumber: number;
 };
 
@@ -235,12 +241,12 @@ function simulateMessageGroups(
 
       if (!currentUserGroup) {
         currentUserGroup = {
-          type: 'user-group',
           messages: [],
           roundNumber,
+          type: 'user-group',
         };
       }
-      currentUserGroup.messages.push({ message, index });
+      currentUserGroup.messages.push({ index, message });
     } else {
       // Close user group when assistant message comes
       if (currentUserGroup) {
@@ -255,9 +261,9 @@ function simulateMessageGroups(
       }
 
       groups.push({
-        type: 'assistant-group',
-        messages: [{ message, index }],
+        messages: [{ index, message }],
         roundNumber,
+        type: 'assistant-group',
       });
     }
   });
@@ -297,8 +303,9 @@ describe('full Render Pipeline Simulation', () => {
       const round1Item = timeline.find(item => item.roundNumber === 1);
 
       expect(round1Item).toBeDefined();
-      if (!round1Item)
+      if (!round1Item) {
         throw new Error('expected round1Item to be defined');
+      }
       expect(round1Item.type).toBe('messages');
 
       const round1Messages = round1Item.data as UIMessage[];
@@ -314,15 +321,16 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      if (!round1Item)
+      if (!round1Item) {
         throw new Error('expected round1Item to be defined');
+      }
       const round1Messages = round1Item.data as UIMessage[];
 
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
       expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].role).toBe(MessageRoles.USER);
-      expect(deduplicated[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(deduplicated[0].parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
   });
 
@@ -333,8 +341,9 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      if (!round1Item)
+      if (!round1Item) {
         throw new Error('expected round1Item to be defined');
+      }
       const round1Messages = round1Item.data as UIMessage[];
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
@@ -352,8 +361,9 @@ describe('full Render Pipeline Simulation', () => {
 
       const timeline = simulateUseThreadTimeline(afterSubmit.messages);
       const round1Item = timeline.find(item => item.roundNumber === 1);
-      if (!round1Item)
+      if (!round1Item) {
         throw new Error('expected round1Item to be defined');
+      }
       const round1Messages = round1Item.data as UIMessage[];
       const deduplicated = simulateChatMessageListDeduplication(round1Messages);
 
@@ -380,8 +390,9 @@ describe('full Render Pipeline Simulation', () => {
       // Verify: Round 1 timeline item exists
       const round1Item = timeline.find(item => item.roundNumber === 1);
       expect(round1Item).toBeDefined();
-      if (!round1Item)
+      if (!round1Item) {
         throw new Error('expected round1Item to be defined');
+      }
       expect(round1Item.type).toBe('messages');
 
       // Step 4: Get messages for round 1 (what ChatMessageList receives)
@@ -401,8 +412,8 @@ describe('full Render Pipeline Simulation', () => {
       expect(groups[0].type).toBe('user-group');
       expect(groups[0].messages).toHaveLength(1);
       expect(groups[0].messages[0].message.parts[0]).toEqual({
-        type: 'text',
         text: 'My follow-up question',
+        type: 'text',
       });
     });
   });

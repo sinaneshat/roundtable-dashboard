@@ -98,22 +98,22 @@ export type ModelSelectionModalProps = {
 };
 
 export function ModelSelectionModal({
-  open,
-  onOpenChange,
-  orderedModels,
-  onReorder,
-  customRoles,
-  onToggle,
-  onRoleChange,
-  onClearRole,
-  onPresetSelect,
-  selectedCount,
-  maxModels,
-  userTierInfo,
   className,
+  customRoles,
   enableDrag = true,
-  visionIncompatibleModelIds,
   fileIncompatibleModelIds,
+  maxModels,
+  onClearRole,
+  onOpenChange,
+  onPresetSelect,
+  onReorder,
+  onRoleChange,
+  onToggle,
+  open,
+  orderedModels,
+  selectedCount,
+  userTierInfo,
+  visionIncompatibleModelIds,
 }: ModelSelectionModalProps) {
   const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
@@ -186,13 +186,13 @@ export function ModelSelectionModal({
 
   const {
     onDrag: onEdgeDrag,
-    onDragStart: onEdgeDragStart,
     onDragEnd: onEdgeDragEnd,
+    onDragStart: onEdgeDragStart,
   } = useDragEdgeScroll({
-    scrollContainerRef: scrollViewportRef,
     edgeThreshold: 60,
-    maxScrollSpeed: 3,
     enabled: enableDrag && !isFiltering,
+    maxScrollSpeed: 3,
+    scrollContainerRef: scrollViewportRef,
   });
 
   const filteredModels = useMemo(() => {
@@ -234,8 +234,9 @@ export function ModelSelectionModal({
   }, [isFiltering, onReorder]);
 
   const selectedModelData = useMemo(() => {
-    if (!selectedModelForRole)
+    if (!selectedModelForRole) {
       return null;
+    }
     return orderedModels.find(om => om.model.id === selectedModelForRole);
   }, [selectedModelForRole, orderedModels]);
 
@@ -260,23 +261,27 @@ export function ModelSelectionModal({
       return [...roles].sort((a, b) => {
         const aIsCurrent = currentRole === a.name;
         const bIsCurrent = currentRole === b.name;
-        if (aIsCurrent && !bIsCurrent)
+        if (aIsCurrent && !bIsCurrent) {
           return -1;
-        if (!aIsCurrent && bIsCurrent)
+        }
+        if (!aIsCurrent && bIsCurrent) {
           return 1;
+        }
         const aInUse = rolesInUse.has(a.name);
         const bInUse = rolesInUse.has(b.name);
-        if (aInUse && !bInUse)
+        if (aInUse && !bInUse) {
           return -1;
-        if (!aInUse && bInUse)
+        }
+        if (!aInUse && bInUse) {
           return 1;
+        }
         return 0;
       }).map(r => r.name);
     };
 
     initialRoleSortOrderRef.current = {
-      predefined: sortRoles(PREDEFINED_ROLE_TEMPLATES),
       custom: sortRoles(customRoles),
+      predefined: sortRoles(PREDEFINED_ROLE_TEMPLATES),
     };
   }
   if (!selectedModelForRole) {
@@ -286,8 +291,9 @@ export function ModelSelectionModal({
 
   // Sort predefined roles using initial order captured on open
   const sortedPredefinedRoles = useMemo(() => {
-    if (!initialRoleSortOrderRef.current)
+    if (!initialRoleSortOrderRef.current) {
       return PREDEFINED_ROLE_TEMPLATES;
+    }
 
     const orderMap = new Map(initialRoleSortOrderRef.current.predefined.map((name, idx) => [name, idx]));
     return [...PREDEFINED_ROLE_TEMPLATES].sort((a, b) => {
@@ -300,8 +306,9 @@ export function ModelSelectionModal({
 
   // Sort custom roles using initial order captured on open
   const sortedCustomRoles = useMemo(() => {
-    if (!initialRoleSortOrderRef.current)
+    if (!initialRoleSortOrderRef.current) {
       return customRoles;
+    }
 
     const orderMap = new Map(initialRoleSortOrderRef.current.custom.map((name, idx) => [name, idx]));
     return [...customRoles].sort((a, b) => {
@@ -338,8 +345,9 @@ export function ModelSelectionModal({
 
   const handleCustomRoleCreate = useCallback(async (roleName: string) => {
     const trimmedRole = roleName.trim();
-    if (!trimmedRole)
+    if (!trimmedRole) {
       return;
+    }
 
     if (!canCreateCustomRoles) {
       toastManager.error(
@@ -352,8 +360,8 @@ export function ModelSelectionModal({
     try {
       const result = await createRoleMutation.mutateAsync({
         json: {
-          name: trimmedRole,
           description: null,
+          name: trimmedRole,
           systemPrompt: createRoleSystemPrompt(trimmedRole),
         },
       });
@@ -431,8 +439,9 @@ export function ModelSelectionModal({
 
   const handleSaveAsPreset = useCallback(async (presetName: string) => {
     const trimmedName = presetName.trim();
-    if (!trimmedName)
+    if (!trimmedName) {
       return;
+    }
 
     const selectedModels = orderedModels.filter(om => om.participant !== null);
     if (selectedModels.length === 0) {
@@ -448,9 +457,9 @@ export function ModelSelectionModal({
     try {
       const result = await createPresetMutation.mutateAsync({
         json: {
-          name: trimmedName,
-          modelRoles,
           mode: ChatModes.ANALYZING,
+          modelRoles,
+          name: trimmedName,
         },
       });
 
@@ -470,8 +479,9 @@ export function ModelSelectionModal({
   }, [orderedModels, createPresetMutation, t, isSavingPreset]);
 
   const handleUpdatePreset = useCallback(async () => {
-    if (!editingPresetId)
+    if (!editingPresetId) {
       return;
+    }
 
     const selectedModels = orderedModels.filter(om => om.participant !== null);
     if (selectedModels.length === 0) {
@@ -489,8 +499,8 @@ export function ModelSelectionModal({
 
     try {
       await updatePresetMutation.mutateAsync({
-        param: { id: editingPresetId },
         json: { modelRoles },
+        param: { id: editingPresetId },
       });
 
       setEditingPresetId(null);
@@ -528,40 +538,45 @@ export function ModelSelectionModal({
     return [...MODEL_PRESETS].sort((a, b) => {
       const aAccessible = canAccessPreset(a, userTier);
       const bAccessible = canAccessPreset(b, userTier);
-      if (aAccessible && !bAccessible)
+      if (aAccessible && !bAccessible) {
         return -1;
-      if (!aAccessible && bAccessible)
+      }
+      if (!aAccessible && bAccessible) {
         return 1;
+      }
       return a.order - b.order;
     });
   }, [userTier]);
 
   const selectedPreset = useMemo((): ModelPreset | null => {
-    if (!selectedPresetId)
+    if (!selectedPresetId) {
       return null;
+    }
     const systemPreset = MODEL_PRESETS.find(p => p.id === selectedPresetId);
-    if (systemPreset)
+    if (systemPreset) {
       return systemPreset;
+    }
     const userPreset = userPresets.find(p => p.id === selectedPresetId);
     if (userPreset) {
       return {
-        id: userPreset.id,
-        name: userPreset.name,
         description: `${userPreset.modelRoles.length} models`,
         icon: Icons.sparkles,
-        requiredTier: SubscriptionTiers.FREE,
-        order: 0,
+        id: userPreset.id,
         mode: userPreset.mode,
-        searchEnabled: false,
         modelRoles: userPreset.modelRoles,
+        name: userPreset.name,
+        order: 0,
+        requiredTier: SubscriptionTiers.FREE,
+        searchEnabled: false,
       };
     }
     return null;
   }, [selectedPresetId, userPresets]);
 
   const selectedPresetModelIds = useMemo(() => {
-    if (!selectedPreset)
+    if (!selectedPreset) {
       return [];
+    }
     return selectedPreset.modelRoles.map(mr => mr.modelId);
   }, [selectedPreset]);
 
@@ -584,11 +599,11 @@ export function ModelSelectionModal({
     const selectedModels = orderedModels.filter(om => om.participant !== null);
 
     return {
-      hasSelectedModels: selectedModels.length > 0,
       canSave: selectedModels.length > 0,
       errorMessage: selectedModels.length === 0
         ? t('chat.models.modal.selectAtLeastOneModel')
         : null,
+      hasSelectedModels: selectedModels.length > 0,
     };
   }, [orderedModels, t]);
 
@@ -602,8 +617,9 @@ export function ModelSelectionModal({
   // On modal open: capture current order (for mid-session stability)
   // On modal close: sort selected to top and persist via onReorder
   useEffect(() => {
-    if (!open)
+    if (!open) {
       return;
+    }
 
     // Capture order on open (items should already be sorted from previous close)
     initialSortOrderRef.current = orderedModelsRef.current.map(om => om.model.id);
@@ -615,10 +631,12 @@ export function ModelSelectionModal({
       const sorted = [...models].sort((a, b) => {
         const aSelected = a.participant !== null;
         const bSelected = b.participant !== null;
-        if (aSelected && !bSelected)
+        if (aSelected && !bSelected) {
           return -1;
-        if (!aSelected && bSelected)
+        }
+        if (!aSelected && bSelected) {
           return 1;
+        }
         return 0;
       });
       reorder(sorted);
@@ -635,12 +653,14 @@ export function ModelSelectionModal({
   }, [activeTab, selectedPresetId]);
 
   const sortedFilteredModels = useMemo(() => {
-    if (activeTab !== ModelSelectionTabs.CUSTOM)
+    if (activeTab !== ModelSelectionTabs.CUSTOM) {
       return filteredModels;
+    }
 
     // Use initial sort order captured on modal open
-    if (!initialSortOrderRef.current)
+    if (!initialSortOrderRef.current) {
       return filteredModels;
+    }
 
     const orderMap = new Map(initialSortOrderRef.current.map((id, idx) => [id, idx]));
     return [...filteredModels].sort((a, b) => {
@@ -678,8 +698,9 @@ export function ModelSelectionModal({
   }, [sortedFilteredModels, handleOpenRoleSelection]);
 
   const handleApplyPreset = useCallback(() => {
-    if (!selectedPreset || !onPresetSelect)
+    if (!selectedPreset || !onPresetSelect) {
       return;
+    }
 
     const incompatibleCount = selectedPresetModelIds.filter(id =>
       combinedIncompatibleModelIds.has(id),
@@ -902,15 +923,15 @@ export function ModelSelectionModal({
                                   <AnimatePresence initial={false}>
                                     {userPresets.map((preset) => {
                                       const presetForCard: ModelPreset = {
-                                        id: preset.id,
-                                        name: preset.name,
                                         description: `${preset.modelRoles.length} models`,
                                         icon: Icons.sparkles,
-                                        requiredTier: SubscriptionTiers.FREE,
-                                        order: 0,
+                                        id: preset.id,
                                         mode: preset.mode,
-                                        searchEnabled: false,
                                         modelRoles: preset.modelRoles,
+                                        name: preset.name,
+                                        order: 0,
+                                        requiredTier: SubscriptionTiers.FREE,
+                                        searchEnabled: false,
                                       };
                                       const isNewlyCreated = newlyCreatedPresetId === preset.id;
                                       return (
@@ -919,9 +940,9 @@ export function ModelSelectionModal({
                                           initial={isNewlyCreated ? { opacity: 0, scale: 0.9 } : { opacity: 1 }}
                                           animate={isNewlyCreated
                                             ? {
+                                                boxShadow: ['0 0 0 0 rgba(var(--primary), 0)', '0 0 0 4px rgba(var(--primary), 0.3)', '0 0 0 0 rgba(var(--primary), 0)'],
                                                 opacity: 1,
                                                 scale: 1,
-                                                boxShadow: ['0 0 0 0 rgba(var(--primary), 0)', '0 0 0 4px rgba(var(--primary), 0.3)', '0 0 0 0 rgba(var(--primary), 0)'],
                                               }
                                             : { opacity: 1, scale: 1 }}
                                           exit={{
@@ -930,7 +951,7 @@ export function ModelSelectionModal({
                                             transition: { duration: 0.15, ease: 'easeOut' },
                                           }}
                                           transition={isNewlyCreated
-                                            ? { duration: 0.5, boxShadow: { duration: 1.5, repeat: 1 } }
+                                            ? { boxShadow: { duration: 1.5, repeat: 1 }, duration: 0.5 }
                                             : { duration: 0.15 }}
                                           className={cn(isNewlyCreated && 'ring-2 ring-primary ring-offset-2 ring-offset-background rounded-xl')}
                                         >

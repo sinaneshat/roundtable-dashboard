@@ -12,9 +12,9 @@ type SocialShareButtonProps = {
 };
 
 export function SocialShareButton({
-  url,
-  showTextOnLargeScreens = false,
   className,
+  showTextOnLargeScreens = false,
+  url,
 }: SocialShareButtonProps) {
   const t = useTranslations();
   const [copySuccess, setCopySuccess] = useState(false);

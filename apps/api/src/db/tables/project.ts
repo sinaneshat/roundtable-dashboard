@@ -52,40 +52,40 @@ import { upload } from './upload';
  * Similar to ChatGPT Projects - groups threads with shared context
  */
 export const chatProject = sqliteTable('chat_project', {
-  id: text('id').primaryKey(),
-
-  // Owner
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-
-  // Project details
-  name: text('name').notNull(), // "Q1 Marketing Strategy"
-  description: text('description'), // Optional project description
-  color: text('color', { enum: PROJECT_COLORS }).default(DEFAULT_PROJECT_COLOR), // Visual identification color
-  icon: text('icon', { enum: PROJECT_ICONS }).default(DEFAULT_PROJECT_ICON), // Visual identification icon
-
-  // Custom instructions (OpenAI Projects pattern)
-  customInstructions: text('custom_instructions'), // Project-level instructions for all threads
-
   // AutoRAG configuration
   autoragInstanceId: text('autorag_instance_id'), // e.g., "roundtable-rag-local"
-  r2FolderPrefix: text('r2_folder_prefix').notNull(), // "projects/{projectId}/"
 
-  // Project settings (type from validation/project.ts)
-  settings: text('settings', { mode: 'json' }).$type<ProjectSettings>(),
-
-  // Metadata (type from validation/project.ts)
-  metadata: text('metadata', { mode: 'json' }).$type<ProjectMetadata>(),
+  color: text('color', { enum: PROJECT_COLORS }).default(DEFAULT_PROJECT_COLOR), // Visual identification color
 
   // Timestamps
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+  // Custom instructions (OpenAI Projects pattern)
+  customInstructions: text('custom_instructions'), // Project-level instructions for all threads
+  description: text('description'), // Optional project description
+  icon: text('icon', { enum: PROJECT_ICONS }).default(DEFAULT_PROJECT_ICON), // Visual identification icon
+
+  id: text('id').primaryKey(),
+
+  // Metadata (type from validation/project.ts)
+  metadata: text('metadata', { mode: 'json' }).$type<ProjectMetadata>(),
+  // Project details
+  name: text('name').notNull(), // "Q1 Marketing Strategy"
+
+  r2FolderPrefix: text('r2_folder_prefix').notNull(), // "projects/{projectId}/"
+
+  // Project settings (type from validation/project.ts)
+  settings: text('settings', { mode: 'json' }).$type<ProjectSettings>(),
+
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  // Owner
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 }, table => [
   // Indexes for efficient queries
   index('chat_project_user_idx').on(table.userId),
@@ -109,26 +109,6 @@ export const chatProject = sqliteTable('chat_project', {
  * - ragMetadata provides project-specific context hints for LLM
  */
 export const projectAttachment = sqliteTable('project_attachment', {
-  id: text('id').primaryKey(),
-
-  // Parent project
-  projectId: text('project_id')
-    .notNull()
-    .references(() => chatProject.id, { onDelete: 'cascade' }),
-
-  // Reference to centralized upload
-  uploadId: text('upload_id')
-    .notNull()
-    .references(() => upload.id, { onDelete: 'cascade' }),
-
-  // AutoRAG indexing status (separate from upload status)
-  indexStatus: text('index_status', { enum: PROJECT_INDEX_STATUSES })
-    .notNull()
-    .default(DEFAULT_PROJECT_INDEX_STATUS),
-
-  // Project-specific metadata for RAG context
-  ragMetadata: text('rag_metadata', { mode: 'json' }).$type<ProjectAttachmentRagMetadata>(),
-
   // User who added this attachment to the project
   addedBy: text('added_by')
     .notNull()
@@ -138,10 +118,30 @@ export const projectAttachment = sqliteTable('project_attachment', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
+
+  id: text('id').primaryKey(),
+
+  // AutoRAG indexing status (separate from upload status)
+  indexStatus: text('index_status', { enum: PROJECT_INDEX_STATUSES })
+    .notNull()
+    .default(DEFAULT_PROJECT_INDEX_STATUS),
+
+  // Parent project
+  projectId: text('project_id')
+    .notNull()
+    .references(() => chatProject.id, { onDelete: 'cascade' }),
+
+  // Project-specific metadata for RAG context
+  ragMetadata: text('rag_metadata', { mode: 'json' }).$type<ProjectAttachmentRagMetadata>(),
+
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  // Reference to centralized upload
+  uploadId: text('upload_id')
+    .notNull()
+    .references(() => upload.id, { onDelete: 'cascade' }),
 }, table => [
   // Indexes for efficient queries
   index('project_attachment_project_idx').on(table.projectId),
@@ -163,43 +163,43 @@ export const projectAttachment = sqliteTable('project_attachment', {
  * - Memory is isolated per project (project-only memory)
  */
 export const projectMemory = sqliteTable('project_memory', {
-  id: text('id').primaryKey(),
-
-  // Parent project
-  projectId: text('project_id')
-    .notNull()
-    .references(() => chatProject.id, { onDelete: 'cascade' }),
-
   // Memory content
   content: text('content').notNull(), // The actual memory/context text
-  summary: text('summary'), // Optional short summary for display
 
-  // Source tracking
-  source: text('source', { enum: PROJECT_MEMORY_SOURCES })
+  // Timestamps
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+
+  // User who created/approved this memory
+  createdBy: text('created_by')
     .notNull()
-    .default(DEFAULT_PROJECT_MEMORY_SOURCE),
-  // FK to chat_thread.id enforced at DB level (avoids circular import)
-  sourceThreadId: text('source_thread_id'), // Thread this memory came from (if applicable)
-  sourceRoundNumber: integer('source_round_number'), // Round number within thread (if from chat)
+    .references(() => user.id, { onDelete: 'cascade' }),
+  id: text('id').primaryKey(),
 
   // Importance and relevance
   importance: integer('importance').notNull().default(5), // 1-10 scale for retrieval prioritization
   isActive: integer('is_active', { mode: 'boolean' })
     .notNull()
     .default(true), // Soft delete / disable memory
-
   // Metadata for context (type from validation/project.ts)
   metadata: text('metadata', { mode: 'json' }).$type<ProjectMemoryMetadata>(),
 
-  // User who created/approved this memory
-  createdBy: text('created_by')
+  // Parent project
+  projectId: text('project_id')
     .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
+    .references(() => chatProject.id, { onDelete: 'cascade' }),
+  // Source tracking
+  source: text('source', { enum: PROJECT_MEMORY_SOURCES })
+    .notNull()
+    .default(DEFAULT_PROJECT_MEMORY_SOURCE),
 
-  // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
+  sourceRoundNumber: integer('source_round_number'), // Round number within thread (if from chat)
+
+  // FK to chat_thread.id enforced at DB level (avoids circular import)
+  sourceThreadId: text('source_thread_id'), // Thread this memory came from (if applicable)
+
+  summary: text('summary'), // Optional short summary for display
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())

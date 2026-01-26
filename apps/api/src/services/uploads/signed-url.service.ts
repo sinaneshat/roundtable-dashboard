@@ -27,10 +27,10 @@ const encoder = new TextEncoder();
 
 export async function importSigningKey(secret: string): Promise<CryptoKey> {
   const keyData = encoder.encode(secret);
-  return crypto.subtle.importKey(
+  return await crypto.subtle.importKey(
     'raw',
     keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
+    { hash: 'SHA-256', name: 'HMAC' },
     false,
     ['sign'],
   );
@@ -59,7 +59,7 @@ async function generateSignature(
   threadId?: string,
 ): Promise<string> {
   const key = await importSigningKey(secret);
-  return generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
+  return await generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
 }
 
 /**
@@ -113,10 +113,10 @@ export async function generateSignedDownloadUrl(
   options: SignedUrlOptions,
 ): Promise<string> {
   const {
+    expirationMs = DEFAULT_URL_EXPIRATION_MS,
+    threadId,
     uploadId,
     userId,
-    threadId,
-    expirationMs = DEFAULT_URL_EXPIRATION_MS,
   } = options;
 
   const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
@@ -174,8 +174,9 @@ export async function generateBatchSignedPaths(
   c: Context<ApiEnv>,
   items: BatchSignOptions[],
 ): Promise<Map<string, string>> {
-  if (items.length === 0)
+  if (items.length === 0) {
     return new Map();
+  }
 
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
@@ -193,10 +194,10 @@ export async function generateBatchSignedPaths(
   await Promise.all(
     items.map(async (item) => {
       const {
+        expirationMs = DEFAULT_URL_EXPIRATION_MS,
+        threadId,
         uploadId,
         userId,
-        threadId,
-        expirationMs = DEFAULT_URL_EXPIRATION_MS,
       } = item;
 
       const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
@@ -207,8 +208,9 @@ export async function generateBatchSignedPaths(
       const params = new URLSearchParams();
       params.set('exp', expiration.toString());
       params.set('uid', userId);
-      if (threadId)
+      if (threadId) {
         params.set('tid', threadId);
+      }
       params.set('sig', signature);
 
       results.set(uploadId, `/api/v1/uploads/${encodeURIComponent(uploadId)}/download?${params.toString()}`);
@@ -232,7 +234,7 @@ export async function validateSignedUrl(
 ): Promise<ValidateSignatureResult> {
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
-    return { valid: false, error: 'Server configuration error' };
+    return { error: 'Server configuration error', valid: false };
   }
 
   const exp = c.req.query('exp');
@@ -241,33 +243,33 @@ export async function validateSignedUrl(
   const sig = c.req.query('sig');
 
   if (!exp || !uid || !sig) {
-    return { valid: false, error: 'Missing signature parameters' };
+    return { error: 'Missing signature parameters', valid: false };
   }
 
   // Security: Reject public access - all downloads are owner-only
   if (uid === 'public') {
-    return { valid: false, error: 'Public access is not allowed' };
+    return { error: 'Public access is not allowed', valid: false };
   }
 
   const expiration = Number.parseInt(exp, 10);
   if (Number.isNaN(expiration)) {
-    return { valid: false, error: 'Invalid expiration format' };
+    return { error: 'Invalid expiration format', valid: false };
   }
 
   if (Date.now() > expiration) {
-    return { valid: false, error: 'URL has expired' };
+    return { error: 'URL has expired', valid: false };
   }
 
   const isValid = await verifySignature(secret, uploadId, expiration, uid, tid, sig);
   if (!isValid) {
-    return { valid: false, error: 'Invalid signature' };
+    return { error: 'Invalid signature', valid: false };
   }
 
   return {
-    valid: true,
+    threadId: tid,
     uploadId,
     userId: uid,
-    threadId: tid,
+    valid: true,
   };
 }
 

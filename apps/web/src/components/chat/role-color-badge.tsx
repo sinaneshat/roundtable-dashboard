@@ -14,10 +14,10 @@ type RoleColorBadgeProps = {
 };
 
 export const RoleColorBadge = memo(({
-  roleName,
-  icon: Icon,
-  size = AvatarSizes.MD,
   className,
+  icon: Icon,
+  roleName,
+  size = AvatarSizes.MD,
 }: RoleColorBadgeProps) => {
   const colors = useMemo(() => getRoleColors(roleName), [roleName]);
 

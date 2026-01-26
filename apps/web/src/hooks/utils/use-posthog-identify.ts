@@ -39,8 +39,9 @@ export function usePostHogIdentify() {
 
   useEffect(() => {
     // Skip if PostHog is not initialized
-    if (!posthog)
+    if (!posthog) {
       return;
+    }
 
     const userId = session?.user?.id;
 

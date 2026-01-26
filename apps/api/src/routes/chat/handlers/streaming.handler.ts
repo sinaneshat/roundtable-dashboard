@@ -175,8 +175,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
   = createHandler(
     {
       auth: 'session',
-      validateBody: StreamChatRequestSchema,
       operationName: 'streamChat',
+      validateBody: StreamChatRequestSchema,
     },
     async (c) => {
       // ✅ LAZY LOAD AI SDK: Load AI SDK functions at handler invocation, not module startup
@@ -196,18 +196,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const sessionToken = extractSessionToken(c.req.header('cookie'));
 
       const {
-        message,
+        attachmentIds,
+        enableWebSearch: providedEnableWebSearch,
         id: threadId,
+        message,
+        mode: providedMode,
+        participantIndex,
+        participants: providedParticipants,
+        regenerateRound,
         // ✅ CRITICAL FIX: userMessageId allows correct DB lookup for pre-persisted messages
         // AI SDK generates its own message IDs, but user messages are pre-persisted via PATCH/POST
         // with backend ULIDs. Using userMessageId (when provided) ensures we find the correct message.
         userMessageId,
-        participantIndex,
-        participants: providedParticipants,
-        regenerateRound,
-        mode: providedMode,
-        enableWebSearch: providedEnableWebSearch,
-        attachmentIds,
       } = c.validated.body;
 
       // =========================================================================
@@ -233,22 +233,26 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           where: eq(tables.chatThread.id, threadId),
           with: {
             participants: {
-              where: eq(tables.chatParticipant.isEnabled, true),
               orderBy: [
                 tables.chatParticipant.priority,
                 tables.chatParticipant.id,
               ],
+              where: eq(tables.chatParticipant.isEnabled, true),
             },
           },
         }),
+        // Conditionally include regenerateRound to satisfy exactOptionalPropertyTypes
         calculateRoundNumber({
-          threadId,
-          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-          // UIMessage is structurally compatible with RoundCalculationMessage (subset of fields)
-          // Cast needed due to Zod .openapi() adding index signatures
-          message: message as unknown as Parameters<typeof import('@/services/threads/round.service').calculateRoundNumber>[0]['message'],
-          regenerateRound,
           db,
+          // ✅ JUSTIFIED DOUBLE CAST (as unknown as RoundCalculationMessage):
+          // UIMessage (AI SDK) has excess properties that fail .strict() schemas.
+          // RoundCalculationMessage only needs {parts, metadata, role} subset.
+          // UIMessage structurally contains these fields, making it runtime-safe.
+          // The .strict() in round.service.ts prevents direct assignment.
+          message: message as unknown as Parameters<typeof import('@/services/threads/round.service').calculateRoundNumber>[0]['message'],
+          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          threadId,
+          ...(regenerateRound !== undefined && { regenerateRound }),
         }),
       ]);
 
@@ -284,14 +288,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         && participantIndex === 0
       ) {
         const existingAssistantMessages = await db.query.chatMessage.findMany({
+          // ✅ FIX: Include participantId for pre-search filtering
+          // Pre-search messages have participantId=null, participant messages have participantId set
+          columns: { id: true, participantId: true },
           where: and(
             eq(tables.chatMessage.threadId, threadId),
             eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
             eq(tables.chatMessage.roundNumber, currentRoundNumber),
           ),
-          // ✅ FIX: Include participantId for pre-search filtering
-          // Pre-search messages have participantId=null, participant messages have participantId set
-          columns: { id: true, participantId: true },
         });
 
         // ✅ FIX: Filter to participant messages only (excludes pre-search)
@@ -333,10 +337,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       if (regenerateRound) {
         await handleRoundRegeneration({
-          threadId,
-          regenerateRound,
-          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           db,
+          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+          regenerateRound,
+          threadId,
         });
       }
 
@@ -453,12 +457,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // =========================================================================
       // STEP 7: Load participants (after persistence)
       // =========================================================================
-      const { participants, participant } = await loadParticipantConfiguration({
-        threadId,
-        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        hasPersistedParticipants: !!providedParticipants,
-        thread,
+      const { participant, participants } = await loadParticipantConfiguration({
         db,
+        hasPersistedParticipants: !!providedParticipants,
+        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+        thread,
+        threadId,
       });
 
       // =========================================================================
@@ -499,19 +503,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
       // First, get a quick message count to estimate complexity
       const messageCountResult = await db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, threadId),
         columns: { id: true },
         limit: ABSOLUTE_MAX_CONTEXT_MESSAGES + 10,
+        where: eq(tables.chatMessage.threadId, threadId),
       });
       const estimatedMessageCount = messageCountResult.length;
 
       // Calculate dynamic memory limits based on request complexity
       const memoryLimits = calculateDynamicLimits({
-        messageCount: estimatedMessageCount,
         attachmentCount: attachmentIds?.length ?? 0,
+        hasProject: !!thread.projectId,
         hasRag: !!thread.projectId,
         hasWebSearch: thread.enableWebSearch ?? false,
-        hasProject: !!thread.projectId,
+        messageCount: estimatedMessageCount,
       });
 
       // Initialize memory budget tracker for this request
@@ -527,13 +531,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Query in descending order to get most recent messages, then reverse for chronological context
       const [recentDbMessages, userTier] = await Promise.all([
         db.query.chatMessage.findMany({
-          where: eq(tables.chatMessage.threadId, threadId),
+          limit: dynamicMessageLimit,
           orderBy: [
             desc(tables.chatMessage.roundNumber),
             desc(tables.chatMessage.createdAt),
             desc(tables.chatMessage.id),
           ],
-          limit: dynamicMessageLimit,
+          where: eq(tables.chatMessage.threadId, threadId),
         }),
         getUserTier(user.id),
       ]);
@@ -581,20 +585,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           if (currentPreSearch?.searchData) {
             // Inject synthetic pre-search message for buildSearchContextWithCitations
             const syntheticPreSearchMsg = {
+              createdAt: new Date(),
               id: `presearch-${currentRoundNumber}-${Date.now()}`,
-              threadId,
-              participantId: null,
-              role: 'assistant' as const,
-              parts: [] as Array<{ type: string; text: string }>,
-              roundNumber: currentRoundNumber,
-              toolCalls: null,
               metadata: {
-                role: 'system' as const,
-                roundNumber: currentRoundNumber,
                 isPreSearch: true as const,
                 preSearch: currentPreSearch.searchData,
+                role: 'system' as const,
+                roundNumber: currentRoundNumber,
               },
-              createdAt: new Date(),
+              participantId: null,
+              parts: [] as { type: string; text: string }[],
+              role: 'assistant' as const,
+              roundNumber: currentRoundNumber,
+              threadId,
+              toolCalls: null,
             };
             previousDbMessages = [syntheticPreSearchMsg as typeof previousDbMessages[number], ...previousDbMessages];
           }
@@ -663,23 +667,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // ✅ HYBRID FILE LOADING: Pass params for URL-based delivery of large files (>4MB)
       // Small files use base64, large files get signed public URLs for AI provider access
       const rawModelMessages = await prepareValidatedMessages({
-        previousDbMessages,
-        newMessage: message as import('ai').UIMessage,
-        r2Bucket: c.env.UPLOADS_R2_BUCKET,
-        db,
         attachmentIds: resolvedAttachmentIds,
         // Hybrid loading params for large file support
         baseUrl: new URL(c.req.url).origin,
-        userId: user.id,
+        db,
+        memoryLimits,
+        newMessage: message as import('ai').UIMessage,
+        previousDbMessages,
+        r2Bucket: c.env.UPLOADS_R2_BUCKET,
         secret: c.env.BETTER_AUTH_SECRET,
         threadId,
-        memoryLimits,
+        userId: user.id,
       }).then(result => result.modelMessages);
 
       // ✅ CAPABILITY FILTER: Strip file/image parts for models that don't support them
       const modelMessages = filterUnsupportedFileParts(rawModelMessages, {
-        supportsVision: modelInfo?.supports_vision ?? false,
         supportsFile: modelInfo?.supports_file ?? false,
+        supportsVision: modelInfo?.supports_vision ?? false,
       });
 
       // Build system prompt with RAG context and citation support
@@ -691,22 +695,22 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         = participant.settings?.systemPrompt
           || buildParticipantSystemPrompt(participant.role, thread.mode);
 
-      const { systemPrompt, citationSourceMap, citableSources }
+      const { citableSources, citationSourceMap, systemPrompt }
         = await buildSystemPromptWithContext({
-          participant,
           allParticipants: participants,
-          thread,
-          userQuery,
-          previousDbMessages,
+          attachmentIds: resolvedAttachmentIds, // ✅ FIX: Use resolved attachmentIds (includes KV lookup for P1+)
+          baseUrl: new URL(c.req.url).origin, // ✅ FIX: Absolute URLs for download links
           currentRoundNumber,
+          db,
           env: {
             AI: c.env.AI,
             UPLOADS_R2_BUCKET: c.env.UPLOADS_R2_BUCKET,
           },
-          db,
-          attachmentIds: resolvedAttachmentIds, // ✅ FIX: Use resolved attachmentIds (includes KV lookup for P1+)
-          baseUrl: new URL(c.req.url).origin, // ✅ FIX: Absolute URLs for download links
           memoryLimits,
+          participant,
+          previousDbMessages,
+          thread,
+          userQuery,
         });
 
       // ✅ MEMORY SAFETY: Track system prompt allocation and truncate if needed
@@ -817,18 +821,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
       const modelForStreaming = isDeepSeek
         ? wrapLanguageModel({
-            model: adaptModelForMiddleware(baseModel),
             middleware: extractReasoningMiddleware({ tagName: 'think' }),
+            model: adaptModelForMiddleware(baseModel),
           })
         : baseModel;
 
       // Parameters for streamText
+      // Only include temperature when it's a valid number to satisfy exactOptionalPropertyTypes
       const streamParams = {
+        maxOutputTokens,
+        messages: modelMessages,
         model: modelForStreaming,
         system: systemPrompt,
-        messages: modelMessages,
-        maxOutputTokens,
-        ...(modelSupportsTemperature && { temperature: temperatureValue }),
+        ...(modelSupportsTemperature && temperatureValue !== undefined && { temperature: temperatureValue }),
         // ✅ MIDDLE-OUT + REASONING: Always include providerOptions with transforms
         providerOptions,
         // ✅ CHUNK NORMALIZATION: Normalize streaming for models with buffered chunk delivery
@@ -837,11 +842,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // smoothStream re-chunks at word boundaries with controlled delay for consistent UX.
         ...(needsSmoothStream(participant.modelId) && {
           experimental_transform: smoothStream({
-            delayInMs: 20,
             chunking: 'word',
+            delayInMs: 20,
           }),
         }),
-        maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
         // ✅ STREAMING TIMEOUT: 30 min to allow long AI responses (reasoning models, complex queries)
         // Cloudflare has UNLIMITED wall-clock duration - only constraint is 100s idle timeout.
         // Active SSE streams sending data are NOT affected by idle timeout.
@@ -849,36 +853,37 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.totalMs),
         // ✅ TELEMETRY: Enable telemetry for OpenTelemetry integration
         experimental_telemetry: {
-          isEnabled: true,
           functionId: `chat.thread.${threadId}.participant.${participantIndex}`,
-          recordInputs: true,
-          recordOutputs: true,
+          isEnabled: true,
           metadata: {
-            thread_id: threadId,
-            round_number: currentRoundNumber,
             conversation_mode: thread.mode,
+            estimated_input_tokens: estimatedInputTokens,
+            has_custom_system_prompt: !!participant.settings?.systemPrompt,
+            is_first_participant: participantIndex === 0,
+            is_reasoning_model: modelInfo?.is_reasoning_model ?? false,
+            is_regeneration: !!regenerateRound,
+            max_output_tokens: maxOutputTokens,
+            model_context_length: modelContextLength,
+            model_id: participant.modelId,
+            model_name: modelInfo?.name || participant.modelId,
             participant_id: participant.id,
             participant_index: participantIndex,
             participant_role: participant.role || 'no-role',
-            is_first_participant: participantIndex === 0,
+            rag_enabled: systemPrompt !== baseSystemPrompt,
+            reasoning_enabled: !!providerOptions,
+            round_number: currentRoundNumber,
+            thread_id: threadId,
             total_participants: participants.length,
-            model_id: participant.modelId,
-            model_name: modelInfo?.name || participant.modelId,
-            model_context_length: modelContextLength,
-            max_output_tokens: maxOutputTokens,
             user_id: user.id,
             user_tier: userTier,
-            is_regeneration: !!regenerateRound,
-            rag_enabled: systemPrompt !== baseSystemPrompt,
-            has_custom_system_prompt: !!participant.settings?.systemPrompt,
-            is_reasoning_model: modelInfo?.is_reasoning_model ?? false,
-            reasoning_enabled: !!providerOptions,
-            estimated_input_tokens: estimatedInputTokens,
             uses_dynamic_pricing: !!modelPricing,
             ...(modelPricing?.input && { input_cost_per_million: modelPricing.input }),
             ...(modelPricing?.output && { output_cost_per_million: modelPricing.output }),
           },
+          recordInputs: true,
+          recordOutputs: true,
         },
+        maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
         // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)
         // These are permanent errors that won't be fixed by retrying
         shouldRetry: ({ error }: { error: unknown }) => {
@@ -1084,6 +1089,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const { session } = c.auth();
 
       // Create tracking context for this LLM generation
+      // Conditionally include modelName to satisfy exactOptionalPropertyTypes
+      const trackingOptions = modelInfo?.name !== undefined
+        ? { isRegeneration: !!regenerateRound, modelName: modelInfo.name, userTier }
+        : { isRegeneration: !!regenerateRound, userTier };
       const trackingContext = createTrackingContext(
         user.id,
         session?.id || user.id, // ✅ Better Auth session.id - required for PostHog tracking, fallback to userId
@@ -1092,11 +1101,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         participant,
         participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
         thread.mode,
-        {
-          modelName: modelInfo?.name,
-          isRegeneration: !!regenerateRound,
-          userTier,
-        },
+        trackingOptions,
       );
 
       // =========================================================================
@@ -1109,14 +1114,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // ✅ FIX: Include availableSources in streaming metadata so frontend can
       // show "Sources" section immediately during streaming (not just after refresh)
       const streamMetadata = createStreamingMetadata({
-        roundNumber: currentRoundNumber,
-        participantId: participant.id,
-        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-        participantRole: participant.role,
-        model: participant.modelId,
         // ✅ CITATIONS: Pass availableSources so frontend shows Sources section during streaming
         // Note: Resolved inline citations (citations array) only available after onFinish
         availableSources,
+        model: participant.modelId,
+        participantId: participant.id,
+        participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+        participantRole: participant.role,
+        roundNumber: currentRoundNumber,
       });
 
       // =========================================================================
@@ -1312,23 +1317,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             }
 
             await saveStreamedMessage({
+              availableSources,
+              citationSourceMap,
+              db,
+              // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
+              emptyResponseError,
+              finishResult,
               messageId,
-              threadId,
+              modelId: participant.modelId,
               participantId: participant.id,
               participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
               participantRole: participant.role,
-              modelId: participant.modelId,
-              roundNumber: currentRoundNumber,
-              text: finishResult.text,
               reasoningDeltas,
-              finishResult,
-              db,
-              citationSourceMap,
-              availableSources,
               // ✅ REASONING DURATION: Pass duration for "Thought for X seconds" display
               reasoningDuration: finalReasoningDuration,
-              // ✅ EMPTY RESPONSE ERROR: Pass error for messages with no renderable content
-              emptyResponseError,
+              roundNumber: currentRoundNumber,
+              text: finishResult.text,
+              threadId,
             });
 
             // =========================================================================
@@ -1344,12 +1349,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // ✅ CREDIT FINALIZATION: Deduct actual credits based on token usage
             // Releases reservation and deducts actual credits used
               finalizeCredits(user.id, streamMessageId, {
-                inputTokens: actualInputTokens,
-                outputTokens: actualOutputTokens,
                 action: 'ai_response',
-                threadId,
+                inputTokens: actualInputTokens,
                 messageId,
                 modelId: participant.modelId,
+                outputTokens: actualOutputTokens,
+                threadId,
               }),
               // ✅ FREE USER SINGLE-ROUND: Check credit balance for zero-out logic
               getUserCreditBalance(user.id),
@@ -1385,23 +1390,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             try {
             // Convert recent model messages to PostHog input format (last 5 for context)
               const recentModelMessages = modelMessages.slice(-5);
-              const inputMessages = recentModelMessages.map((msg): { role: string; content: string | Array<{ type: string; text: string }> } => {
+              const inputMessages = recentModelMessages.map((msg): { role: string; content: string | { type: string; text: string }[] } => {
                 return {
-                  role: msg.role,
                   content:
                   typeof msg.content === 'string'
                     ? msg.content
                     : Array.isArray(msg.content)
                       ? msg.content.map((part: { type: string; text?: string }): { type: string; text: string } => {
                           if ('text' in part && part.text) {
-                            return { type: MessagePartTypes.TEXT, text: part.text };
+                            return { text: part.text, type: MessagePartTypes.TEXT };
                           }
                           if (part.type === 'image') {
-                            return { type: 'image', text: '[image content]' };
+                            return { text: '[image content]', type: 'image' };
                           }
-                          return { type: MessagePartTypes.TEXT, text: '[content]' };
+                          return { text: '[content]', type: MessagePartTypes.TEXT };
                         })
                       : [],
+                  role: msg.role,
                 };
               });
 
@@ -1412,16 +1417,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               // - totalUsage: Contains CUMULATIVE token usage across ALL STEPS (multi-step reasoning)
               const usage = finishResult.usage
                 ? {
+                    // AI SDK v6: inputTokenDetails contains cache metrics
+                    inputTokenDetails: finishResult.usage.inputTokenDetails,
                     inputTokens: finishResult.usage.inputTokens ?? 0,
+                    // AI SDK v6: outputTokenDetails contains reasoning token metrics
+                    outputTokenDetails: finishResult.usage.outputTokenDetails,
                     outputTokens: finishResult.usage.outputTokens ?? 0,
                     totalTokens:
                     finishResult.usage.totalTokens
                     ?? (finishResult.usage.inputTokens ?? 0)
                     + (finishResult.usage.outputTokens ?? 0),
-                    // AI SDK v6: inputTokenDetails contains cache metrics
-                    inputTokenDetails: finishResult.usage.inputTokenDetails,
-                    // AI SDK v6: outputTokenDetails contains reasoning token metrics
-                    outputTokenDetails: finishResult.usage.outputTokenDetails,
                   }
                 : undefined;
 
@@ -1431,14 +1436,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               const totalUsage
                 = 'totalUsage' in finishResult && finishResult.totalUsage
                   ? {
+                      inputTokenDetails: finishResult.totalUsage.inputTokenDetails,
                       inputTokens: finishResult.totalUsage.inputTokens ?? 0,
+                      outputTokenDetails: finishResult.totalUsage.outputTokenDetails,
                       outputTokens: finishResult.totalUsage.outputTokens ?? 0,
                       totalTokens:
                       finishResult.totalUsage.totalTokens
                       ?? (finishResult.totalUsage.inputTokens ?? 0)
                       + (finishResult.totalUsage.outputTokens ?? 0),
-                      inputTokenDetails: finishResult.totalUsage.inputTokenDetails,
-                      outputTokenDetails: finishResult.totalUsage.outputTokenDetails,
                     }
                   : usage; // Fallback to usage if totalUsage not available
 
@@ -1463,28 +1468,43 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   await trackLLMGeneration(
                     trackingContext,
                     {
-                      text: finishResult.text,
                       finishReason: finishResult.finishReason,
-                      // AI SDK V6: Use usage (final step only)
-                      usage,
                       reasoning: finishResult.reasoning,
+                      response: finishResult.response,
+                      text: finishResult.text,
                       // AI SDK v6: toolCalls and toolResults are already in correct format (ToolCallPart/ToolResultPart)
                       toolCalls: finishResult.toolCalls,
                       toolResults: finishResult.toolResults,
-                      response: finishResult.response,
+                      // AI SDK V6: Use usage (final step only)
+                      usage,
                     },
                     inputMessages, // PostHog Best Practice: Always include input messages
                     llmTraceId,
                     llmStartTime,
                     {
-                    // Dynamic model pricing from OpenRouter API
-                      modelPricing,
+                    // Additional custom properties for analytics
+                      additionalProperties: {
+                        is_first_participant: participantIndex === 0,
+                        message_id: messageId,
+                        message_persisted: true,
+                        rag_context_used: systemPrompt !== baseSystemPrompt,
+                        reasoning_from_sdk: !!(
+                          finishResult.reasoning
+                          && finishResult.reasoning.length > 0
+                        ),
+                        reasoning_length_chars: reasoningText.length,
+                        sdk_version: 'ai-sdk-v6',
+                        total_participants: participants.length,
+                      },
 
                       // Model configuration tracking
                       modelConfig: {
-                        temperature: temperatureValue,
                         maxTokens: maxOutputTokens,
+                        temperature: temperatureValue,
                       },
+
+                      // Dynamic model pricing from OpenRouter API
+                      modelPricing,
 
                       // PostHog Best Practice: Prompt tracking for A/B testing
                       promptTracking: {
@@ -1495,12 +1515,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                         systemPromptTokens,
                       },
 
-                      // ✅ AI SDK V6: Pass totalUsage for cumulative metrics
-                      totalUsage,
-
-                      // ✅ REASONING TOKENS: Pass calculated reasoning tokens
-                      reasoningTokens,
-
                       // ✅ POSTHOG OFFICIAL: Provider URL tracking for debugging
                       providerUrls: {
                         baseUrl: 'https://openrouter.ai',
@@ -1508,20 +1522,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                         'https://openrouter.ai/api/v1/chat/completions',
                       },
 
-                      // Additional custom properties for analytics
-                      additionalProperties: {
-                        message_id: messageId,
-                        reasoning_length_chars: reasoningText.length,
-                        reasoning_from_sdk: !!(
-                          finishResult.reasoning
-                          && finishResult.reasoning.length > 0
-                        ),
-                        rag_context_used: systemPrompt !== baseSystemPrompt,
-                        sdk_version: 'ai-sdk-v6',
-                        is_first_participant: participantIndex === 0,
-                        total_participants: participants.length,
-                        message_persisted: true,
-                      },
+                      // ✅ REASONING TOKENS: Pass calculated reasoning tokens
+                      reasoningTokens,
+
+                      // ✅ AI SDK V6: Pass totalUsage for cumulative metrics
+                      totalUsage,
                     },
                   );
                 } catch {
@@ -1610,13 +1615,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // ✅ DEBUG: Log round completion check for memory extraction debugging
             console.error('[Streaming] Round completion check', {
               allParticipantsComplete,
+              hasMoreParticipants,
               hasProjectId: !!thread.projectId,
-              projectId: thread.projectId,
               needsModerator,
               participantCount: participants.length,
-              hasMoreParticipants,
-              threadId,
+              projectId: thread.projectId,
               roundNumber: currentRoundNumber,
+              threadId,
             });
 
             // =========================================================================
@@ -1631,15 +1636,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             if (hasMoreParticipants) {
             // ✅ TRIGGER NEXT PARTICIPANT via Queue
               const queueMessage: TriggerParticipantQueueMessage = {
-                type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
-                messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
-                threadId,
-                roundNumber: currentRoundNumber,
-                participantIndex: nextParticipantIndex,
-                userId: user.id,
-                sessionToken,
                 attachmentIds: resolvedAttachmentIds,
+                messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,
+                participantIndex: nextParticipantIndex,
                 queuedAt: new Date().toISOString(),
+                roundNumber: currentRoundNumber,
+                sessionToken,
+                threadId,
+                type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
+                userId: user.id,
               };
 
               // Queue binding may be undefined in local dev without Cloudflare simulation
@@ -1661,13 +1666,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             } else if (needsModerator) {
             // ✅ TRIGGER MODERATOR via Queue
               const queueMessage: TriggerModeratorQueueMessage = {
-                type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
-                threadId,
-                roundNumber: currentRoundNumber,
-                userId: user.id,
-                sessionToken,
                 queuedAt: new Date().toISOString(),
+                roundNumber: currentRoundNumber,
+                sessionToken,
+                threadId,
+                type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
+                userId: user.id,
               };
 
               // Queue binding may be undefined in local dev without Cloudflare simulation
@@ -1705,35 +1710,35 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
               // Extract memories in background
               const memoryExtractionPromise = extractMemoriesFromConversation({
-                projectId: thread.projectId,
-                threadId,
-                roundNumber: currentRoundNumber,
-                userQuestion: userQuestionText,
-                participantResponses,
-                userId: user.id,
                 ai: c.env.AI,
                 db,
+                participantResponses,
+                projectId: thread.projectId,
+                roundNumber: currentRoundNumber,
+                threadId,
+                userId: user.id,
+                userQuestion: userQuestionText,
               }).then(async (result) => {
                 if (result.extracted.length > 0) {
                   console.error('[Streaming] Memories extracted for non-moderator thread', {
-                    projectId: thread.projectId,
-                    threadId,
-                    roundNumber: currentRoundNumber,
                     memoryCount: result.extracted.length,
                     memoryIds: result.memoryIds,
+                    projectId: thread.projectId,
+                    roundNumber: currentRoundNumber,
+                    threadId,
                   });
 
                   // ✅ Store memory event in KV for frontend to poll
                   const memoryEventKey = `memory-event:${threadId}:${currentRoundNumber}`;
                   const memoryEventData = {
-                    memoryIds: result.memoryIds,
+                    createdAt: Date.now(),
                     memories: result.extracted.map(m => ({
+                      content: m.content.slice(0, 200),
                       id: result.memoryIds[result.extracted.indexOf(m)],
                       summary: m.summary,
-                      content: m.content.slice(0, 200),
                     })),
+                    memoryIds: result.memoryIds,
                     projectId: thread.projectId,
-                    createdAt: Date.now(),
                   };
 
                   try {
@@ -1766,11 +1771,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // ✅ DEBUG: Log any errors in onFinish callback
             console.error('[Streaming] onFinish ERROR:', {
               error: onFinishError instanceof Error ? onFinishError.message : String(onFinishError),
-              stack: onFinishError instanceof Error ? onFinishError.stack : undefined,
               messageId: streamMessageId,
-              threadId,
-              roundNumber: currentRoundNumber,
               participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+              roundNumber: currentRoundNumber,
+              stack: onFinishError instanceof Error ? onFinishError.stack : undefined,
+              threadId,
             });
           }
         },
@@ -1778,8 +1783,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
       // Get the base stream response
       const filteredOriginalMessages = previousMessages.filter((m) => {
-        if (m.id === message.id)
+        if (m.id === message.id) {
           return false;
+        }
 
         // ✅ CRITICAL: Exclude assistant messages from current round
         // These are concurrent participant responses, not conversation history
@@ -1794,37 +1800,6 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       });
 
       const baseStreamResponse = finalResult.toUIMessageStreamResponse({
-        sendReasoning: true,
-
-        originalMessages: filteredOriginalMessages,
-
-        // ✅ DETERMINISTIC MESSAGE ID: Server-side generation using composite key
-        // Format: {threadId}_r{roundNumber}_p{participantId}
-        // Uniqueness guaranteed by business logic, not random generation
-        // No collision risk - each participant can only respond once per round
-        generateMessageId: () => streamMessageId,
-
-        // ✅ AI SDK V6 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
-        // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
-        // The callback receives { part } with type: 'start' | 'finish' | 'start-step' | 'finish-step'
-        // Send metadata on 'start' to ensure frontend receives participant info immediately
-        // Send additional metadata on 'finish' to include usage stats
-        messageMetadata: ({ part }) => {
-          if (part.type === 'start') {
-            return streamMetadata;
-          }
-
-          if (part.type === 'finish') {
-            return completeStreamingMetadata(streamMetadata, {
-              finishReason: part.finishReason,
-              usage: undefined,
-              totalUsage: part.totalUsage,
-            });
-          }
-
-          return undefined;
-        },
-
         // ✅ AI SDK RESUME PATTERN: Buffer SSE chunks for stream resumption
         // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot-resume-streams
         //
@@ -1882,14 +1857,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               if (c.env.ROUND_ORCHESTRATION_QUEUE) {
                 try {
                   const recoveryMessage: CheckRoundCompletionQueueMessage = {
-                    type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
                     messageId: `check-${threadId}-r${currentRoundNumber}-stale-${Date.now()}`,
-                    threadId,
-                    roundNumber: currentRoundNumber,
-                    userId: user.id,
-                    sessionToken,
-                    reason: CheckRoundCompletionReasons.STALE_STREAM,
                     queuedAt: new Date().toISOString(),
+                    reason: CheckRoundCompletionReasons.STALE_STREAM,
+                    roundNumber: currentRoundNumber,
+                    sessionToken,
+                    threadId,
+                    type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+                    userId: user.id,
                   };
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(recoveryMessage);
                 } catch {
@@ -1913,6 +1888,33 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           } else {
             bufferStream().catch(() => {});
           }
+        },
+
+        // ✅ DETERMINISTIC MESSAGE ID: Server-side generation using composite key
+        // Format: {threadId}_r{roundNumber}_p{participantId}
+        // Uniqueness guaranteed by business logic, not random generation
+        // No collision risk - each participant can only respond once per round
+        generateMessageId: () => streamMessageId,
+
+        // ✅ AI SDK V6 OFFICIAL PATTERN: Inject participant metadata at stream lifecycle events
+        // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/25-message-metadata
+        // The callback receives { part } with type: 'start' | 'finish' | 'start-step' | 'finish-step'
+        // Send metadata on 'start' to ensure frontend receives participant info immediately
+        // Send additional metadata on 'finish' to include usage stats
+        messageMetadata: ({ part }) => {
+          if (part.type === 'start') {
+            return streamMetadata;
+          }
+
+          if (part.type === 'finish') {
+            // Omit usage instead of passing undefined to satisfy exactOptionalPropertyTypes
+            return completeStreamingMetadata(streamMetadata, {
+              finishReason: part.finishReason,
+              totalUsage: part.totalUsage,
+            });
+          }
+
+          return undefined;
         },
 
         onError: (error) => {
@@ -1964,14 +1966,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // This ensures round can continue even if this stream fails
           if (c.env.ROUND_ORCHESTRATION_QUEUE) {
             c.env.ROUND_ORCHESTRATION_QUEUE.send({
-              type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
               messageId: `check-${threadId}-r${currentRoundNumber}-error-${Date.now()}`,
-              threadId,
-              roundNumber: currentRoundNumber,
-              userId: user.id,
-              sessionToken,
-              reason: CheckRoundCompletionReasons.STALE_STREAM,
               queuedAt: new Date().toISOString(),
+              reason: CheckRoundCompletionReasons.STALE_STREAM,
+              roundNumber: currentRoundNumber,
+              sessionToken,
+              threadId,
+              type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+              userId: user.id,
             } satisfies CheckRoundCompletionQueueMessage).catch(() => {
               // Queue send failed - non-critical
             });
@@ -2012,16 +2014,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // When all retry attempts are exhausted, AI SDK throws RetryError
           if (RetryError.isInstance(error)) {
             return JSON.stringify({
-              errorName: 'RetryError',
-              errorType: 'retry_exhausted',
               errorCategory: 'provider_rate_limit',
               errorMessage:
                 'Maximum retries exceeded. The model provider is currently unavailable. Please try again later.',
+              errorName: 'RetryError',
+              errorType: 'retry_exhausted',
               isTransient: true,
-              shouldRetry: false, // All retries already exhausted by AI SDK
-              participantId: participant.id,
               modelId: participant.modelId,
+              participantId: participant.id,
               participantRole: participant.role,
+              shouldRetry: false, // All retries already exhausted by AI SDK
               traceId: llmTraceId, // ✅ Include trace ID for debugging correlation
             });
           }
@@ -2038,6 +2040,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
           return JSON.stringify(errorMetadata);
         },
+
+        originalMessages: filteredOriginalMessages,
+
+        sendReasoning: true,
       });
 
       // =========================================================================

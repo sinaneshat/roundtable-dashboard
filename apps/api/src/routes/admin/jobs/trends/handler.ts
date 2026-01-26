@@ -14,14 +14,14 @@ import { DiscoverTrendsRequestSchema } from './schema';
 export const discoverTrendsHandler: RouteHandler<typeof discoverTrendsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: DiscoverTrendsRequestSchema,
     operationName: 'discoverTrends',
+    validateBody: DiscoverTrendsRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
     requireAdmin(user);
 
-    const { keyword, platforms, maxSuggestions } = c.validated.body;
+    const { keyword, maxSuggestions, platforms } = c.validated.body;
 
     const result = await discoverTrends(
       keyword,

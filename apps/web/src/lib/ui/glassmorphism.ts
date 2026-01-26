@@ -24,14 +24,6 @@ import { cn } from './cn';
  * Tailwind mapping: backdrop-blur-lg=16px, backdrop-blur-xl=24px, backdrop-blur-2xl=40px
  */
 export const glassVariants = {
-  // Light Glass - subtle frosting, high transparency (15px blur via inline styles)
-  subtle: cn(
-    'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target)
-    'bg-background/10', // 10% background + 5% tint layer = 15% total
-    'border-white/20',
-    'shadow-md',
-  ),
-
   // Medium Glass - standard modal glass effect (20px blur via inline styles) - DEFAULT
   medium: cn(
     'backdrop-blur-xl', // Tailwind: 24px (will be overridden by inline 20px)
@@ -47,18 +39,20 @@ export const glassVariants = {
     'border-white/30',
     'shadow-xl',
   ),
+
+  // Light Glass - subtle frosting, high transparency (15px blur via inline styles)
+  subtle: cn(
+    'backdrop-blur-lg', // Tailwind: 16px (closest to 15px target)
+    'bg-background/10', // 10% background + 5% tint layer = 15% total
+    'border-white/20',
+    'shadow-md',
+  ),
 } as const;
 
 /**
  * Glass hover states (internal use by glassCard())
  */
 const glassHoverVariants = {
-  subtle: cn(
-    'hover:bg-background/10',
-    'hover:border-white/15',
-    'transition-all duration-200',
-  ),
-
   medium: cn(
     'hover:bg-background/20',
     'hover:border-white/30',
@@ -68,6 +62,12 @@ const glassHoverVariants = {
   strong: cn(
     'hover:bg-background/30',
     'hover:border-white/40',
+    'transition-all duration-200',
+  ),
+
+  subtle: cn(
+    'hover:bg-background/10',
+    'hover:border-white/15',
     'transition-all duration-200',
   ),
 } as const;
@@ -136,13 +136,6 @@ export const glassBadge = cn(
  * Used in chat cards, input boxes, and overlays
  */
 export const chatGlass = {
-  // Quick start suggestion cards
-  quickStartCard: cn(
-    glassVariants.medium,
-    glassHoverVariants.medium,
-    'hover:shadow-3xl', // Extra shadow on hover
-  ),
-
   // Chat input box - Liquid Glass effect (fully transparent with blur)
   inputBox: cn(
     'backdrop-blur-2xl',
@@ -152,16 +145,23 @@ export const chatGlass = {
     'transition-all duration-200',
   ),
 
+  // Message bubbles (for future use)
+  messageBubble: cn(
+    glassVariants.subtle,
+    'rounded-2xl',
+  ),
+
   // Participant/model badges
   participantBadge: cn(
     glassBadge,
     'rounded-full',
   ),
 
-  // Message bubbles (for future use)
-  messageBubble: cn(
-    glassVariants.subtle,
-    'rounded-2xl',
+  // Quick start suggestion cards
+  quickStartCard: cn(
+    glassVariants.medium,
+    glassHoverVariants.medium,
+    'hover:shadow-3xl', // Extra shadow on hover
   ),
 } as const;
 
@@ -170,6 +170,13 @@ export const chatGlass = {
  * For cards, panels, and data displays
  */
 export const dashboardGlass = {
+  // Navigation sidebars - glassmorphism design matching chat input
+  sidebar: cn(
+    'backdrop-blur-xl',
+    'bg-white/5',
+    'border border-white/[0.12]',
+  ),
+
   // Stats cards
   statsCard: cn(
     glassVariants.medium,
@@ -180,13 +187,6 @@ export const dashboardGlass = {
   tablePanel: cn(
     glassVariants.subtle,
     'border-b',
-  ),
-
-  // Navigation sidebars - glassmorphism design matching chat input
-  sidebar: cn(
-    'backdrop-blur-xl',
-    'bg-white/5',
-    'border border-white/[0.12]',
   ),
 } as const;
 
@@ -233,6 +233,14 @@ export const glassDialogOverlay = cn(
  * Extracted from scattered implementations for consistency
  */
 export const glassButton = {
+  // Ghost glass button - minimal, transparent
+  ghost: cn(
+    'rounded-lg',
+    'bg-white/5',
+    'hover:bg-white/[0.07]',
+    'transition-colors',
+  ),
+
   // Primary action button - white background, black text
   primary: cn(
     'h-11 rounded-xl',
@@ -246,14 +254,6 @@ export const glassButton = {
     'h-11 rounded-xl',
     'border-white/20 bg-white/10 text-foreground',
     'hover:bg-white/15 hover:border-white/30',
-    'transition-colors',
-  ),
-
-  // Ghost glass button - minimal, transparent
-  ghost: cn(
-    'rounded-lg',
-    'bg-white/5',
-    'hover:bg-white/[0.07]',
     'transition-colors',
   ),
 } as const;

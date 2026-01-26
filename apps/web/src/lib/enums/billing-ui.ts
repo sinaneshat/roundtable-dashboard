@@ -24,9 +24,9 @@ export const DEFAULT_CREDIT_ESTIMATION_STATUS: CreditEstimationStatus = 'suffici
 
 // 5. CONSTANT OBJECT
 export const CreditEstimationStatuses = {
-  SUFFICIENT: 'sufficient' as const,
-  LOW: 'low' as const,
   INSUFFICIENT: 'insufficient' as const,
+  LOW: 'low' as const,
+  SUFFICIENT: 'sufficient' as const,
 } as const;
 
 // 6. TYPE GUARD (uses Zod safeParse - no type cast)
@@ -42,7 +42,7 @@ export function parseCreditEstimationStatus(value: unknown): CreditEstimationSta
 
 // 8. DISPLAY LABELS
 export const CREDIT_ESTIMATION_STATUS_LABELS: Record<CreditEstimationStatus, string> = {
-  [CreditEstimationStatuses.SUFFICIENT]: 'Sufficient Credits',
-  [CreditEstimationStatuses.LOW]: 'Low Credits',
   [CreditEstimationStatuses.INSUFFICIENT]: 'Insufficient Credits',
+  [CreditEstimationStatuses.LOW]: 'Low Credits',
+  [CreditEstimationStatuses.SUFFICIENT]: 'Sufficient Credits',
 } as const;

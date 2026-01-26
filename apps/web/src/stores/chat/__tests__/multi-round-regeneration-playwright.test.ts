@@ -43,7 +43,7 @@ type RegenerationState = {
 
 type ConversationState = {
   threadId: string;
-  messages: Array<TestUserMessage | TestAssistantMessage>;
+  messages: (TestUserMessage | TestAssistantMessage)[];
   preSearches: StoredPreSearch[];
   currentRoundNumber: number;
 };
@@ -62,10 +62,10 @@ type RegenerationAction = {
 
 function createConversation(threadId: string): ConversationState {
   return {
-    threadId,
+    currentRoundNumber: 0,
     messages: [],
     preSearches: [],
-    currentRoundNumber: 0,
+    threadId,
   };
 }
 
@@ -81,28 +81,28 @@ function addCompleteRound(
 
   // Add user message
   messages.push(createTestUserMessage({
-    id: `${state.threadId}_r${roundNumber}_user`,
     content: userQuestion,
+    id: `${state.threadId}_r${roundNumber}_user`,
     roundNumber,
   }));
 
   // Add participant messages
   participantResponses.forEach((response, index) => {
     messages.push(createTestAssistantMessage({
-      id: `${state.threadId}_r${roundNumber}_p${index}`,
       content: response,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `${state.threadId}_r${roundNumber}_p${index}`,
       participantId: `participant-${index}`,
       participantIndex: index,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     }));
   });
 
   // Add moderator
   if (includeModerator) {
     messages.push(createTestModeratorMessage({
-      id: `${state.threadId}_r${roundNumber}_moderator`,
       content: `Moderator for round ${roundNumber}`,
+      id: `${state.threadId}_r${roundNumber}_moderator`,
       roundNumber,
     }));
   }
@@ -112,9 +112,9 @@ function addCompleteRound(
 
   return {
     ...state,
+    currentRoundNumber: Math.max(state.currentRoundNumber, roundNumber),
     messages,
     preSearches,
-    currentRoundNumber: Math.max(state.currentRoundNumber, roundNumber),
   };
 }
 
@@ -136,11 +136,11 @@ function regenerateRound(
   roundNumber: number,
 ): RegenerationAction {
   const action: RegenerationAction = {
-    roundNumber,
     deletedMessages: 0,
     deletedModerator: false,
     deletedPreSearch: false,
     preservedUserMessage: false,
+    roundNumber,
   };
 
   // Check if user message exists
@@ -190,20 +190,20 @@ function addRegeneratedResponses(
   // Add new participant messages
   newResponses.forEach((response, index) => {
     messages.push(createTestAssistantMessage({
-      id: `${state.threadId}_r${roundNumber}_p${index}_retry`,
       content: response,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `${state.threadId}_r${roundNumber}_p${index}_retry`,
       participantId: `participant-${index}`,
       participantIndex: index,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     }));
   });
 
   // Add new moderator
   if (includeModerator) {
     messages.push(createTestModeratorMessage({
-      id: `${state.threadId}_r${roundNumber}_moderator_retry`,
       content: `Regenerated moderator for round ${roundNumber}`,
+      id: `${state.threadId}_r${roundNumber}_moderator_retry`,
       roundNumber,
     }));
   }
@@ -233,14 +233,14 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Verify can regenerate Round 1 (most recent)
       const canRegen = canRegenerateRound(state, 1);
-      expect(canRegen.canRegenerate).toBe(true);
+      expect(canRegen.canRegenerate).toBeTruthy();
       expect(canRegen.targetRound).toBe(1);
 
       // Regenerate Round 1
       const action = regenerateRound(state, 1);
       expect(action.deletedMessages).toBe(2);
-      expect(action.deletedModerator).toBe(true);
-      expect(action.preservedUserMessage).toBe(true);
+      expect(action.deletedModerator).toBeTruthy();
+      expect(action.preservedUserMessage).toBeTruthy();
 
       // Verify Round 0 unchanged
       const round0Messages = state.messages.filter(m => m.metadata.roundNumber === 0);
@@ -305,7 +305,7 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Regenerate
       const action = regenerateRound(state, 1);
-      expect(action.preservedUserMessage).toBe(true);
+      expect(action.preservedUserMessage).toBeTruthy();
 
       // Verify user message still exists
       const userMessage = state.messages.find(
@@ -348,7 +348,7 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Verify round number still 1
       const newMessages = state.messages.filter(m => m.metadata.roundNumber === 1);
-      expect(newMessages.every(m => m.metadata.roundNumber === 1)).toBe(true);
+      expect(newMessages.every(m => m.metadata.roundNumber === 1)).toBeTruthy();
 
       // Current round number unchanged
       expect(state.currentRoundNumber).toBe(1);
@@ -367,7 +367,7 @@ describe('multi-Round Regeneration E2E', () => {
 
         // Verify can regenerate
         const canRegen = canRegenerateRound(state, 1);
-        expect(canRegen.canRegenerate).toBe(true);
+        expect(canRegen.canRegenerate).toBeTruthy();
 
         // Regenerate
         if (attempt < 3) {
@@ -468,7 +468,7 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Cannot regenerate Round 0 (not most recent)
       const canRegen = canRegenerateRound(state, 0);
-      expect(canRegen.canRegenerate).toBe(false);
+      expect(canRegen.canRegenerate).toBeFalsy();
       expect(canRegen.targetRound).toBeNull();
     });
 
@@ -480,13 +480,13 @@ describe('multi-Round Regeneration E2E', () => {
       state = addCompleteRound(state, 2, 'Q2', ['R2']);
 
       // Round 0 - cannot regenerate
-      expect(canRegenerateRound(state, 0).canRegenerate).toBe(false);
+      expect(canRegenerateRound(state, 0).canRegenerate).toBeFalsy();
 
       // Round 1 - cannot regenerate
-      expect(canRegenerateRound(state, 1).canRegenerate).toBe(false);
+      expect(canRegenerateRound(state, 1).canRegenerate).toBeFalsy();
 
       // Round 2 - can regenerate (most recent)
-      expect(canRegenerateRound(state, 2).canRegenerate).toBe(true);
+      expect(canRegenerateRound(state, 2).canRegenerate).toBeTruthy();
     });
 
     it('should update regenerate availability when adding new round', () => {
@@ -496,16 +496,16 @@ describe('multi-Round Regeneration E2E', () => {
       state = addCompleteRound(state, 1, 'Q1', ['R1']);
 
       // Round 1 can be regenerated
-      expect(canRegenerateRound(state, 1).canRegenerate).toBe(true);
+      expect(canRegenerateRound(state, 1).canRegenerate).toBeTruthy();
 
       // Add Round 2
       state = addCompleteRound(state, 2, 'Q2', ['R2']);
 
       // Round 1 can NO LONGER be regenerated
-      expect(canRegenerateRound(state, 1).canRegenerate).toBe(false);
+      expect(canRegenerateRound(state, 1).canRegenerate).toBeFalsy();
 
       // Round 2 can now be regenerated
-      expect(canRegenerateRound(state, 2).canRegenerate).toBe(true);
+      expect(canRegenerateRound(state, 2).canRegenerate).toBeTruthy();
     });
   });
 
@@ -524,7 +524,7 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Regenerate Round 1
       const action = regenerateRound(state, 1);
-      expect(action.deletedPreSearch).toBe(true);
+      expect(action.deletedPreSearch).toBeTruthy();
 
       // Pre-search deleted
       expect(state.preSearches).toHaveLength(0);
@@ -544,11 +544,11 @@ describe('multi-Round Regeneration E2E', () => {
       // Round 0 with pre-search
       const originalPreSearch = createMockStoredPreSearch(0, MessageStatuses.COMPLETE, {
         searchData: {
-          queries: [{ query: 'original query', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          moderatorSummary: 'Summary',
-          successCount: 1,
           failureCount: 0,
+          moderatorSummary: 'Summary',
+          queries: [{ index: 0, query: 'original query', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
           totalResults: 0,
           totalTime: 1000,
         },
@@ -564,11 +564,11 @@ describe('multi-Round Regeneration E2E', () => {
       // New pre-search with potentially different query
       const newPreSearch = createMockStoredPreSearch(0, MessageStatuses.COMPLETE, {
         searchData: {
-          queries: [{ query: 'new query', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          moderatorSummary: 'Summary',
-          successCount: 1,
           failureCount: 0,
+          moderatorSummary: 'Summary',
+          queries: [{ index: 0, query: 'new query', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
           totalResults: 0,
           totalTime: 1000,
         },
@@ -590,7 +590,7 @@ describe('multi-Round Regeneration E2E', () => {
 
       // Regenerate - no pre-search to delete
       const action = regenerateRound(state, 1);
-      expect(action.deletedPreSearch).toBe(false);
+      expect(action.deletedPreSearch).toBeFalsy();
 
       // Re-add without pre-search
       state = addRegeneratedResponses(state, 1, ['R1 regenerated']);

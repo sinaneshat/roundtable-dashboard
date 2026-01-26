@@ -33,10 +33,10 @@ async function getStripeModule(): Promise<typeof import('stripe').default> {
 // ============================================================================
 
 const StripeServiceConfigSchema = z.object({
+  apiVersion: z.custom<Stripe.LatestApiVersion>().optional(),
+  portalConfigId: z.string().optional(),
   secretKey: z.string().min(1),
   webhookSecret: z.string().min(1),
-  portalConfigId: z.string().optional(),
-  apiVersion: z.custom<Stripe.LatestApiVersion>().optional(),
 }).strict();
 
 export type StripeServiceConfig = z.infer<typeof StripeServiceConfigSchema>;
@@ -94,8 +94,8 @@ class StripeService {
         const StripeClass = await getStripeModule();
         this.stripe = new StripeClass(config.secretKey, {
           apiVersion: config.apiVersion || '2025-12-15.clover',
-          typescript: true,
           httpClient: StripeClass.createFetchHttpClient(),
+          typescript: true,
         });
       })();
     }
@@ -115,7 +115,7 @@ class StripeService {
     if (!this.webhookSecret) {
       throw createError.internal(
         'Stripe webhook secret not configured',
-        { errorType: 'configuration', service: 'stripe', operation: 'webhook_secret' },
+        { errorType: 'configuration', operation: 'webhook_secret', service: 'stripe' },
       );
     }
     return this.webhookSecret;
@@ -139,7 +139,7 @@ class StripeService {
 
   async listPrices(productId: string): Promise<Stripe.Price[]> {
     const stripe = await this.ensureClient();
-    const prices = await stripe.prices.list({ product: productId, active: true });
+    const prices = await stripe.prices.list({ active: true, product: productId });
     return prices.data;
   }
 
@@ -151,8 +151,8 @@ class StripeService {
     const stripe = await this.ensureClient();
     return await stripe.customers.create({
       email: params.email,
-      name: params.name,
       metadata: params.metadata || {},
+      ...(params.name !== undefined && { name: params.name }),
     });
   }
 
@@ -187,12 +187,12 @@ class StripeService {
     const stripe = await this.ensureClient();
     return await stripe.subscriptions.create({
       customer: params.customerId,
+      expand: ['latest_invoice.payment_intent'],
       items: [{ price: params.priceId }],
-      trial_period_days: params.trialPeriodDays,
       metadata: params.metadata || {},
       payment_behavior: 'default_incomplete',
       payment_settings: { save_default_payment_method: 'on_subscription' },
-      expand: ['latest_invoice.payment_intent'],
+      ...(params.trialPeriodDays !== undefined && { trial_period_days: params.trialPeriodDays }),
     });
   }
 
@@ -255,12 +255,12 @@ class StripeService {
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      mode: checkoutMode,
+      cancel_url: params.cancelUrl,
       customer: params.customerId,
       line_items: [{ price: params.priceId, quantity: 1 }],
-      success_url: params.successUrl,
-      cancel_url: params.cancelUrl,
       metadata: params.metadata || {},
+      mode: checkoutMode,
+      success_url: params.successUrl,
     };
 
     if (params.trialPeriodDays && checkoutMode === 'subscription') {
@@ -279,7 +279,7 @@ class StripeService {
     } catch {
       throw createError.badRequest(
         'Invalid webhook signature',
-        { errorType: 'external_service', service: 'stripe', operation: 'webhook_verification' },
+        { errorType: 'external_service', operation: 'webhook_verification', service: 'stripe' },
       );
     }
   }
@@ -319,8 +319,8 @@ export const stripeService = new StripeService();
 
 export function initializeStripe(env: ApiEnv['Bindings']): void {
   stripeService.initialize({
+    portalConfigId: env.STRIPE_CUSTOMER_PORTAL_CONFIG_ID,
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-    portalConfigId: env.STRIPE_CUSTOMER_PORTAL_CONFIG_ID,
   });
 }

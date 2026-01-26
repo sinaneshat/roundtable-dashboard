@@ -48,26 +48,26 @@ function createUIMessage(overrides: {
   metadata?: UIMessage['metadata'];
 }): UIMessage {
   return {
-    id: overrides.id,
-    role: overrides.role as typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT | 'system',
     content: overrides.content ?? '',
-    parts: overrides.parts ?? [],
     createdAt: overrides.createdAt ?? new Date(),
+    id: overrides.id,
     metadata: overrides.metadata,
+    parts: overrides.parts ?? [],
+    role: overrides.role as typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT | 'system',
   };
 }
 
 function createParticipant(id: string, priority: number, isEnabled = true): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-1',
-    modelId: `model-${id}`,
-    role: null,
-    customRoleId: null,
-    priority,
-    isEnabled,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id,
+    isEnabled,
+    modelId: `model-${id}`,
+    priority,
+    role: null,
+    settings: null,
+    threadId: 'thread-1',
     updatedAt: new Date(),
   };
 }
@@ -86,28 +86,28 @@ function createAssistantMessage(
     isModerator?: boolean;
   } = {},
 ): UIMessage {
-  const { hasContent = true, isStreaming = false, finishReason, isModerator = false } = options;
+  const { finishReason, hasContent = true, isModerator = false, isStreaming = false } = options;
 
   const partState: TextPartState | undefined = isStreaming ? TextPartStates.STREAMING : undefined;
 
   const parts: UIMessage['parts'] = hasContent
     ? [{
-        type: MessagePartTypes.TEXT,
         text: 'Test content',
+        type: MessagePartTypes.TEXT,
         ...(partState ? { state: partState } : {}),
       }]
     : [];
 
   return createUIMessage({
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts,
     metadata: {
-      roundNumber,
-      participantId: isModerator ? undefined : participantId,
       finishReason,
+      participantId: isModerator ? undefined : participantId,
+      roundNumber,
       ...(isModerator ? { isModerator: true } : {}),
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   });
 }
 
@@ -125,14 +125,14 @@ describe('participant Completion Gate - Map Optimization', () => {
       ];
 
       const messages = [
-        createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
-        createAssistantMessage('p2', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
-        createAssistantMessage('p3', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
+        createAssistantMessage('p2', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
+        createAssistantMessage('p3', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.expectedCount).toBe(3);
       expect(status.completedCount).toBe(3);
       expect(status.streamingCount).toBe(0);
@@ -145,13 +145,13 @@ describe('participant Completion Gate - Map Optimization', () => {
       ];
 
       const messages = [
-        createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
         createAssistantMessage('p2', 0, { hasContent: true, isStreaming: true }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('p2');
@@ -166,14 +166,14 @@ describe('participant Completion Gate - Map Optimization', () => {
       ];
 
       const messages = [
-        createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
         // p2 missing
         // p3 missing
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.expectedCount).toBe(3);
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(2); // p2 and p3 counted as "streaming" (not complete)
@@ -187,13 +187,13 @@ describe('participant Completion Gate - Map Optimization', () => {
       ];
 
       const messages = [
-        createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
-        createAssistantMessage('p3', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
+        createAssistantMessage('p3', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.expectedCount).toBe(2); // Only enabled participants
       expect(status.completedCount).toBe(2);
     });
@@ -205,14 +205,14 @@ describe('participant Completion Gate - Map Optimization', () => {
 
       // Create messages for all participants
       const messages = participants.map(p =>
-        createAssistantMessage(p.id, 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage(p.id, 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       );
 
       const startTime = performance.now();
       const status = getParticipantCompletionStatus(messages, participants, 0);
       const endTime = performance.now();
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.expectedCount).toBe(100);
       expect(status.completedCount).toBe(100);
 
@@ -228,18 +228,18 @@ describe('participant Completion Gate - Map Optimization', () => {
 
       const messages = [
         // Round 0 - complete
-        createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
-        createAssistantMessage('p2', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
+        createAssistantMessage('p2', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
         // Round 1 - incomplete
-        createAssistantMessage('p1', 1, { hasContent: true, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 1, { finishReason: FinishReasons.STOP, hasContent: true }),
         // p2 for round 1 is missing
       ];
 
       const round0Status = getParticipantCompletionStatus(messages, participants, 0);
       const round1Status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(round0Status.allComplete).toBe(true);
-      expect(round1Status.allComplete).toBe(false);
+      expect(round0Status.allComplete).toBeTruthy();
+      expect(round1Status.allComplete).toBeFalsy();
       expect(round1Status.completedCount).toBe(1);
     });
   });
@@ -247,12 +247,12 @@ describe('participant Completion Gate - Map Optimization', () => {
   describe('isMessageComplete', () => {
     it('returns false for message with streaming parts', () => {
       const message = createAssistantMessage('p1', 0, {
+        finishReason: FinishReasons.STOP,
         hasContent: true,
         isStreaming: true,
-        finishReason: FinishReasons.STOP,
       });
 
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
     });
 
     it('returns true for message with content and no streaming', () => {
@@ -261,30 +261,30 @@ describe('participant Completion Gate - Map Optimization', () => {
         isStreaming: false,
       });
 
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns true for message with valid finish reason', () => {
       const message = createAssistantMessage('p1', 0, {
-        hasContent: false,
         finishReason: FinishReasons.STOP,
+        hasContent: false,
       });
 
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns false for message with unknown finish reason and no content', () => {
       const message = createUIMessage({
         id: 'msg-1',
-        role: MessageRoles.ASSISTANT,
-        parts: [],
         metadata: {
-          roundNumber: 0,
           finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 0,
         },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       });
 
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
     });
   });
 });
@@ -344,12 +344,14 @@ describe('flow State Machine - Single Pass Optimization', () => {
     let completedCount = 0;
 
     for (const m of messages) {
-      if (m.role !== MessageRoles.ASSISTANT)
+      if (m.role !== MessageRoles.ASSISTANT) {
         continue;
+      }
 
       const roundNumber = getMetadataRoundNumber(m.metadata);
-      if (roundNumber !== currentRound)
+      if (roundNumber !== currentRound) {
         continue;
+      }
 
       // Check if moderator
       if (isMetadataModerator(m.metadata)) {
@@ -378,13 +380,13 @@ describe('flow State Machine - Single Pass Optimization', () => {
       }
     }
 
-    return { moderatorMessage, completedCount };
+    return { completedCount, moderatorMessage };
   }
 
   it('correctly identifies moderator and completed count in single pass', () => {
     const messages = [
-      createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
-      createAssistantMessage('p2', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+      createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
+      createAssistantMessage('p2', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       createAssistantMessage('mod', 0, { hasContent: true, isModerator: true }),
     ];
 
@@ -412,7 +414,7 @@ describe('flow State Machine - Single Pass Optimization', () => {
 
   it('excludes streaming messages from completed count', () => {
     const messages = [
-      createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+      createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       createAssistantMessage('p2', 0, { hasContent: true, isStreaming: true }),
     ];
 
@@ -470,8 +472,9 @@ describe('round Utils - Single Pass Grouping', () => {
     let lastKnownUserRound = -1;
 
     for (const message of messages) {
-      if (seenIds.has(message.id))
+      if (seenIds.has(message.id)) {
         continue;
+      }
       seenIds.add(message.id);
 
       const explicitRound = getMetadataRoundNumber(message.metadata);
@@ -495,8 +498,9 @@ describe('round Utils - Single Pass Grouping', () => {
         result.set(roundNumber, []);
       }
       const roundMessages = result.get(roundNumber);
-      if (!roundMessages)
+      if (!roundMessages) {
         throw new Error('expected round messages array');
+      }
       roundMessages.push(message);
     }
 
@@ -505,10 +509,10 @@ describe('round Utils - Single Pass Grouping', () => {
 
   it('groups messages by round correctly', () => {
     const messages = [
-      createUIMessage({ id: 'u1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'a1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'u2', role: MessageRoles.USER, metadata: { roundNumber: 1 } }),
-      createUIMessage({ id: 'a2', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 } }),
+      createUIMessage({ id: 'u1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'a1', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT }),
+      createUIMessage({ id: 'u2', metadata: { roundNumber: 1 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'a2', metadata: { roundNumber: 1 }, role: MessageRoles.ASSISTANT }),
     ];
 
     const grouped = groupMessagesByRound(messages);
@@ -519,9 +523,9 @@ describe('round Utils - Single Pass Grouping', () => {
 
   it('handles duplicate messages (deduplication)', () => {
     const messages = [
-      createUIMessage({ id: 'u1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'u1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }), // duplicate
-      createUIMessage({ id: 'a1', role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 } }),
+      createUIMessage({ id: 'u1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'u1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }), // duplicate
+      createUIMessage({ id: 'a1', metadata: { roundNumber: 0 }, role: MessageRoles.ASSISTANT }),
     ];
 
     const grouped = groupMessagesByRound(messages);
@@ -531,10 +535,10 @@ describe('round Utils - Single Pass Grouping', () => {
 
   it('infers round from forward tracking when metadata missing', () => {
     const messages = [
-      createUIMessage({ id: 'u1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'a1', role: MessageRoles.ASSISTANT, metadata: {} }), // no roundNumber
-      createUIMessage({ id: 'u2', role: MessageRoles.USER, metadata: {} }), // no roundNumber
-      createUIMessage({ id: 'a2', role: MessageRoles.ASSISTANT, metadata: {} }), // no roundNumber
+      createUIMessage({ id: 'u1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'a1', metadata: {}, role: MessageRoles.ASSISTANT }), // no roundNumber
+      createUIMessage({ id: 'u2', metadata: {}, role: MessageRoles.USER }), // no roundNumber
+      createUIMessage({ id: 'a2', metadata: {}, role: MessageRoles.ASSISTANT }), // no roundNumber
     ];
 
     const grouped = groupMessagesByRound(messages);
@@ -547,8 +551,8 @@ describe('round Utils - Single Pass Grouping', () => {
     const messages = Array.from({ length: 10000 }, (_, i) =>
       createUIMessage({
         id: `msg-${i}`,
-        role: i % 3 === 0 ? MessageRoles.USER : MessageRoles.ASSISTANT,
         metadata: { roundNumber: Math.floor(i / 100) },
+        role: i % 3 === 0 ? MessageRoles.USER : MessageRoles.ASSISTANT,
       }));
 
     const startTime = performance.now();
@@ -623,22 +627,23 @@ describe('participant Config Service - Map Optimization', () => {
     // Updated: role changed
     const updatedParticipants = providedEnabledParticipants.filter((provided) => {
       const dbP = enabledDbByModelId.get(provided.modelId);
-      if (!dbP)
+      if (!dbP) {
         return false;
+      }
       return (dbP.role || null) !== (provided.role || null);
     });
 
     return {
-      removedParticipants,
       addedParticipants,
       reenabledParticipants,
+      removedParticipants,
       updatedParticipants,
     };
   }
 
   it('correctly identifies added participants', () => {
     const dbParticipants: SimulatedDbParticipant[] = [
-      { id: 'p1', modelId: 'model-1', isEnabled: true, role: null },
+      { id: 'p1', isEnabled: true, modelId: 'model-1', role: null },
     ];
 
     const providedParticipants: SimulatedProvidedParticipant[] = [
@@ -654,8 +659,8 @@ describe('participant Config Service - Map Optimization', () => {
 
   it('correctly identifies removed participants', () => {
     const dbParticipants: SimulatedDbParticipant[] = [
-      { id: 'p1', modelId: 'model-1', isEnabled: true, role: null },
-      { id: 'p2', modelId: 'model-2', isEnabled: true, role: null },
+      { id: 'p1', isEnabled: true, modelId: 'model-1', role: null },
+      { id: 'p2', isEnabled: true, modelId: 'model-2', role: null },
     ];
 
     const providedParticipants: SimulatedProvidedParticipant[] = [
@@ -671,8 +676,8 @@ describe('participant Config Service - Map Optimization', () => {
 
   it('correctly identifies re-enabled participants', () => {
     const dbParticipants: SimulatedDbParticipant[] = [
-      { id: 'p1', modelId: 'model-1', isEnabled: true, role: null },
-      { id: 'p2', modelId: 'model-2', isEnabled: false, role: null }, // disabled
+      { id: 'p1', isEnabled: true, modelId: 'model-1', role: null },
+      { id: 'p2', isEnabled: false, modelId: 'model-2', role: null }, // disabled
     ];
 
     const providedParticipants: SimulatedProvidedParticipant[] = [
@@ -689,7 +694,7 @@ describe('participant Config Service - Map Optimization', () => {
 
   it('correctly identifies updated participants (role change)', () => {
     const dbParticipants: SimulatedDbParticipant[] = [
-      { id: 'p1', modelId: 'model-1', isEnabled: true, role: 'Old Role' },
+      { id: 'p1', isEnabled: true, modelId: 'model-1', role: 'Old Role' },
     ];
 
     const providedParticipants: SimulatedProvidedParticipant[] = [
@@ -705,8 +710,8 @@ describe('participant Config Service - Map Optimization', () => {
   it('performance test - handles 100 participants efficiently', () => {
     const dbParticipants: SimulatedDbParticipant[] = Array.from({ length: 100 }, (_, i) => ({
       id: `p${i}`,
-      modelId: `model-${i}`,
       isEnabled: i % 10 !== 0, // 10 disabled
+      modelId: `model-${i}`,
       role: null,
     }));
 
@@ -739,7 +744,7 @@ describe('race Condition Prevention', () => {
     ];
 
     const messages = [
-      createAssistantMessage('p1', 0, { hasContent: true, finishReason: FinishReasons.STOP }),
+      createAssistantMessage('p1', 0, { finishReason: FinishReasons.STOP, hasContent: true }),
       createAssistantMessage('p2', 0, { hasContent: true, isStreaming: true }),
     ];
 
@@ -749,7 +754,7 @@ describe('race Condition Prevention', () => {
 
     // All results should be identical
     results.forEach((result) => {
-      expect(result.allComplete).toBe(false);
+      expect(result.allComplete).toBeFalsy();
       expect(result.completedCount).toBe(1);
       expect(result.streamingCount).toBe(1);
     });
@@ -757,16 +762,17 @@ describe('race Condition Prevention', () => {
 
   it('message grouping is deterministic with duplicate IDs', () => {
     const messages = [
-      createUIMessage({ id: 'msg-1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'msg-1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
-      createUIMessage({ id: 'msg-1', role: MessageRoles.USER, metadata: { roundNumber: 0 } }),
+      createUIMessage({ id: 'msg-1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'msg-1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
+      createUIMessage({ id: 'msg-1', metadata: { roundNumber: 0 }, role: MessageRoles.USER }),
     ];
 
     // Simulated grouping function
     const seenIds = new Set<string>();
     const deduped = messages.filter((m) => {
-      if (seenIds.has(m.id))
+      if (seenIds.has(m.id)) {
         return false;
+      }
       seenIds.add(m.id);
       return true;
     });
@@ -781,15 +787,15 @@ describe('race Condition Prevention', () => {
     });
 
     const completeMessage = createAssistantMessage('p2', 0, {
+      finishReason: FinishReasons.STOP,
       hasContent: true,
       isStreaming: false,
-      finishReason: FinishReasons.STOP,
     });
 
     // Multiple checks should be consistent
     for (let i = 0; i < 10; i++) {
-      expect(isMessageComplete(streamingMessage)).toBe(false);
-      expect(isMessageComplete(completeMessage)).toBe(true);
+      expect(isMessageComplete(streamingMessage)).toBeFalsy();
+      expect(isMessageComplete(completeMessage)).toBeTruthy();
     }
   });
 });

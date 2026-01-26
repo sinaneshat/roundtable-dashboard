@@ -13,47 +13,47 @@ type EmailHeadingProps = {
 
 const headingStyles: Record<number, CSSProperties> = {
   1: {
+    color: colors.foreground,
     fontSize: typography.fontSize['3xl'],
     fontWeight: typography.fontWeight.bold,
     lineHeight: '36px',
-    color: colors.foreground,
   },
   2: {
+    color: colors.foreground,
     fontSize: typography.fontSize['2xl'],
     fontWeight: typography.fontWeight.bold,
     lineHeight: '30px',
-    color: colors.foreground,
   },
   3: {
+    color: colors.foreground,
     fontSize: typography.fontSize.xl,
     fontWeight: typography.fontWeight.semibold,
     lineHeight: '26px',
-    color: colors.foreground,
   },
   4: {
+    color: colors.foreground,
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     lineHeight: typography.lineHeight.normal,
-    color: colors.foreground,
   },
 };
 
 const alignStyles: Record<string, CSSProperties> = {
-  left: { textAlign: 'left' },
   center: { textAlign: 'center' },
+  left: { textAlign: 'left' },
   right: { textAlign: 'right' },
 };
 
 export function EmailHeading({
+  align = 'center',
   children,
   level = 1,
-  align = 'center',
   style,
 }: EmailHeadingProps) {
   const combinedStyle: CSSProperties = {
+    fontFamily: typography.fontFamily,
     margin: `${spacing[8]} 0`,
     padding: '0',
-    fontFamily: typography.fontFamily,
     ...headingStyles[level],
     ...alignStyles[align],
     ...style,

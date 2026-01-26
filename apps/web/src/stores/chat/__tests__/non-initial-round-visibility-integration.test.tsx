@@ -47,41 +47,41 @@ describe('non-Initial Round Visibility - Integration', () => {
 
     // Initialize with round 0 complete
     const thread: ChatThread = {
+      createdAt: new Date(),
+      enableWebSearch: false,
       id: 'test-thread',
-      slug: 'test-slug',
-      title: 'Test Thread',
-      mode: ChatModes.BRAINSTORM,
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      enableWebSearch: false,
-      isAiGeneratedTitle: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       lastMessageAt: new Date(),
+      mode: ChatModes.BRAINSTORM,
+      slug: 'test-slug',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: new Date(),
     };
 
     const participants: ChatParticipant[] = [
       {
-        id: 'p1',
-        threadId: 'test-thread',
-        modelId: 'gpt-4o',
-        role: 'Analyst',
-        priority: 0,
-        isEnabled: true,
-        settings: null,
         createdAt: new Date(),
+        id: 'p1',
+        isEnabled: true,
+        modelId: 'gpt-4o',
+        priority: 0,
+        role: 'Analyst',
+        settings: null,
+        threadId: 'test-thread',
         updatedAt: new Date(),
       },
       {
-        id: 'p2',
-        threadId: 'test-thread',
-        modelId: 'claude-3-5-sonnet',
-        role: 'Critic',
-        priority: 1,
-        isEnabled: true,
-        settings: null,
         createdAt: new Date(),
+        id: 'p2',
+        isEnabled: true,
+        modelId: 'claude-3-5-sonnet',
+        priority: 1,
+        role: 'Critic',
+        settings: null,
+        threadId: 'test-thread',
         updatedAt: new Date(),
       },
     ];
@@ -89,43 +89,43 @@ describe('non-Initial Round Visibility - Integration', () => {
     const round0Messages: UIMessage[] = [
       {
         id: 'user-r0',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Initial question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Initial question', type: 'text' }],
+        role: MessageRoles.USER,
       },
       {
         id: 'assistant-r0-p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'GPT response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
-          participantIndex: 0,
-          participantId: 'p1',
-          model: 'gpt-4o',
           finishReason: 'stop',
           hasError: false,
-          isTransient: false,
           isPartialResponse: false,
-          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          isTransient: false,
+          model: 'gpt-4o',
+          participantId: 'p1',
+          participantIndex: 0,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
         },
+        parts: [{ text: 'GPT response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
       {
         id: 'assistant-r0-p1',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Claude response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
-          participantIndex: 1,
-          participantId: 'p2',
-          model: 'claude-3-5-sonnet',
           finishReason: 'stop',
           hasError: false,
-          isTransient: false,
           isPartialResponse: false,
-          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+          isTransient: false,
+          model: 'claude-3-5-sonnet',
+          participantId: 'p2',
+          participantIndex: 1,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
         },
+        parts: [{ text: 'Claude response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
@@ -139,10 +139,10 @@ describe('non-Initial Round Visibility - Integration', () => {
       expect(initialMessages).toHaveLength(3);
 
       // Use renderHook to test useThreadTimeline (no wrapper needed - pure hook)
-      const { result, rerender } = renderHook(
+      const { rerender, result } = renderHook(
         ({ messages }) => useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
         { initialProps: { messages: initialMessages } },
@@ -155,13 +155,13 @@ describe('non-Initial Round Visibility - Integration', () => {
       // Add optimistic message for round 1
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1-${Date.now()}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up question' }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: 1,
-          isOptimistic: true,
         },
+        parts: [{ text: 'Follow-up question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
@@ -189,23 +189,23 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Add pre-search for round 1
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'test-thread',
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'test-thread',
+        userQuery: 'Search query',
       });
 
       const preSearches = store.getState().preSearches;
 
       const { result } = renderHook(
         () => useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -220,24 +220,24 @@ describe('non-Initial Round Visibility - Integration', () => {
       // Add optimistic message
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-1`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Question with search' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Question with search', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       store.getState().setMessages(msgs => [...msgs, optimisticMessage]);
 
       // Add pre-search
       store.getState().addPreSearch({
-        id: 'presearch-r1',
-        threadId: 'test-thread',
-        roundNumber: 1,
-        userQuery: 'Search query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
         errorMessage: null,
+        id: 'presearch-r1',
+        roundNumber: 1,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'test-thread',
+        userQuery: 'Search query',
       });
 
       const messages = store.getState().messages;
@@ -245,8 +245,8 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       const { result } = renderHook(
         () => useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -269,9 +269,9 @@ describe('non-Initial Round Visibility - Integration', () => {
       // Simulate handleUpdateThreadAndSend actions
       const optimisticMessage: UIMessage = {
         id: `optimistic-user-${nextRound}`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up' }],
         metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+        parts: [{ text: 'Follow-up', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Step 1: Add optimistic message
@@ -300,10 +300,10 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Guard flags should be set
       expect(state.configChangeRoundNumber).toBe(nextRound);
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
 
       // hasInitiallyLoaded should still be true
-      expect(state.hasInitiallyLoaded).toBe(true);
+      expect(state.hasInitiallyLoaded).toBeTruthy();
     });
 
     it('should preserve state when initializeThread is called during submission', () => {
@@ -314,9 +314,9 @@ describe('non-Initial Round Visibility - Integration', () => {
         ...msgs,
         {
           id: `optimistic-user-${nextRound}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRound },
+          parts: [{ text: 'Follow-up', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
       store.getState().setStreamingRoundNumber(nextRound);
@@ -324,8 +324,9 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // Call initializeThread (simulating what useScreenInitialization might do)
       const thread = store.getState().thread;
-      if (!thread)
+      if (!thread) {
         throw new Error('expected thread to be set');
+      }
 
       const participants = store.getState().participants;
 
@@ -333,9 +334,9 @@ describe('non-Initial Round Visibility - Integration', () => {
         // Only round 0 messages from "server"
         {
           id: 'user-r0',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Initial' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Initial', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -360,9 +361,9 @@ describe('non-Initial Round Visibility - Integration', () => {
         ...msgs,
         {
           id: 'user-r1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Round 1 question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Round 1 question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -370,8 +371,8 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       const { result } = renderHook(
         () => useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -388,9 +389,9 @@ describe('non-Initial Round Visibility - Integration', () => {
         ...msgs,
         {
           id: 'user-r1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
+          parts: [{ text: 'Question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -398,7 +399,7 @@ describe('non-Initial Round Visibility - Integration', () => {
 
       // isStoreReady = hasInitiallyLoaded && messages.length > 0
       const isStoreReady = state.hasInitiallyLoaded && state.messages.length > 0;
-      expect(isStoreReady).toBe(true);
+      expect(isStoreReady).toBeTruthy();
     });
   });
 });

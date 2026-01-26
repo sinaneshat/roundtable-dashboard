@@ -23,21 +23,21 @@ type UseStreamingTriggerParams = {
 };
 
 export function useStreamingTrigger({
-  store,
   chat,
   effectiveThreadId,
   queryClientRef,
+  store,
 }: UseStreamingTriggerParams) {
   // ✅ STALE SELECTOR FIX: These selectors are kept for effect dependency tracking,
   // but the effect reads fresh state from store.getState() to avoid stale values.
   const {
-    waitingToStart,
     chatIsStreaming,
     hasSentPending,
+    waitingToStart,
   } = useStore(store, useShallow(s => ({
-    waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
     hasSentPending: s.hasSentPendingMessage,
+    waitingToStart: s.waitingToStartStreaming,
   })));
 
   const startRoundCalledForRoundRef = useRef<number | null>(null);
@@ -133,8 +133,9 @@ export function useStreamingTrigger({
 
         const pendingMsg = currentState.pendingMessage;
         const userMessageForRound = freshMessages.find((msg) => {
-          if (msg.role !== MessageRoles.USER)
+          if (msg.role !== MessageRoles.USER) {
             return false;
+          }
           const msgRound = getRoundNumber(msg.metadata);
           return msgRound === currentRound;
         });
@@ -150,8 +151,8 @@ export function useStreamingTrigger({
           const resumeSearch = async () => {
             try {
               const response = await executePreSearchStreamService({
-                param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
                 json: { userQuery },
+                param: { roundNumber: String(currentRound), threadId: threadIdForSearch },
               });
 
               if (response.status === 202) {
@@ -206,8 +207,9 @@ export function useStreamingTrigger({
 
         const pendingMsg = currentState.pendingMessage;
         const userMessageForRound = freshMessages.find((msg) => {
-          if (msg.role !== MessageRoles.USER)
+          if (msg.role !== MessageRoles.USER) {
             return false;
+          }
           const msgRound = getRoundNumber(msg.metadata);
           return msgRound === currentRound;
         });
@@ -229,8 +231,8 @@ export function useStreamingTrigger({
               store.getState().updatePreSearchStatus(currentRound, MessageStatuses.STREAMING);
 
               const response = await executePreSearchStreamService({
-                param: { threadId: threadIdForSearch, roundNumber: String(currentRound) },
-                json: { userQuery, fileContext: fileContext || undefined, attachmentIds },
+                json: { attachmentIds, fileContext: fileContext || undefined, userQuery },
+                param: { roundNumber: String(currentRound), threadId: threadIdForSearch },
               });
 
               if (!response.ok && response.status !== 409) {

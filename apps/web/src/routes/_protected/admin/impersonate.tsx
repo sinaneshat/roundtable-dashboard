@@ -61,8 +61,9 @@ function ImpersonatePage() {
   };
 
   const handleImpersonate = async () => {
-    if (!selectedUser)
+    if (!selectedUser) {
       return;
+    }
 
     isImpersonating.onTrue();
     const baseUrl = getAppBaseUrl();
@@ -70,8 +71,11 @@ function ImpersonatePage() {
     // Impersonate FIRST, then clear caches (correct order)
     // Better Auth handles session switching - saves admin session in admin_session cookie
     authClient.admin.impersonateUser({
-      userId: selectedUser.id,
       fetchOptions: {
+        onError: (ctx) => {
+          showApiErrorToast('Impersonation Failed', ctx.error);
+          isImpersonating.onFalse();
+        },
         onSuccess: () => {
           // Session changed - now clear server cache for target user
           clearCacheMutation.mutate(selectedUser.id, {
@@ -83,11 +87,8 @@ function ImpersonatePage() {
             },
           });
         },
-        onError: (ctx) => {
-          showApiErrorToast('Impersonation Failed', ctx.error);
-          isImpersonating.onFalse();
-        },
       },
+      userId: selectedUser.id,
     });
   };
 

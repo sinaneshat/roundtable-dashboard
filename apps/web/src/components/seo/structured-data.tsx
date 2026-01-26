@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 import type { JsonLdData } from '@/lib/seo';
 import {
   createArticleJsonLd,
@@ -11,48 +13,59 @@ import {
  * Props for the StructuredData component
  * Uses discriminated union for type-safe props based on schema type
  */
-type BaseProps = {
+const BasePropsSchema = z.object({
   /** Schema.org type for the structured data */
-  type?: 'WebApplication' | 'Organization' | 'Product' | 'Article';
-};
+  type: z.enum(['WebApplication', 'Organization', 'Product', 'Article']).optional(),
+});
 
-type ArticleProps = BaseProps & {
-  type: 'Article';
-  /** Headline for the article */
-  headline: string;
-  /** Description of the article */
-  description: string;
-  /** Path to the article */
-  path: string;
+/**
+ * Schema for Article structured data props
+ */
+const ArticlePropsSchema = BasePropsSchema.extend({
   /** Author name */
-  author?: string;
-  /** Publication date */
-  datePublished?: string;
+  author: z.string().optional(),
   /** Last modified date */
-  dateModified?: string;
+  dateModified: z.string().optional(),
+  /** Publication date */
+  datePublished: z.string().optional(),
+  /** Description of the article */
+  description: z.string(),
+  /** Headline for the article */
+  headline: z.string(),
   /** Image URL */
-  image?: string;
-};
+  image: z.string().optional(),
+  /** Path to the article */
+  path: z.string(),
+  type: z.literal('Article'),
+});
 
-type ProductProps = BaseProps & {
-  type: 'Product';
-  /** Product name */
-  name: string;
-  /** Product description */
-  description: string;
-  /** Price */
-  price: number;
+/**
+ * Schema for Product structured data props
+ */
+const ProductPropsSchema = BasePropsSchema.extend({
   /** Currency code */
-  currency?: string;
+  currency: z.string().optional(),
+  /** Product description */
+  description: z.string(),
+  /** Product name */
+  name: z.string(),
   /** Path to product page */
-  path?: string;
-};
+  path: z.string().optional(),
+  /** Price */
+  price: z.number(),
+  type: z.literal('Product'),
+});
 
-type StructuredDataProps
-  = | { type?: 'WebApplication' }
-    | { type: 'Organization' }
-    | ArticleProps
-    | ProductProps;
+/**
+ * Discriminated union schema for StructuredData props
+ */
+const _StructuredDataPropsSchema = z.union([
+  z.object({ type: z.literal('WebApplication').optional() }),
+  z.object({ type: z.literal('Organization') }),
+  ArticlePropsSchema,
+  ProductPropsSchema,
+]);
+type StructuredDataProps = z.infer<typeof _StructuredDataPropsSchema>;
 
 /**
  * StructuredData component that injects JSON-LD structured data into the page
@@ -72,22 +85,22 @@ export function StructuredData(props: StructuredDataProps) {
       break;
     case 'Article':
       structuredData = createArticleJsonLd({
-        headline: props.headline,
-        description: props.description,
-        path: props.path,
         author: props.author,
-        datePublished: props.datePublished,
         dateModified: props.dateModified,
+        datePublished: props.datePublished,
+        description: props.description,
+        headline: props.headline,
         image: props.image,
+        path: props.path,
       });
       break;
     case 'Product':
       structuredData = createProductJsonLd({
-        name: props.name,
-        description: props.description,
-        price: props.price,
         currency: props.currency,
+        description: props.description,
+        name: props.name,
         path: props.path,
+        price: props.price,
       });
       break;
     case 'WebApplication':

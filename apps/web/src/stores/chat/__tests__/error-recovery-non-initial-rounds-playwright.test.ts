@@ -62,22 +62,22 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Round 0 complete (existing conversation history)
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Initial question', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Initial question', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'Response from P0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'r0_p1',
         content: 'Response from P1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
     state.tryMarkModeratorCreated(0);
@@ -88,8 +88,8 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // User submits Round 1 message (optimistic update)
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-r1-user',
       content: 'Follow-up question',
+      id: 'optimistic-r1-user',
       roundNumber: 1,
     });
 
@@ -99,7 +99,7 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setConfigChangeRoundNumber(1); // PATCH in progress
 
     expect(getStoreState(store).messages).toHaveLength(4); // 3 from R0 + 1 optimistic
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
 
     // === PATCH FAILS (500 Internal Server Error) ===
     // Rollback: Remove optimistic message
@@ -112,12 +112,12 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Verify rollback complete
     expect(getStoreState(store).messages).toHaveLength(3); // Back to R0 only
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
     expect(getStoreState(store).configChangeRoundNumber).toBeNull();
 
     // User can submit again (state is clean)
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
   });
 
   it('handles PATCH error - comprehensive state cleanup including nextParticipantToTrigger', () => {
@@ -125,8 +125,8 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // User submits Round 1 message with complete optimistic setup
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-full-cleanup',
       content: 'Test full cleanup',
+      id: 'optimistic-full-cleanup',
       roundNumber: 1,
     });
 
@@ -137,7 +137,7 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setNextParticipantToTrigger(0); // Set for streaming trigger
 
     expect(getStoreState(store).messages).toHaveLength(4); // 3 from R0 + 1 optimistic
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
     expect(getStoreState(store).streamingRoundNumber).toBe(1);
     expect(getStoreState(store).configChangeRoundNumber).toBe(1);
     expect(getStoreState(store).nextParticipantToTrigger).toBe(0);
@@ -151,16 +151,16 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Verify ALL streaming state flags are reset
     expect(getStoreState(store).messages).toHaveLength(3); // Back to R0 only
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
     expect(getStoreState(store).nextParticipantToTrigger).toBeNull();
     expect(getStoreState(store).configChangeRoundNumber).toBeNull();
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
 
     // User can submit again - all flags clean
     const retryMessage = createTestUserMessage({
-      id: 'retry-after-cleanup',
       content: 'Retry submission',
+      id: 'retry-after-cleanup',
       roundNumber: 1,
     });
 
@@ -170,18 +170,18 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setNextParticipantToTrigger(0);
 
     expect(getStoreState(store).messages).toHaveLength(4);
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
   });
 
   it('handles PATCH error with web search - cleans up pre-search placeholder', () => {
     // Enable web search for this test
     const state = getStoreState(store);
-    state.setThread(createMockThread({ id: 'thread-456', enableWebSearch: true }));
+    state.setThread(createMockThread({ enableWebSearch: true, id: 'thread-456' }));
 
     // User submits Round 1 message with web search enabled
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-with-presearch',
       content: 'Query with web search',
+      id: 'optimistic-with-presearch',
       roundNumber: 1,
     });
 
@@ -189,15 +189,15 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Pre-search placeholder added (before PATCH)
     state.addPreSearch({
-      id: 'presearch-r1-placeholder',
-      threadId: 'thread-456',
-      roundNumber: 1,
-      status: MessageStatuses.PENDING,
-      userQuery: 'Query with web search',
-      searchData: null,
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r1-placeholder',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-456',
+      userQuery: 'Query with web search',
     } as StoredPreSearch);
 
     state.setStreamingRoundNumber(1);
@@ -225,14 +225,14 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     // Verify pre-search placeholder removed
     expect(getStoreState(store).messages).toHaveLength(3); // Back to R0 only
     expect(getStoreState(store).preSearches).toHaveLength(0); // ✅ Cleaned up
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
     expect(getStoreState(store).configChangeRoundNumber).toBeNull();
 
     // User can retry - no lingering pre-search UI
     const retryMessage = createTestUserMessage({
-      id: 'retry-with-presearch',
       content: 'Retry with web search',
+      id: 'retry-with-presearch',
       roundNumber: 1,
     });
 
@@ -240,15 +240,15 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Fresh pre-search placeholder for retry
     state.addPreSearch({
-      id: 'presearch-r1-retry',
-      threadId: 'thread-456',
-      roundNumber: 1,
-      status: MessageStatuses.PENDING,
-      userQuery: 'Retry with web search',
-      searchData: null,
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r1-retry',
+      roundNumber: 1,
+      searchData: null,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-456',
+      userQuery: 'Retry with web search',
     } as StoredPreSearch);
 
     expect(getStoreState(store).messages).toHaveLength(4);
@@ -261,8 +261,8 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // User submits Round 1 message (full optimistic setup)
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-ui-check',
       content: 'UI pollution test',
+      id: 'optimistic-ui-check',
       roundNumber: 1,
     });
 
@@ -274,15 +274,15 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setIsWaitingForChangelog(false); // Set to false initially
 
     const preErrorState = {
-      messagesLength: getStoreState(store).messages.length,
-      waitingToStartStreaming: getStoreState(store).waitingToStartStreaming,
-      streamingRoundNumber: getStoreState(store).streamingRoundNumber,
       configChangeRoundNumber: getStoreState(store).configChangeRoundNumber,
+      messagesLength: getStoreState(store).messages.length,
       nextParticipantToTrigger: getStoreState(store).nextParticipantToTrigger,
+      streamingRoundNumber: getStoreState(store).streamingRoundNumber,
+      waitingToStartStreaming: getStoreState(store).waitingToStartStreaming,
     };
 
     expect(preErrorState.messagesLength).toBe(4);
-    expect(preErrorState.waitingToStartStreaming).toBe(true);
+    expect(preErrorState.waitingToStartStreaming).toBeTruthy();
     expect(preErrorState.streamingRoundNumber).toBe(1);
     expect(preErrorState.configChangeRoundNumber).toBe(1);
     expect(preErrorState.nextParticipantToTrigger).toBe(0);
@@ -297,25 +297,25 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setError(null); // ✅ Clear any error state
 
     const postErrorState = {
-      messagesLength: getStoreState(store).messages.length,
-      waitingToStartStreaming: getStoreState(store).waitingToStartStreaming,
-      streamingRoundNumber: getStoreState(store).streamingRoundNumber,
       configChangeRoundNumber: getStoreState(store).configChangeRoundNumber,
-      nextParticipantToTrigger: getStoreState(store).nextParticipantToTrigger,
-      isWaitingForChangelog: getStoreState(store).isWaitingForChangelog,
       error: getStoreState(store).error,
       isStreaming: getStoreState(store).isStreaming,
+      isWaitingForChangelog: getStoreState(store).isWaitingForChangelog,
+      messagesLength: getStoreState(store).messages.length,
+      nextParticipantToTrigger: getStoreState(store).nextParticipantToTrigger,
+      streamingRoundNumber: getStoreState(store).streamingRoundNumber,
+      waitingToStartStreaming: getStoreState(store).waitingToStartStreaming,
     };
 
     // ✅ VERIFY: All flags reset to allow submission
     expect(postErrorState.messagesLength).toBe(3); // Back to R0 only
-    expect(postErrorState.waitingToStartStreaming).toBe(false);
+    expect(postErrorState.waitingToStartStreaming).toBeFalsy();
     expect(postErrorState.streamingRoundNumber).toBeNull();
     expect(postErrorState.configChangeRoundNumber).toBeNull();
     expect(postErrorState.nextParticipantToTrigger).toBeNull();
-    expect(postErrorState.isWaitingForChangelog).toBe(false);
+    expect(postErrorState.isWaitingForChangelog).toBeFalsy();
     expect(postErrorState.error).toBeNull();
-    expect(postErrorState.isStreaming).toBe(false);
+    expect(postErrorState.isStreaming).toBeFalsy();
 
     // ✅ VERIFY: User can retry submission immediately
     const canRetry = !postErrorState.waitingToStartStreaming
@@ -323,7 +323,7 @@ describe('pATCH Failure Recovery - Round 1+', () => {
       && postErrorState.streamingRoundNumber === null
       && postErrorState.configChangeRoundNumber === null;
 
-    expect(canRetry).toBe(true);
+    expect(canRetry).toBeTruthy();
   });
 
   it('handles PATCH 400 error - validation failure removes optimistic message', () => {
@@ -331,8 +331,8 @@ describe('pATCH Failure Recovery - Round 1+', () => {
 
     // Invalid message (e.g., too long, empty after trimming, etc.)
     const invalidOptimisticMessage = createTestUserMessage({
-      id: 'optimistic-invalid',
       content: '', // Empty content (validation error)
+      id: 'optimistic-invalid',
       roundNumber: 1,
     });
 
@@ -349,15 +349,15 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setStreamingRoundNumber(null);
 
     expect(getStoreState(store).messages).toHaveLength(3); // R0 only
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
   });
 
   it('handles PATCH timeout - removes optimistic message after timeout', () => {
     const state = getStoreState(store);
 
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-timeout',
       content: 'Question that times out',
+      id: 'optimistic-timeout',
       roundNumber: 1,
     });
 
@@ -372,7 +372,7 @@ describe('pATCH Failure Recovery - Round 1+', () => {
     state.setConfigChangeRoundNumber(null);
 
     expect(getStoreState(store).messages).toHaveLength(3);
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
   });
 });
 
@@ -392,14 +392,14 @@ describe('changelog Fetch Failure - Round 1+', () => {
 
     // Round 0 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -412,8 +412,8 @@ describe('changelog Fetch Failure - Round 1+', () => {
 
     // Submit Round 1 with config changes
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1 with config changes',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -421,7 +421,7 @@ describe('changelog Fetch Failure - Round 1+', () => {
     state.setIsWaitingForChangelog(true); // Waiting for changelog to fetch
     state.setConfigChangeRoundNumber(1);
 
-    expect(getStoreState(store).isWaitingForChangelog).toBe(true);
+    expect(getStoreState(store).isWaitingForChangelog).toBeTruthy();
 
     // === CHANGELOG FETCH TIMES OUT (10s timeout from FLOW_DOCUMENTATION.md) ===
     // Timeout protection: clear waiting flag and continue
@@ -429,14 +429,14 @@ describe('changelog Fetch Failure - Round 1+', () => {
     state.setConfigChangeRoundNumber(null);
 
     // Streaming can now proceed (even without changelog)
-    expect(getStoreState(store).isWaitingForChangelog).toBe(false);
+    expect(getStoreState(store).isWaitingForChangelog).toBeFalsy();
     expect(getStoreState(store).configChangeRoundNumber).toBeNull();
 
     // Participants start streaming
     state.setIsStreaming(true);
     state.setStreamingRoundNumber(1);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
   });
 
   it('changelog fetch fails with error - streaming continues anyway', () => {
@@ -451,11 +451,11 @@ describe('changelog Fetch Failure - Round 1+', () => {
     state.setIsWaitingForChangelog(false);
     state.setConfigChangeRoundNumber(null);
 
-    expect(getStoreState(store).isWaitingForChangelog).toBe(false);
+    expect(getStoreState(store).isWaitingForChangelog).toBeFalsy();
 
     // Streaming proceeds
     state.setIsStreaming(true);
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
   });
 });
 
@@ -469,40 +469,40 @@ describe('pre-Search Failure - Round 1+', () => {
   beforeEach(() => {
     store = createChatStore();
     const state = getStoreState(store);
-    state.setThread(createMockThread({ id: 'thread-abc', enableWebSearch: true }));
+    state.setThread(createMockThread({ enableWebSearch: true, id: 'thread-abc' }));
     state.setParticipants(createMockParticipants(3, 'thread-abc'));
     state.setScreenMode(ScreenModes.THREAD);
 
     // Round 0 complete (with successful pre-search)
     state.addPreSearch({
+      completedAt: new Date(),
+      createdAt: new Date(),
+      errorMessage: null,
       id: 'presearch-r0',
-      threadId: 'thread-abc',
       roundNumber: 0,
-      status: MessageStatuses.COMPLETE,
-      userQuery: 'Initial query',
       searchData: {
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-        results: [],
-        moderatorSummary: 'Summary',
-        successCount: 1,
         failureCount: 0,
+        moderatorSummary: 'Summary',
+        queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+        results: [],
+        successCount: 1,
         totalResults: 5,
         totalTime: 3000,
       },
-      errorMessage: null,
-      createdAt: new Date(),
-      completedAt: new Date(),
+      status: MessageStatuses.COMPLETE,
+      threadId: 'thread-abc',
+      userQuery: 'Initial query',
     } as StoredPreSearch);
 
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -512,8 +512,8 @@ describe('pre-Search Failure - Round 1+', () => {
 
     // Round 1 with web search enabled
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1 with web search',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -521,15 +521,15 @@ describe('pre-Search Failure - Round 1+', () => {
 
     // Pre-search starts
     state.addPreSearch({
-      id: 'presearch-r1',
-      threadId: 'thread-abc',
-      roundNumber: 1,
-      status: MessageStatuses.PENDING,
-      userQuery: 'Q1 with web search',
-      searchData: undefined,
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: undefined,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread-abc',
+      userQuery: 'Q1 with web search',
     } as StoredPreSearch);
 
     // Pre-search transitions to streaming
@@ -538,14 +538,15 @@ describe('pre-Search Failure - Round 1+', () => {
     // === PRE-SEARCH STREAMING ERROR ===
     // Update pre-search to FAILED status directly
     const preSearch1 = getStoreState(store).preSearches[1];
-    if (!preSearch1)
+    if (!preSearch1) {
       throw new Error('expected pre-search at index 1');
+    }
     state.setPreSearches([
       ...getStoreState(store).preSearches.slice(0, 1),
       {
         ...preSearch1,
-        status: MessageStatuses.FAILED,
         errorMessage: 'Search API timeout',
+        status: MessageStatuses.FAILED,
       },
     ]);
 
@@ -556,16 +557,16 @@ describe('pre-Search Failure - Round 1+', () => {
     state.setIsStreaming(true);
     state.setStreamingRoundNumber(1);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
 
     // Participants stream without search context
     const r1P0 = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'Response without search results',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0]);
@@ -577,27 +578,28 @@ describe('pre-Search Failure - Round 1+', () => {
     const state = getStoreState(store);
 
     state.addPreSearch({
-      id: 'presearch-timeout',
-      threadId: 'thread-abc',
-      roundNumber: 1,
-      status: MessageStatuses.STREAMING,
-      userQuery: 'Timeout query',
-      searchData: undefined,
-      errorMessage: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: null,
+      id: 'presearch-timeout',
+      roundNumber: 1,
+      searchData: undefined,
+      status: MessageStatuses.STREAMING,
+      threadId: 'thread-abc',
+      userQuery: 'Timeout query',
     } as StoredPreSearch);
 
     // Simulate 10s timeout check
     // After timeout, mark as FAILED and continue
     const preSearch0 = getStoreState(store).preSearches[0];
-    if (!preSearch0)
+    if (!preSearch0) {
       throw new Error('expected pre-search at index 0');
+    }
     state.setPreSearches([
       {
         ...preSearch0,
-        status: MessageStatuses.FAILED,
         errorMessage: 'Pre-search timed out after 10s',
+        status: MessageStatuses.FAILED,
       },
     ]);
 
@@ -605,7 +607,7 @@ describe('pre-Search Failure - Round 1+', () => {
 
     // Streaming proceeds
     state.setIsStreaming(true);
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
   });
 });
 
@@ -625,14 +627,14 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // Round 0 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -641,8 +643,8 @@ describe('participant Streaming Failure - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -652,12 +654,12 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P0 succeeds
     const r1P0 = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'P0 response',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0]);
@@ -665,13 +667,13 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P1 FAILS
     const r1P1Error = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'Error: Rate limit exceeded',
-      roundNumber: 1,
-      participantId: 'participant-1',
-      participantIndex: 1,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p1',
+      participantId: 'participant-1',
+      participantIndex: 1,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P1Error]);
@@ -679,12 +681,12 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P2 CONTINUES despite P1 failure
     const r1P2 = createTestAssistantMessage({
-      id: 'r1_p2',
       content: 'P2 response (after P1 error)',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p2',
       participantId: 'participant-2',
       participantIndex: 2,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P2]);
@@ -699,8 +701,8 @@ describe('participant Streaming Failure - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -710,13 +712,13 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P0 FAILS (first participant)
     const r1P0Error = createTestAssistantMessage({
-      id: 'r1_p0',
       content: '',
-      roundNumber: 1,
-      participantId: 'participant-0',
-      participantIndex: 0,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p0',
+      participantId: 'participant-0',
+      participantIndex: 0,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0Error]);
@@ -724,21 +726,21 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P1 and P2 continue
     const r1P1 = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'P1 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const r1P2 = createTestAssistantMessage({
-      id: 'r1_p2',
       content: 'P2 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p2',
       participantId: 'participant-2',
       participantIndex: 2,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P1, r1P2]);
@@ -751,8 +753,8 @@ describe('participant Streaming Failure - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -762,21 +764,21 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P0 and P1 succeed
     const r1P0 = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'P0 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const r1P1 = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'P1 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0, r1P1]);
@@ -784,13 +786,13 @@ describe('participant Streaming Failure - Round 1+', () => {
 
     // P2 FAILS (last participant)
     const r1P2Error = createTestAssistantMessage({
-      id: 'r1_p2',
       content: 'Partial response before timeout...',
-      roundNumber: 1,
-      participantId: 'participant-2',
-      participantIndex: 2,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p2',
+      participantId: 'participant-2',
+      participantIndex: 2,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P2Error]);
@@ -798,7 +800,7 @@ describe('participant Streaming Failure - Round 1+', () => {
     // Round completes
     state.completeStreaming();
 
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).messages).toHaveLength(6); // 2 from R0 + 4 from R1
   });
 });
@@ -819,14 +821,14 @@ describe('moderator Failure - Round 1+', () => {
 
     // Round 0 complete with moderator
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
     state.tryMarkModeratorCreated(0);
@@ -837,22 +839,22 @@ describe('moderator Failure - Round 1+', () => {
 
     // Round 1 participants complete
     const r1Messages = [
-      createTestUserMessage({ id: 'r1_user', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'A1',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'r1_p1',
         content: 'A1-P1',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -866,7 +868,7 @@ describe('moderator Failure - Round 1+', () => {
     state.setIsModeratorStreaming(false);
     state.setError(new Error('Moderator generation failed'));
 
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
     expect(getStoreState(store).error).not.toBeNull();
 
     // Clear error (user acknowledges failure)
@@ -874,8 +876,8 @@ describe('moderator Failure - Round 1+', () => {
 
     // User can continue to Round 2 (moderator failure non-blocking)
     const r2UserMessage = createTestUserMessage({
-      id: 'r2_user',
       content: 'Q2',
+      id: 'r2_user',
       roundNumber: 2,
     });
 
@@ -883,7 +885,7 @@ describe('moderator Failure - Round 1+', () => {
     state.setIsStreaming(true);
     state.setStreamingRoundNumber(2);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).streamingRoundNumber).toBe(2);
   });
 
@@ -892,14 +894,14 @@ describe('moderator Failure - Round 1+', () => {
 
     // Round 1 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r1_user', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'A1',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ]);
 
@@ -911,12 +913,12 @@ describe('moderator Failure - Round 1+', () => {
     // Clear tracking to allow retry
     state.clearModeratorTracking(1);
 
-    expect(state.hasModeratorBeenCreated(1)).toBe(false);
+    expect(state.hasModeratorBeenCreated(1)).toBeFalsy();
 
     // Retry moderator
     const canRetry = state.tryMarkModeratorCreated(1);
-    expect(canRetry).toBe(true);
-    expect(state.hasModeratorBeenCreated(1)).toBe(true);
+    expect(canRetry).toBeTruthy();
+    expect(state.hasModeratorBeenCreated(1)).toBeTruthy();
   });
 });
 
@@ -930,20 +932,20 @@ describe('multiple Errors in Same Round - Round 1+', () => {
   beforeEach(() => {
     store = createChatStore();
     const state = getStoreState(store);
-    state.setThread(createMockThread({ id: 'thread-jkl', enableWebSearch: true }));
+    state.setThread(createMockThread({ enableWebSearch: true, id: 'thread-jkl' }));
     state.setParticipants(createMockParticipants(3, 'thread-jkl'));
     state.setScreenMode(ScreenModes.THREAD);
 
     // Round 0 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -952,8 +954,8 @@ describe('multiple Errors in Same Round - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -961,15 +963,15 @@ describe('multiple Errors in Same Round - Round 1+', () => {
 
     // === PRE-SEARCH FAILS ===
     state.addPreSearch({
-      id: 'presearch-r1',
-      threadId: 'thread-jkl',
-      roundNumber: 1,
-      status: MessageStatuses.FAILED,
-      userQuery: 'Q1',
-      searchData: undefined,
-      errorMessage: 'Search API error',
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: 'Search API error',
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: undefined,
+      status: MessageStatuses.FAILED,
+      threadId: 'thread-jkl',
+      userQuery: 'Q1',
     } as StoredPreSearch);
 
     // Participants start (despite pre-search failure)
@@ -978,13 +980,13 @@ describe('multiple Errors in Same Round - Round 1+', () => {
 
     // === P0 FAILS ===
     const r1P0Error = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'Error',
-      roundNumber: 1,
-      participantId: 'participant-0',
-      participantIndex: 0,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p0',
+      participantId: 'participant-0',
+      participantIndex: 0,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0Error]);
@@ -992,21 +994,21 @@ describe('multiple Errors in Same Round - Round 1+', () => {
 
     // === P1 and P2 succeed ===
     const r1P1 = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'P1 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const r1P2 = createTestAssistantMessage({
-      id: 'r1_p2',
       content: 'P2 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p2',
       participantId: 'participant-2',
       participantIndex: 2,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P1, r1P2]);
@@ -1014,7 +1016,7 @@ describe('multiple Errors in Same Round - Round 1+', () => {
     // Round completes with pre-search failure + participant failure
     state.completeStreaming();
 
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).preSearches[0]?.status).toBe(MessageStatuses.FAILED);
     expect(getStoreState(store).messages).toHaveLength(6); // 2 from R0 + 4 from R1
   });
@@ -1023,8 +1025,8 @@ describe('multiple Errors in Same Round - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -1034,25 +1036,25 @@ describe('multiple Errors in Same Round - Round 1+', () => {
 
     // === P0 FAILS ===
     const r1P0Error = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'Error',
-      roundNumber: 1,
-      participantId: 'participant-0',
-      participantIndex: 0,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p0',
+      participantId: 'participant-0',
+      participantIndex: 0,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0Error]);
 
     // P1 succeeds
     const r1P1 = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'P1 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P1]);
@@ -1069,8 +1071,8 @@ describe('multiple Errors in Same Round - Round 1+', () => {
 
     // User can submit Round 2 (both failures non-blocking)
     const r2UserMessage = createTestUserMessage({
-      id: 'r2_user',
       content: 'Q2',
+      id: 'r2_user',
       roundNumber: 2,
     });
 
@@ -1096,14 +1098,14 @@ describe('recovery from Error State - Round 1+', () => {
 
     // Round 0 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -1113,8 +1115,8 @@ describe('recovery from Error State - Round 1+', () => {
 
     // PATCH fails (optimistic message rolled back)
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-fail',
       content: 'Failed message',
+      id: 'optimistic-fail',
       roundNumber: 1,
     });
 
@@ -1128,13 +1130,13 @@ describe('recovery from Error State - Round 1+', () => {
 
     // Verify state is clean for retry
     expect(getStoreState(store).messages).toHaveLength(2); // R0 only
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
 
     // User can submit again
     const retryMessage = createTestUserMessage({
-      id: 'r1_user_retry',
       content: 'Retry message',
+      id: 'r1_user_retry',
       roundNumber: 1,
     });
 
@@ -1142,7 +1144,7 @@ describe('recovery from Error State - Round 1+', () => {
     state.setWaitingToStartStreaming(true);
 
     expect(getStoreState(store).messages).toHaveLength(3); // R0 + retry
-    expect(getStoreState(store).waitingToStartStreaming).toBe(true);
+    expect(getStoreState(store).waitingToStartStreaming).toBeTruthy();
   });
 
   it('after participant streaming error - user can submit next round', () => {
@@ -1150,15 +1152,15 @@ describe('recovery from Error State - Round 1+', () => {
 
     // Round 1 with participant error
     const r1Messages = [
-      createTestUserMessage({ id: 'r1_user', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'Error',
-        roundNumber: 1,
-        participantId: 'participant-0',
-        participantIndex: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'r1_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 
@@ -1168,13 +1170,13 @@ describe('recovery from Error State - Round 1+', () => {
     state.setError(null);
 
     // Verify state is clean
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
 
     // User can submit Round 2
     const r2UserMessage = createTestUserMessage({
-      id: 'r2_user',
       content: 'Q2',
+      id: 'r2_user',
       roundNumber: 2,
     });
 
@@ -1182,7 +1184,7 @@ describe('recovery from Error State - Round 1+', () => {
     state.setIsStreaming(true);
     state.setStreamingRoundNumber(2);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).streamingRoundNumber).toBe(2);
   });
 
@@ -1204,11 +1206,11 @@ describe('recovery from Error State - Round 1+', () => {
     state.setError(null);
 
     // Verify all flags cleared
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
-    expect(getStoreState(store).waitingToStartStreaming).toBe(false);
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
-    expect(getStoreState(store).isWaitingForChangelog).toBe(false);
+    expect(getStoreState(store).waitingToStartStreaming).toBeFalsy();
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
+    expect(getStoreState(store).isWaitingForChangelog).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
   });
 });
@@ -1229,14 +1231,14 @@ describe('network Interruption Recovery - Round 1+', () => {
 
     // Round 0 complete
     state.setMessages([
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
   });
@@ -1245,8 +1247,8 @@ describe('network Interruption Recovery - Round 1+', () => {
     const state = getStoreState(store);
 
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
@@ -1256,12 +1258,12 @@ describe('network Interruption Recovery - Round 1+', () => {
 
     // P0 starts streaming, then network disconnects mid-response
     const r1P0Partial = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'Partial response before disconnect...',
-      roundNumber: 1,
+      finishReason: FinishReasons.UNKNOWN, // Unknown = incomplete
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN, // Unknown = incomplete
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0Partial]);
@@ -1273,8 +1275,8 @@ describe('network Interruption Recovery - Round 1+', () => {
     // Partial content preserved
     expect(getStoreState(store).messages).toHaveLength(4); // r0_user, r0_p0, r1_user, r1_p0 = 4 total
     expect(getStoreState(store).messages[3]?.parts?.[0]).toEqual({
-      type: 'text',
       text: 'Partial response before disconnect...',
+      type: 'text',
     });
   });
 
@@ -1286,28 +1288,28 @@ describe('network Interruption Recovery - Round 1+', () => {
     state.resetForThreadNavigation();
 
     expect(getStoreState(store).messages).toHaveLength(0);
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
 
     // Reload from server (simulated)
     const serverMessages = [
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
+        participantId: 'participant-0',
+        participantIndex: 0,
         roundNumber: 0,
-        participantId: 'participant-0',
-        participantIndex: 0,
-        finishReason: FinishReasons.STOP,
       }),
-      createTestUserMessage({ id: 'r1_user', content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: 'r1_user', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'r1_p0',
         content: 'Completed response (from server)',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -1328,20 +1330,20 @@ describe('complete Error Recovery Journey - Round 1+', () => {
     const state = getStoreState(store);
 
     // === SETUP ===
-    state.setThread(createMockThread({ id: 'thread-stu', enableWebSearch: true }));
+    state.setThread(createMockThread({ enableWebSearch: true, id: 'thread-stu' }));
     state.setParticipants(createMockParticipants(3, 'thread-stu'));
     state.setScreenMode(ScreenModes.THREAD);
 
     // === ROUND 0: Successful ===
     const r0Messages = [
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(r0Messages);
@@ -1349,23 +1351,23 @@ describe('complete Error Recovery Journey - Round 1+', () => {
 
     // === ROUND 1: Pre-search fails, participants succeed, moderator fails ===
     const r1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
     state.setMessages(prevMessages => [...prevMessages, r1UserMessage]);
 
     // Pre-search fails
     state.addPreSearch({
-      id: 'presearch-r1',
-      threadId: 'thread-stu',
-      roundNumber: 1,
-      status: MessageStatuses.FAILED,
-      userQuery: 'Q1',
-      searchData: undefined,
-      errorMessage: 'Search timeout',
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: 'Search timeout',
+      id: 'presearch-r1',
+      roundNumber: 1,
+      searchData: undefined,
+      status: MessageStatuses.FAILED,
+      threadId: 'thread-stu',
+      userQuery: 'Q1',
     } as StoredPreSearch);
 
     // Participants proceed
@@ -1373,21 +1375,21 @@ describe('complete Error Recovery Journey - Round 1+', () => {
     state.setStreamingRoundNumber(1);
 
     const r1P0 = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'R1P0',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const r1P1 = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'R1P1',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r1P0, r1P1]);
@@ -1404,8 +1406,8 @@ describe('complete Error Recovery Journey - Round 1+', () => {
 
     // === ROUND 2: Participant fails, round completes ===
     const r2UserMessage = createTestUserMessage({
-      id: 'r2_user',
       content: 'Q2',
+      id: 'r2_user',
       roundNumber: 2,
     });
     state.setMessages(prevMessages => [...prevMessages, r2UserMessage]);
@@ -1415,23 +1417,23 @@ describe('complete Error Recovery Journey - Round 1+', () => {
 
     // P0 fails
     const r2P0Error = createTestAssistantMessage({
-      id: 'r2_p0',
       content: 'Error',
-      roundNumber: 2,
-      participantId: 'participant-0',
-      participantIndex: 0,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r2_p0',
+      participantId: 'participant-0',
+      participantIndex: 0,
+      roundNumber: 2,
     });
 
     // P1 succeeds
     const r2P1 = createTestAssistantMessage({
-      id: 'r2_p1',
       content: 'R2P1',
-      roundNumber: 2,
+      finishReason: FinishReasons.STOP,
+      id: 'r2_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 2,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r2P0Error, r2P1]);
@@ -1439,13 +1441,13 @@ describe('complete Error Recovery Journey - Round 1+', () => {
 
     // === VERIFY RECOVERY ===
     expect(getStoreState(store).messages).toHaveLength(8); // 2 R0, 3 R1, 3 R2
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
 
     // === ROUND 3: Fully successful (recovery complete) ===
     const r3UserMessage = createTestUserMessage({
-      id: 'r3_user',
       content: 'Q3',
+      id: 'r3_user',
       roundNumber: 3,
     });
     state.setMessages(prevMessages => [...prevMessages, r3UserMessage]);
@@ -1454,21 +1456,21 @@ describe('complete Error Recovery Journey - Round 1+', () => {
     state.setStreamingRoundNumber(3);
 
     const r3P0 = createTestAssistantMessage({
-      id: 'r3_p0',
       content: 'R3P0 success',
-      roundNumber: 3,
+      finishReason: FinishReasons.STOP,
+      id: 'r3_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 3,
     });
 
     const r3P1 = createTestAssistantMessage({
-      id: 'r3_p1',
       content: 'R3P1 success',
-      roundNumber: 3,
+      finishReason: FinishReasons.STOP,
+      id: 'r3_p1',
       participantId: 'participant-1',
       participantIndex: 1,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 3,
     });
 
     state.setMessages(prevMessages => [...prevMessages, r3P0, r3P1]);
@@ -1476,11 +1478,11 @@ describe('complete Error Recovery Journey - Round 1+', () => {
 
     // Moderator succeeds
     state.tryMarkModeratorCreated(3);
-    expect(state.hasModeratorBeenCreated(3)).toBe(true);
+    expect(state.hasModeratorBeenCreated(3)).toBeTruthy();
 
     // === FINAL VERIFICATION ===
     expect(getStoreState(store).messages).toHaveLength(11); // 2 R0, 3 R1, 3 R2, 3 R3
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
 
     // Conversation successfully recovered from:

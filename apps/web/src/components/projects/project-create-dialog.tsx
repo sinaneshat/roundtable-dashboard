@@ -32,7 +32,7 @@ type ProjectCreateDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogProps) {
+export function ProjectCreateDialog({ onOpenChange, open }: ProjectCreateDialogProps) {
   const t = useTranslations();
   const navigate = useNavigate();
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false);
@@ -40,17 +40,17 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
   const createMutation = useCreateProjectMutation();
 
   const form = useForm<ProjectFormValues>({
-    resolver: zodResolver(ProjectFormSchema),
     defaultValues: PROJECT_FORM_DEFAULTS,
     mode: 'onChange',
+    resolver: zodResolver(ProjectFormSchema),
   });
 
   const {
+    formState: { isSubmitting, isValid },
     handleSubmit,
     reset,
     setValue,
     watch,
-    formState: { isValid, isSubmitting },
   } = form;
 
   const currentIcon = watch('icon');
@@ -65,9 +65,9 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
   const onSubmit = useCallback(
     async (values: ProjectFormValues) => {
       const trimmedValues = {
-        name: values.name.trim(),
         color: values.color,
         icon: values.icon,
+        name: values.name.trim(),
       };
 
       try {
@@ -76,7 +76,7 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
         });
         if (result.success && result.data?.id) {
           onOpenChange(false);
-          navigate({ to: '/chat/projects/$projectId', params: { projectId: result.data.id } });
+          navigate({ params: { projectId: result.data.id }, to: '/chat/projects/$projectId' });
         }
       } catch {
         // Error handled by mutation
@@ -95,8 +95,9 @@ export function ProjectCreateDialog({ open, onOpenChange }: ProjectCreateDialogP
   );
 
   const handleClose = useCallback(() => {
-    if (createMutation.isPending)
+    if (createMutation.isPending) {
       return;
+    }
     onOpenChange(false);
   }, [createMutation.isPending, onOpenChange]);
 

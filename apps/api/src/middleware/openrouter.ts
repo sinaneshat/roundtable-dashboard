@@ -31,5 +31,5 @@ export const ensureOpenRouterInitialized = createMiddleware<ApiEnv>(async (c, ne
   // This is idempotent - safe to call multiple times
   initializeOpenRouter(c.env);
 
-  return next();
+  return await next();
 });

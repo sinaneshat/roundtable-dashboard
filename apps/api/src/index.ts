@@ -45,7 +45,7 @@ const app = createOpenApiApp();
 // ============================================================================
 
 // DEBUG: Log ALL requests (especially POST) to diagnose 400 errors
-if (process.env.DEBUG_REQUESTS === 'true') {
+if (process.env['DEBUG_REQUESTS'] === 'true') {
   app.use('*', async (c, next) => {
     const startTime = Date.now();
     const method = c.req.method;
@@ -59,10 +59,10 @@ if (process.env.DEBUG_REQUESTS === 'true') {
         const contentType = c.req.header('content-type');
 
         console.error(`[REQUEST-DEBUG] ${method} ${path}:`, {
-          contentLength,
-          contentType,
           bodyLength: bodyText.length,
           bodyPreview: bodyText.slice(0, 300),
+          contentLength,
+          contentType,
           isValidJson: (() => {
             try {
               JSON.parse(bodyText);
@@ -114,18 +114,18 @@ app.use('*', timing());
 // Timeout for non-streaming routes
 app.use('*', async (c, next) => {
   if (c.req.path.includes('/stream') || c.req.path.includes('/moderator') || c.req.path.includes('/chat')) {
-    return next();
+    return await next();
   }
-  return timeout(30000)(c, next);
+  return await timeout(30000)(c, next);
 });
 
 // Body limit - default 5MB, uploads get 100MB
 app.use('*', async (c, next) => {
   const path = c.req.path;
   if (path.includes('/uploads')) {
-    return next();
+    return await next();
   }
-  return bodyLimit({
+  return await bodyLimit({
     maxSize: 5 * 1024 * 1024,
     onError: c => c.text('Payload Too Large', 413),
   })(c, next);
@@ -135,9 +135,9 @@ app.use('*', async (c, next) => {
 app.use('*', async (c, next) => {
   const path = c.req.path;
   if (!path.includes('/uploads')) {
-    return next();
+    return await next();
   }
-  return bodyLimit({
+  return await bodyLimit({
     maxSize: 100 * 1024 * 1024,
     onError: c => c.text('Payload Too Large - max 100MB for uploads', 413),
   })(c, next);
@@ -148,35 +148,36 @@ app.use('*', async (c, next) => {
   // OG images need to be accessible from ANY origin (social media crawlers, external sites)
   // Use includes() to match /og/ regardless of path prefix (handles both /og/chat and /api/v1/og/chat)
   if (c.req.path.includes('/og/')) {
-    return cors({
-      origin: '*',
-      credentials: false, // * origin cannot use credentials
-      allowMethods: ['GET', 'OPTIONS'],
+    return await cors({
       allowHeaders: ['Content-Type'],
+      allowMethods: ['GET', 'OPTIONS'],
+      credentials: false, // * origin cannot use credentials
+      origin: '*',
     })(c, next);
   }
 
   const allowedOrigins = getAllowedOriginsFromContext(c);
 
   const middleware = cors({
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'Pragma'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    credentials: true,
     origin: (origin) => {
-      if (!origin)
+      if (!origin) {
         return origin;
+      }
       return allowedOrigins.includes(origin) ? origin : null;
     },
-    credentials: true,
-    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'Pragma'],
   });
-  return middleware(c, next);
+  return await middleware(c, next);
 });
 
 // ETag support
 app.use('*', async (c, next) => {
   if (c.req.path.includes('/stream') || c.req.path.includes('/chat') || c.req.path.includes('/moderator')) {
-    return next();
+    return await next();
   }
-  return etag()(c, next);
+  return await etag()(c, next);
 });
 
 // Session attachment - optimized with prefix-based routing
@@ -190,25 +191,25 @@ app.use('*', async (c, next) => {
   if (publicPrefixes.some(prefix => path.startsWith(prefix))) {
     c.set('session', null);
     c.set('user', null);
-    return next();
+    return await next();
   }
 
   if (staticExtensions.some(ext => path.endsWith(ext))) {
     c.set('session', null);
     c.set('user', null);
-    return next();
+    return await next();
   }
 
   if (docPaths.includes(path)) {
     c.set('session', null);
     c.set('user', null);
-    return next();
+    return await next();
   }
 
   if ((path.startsWith('/billing/products') || path === '/models') && c.req.method === 'GET') {
     c.set('session', null);
     c.set('user', null);
-    return next();
+    return await next();
   }
 
   const handlerAuthPrefixes = [
@@ -225,10 +226,10 @@ app.use('*', async (c, next) => {
   if (handlerAuthPrefixes.some(prefix => path.startsWith(prefix))) {
     c.set('session', null);
     c.set('user', null);
-    return next();
+    return await next();
   }
 
-  return attachSession(c, next);
+  return await attachSession(c, next);
 });
 
 // Stripe/OpenRouter initialization
@@ -294,9 +295,9 @@ app.use('/projects/:id/knowledge/:fileId', csrfProtection);
 
 app.use('/uploads', async (c, next) => {
   if (c.req.path.includes('/download')) {
-    return next();
+    return await next();
   }
-  return RateLimiterFactory.create('upload')(c, next);
+  return await RateLimiterFactory.create('upload')(c, next);
 }, csrfProtection);
 app.use('/uploads/ticket', RateLimiterFactory.create('upload'), csrfProtection);
 app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProtection);
@@ -343,45 +344,45 @@ export type {
 // ============================================================================
 
 app.doc('/doc', c => ({
-  openapi: '3.0.0',
-  info: {
-    version: APP_VERSION,
-    title: 'Roundtable API',
-    description: 'roundtable.now API - Collaborative AI brainstorming platform. Built with Hono, Zod, and OpenAPI.',
-    contact: { name: 'Roundtable', url: 'https://roundtable.now' },
-    license: { name: 'Proprietary' },
-  },
-  tags: [
-    { name: 'system', description: 'System health and diagnostics' },
-    { name: 'auth', description: 'Authentication and authorization' },
-    { name: 'api-keys', description: 'API key management and authentication' },
-    { name: 'billing', description: 'Stripe billing, subscriptions, and payments' },
-    { name: 'chat', description: 'Multi-model AI chat threads and messages' },
-    { name: 'Uploads', description: 'File uploads for chat attachments (R2 storage)' },
-    { name: 'Multipart', description: 'Multipart uploads for large files' },
-    { name: 'projects', description: 'Project-based knowledge base management with AutoRAG' },
-    { name: 'knowledge-base', description: 'Knowledge file upload and management' },
-    { name: 'usage', description: 'Usage tracking and quota management' },
-    { name: 'models', description: 'Dynamic OpenRouter AI models discovery and management' },
-    { name: 'mcp', description: 'Model Context Protocol server implementation' },
-    { name: 'tools', description: 'MCP tool execution endpoints' },
-  ],
-  servers: [
-    {
-      url: `${new URL(c.req.url).origin}/api/v1`,
-      description: 'Current environment',
-    },
-  ],
   components: {
     securitySchemes: {
       ApiKeyAuth: {
-        type: 'apiKey',
         in: 'header',
         name: 'x-api-key',
+        type: 'apiKey',
       },
     },
   },
+  info: {
+    contact: { name: 'Roundtable', url: 'https://roundtable.now' },
+    description: 'roundtable.now API - Collaborative AI brainstorming platform. Built with Hono, Zod, and OpenAPI.',
+    license: { name: 'Proprietary' },
+    title: 'Roundtable API',
+    version: APP_VERSION,
+  },
+  openapi: '3.0.0',
   security: [{ ApiKeyAuth: [] }],
+  servers: [
+    {
+      description: 'Current environment',
+      url: `${new URL(c.req.url).origin}/api/v1`,
+    },
+  ],
+  tags: [
+    { description: 'System health and diagnostics', name: 'system' },
+    { description: 'Authentication and authorization', name: 'auth' },
+    { description: 'API key management and authentication', name: 'api-keys' },
+    { description: 'Stripe billing, subscriptions, and payments', name: 'billing' },
+    { description: 'Multi-model AI chat threads and messages', name: 'chat' },
+    { description: 'File uploads for chat attachments (R2 storage)', name: 'Uploads' },
+    { description: 'Multipart uploads for large files', name: 'Multipart' },
+    { description: 'Project-based knowledge base management with AutoRAG', name: 'projects' },
+    { description: 'Knowledge file upload and management', name: 'knowledge-base' },
+    { description: 'Usage tracking and quota management', name: 'usage' },
+    { description: 'Dynamic OpenRouter AI models discovery and management', name: 'models' },
+    { description: 'Model Context Protocol server implementation', name: 'mcp' },
+    { description: 'MCP tool execution endpoints', name: 'tools' },
+  ],
 }));
 
 app.get('/openapi.json', async (c) => {
@@ -411,9 +412,9 @@ app.use('/scalar', async (c, next) => {
   newHeaders.set('Content-Security-Policy', csp);
 
   c.res = new Response(response.body, {
+    headers: newHeaders,
     status: response.status,
     statusText: response.statusText,
-    headers: newHeaders,
   });
 });
 
@@ -438,8 +439,8 @@ app.get('/scalar', (c) => {
 app.get('/llms.txt', async (c) => {
   try {
     const document = app.getOpenAPI31Document({
-      openapi: '3.1.0',
       info: { title: 'Application API', version: APP_VERSION },
+      openapi: '3.1.0',
     });
     // Simple markdown conversion without external deps
     const md = `# API Documentation\n\n${JSON.stringify(document, null, 2)}`;
@@ -462,12 +463,12 @@ rootApp.get('/debug/env', (c) => {
   const betterAuthUrl = c.env?.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL;
 
   return c.json({
-    nodeEnv,
-    webappEnv,
+    allowedOrigins: getAllowedOriginsFromContext(c),
     betterAuthUrl,
     isProductionMode: nodeEnv === 'production',
-    allowedOrigins: getAllowedOriginsFromContext(c),
+    nodeEnv,
     timestamp: new Date().toISOString(),
+    webappEnv,
   });
 });
 
@@ -490,9 +491,9 @@ rootApp.get('/debug/cookie-test', (c) => {
   );
 
   return c.json({
-    message: 'Cookie set',
-    isProduction,
     domain: isProduction ? '.roundtable.now' : 'none',
+    isProduction,
+    message: 'Cookie set',
     requestCookies: c.req.header('cookie') || 'none',
   });
 });
@@ -514,7 +515,7 @@ rootApp.all('/api/auth/*', async (c) => {
       headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
       headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
     }
-    return new Response(null, { status: 204, headers });
+    return new Response(null, { headers, status: 204 });
   }
 
   try {
@@ -535,11 +536,11 @@ rootApp.all('/api/auth/*', async (c) => {
       try {
         const body = await clonedResponse.text();
         console.error({
+          body: body.slice(0, 1000),
           log_type: 'better_auth_error',
-          timestamp: new Date().toISOString(),
           path: c.req.path,
           status: response.status,
-          body: body.slice(0, 1000),
+          timestamp: new Date().toISOString(),
         });
       } catch {
         // Ignore clone errors
@@ -547,18 +548,18 @@ rootApp.all('/api/auth/*', async (c) => {
     }
 
     return new Response(response.body, {
+      headers: newHeaders,
       status: response.status,
       statusText: response.statusText,
-      headers: newHeaders,
     });
   } catch (error) {
     console.error({
-      log_type: 'better_auth_exception',
-      timestamp: new Date().toISOString(),
-      path: c.req.path,
-      error_name: error instanceof Error ? error.name : 'Unknown',
       error_message: error instanceof Error ? error.message : String(error),
+      error_name: error instanceof Error ? error.name : 'Unknown',
       error_stack: error instanceof Error ? error.stack : undefined,
+      log_type: 'better_auth_exception',
+      path: c.req.path,
+      timestamp: new Date().toISOString(),
     });
 
     const headers = new Headers();
@@ -570,7 +571,7 @@ rootApp.all('/api/auth/*', async (c) => {
 
     return new Response(
       JSON.stringify({ error: 'Authentication service error' }),
-      { status: 500, headers },
+      { headers, status: 500 },
     );
   }
 });

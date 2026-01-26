@@ -14,7 +14,7 @@ type TypewriterTitleProps = {
   currentTitle: string;
 };
 
-export function TypewriterTitle({ threadId, currentTitle }: TypewriterTitleProps) {
+export function TypewriterTitle({ currentTitle, threadId }: TypewriterTitleProps) {
   const { animatingThreadId, animationPhase, displayedTitle } = useChatStore(
     useShallow(s => ({
       animatingThreadId: s.animatingThreadId,

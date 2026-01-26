@@ -82,7 +82,7 @@ describe('action Invocation Counts - Submission Flow', () => {
     expect(spy).toHaveBeenNthCalledWith(1, 0);
 
     // Verify state was reset to null by completeStreaming
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().streamingRoundNumber).toBeNull();
   });
 
   it('should call setCreatedThreadId exactly once per thread', () => {
@@ -144,9 +144,9 @@ describe('action Invocation Counts - Participant Streaming', () => {
 
     // Set up streaming state
     store.setState({
+      currentParticipantIndex: 2,
       isStreaming: true,
       streamingRoundNumber: 0,
-      currentParticipantIndex: 2,
     });
 
     // Complete round
@@ -156,8 +156,8 @@ describe('action Invocation Counts - Participant Streaming', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     // Verify state was reset
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().streamingRoundNumber).toBeNull();
   });
 
   it('should call setMessages N times for N streaming chunks', () => {
@@ -167,11 +167,11 @@ describe('action Invocation Counts - Participant Streaming', () => {
     // Simulate 10 streaming chunks
     for (let i = 1; i <= 10; i++) {
       const message = createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Word '.repeat(i),
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([message]);
     }
@@ -225,14 +225,14 @@ describe('action Invocation Counts - Pre-Search', () => {
     const spy = vi.spyOn(store.getState(), 'addPreSearch');
 
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
 
     store.getState().addPreSearch(preSearchPlaceholder);
@@ -248,8 +248,8 @@ describe('action Invocation Counts - Pre-Search', () => {
 
     // Simulate submission without web search
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -264,14 +264,14 @@ describe('action Invocation Counts - Pre-Search', () => {
 
     // Add PENDING pre-search
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -293,24 +293,24 @@ describe('action Invocation Counts - Pre-Search', () => {
 
     // Add PENDING pre-search
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
     // First try - should succeed
     const didMark1 = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark1).toBe(true);
+    expect(didMark1).toBeTruthy();
 
     // Second try - should fail (already marked)
     const didMark2 = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark2).toBe(false);
+    expect(didMark2).toBeFalsy();
 
     // Should be called exactly twice (once successful, once failed)
     expect(spy).toHaveBeenCalledTimes(2);
@@ -322,14 +322,14 @@ describe('action Invocation Counts - Pre-Search', () => {
 
     // Add PENDING pre-search
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -360,33 +360,33 @@ describe('action Invocation Counts - Multi-Round Flow', () => {
 
     // User message
     const r0User = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question 1',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([r0User]);
 
     // 3 participant messages (simulating completed state)
     const r0p0 = createTestAssistantMessage({
-      id: 'thread_abc_r0_p0',
       content: 'Response 1',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
     const r0p1 = createTestAssistantMessage({
-      id: 'thread_abc_r0_p1',
       content: 'Response 2',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p1',
       participantId: 'participant-1',
       participantIndex: 1,
+      roundNumber: 0,
     });
     const r0p2 = createTestAssistantMessage({
-      id: 'thread_abc_r0_p2',
       content: 'Response 3',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p2',
       participantId: 'participant-2',
       participantIndex: 2,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([r0User, r0p0]);
@@ -401,32 +401,32 @@ describe('action Invocation Counts - Multi-Round Flow', () => {
     store.getState().setIsStreaming(true);
 
     const r1User = createTestUserMessage({
-      id: 'thread_abc_r1_user',
       content: 'Question 2',
+      id: 'thread_abc_r1_user',
       roundNumber: 1,
     });
     store.getState().setMessages([r0User, r0p0, r0p1, r0p2, r1User]);
 
     const r1p0 = createTestAssistantMessage({
-      id: 'thread_abc_r1_p0',
       content: 'Response 4',
-      roundNumber: 1,
+      id: 'thread_abc_r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 1,
     });
     const r1p1 = createTestAssistantMessage({
-      id: 'thread_abc_r1_p1',
       content: 'Response 5',
-      roundNumber: 1,
+      id: 'thread_abc_r1_p1',
       participantId: 'participant-1',
       participantIndex: 1,
+      roundNumber: 1,
     });
     const r1p2 = createTestAssistantMessage({
-      id: 'thread_abc_r1_p2',
       content: 'Response 6',
-      roundNumber: 1,
+      id: 'thread_abc_r1_p2',
       participantId: 'participant-2',
       participantIndex: 2,
+      roundNumber: 1,
     });
 
     store.getState().setMessages([r0User, r0p0, r0p1, r0p2, r1User, r1p0]);
@@ -458,7 +458,7 @@ describe('action Invocation Counts - Error Scenarios', () => {
 
     // In proper flow, setStreamingRoundNumber MUST be called before setIsStreaming
     // This test documents expected behavior
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().streamingRoundNumber).toBeNull();
 
     // Provider should NOT call setIsStreaming when round is null
     // But store will accept it (store is permissive, provider is strict)
@@ -527,7 +527,7 @@ describe('action Invocation Counts - Performance Regression', () => {
      * - Verify atomic operations working correctly
      * - Look for unnecessary polling or queries
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('verifies no duplicate setMessages calls for same content', () => {
@@ -535,11 +535,11 @@ describe('action Invocation Counts - Performance Regression', () => {
     const spy = vi.spyOn(store.getState(), 'setMessages');
 
     const message = createTestAssistantMessage({
-      id: 'thread_abc_r0_p0',
       content: 'Test response',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     // Call once

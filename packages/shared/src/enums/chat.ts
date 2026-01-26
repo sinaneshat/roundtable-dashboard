@@ -122,10 +122,10 @@ export type MessageStatus = z.infer<typeof MessageStatusSchema>;
 export const DEFAULT_MESSAGE_STATUS: MessageStatus = 'pending';
 
 export const MessageStatuses = {
-  PENDING: 'pending' as const,
-  STREAMING: 'streaming' as const,
   COMPLETE: 'complete' as const,
   FAILED: 'failed' as const,
+  PENDING: 'pending' as const,
+  STREAMING: 'streaming' as const,
 } as const;
 
 // ============================================================================
@@ -144,9 +144,9 @@ export type MessageRole = z.infer<typeof MessageRoleSchema>;
 export const DEFAULT_MESSAGE_ROLE: MessageRole = 'user';
 
 export const MessageRoles = {
-  USER: 'user' as const,
   ASSISTANT: 'assistant' as const,
   TOOL: 'tool' as const,
+  USER: 'user' as const,
 } as const;
 
 // ============================================================================
@@ -193,12 +193,12 @@ export type ChangelogChangeType = z.infer<typeof ChangelogChangeTypeSchema>;
 export const DEFAULT_CHANGELOG_CHANGE_TYPE: ChangelogChangeType = 'participant';
 
 export const ChangelogChangeTypes = {
-  PARTICIPANT: 'participant' as const,
-  PARTICIPANT_ROLE: 'participant_role' as const,
-  MODE_CHANGE: 'mode_change' as const,
-  PARTICIPANT_REORDER: 'participant_reorder' as const,
-  WEB_SEARCH: 'web_search' as const,
   MEMORY_CREATED: 'memory_created' as const,
+  MODE_CHANGE: 'mode_change' as const,
+  PARTICIPANT: 'participant' as const,
+  PARTICIPANT_REORDER: 'participant_reorder' as const,
+  PARTICIPANT_ROLE: 'participant_role' as const,
+  WEB_SEARCH: 'web_search' as const,
 } as const;
 
 // ============================================================================
@@ -223,8 +223,8 @@ export const DEFAULT_SCREEN_MODE: ScreenMode = 'overview';
 // 5. CONSTANT OBJECT
 export const ScreenModes = {
   OVERVIEW: 'overview' as const,
-  THREAD: 'thread' as const,
   PUBLIC: 'public' as const,
+  THREAD: 'thread' as const,
 } as const;
 
 // ============================================================================
@@ -278,9 +278,9 @@ export const DEFAULT_TIMELINE_ELEMENT_TYPE: TimelineElementType = 'user_message'
 
 // 5. CONSTANT OBJECT
 export const TimelineElementTypes = {
-  PRE_SEARCH: 'pre_search' as const,
   MODERATOR: 'moderator' as const,
   PARTICIPANT_MESSAGE: 'participant_message' as const,
+  PRE_SEARCH: 'pre_search' as const,
   USER_MESSAGE: 'user_message' as const,
 } as const;
 
@@ -291,9 +291,9 @@ export function isTimelineElementType(value: unknown): value is TimelineElementT
 
 // 7. DISPLAY LABELS
 export const TIMELINE_ELEMENT_TYPE_LABELS: Record<TimelineElementType, string> = {
-  [TimelineElementTypes.PRE_SEARCH]: 'Pre-Search',
   [TimelineElementTypes.MODERATOR]: 'Moderator',
   [TimelineElementTypes.PARTICIPANT_MESSAGE]: 'Participant Message',
+  [TimelineElementTypes.PRE_SEARCH]: 'Pre-Search',
   [TimelineElementTypes.USER_MESSAGE]: 'User Message',
 } as const;
 
@@ -322,8 +322,8 @@ export const DEFAULT_TIMELINE_ITEM_TYPE: TimelineItemType = 'messages';
 
 // 5. CONSTANT OBJECT
 export const TimelineItemTypes = {
-  MESSAGES: 'messages' as const,
   CHANGELOG: 'changelog' as const,
+  MESSAGES: 'messages' as const,
   PRE_SEARCH: 'pre-search' as const,
 } as const;
 
@@ -334,8 +334,8 @@ export function isTimelineItemType(value: unknown): value is TimelineItemType {
 
 // 7. DISPLAY LABELS
 export const TIMELINE_ITEM_TYPE_LABELS: Record<TimelineItemType, string> = {
-  [TimelineItemTypes.MESSAGES]: 'Messages',
   [TimelineItemTypes.CHANGELOG]: 'Changelog',
+  [TimelineItemTypes.MESSAGES]: 'Messages',
   [TimelineItemTypes.PRE_SEARCH]: 'Pre-Search',
 } as const;
 
@@ -364,9 +364,9 @@ export const DEFAULT_SHARED_ASSUMPTION_TYPE: SharedAssumptionType = 'shared assu
 
 // 5. CONSTANT OBJECT
 export const SharedAssumptionTypes = {
-  SHARED_ASSUMPTIONS: 'shared assumptions' as const,
   COMMON_OBJECTIVES: 'common objectives' as const,
   OVERLAPPING_CONCLUSIONS: 'overlapping conclusions' as const,
+  SHARED_ASSUMPTIONS: 'shared assumptions' as const,
 } as const;
 
 // ============================================================================
@@ -395,8 +395,8 @@ export const DEFAULT_CORE_ASSUMPTION_FOCUS_TYPE: CoreAssumptionFocusType
 
 // 5. CONSTANT OBJECT
 export const CoreAssumptionFocusTypes = {
-  FOUNDATIONAL_ASSUMPTIONS: 'foundational assumptions behind each perspective' as const,
   ASSUMPTION_CONFLICTS: 'where assumptions conflict' as const,
+  FOUNDATIONAL_ASSUMPTIONS: 'foundational assumptions behind each perspective' as const,
   UNRESOLVED_DISAGREEMENTS: 'why disagreements remain unresolved' as const,
 } as const;
 
@@ -423,10 +423,10 @@ export const DEFAULT_CHANGELOG_CHANGE_TYPE_EXTENDED: ChangelogChangeTypeExtended
 
 export const ChangelogChangeTypesExtended = {
   ADDED: 'added' as const,
-  REMOVED: 'removed' as const,
-  MODIFIED: 'modified' as const,
-  REORDERED: 'reordered' as const,
   MODE_CHANGED: 'mode-changed' as const,
+  MODIFIED: 'modified' as const,
+  REMOVED: 'removed' as const,
+  REORDERED: 'reordered' as const,
 } as const;
 
 // ============================================================================
@@ -454,9 +454,9 @@ export const DEFAULT_MODERATOR_REQUIRED_SECTION: ModeratorRequiredSection = 'sum
 
 // 5. CONSTANT OBJECT
 export const ModeratorRequiredSections = {
-  SUMMARY_CONCLUSION: 'summaryConclusion' as const,
-  QUESTION_OVERVIEW: 'questionOverview' as const,
   PARTICIPANTS: 'participants' as const,
+  QUESTION_OVERVIEW: 'questionOverview' as const,
+  SUMMARY_CONCLUSION: 'summaryConclusion' as const,
 } as const;
 
 // ============================================================================
@@ -490,15 +490,15 @@ export const DEFAULT_MODERATOR_OPTIONAL_SECTION: ModeratorOptionalSection = 'pri
 
 // 5. CONSTANT OBJECT
 export const ModeratorOptionalSections = {
-  PRIMARY_PERSPECTIVES: 'primaryPerspectives' as const,
   AREAS_OF_AGREEMENT: 'areasOfAgreement' as const,
-  CORE_ASSUMPTIONS_AND_TENSIONS: 'coreAssumptionsAndTensions' as const,
-  TRADE_OFFS_AND_IMPLICATIONS: 'tradeOffsAndImplications' as const,
-  LIMITATIONS_AND_BLIND_SPOTS: 'limitationsAndBlindSpots' as const,
   CONSENSUS_STATUS: 'consensusStatus' as const,
+  CORE_ASSUMPTIONS_AND_TENSIONS: 'coreAssumptionsAndTensions' as const,
   INTEGRATED_ANALYSIS: 'integratedAnalysis' as const,
   KEY_EXCHANGES: 'keyExchanges' as const,
   KEY_UNCERTAINTIES: 'keyUncertainties' as const,
+  LIMITATIONS_AND_BLIND_SPOTS: 'limitationsAndBlindSpots' as const,
+  PRIMARY_PERSPECTIVES: 'primaryPerspectives' as const,
+  TRADE_OFFS_AND_IMPLICATIONS: 'tradeOffsAndImplications' as const,
 } as const;
 
 // ============================================================================
@@ -577,8 +577,8 @@ export const DEFAULT_LIMITATION_IMPORTANCE: LimitationImportance = 'secondary';
 // 5. CONSTANT OBJECT
 export const LimitationImportances = {
   CRITICAL: 'critical' as const,
-  SECONDARY: 'secondary' as const,
   OUT_OF_SCOPE: 'out_of_scope' as const,
+  SECONDARY: 'secondary' as const,
 } as const;
 
 // ============================================================================
@@ -602,10 +602,10 @@ export const DEFAULT_CHANGELOG_OPERATION: ChangelogOperation = 'none';
 
 // 5. CONSTANT OBJECT
 export const ChangelogOperations = {
-  NONE: 'none' as const,
   DELETE: 'delete' as const,
-  UPDATE: 'update' as const,
   INSERT: 'insert' as const,
+  NONE: 'none' as const,
+  UPDATE: 'update' as const,
 } as const;
 
 // ============================================================================
@@ -635,10 +635,10 @@ export const DEFAULT_MODERATOR_STYLE_CONSTRAINT: ModeratorStyleConstraint = 'pre
 
 // 5. CONSTANT OBJECT
 export const ModeratorStyleConstraints = {
-  PRECISE_RESTRAINED_NON_PERFORMATIVE: 'precise_restrained_non_performative' as const,
+  NO_CONVERSATION_NARRATION: 'no_conversation_narration' as const,
   NO_EMOTIONAL_LANGUAGE: 'no_emotional_language' as const,
   NO_INTERNAL_SYSTEM_REFERENCES: 'no_internal_system_references' as const,
-  NO_CONVERSATION_NARRATION: 'no_conversation_narration' as const,
-  TREAT_CROSS_MODEL_CHALLENGES_AS_STRUCTURAL_TENSIONS: 'treat_cross_model_challenges_as_structural_tensions' as const,
   OMIT_EMPTY_SECTIONS: 'omit_empty_sections' as const,
+  PRECISE_RESTRAINED_NON_PERFORMATIVE: 'precise_restrained_non_performative' as const,
+  TREAT_CROSS_MODEL_CHALLENGES_AS_STRUCTURAL_TENSIONS: 'treat_cross_model_challenges_as_structural_tensions' as const,
 } as const;

@@ -18,16 +18,16 @@ const _mockReplace = vi.fn();
 
 vi.mock('@/hooks/mutations', () => ({
   useToggleFavoriteMutation: () => ({
-    mutate: vi.fn(),
     isPending: false,
+    mutate: vi.fn(),
   }),
   useTogglePublicMutation: () => ({
-    mutate: vi.fn(),
     isPending: false,
+    mutate: vi.fn(),
   }),
   useUpdateThreadMutation: () => ({
-    mutate: vi.fn(),
     isPending: false,
+    mutate: vi.fn(),
   }),
 }));
 
@@ -64,14 +64,14 @@ function trackRender(componentName: string): number {
 
 function createMockChat(overrides: Partial<ChatSidebarItem> = {}): ChatSidebarItem {
   return {
-    id: `thread-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    title: 'New conversation',
-    slug: 'temp-thread-abc123',
-    previousSlug: null,
     createdAt: new Date(),
-    updatedAt: new Date(),
+    id: `thread-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     isFavorite: false,
     isPublic: false,
+    previousSlug: null,
+    slug: 'temp-thread-abc123',
+    title: 'New conversation',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -79,8 +79,8 @@ function createMockChat(overrides: Partial<ChatSidebarItem> = {}): ChatSidebarIt
 function TestWrapper({ children }: { children: ReactNode }) {
   const [queryClient] = React.useState(() => new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
+      queries: { gcTime: 0, retry: false },
     },
   }));
 
@@ -198,8 +198,8 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
           } else if (pollCycle === 5) {
             const updatedChat = createMockChat({
               id: threadId,
-              slug: 'how-to-implement-react-hooks',
               previousSlug: 'temp-thread-001',
+              slug: 'how-to-implement-react-hooks',
               title: 'How to implement React hooks effectively',
             });
 
@@ -214,8 +214,8 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
           } else {
             const stableChat = createMockChat({
               id: threadId,
-              slug: 'how-to-implement-react-hooks',
               previousSlug: null,
+              slug: 'how-to-implement-react-hooks',
               title: 'How to implement React hooks effectively',
             });
 
@@ -258,8 +258,8 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
       expect(buttonBefore).toBeInTheDocument();
       const updatedChat = createMockChat({
         id: threadId,
-        slug: 'ai-generated-slug',
         previousSlug: 'temp-thread-002',
+        slug: 'ai-generated-slug',
         title: 'AI Generated Title',
       });
 
@@ -297,9 +297,9 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
         for (let i = 0; i < 5; i++) {
           const updatedThreads = threads.map((t, idx) => ({
             ...t,
+            previousSlug: i === 3 ? t.slug : null,
             slug: i >= 3 ? `ai-slug-${idx}` : t.slug,
             title: i >= 3 ? `AI Title ${idx}` : t.title,
-            previousSlug: i === 3 ? t.slug : null,
           }));
 
           rerender(
@@ -336,12 +336,12 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
       const button = screen.getByTestId(`chat-button-${threadId}`);
       await userEvent.hover(button);
 
-      expect(mockPrefetch).toHaveBeenCalled();
+      expect(mockPrefetch).toHaveBeenCalledWith();
       await act(async () => {
         const updatedChat = createMockChat({
           id: threadId,
-          slug: 'ai-dropdown-test',
           previousSlug: 'temp-dropdown',
+          slug: 'ai-dropdown-test',
           title: 'AI Generated During Hover',
         });
 
@@ -378,8 +378,8 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
               <TrackedChatList
                 chats={[{
                   ...thread,
-                  title: i >= 5 ? 'AI Title' : 'Baseline Test',
                   slug: i >= 5 ? 'ai-slug' : 'temp-baseline',
+                  title: i >= 5 ? 'AI Title' : 'Baseline Test',
                 }]}
               />
             </TestWrapper>,
@@ -401,10 +401,10 @@ describe('dynamic Title Update E2E - Source Code Verification', () => {
     const { resolve } = await import('node:path');
 
     const filesToCheck = [
-      { path: '../chat-list.tsx', name: 'ChatList' },
-      { path: '../nav-user.tsx', name: 'NavUser' },
-      { path: '../chat-thread-actions.tsx', name: 'ChatThreadActions' },
-      { path: '../social-share-button.tsx', name: 'SocialShareButton' },
+      { name: 'ChatList', path: '../chat-list.tsx' },
+      { name: 'NavUser', path: '../nav-user.tsx' },
+      { name: 'ChatThreadActions', path: '../chat-thread-actions.tsx' },
+      { name: 'SocialShareButton', path: '../social-share-button.tsx' },
     ];
 
     const findings: string[] = [];

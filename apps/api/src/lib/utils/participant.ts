@@ -17,7 +17,7 @@ import type { ParticipantComparisonMode } from '@roundtable/shared/enums';
 import { ParticipantComparisonModes } from '@roundtable/shared/enums';
 
 import type { ChatParticipant } from '@/db/validation/chat';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ComparableParticipant, ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 // ============================================================================
 // Priority Sorting (SINGLE SOURCE OF TRUTH)
@@ -70,16 +70,8 @@ export function reindexParticipantPriorities<T extends WithPriority>(participant
 // Type Definitions
 // ============================================================================
 
-/**
- * Comparable participant type (common fields between ChatParticipant and ParticipantConfig)
- */
-export type ComparableParticipant = Pick<
-  ChatParticipant | ParticipantConfig,
-  'modelId' | 'role' | 'priority'
-> & {
-  customRoleId?: string | null;
-  isEnabled?: boolean;
-};
+// NOTE: ComparableParticipant is defined via Zod schema in participant-schemas.ts
+// Import it from there for new code. The type is used in comparison functions below.
 
 /**
  * Update payload for participant changes
@@ -312,12 +304,12 @@ export function participantConfigToUpdatePayload(
   // - Backend uses empty string to trigger "find by modelId" logic for new participants
   const isNewParticipant = participant.id === participant.modelId;
   return {
-    id: isNewParticipant ? '' : participant.id,
-    modelId: participant.modelId,
-    role: participant.role || null,
     customRoleId: participant.customRoleId || null,
-    priority: participant.priority,
+    id: isNewParticipant ? '' : participant.id,
     isEnabled: true,
+    modelId: participant.modelId,
+    priority: participant.priority,
+    role: participant.role || null,
   };
 }
 
@@ -337,15 +329,15 @@ export function participantConfigToOptimistic(
   const now = new Date();
 
   return {
-    id: participant.id,
-    threadId,
-    modelId: participant.modelId,
-    role: participant.role || null,
-    customRoleId: participant.customRoleId || null,
-    priority: index,
-    isEnabled: true,
-    settings: participant.settings || null,
     createdAt: now,
+    customRoleId: participant.customRoleId || null,
+    id: participant.id,
+    isEnabled: true,
+    modelId: participant.modelId,
+    priority: index,
+    role: participant.role || null,
+    settings: participant.settings || null,
+    threadId,
     updatedAt: now,
   };
 }
@@ -370,11 +362,11 @@ export function chatParticipantsToConfig(
 ): ParticipantConfig[] {
   return getEnabledSortedParticipants(participants)
     .map((p, index) => ({
+      customRoleId: p.customRoleId || undefined,
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
-      customRoleId: p.customRoleId || undefined,
       priority: index,
+      role: p.role,
     }));
 }
 
@@ -390,7 +382,7 @@ export function chatParticipantsToConfig(
  * @returns True if duplicate
  */
 export function isParticipantDuplicate(
-  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'modelId'>>,
+  participants: Pick<ChatParticipant | ParticipantConfig, 'modelId'>[],
   modelId: string,
 ): boolean {
   return participants.some(p => p.modelId === modelId);
@@ -403,7 +395,7 @@ export function isParticipantDuplicate(
  * @returns Next priority number
  */
 export function getNextParticipantPriority(
-  participants: Array<Pick<ChatParticipant | ParticipantConfig, 'priority'>>,
+  participants: Pick<ChatParticipant | ParticipantConfig, 'priority'>[],
 ): number {
   if (participants.length === 0) {
     return 0;
@@ -576,8 +568,8 @@ export function prepareParticipantUpdate(
   );
 
   return {
-    updateResult,
-    updatePayloads,
     optimisticParticipants,
+    updatePayloads,
+    updateResult,
   };
 }

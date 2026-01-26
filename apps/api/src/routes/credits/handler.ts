@@ -34,20 +34,20 @@ type CreditCalculator = (params: CreditEstimateParams) => number;
 
 const CREDIT_ACTION_CALCULATORS: Record<CreditAction, CreditCalculator> = {
   [CreditActions.AI_RESPONSE]: p => estimateStreamingCredits(p.participantCount, p.inputTokens),
-  [CreditActions.USER_MESSAGE]: p => estimateStreamingCredits(p.participantCount, p.inputTokens),
-  [CreditActions.WEB_SEARCH]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery),
-  [CreditActions.THREAD_CREATION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.threadCreation),
-  [CreditActions.FILE_READING]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.fileReading),
   [CreditActions.ANALYSIS_GENERATION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.analysisGeneration),
+  [CreditActions.CREDIT_PURCHASE]: () => 0,
+  [CreditActions.FILE_READING]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.fileReading),
+  [CreditActions.FREE_ROUND_COMPLETE]: () => 0,
   [CreditActions.MEMORY_EXTRACTION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.memoryExtraction),
-  [CreditActions.RAG_QUERY]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.ragQuery),
+  [CreditActions.MONTHLY_RENEWAL]: () => 0,
   [CreditActions.PROJECT_FILE_LINK]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.projectFileLink),
   [CreditActions.PROJECT_STORAGE]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.projectStoragePer10MB),
+  [CreditActions.RAG_QUERY]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.ragQuery),
   // Grant actions - return 0 for estimation (not deductions)
   [CreditActions.SIGNUP_BONUS]: () => 0,
-  [CreditActions.MONTHLY_RENEWAL]: () => 0,
-  [CreditActions.CREDIT_PURCHASE]: () => 0,
-  [CreditActions.FREE_ROUND_COMPLETE]: () => 0,
+  [CreditActions.THREAD_CREATION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.threadCreation),
+  [CreditActions.USER_MESSAGE]: p => estimateStreamingCredits(p.participantCount, p.inputTokens),
+  [CreditActions.WEB_SEARCH]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery),
 };
 
 function calculateCreditCost(action: CreditAction, params: CreditEstimateParams): number {
@@ -85,16 +85,16 @@ export const getCreditBalanceHandler: RouteHandler<
     }
 
     return Responses.ok(c, {
-      balance: creditBalance.balance,
-      reserved: creditBalance.reserved,
       available,
-      status,
+      balance: creditBalance.balance,
       percentage: Math.min(percentage, 100),
       plan: {
-        type: creditBalance.planType,
         monthlyCredits: creditBalance.monthlyCredits,
         nextRefillAt: creditBalance.nextRefillAt?.toISOString() ?? null,
+        type: creditBalance.planType,
       },
+      reserved: creditBalance.reserved,
+      status,
     });
   },
 );
@@ -105,8 +105,8 @@ export const getCreditTransactionsHandler: RouteHandler<
 > = createHandler(
   {
     auth: 'session',
-    validateQuery: CreditTransactionsQuerySchema,
     operationName: 'getCreditTransactions',
+    validateQuery: CreditTransactionsQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -116,29 +116,32 @@ export const getCreditTransactionsHandler: RouteHandler<
     const page = query.page ?? 1;
     const offset = (page - 1) * limit;
 
-    const { transactions, total } = await getUserTransactionHistory(
+    // Only include type in options if defined to satisfy exactOptionalPropertyTypes
+    const { total, transactions } = await getUserTransactionHistory(
       user.id,
-      { limit, offset, type: query.type },
+      query.type !== undefined
+        ? { limit, offset, type: query.type }
+        : { limit, offset },
     );
 
     return Responses.ok(c, {
       items: transactions.map(tx => ({
-        id: tx.id,
-        type: tx.type,
+        action: tx.action,
         amount: tx.amount,
         balanceAfter: tx.balanceAfter,
-        action: tx.action,
+        createdAt: tx.createdAt,
         description: tx.description,
+        id: tx.id,
         inputTokens: tx.inputTokens,
         outputTokens: tx.outputTokens,
         threadId: tx.threadId,
-        createdAt: tx.createdAt,
+        type: tx.type,
       })),
       pagination: {
-        total,
+        hasMore: offset + transactions.length < total,
         limit,
         offset,
-        hasMore: offset + transactions.length < total,
+        total,
       },
     });
   },
@@ -150,16 +153,16 @@ export const estimateCreditCostHandler: RouteHandler<
 > = createHandler(
   {
     auth: 'session',
-    validateBody: CreditEstimateRequestSchema,
     operationName: 'estimateCreditCost',
+    validateBody: CreditEstimateRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
     const body = c.validated.body;
 
     const params: CreditEstimateParams = {
-      participantCount: body.params?.participantCount ?? 1,
       inputTokens: body.params?.estimatedInputTokens ?? CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
+      participantCount: body.params?.participantCount ?? 1,
     };
 
     const estimatedCredits = calculateCreditCost(body.action, params);
@@ -170,10 +173,10 @@ export const estimateCreditCostHandler: RouteHandler<
     const canAfford = await canAffordCredits(user.id, estimatedCredits);
 
     return Responses.ok(c, {
-      estimatedCredits,
+      balanceAfter: currentBalance - estimatedCredits,
       canAfford,
       currentBalance,
-      balanceAfter: currentBalance - estimatedCredits,
+      estimatedCredits,
     });
   },
 );

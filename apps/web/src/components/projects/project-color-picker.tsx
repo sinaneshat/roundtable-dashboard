@@ -10,7 +10,7 @@ type ProjectColorPickerProps = {
   onChange: (color: ProjectColor) => void;
 };
 
-export function ProjectColorPicker({ value, onChange }: ProjectColorPickerProps) {
+export function ProjectColorPicker({ onChange, value }: ProjectColorPickerProps) {
   return (
     <div className="grid grid-cols-9 gap-1.5">
       {PROJECT_COLORS.map(color => (

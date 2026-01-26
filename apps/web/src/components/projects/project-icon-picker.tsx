@@ -10,7 +10,7 @@ type ProjectIconPickerProps = {
   onChange: (icon: ProjectIcon) => void;
 };
 
-export function ProjectIconPicker({ value, onChange }: ProjectIconPickerProps) {
+export function ProjectIconPicker({ onChange, value }: ProjectIconPickerProps) {
   return (
     <div className="grid grid-cols-6 gap-1.5">
       {PROJECT_ICONS.map((icon) => {

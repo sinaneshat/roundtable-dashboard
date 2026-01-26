@@ -16,13 +16,13 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
 
   await executeBatch(db, [
     db.insert(tables.chatThreadChangelog).values({
-      id: changelogId,
-      threadId: params.threadId,
-      roundNumber: params.roundNumber,
-      changeType: params.changeType,
-      changeSummary: params.changeSummary,
       changeData: params.changeData,
+      changeSummary: params.changeSummary,
+      changeType: params.changeType,
       createdAt: now,
+      id: changelogId,
+      roundNumber: params.roundNumber,
+      threadId: params.threadId,
     }),
     db.update(tables.chatThread)
       .set({ updatedAt: now })
@@ -35,30 +35,30 @@ export async function createChangelogEntry(params: CreateChangelogParams): Promi
 export async function getThreadChangelog(
   threadId: string,
   limit?: number,
-): Promise<Array<ChatThreadChangelog>> {
+): Promise<ChatThreadChangelog[]> {
   const db = await getDbAsync();
 
-  return db.query.chatThreadChangelog
+  return await db.query.chatThreadChangelog
     .findMany({
-      where: eq(tables.chatThreadChangelog.threadId, threadId),
-      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
       limit,
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
+      where: eq(tables.chatThreadChangelog.threadId, threadId),
     });
 }
 
 export async function getThreadChangelogByRound(
   threadId: string,
   roundNumber: number,
-): Promise<Array<ChatThreadChangelog>> {
+): Promise<ChatThreadChangelog[]> {
   const db = await getDbAsync();
 
-  return db.query.chatThreadChangelog
+  return await db.query.chatThreadChangelog
     .findMany({
+      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
       where: and(
         eq(tables.chatThreadChangelog.threadId, threadId),
         eq(tables.chatThreadChangelog.roundNumber, roundNumber),
       ),
-      orderBy: [desc(tables.chatThreadChangelog.createdAt)],
     });
 }
 
@@ -68,16 +68,16 @@ export async function logModeChange(
   oldMode: ChatMode,
   newMode: ChatMode,
 ): Promise<string> {
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.MODIFIED,
-    changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.MODE_CHANGE,
-      oldMode,
       newMode,
+      oldMode,
+      type: ChangelogChangeTypes.MODE_CHANGE,
     },
+    changeSummary: `Changed conversation mode from ${oldMode} to ${newMode}`,
+    changeType: ChangelogTypes.MODIFIED,
+    roundNumber,
+    threadId,
   });
 }
 
@@ -91,17 +91,17 @@ export async function logParticipantAdded(
   const modelName = modelId.split('/').pop() || modelId;
   const summary = role ? `Added ${modelName} as ${role}` : `Added ${modelName}`;
 
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.ADDED,
-    changeSummary: summary,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.PARTICIPANT,
-      participantId,
       modelId,
+      participantId,
       role,
+      type: ChangelogChangeTypes.PARTICIPANT,
     },
+    changeSummary: summary,
+    changeType: ChangelogTypes.ADDED,
+    roundNumber,
+    threadId,
   });
 }
 
@@ -115,17 +115,17 @@ export async function logParticipantRemoved(
   const modelName = modelId.split('/').pop() || modelId;
   const summary = role ? `Removed ${modelName} (${role})` : `Removed ${modelName}`;
 
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.REMOVED,
-    changeSummary: summary,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.PARTICIPANT,
-      participantId,
       modelId,
+      participantId,
       role,
+      type: ChangelogChangeTypes.PARTICIPANT,
     },
+    changeSummary: summary,
+    changeType: ChangelogTypes.REMOVED,
+    roundNumber,
+    threadId,
   });
 }
 
@@ -140,44 +140,44 @@ export async function logParticipantUpdated(
   const modelName = modelId.split('/').pop() || modelId;
   const summary = `Updated ${modelName} role from ${oldRole || 'none'} to ${newRole || 'none'}`;
 
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.MODIFIED,
-    changeSummary: summary,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.PARTICIPANT_ROLE,
-      participantId,
       modelId,
-      oldRole,
       newRole,
+      oldRole,
+      participantId,
+      type: ChangelogChangeTypes.PARTICIPANT_ROLE,
     },
+    changeSummary: summary,
+    changeType: ChangelogTypes.MODIFIED,
+    roundNumber,
+    threadId,
   });
 }
 
 export async function logParticipantsReordered(
   threadId: string,
   roundNumber: number,
-  participants: Array<{
+  participants: {
     id: string;
     modelId: string;
     role: string | null;
     priority: number;
-  }>,
+  }[],
 ): Promise<string> {
   const participantNames = participants
     .map(p => p.modelId.split('/').pop() || p.modelId)
     .join(', ');
 
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.MODIFIED,
-    changeSummary: `Reordered participants: ${participantNames}`,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.PARTICIPANT_REORDER,
       participants,
+      type: ChangelogChangeTypes.PARTICIPANT_REORDER,
     },
+    changeSummary: `Reordered participants: ${participantNames}`,
+    changeType: ChangelogTypes.MODIFIED,
+    roundNumber,
+    threadId,
   });
 }
 
@@ -186,15 +186,15 @@ export async function logWebSearchToggle(
   roundNumber: number,
   enabled: boolean,
 ): Promise<string> {
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.MODIFIED,
-    changeSummary: enabled ? 'Enabled web search' : 'Disabled web search',
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.WEB_SEARCH,
       enabled,
+      type: ChangelogChangeTypes.WEB_SEARCH,
     },
+    changeSummary: enabled ? 'Enabled web search' : 'Disabled web search',
+    changeType: ChangelogTypes.MODIFIED,
+    roundNumber,
+    threadId,
   });
 }
 
@@ -202,23 +202,23 @@ export async function logMemoriesCreated(
   threadId: string,
   roundNumber: number,
   projectId: string,
-  memories: Array<{ id: string; summary: string }>,
+  memories: { id: string; summary: string }[],
 ): Promise<string> {
   const memoryCount = memories.length;
   const summary = memoryCount === 1
     ? `Saved 1 memory: ${memories[0]?.summary.slice(0, 50)}...`
     : `Saved ${memoryCount} memories`;
 
-  return createChangelogEntry({
-    threadId,
-    roundNumber,
-    changeType: ChangelogTypes.ADDED,
-    changeSummary: summary,
+  return await createChangelogEntry({
     changeData: {
-      type: ChangelogChangeTypes.MEMORY_CREATED,
-      memoryCount,
       memories: memories.map(m => ({ id: m.id, summary: m.summary })),
+      memoryCount,
       projectId,
+      type: ChangelogChangeTypes.MEMORY_CREATED,
     },
+    changeSummary: summary,
+    changeType: ChangelogTypes.ADDED,
+    roundNumber,
+    threadId,
   });
 }

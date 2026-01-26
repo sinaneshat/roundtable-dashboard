@@ -33,8 +33,8 @@ function createRoundMessages(
 ): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-config-123_r${roundNumber}_user`,
       content: `Question for round ${roundNumber}`,
+      id: `thread-config-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -42,12 +42,12 @@ function createRoundMessages(
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-config-123_r${roundNumber}_p${i}`,
         content: `Response from participant ${i} for round ${roundNumber}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-config-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -234,9 +234,10 @@ describe('participant Configuration Changes', () => {
       // Check all participants stored but isEnabled differs
       expect(getStoreState(store).participants).toHaveLength(3);
       const participant1 = getStoreState(store).participants[1];
-      if (!participant1)
+      if (!participant1) {
         throw new Error('expected participant 1');
-      expect(participant1.isEnabled).toBe(false);
+      }
+      expect(participant1.isEnabled).toBeFalsy();
 
       // Filter for enabled (simulating what the app does)
       const enabled = getStoreState(store).participants.filter(p => p.isEnabled);
@@ -264,27 +265,27 @@ describe('web Search Configuration Changes', () => {
   it('tracks web search toggle in form state', () => {
     const state = getStoreState(store);
 
-    expect(getStoreState(store).enableWebSearch).toBe(false);
+    expect(getStoreState(store).enableWebSearch).toBeFalsy();
 
     state.setEnableWebSearch(true);
-    expect(getStoreState(store).enableWebSearch).toBe(true);
+    expect(getStoreState(store).enableWebSearch).toBeTruthy();
 
     state.setEnableWebSearch(false);
-    expect(getStoreState(store).enableWebSearch).toBe(false);
+    expect(getStoreState(store).enableWebSearch).toBeFalsy();
   });
 
   it('thread enableWebSearch independent of form state', () => {
     const state = getStoreState(store);
 
     // Thread has its own setting
-    expect(getStoreState(store).thread?.enableWebSearch).toBe(false);
+    expect(getStoreState(store).thread?.enableWebSearch).toBeFalsy();
 
     // Form state can differ
     state.setEnableWebSearch(true);
-    expect(getStoreState(store).enableWebSearch).toBe(true);
+    expect(getStoreState(store).enableWebSearch).toBeTruthy();
 
     // Thread setting unchanged
-    expect(getStoreState(store).thread?.enableWebSearch).toBe(false);
+    expect(getStoreState(store).thread?.enableWebSearch).toBeFalsy();
   });
 
   it('enabling web search mid-conversation allows pre-search', () => {
@@ -300,9 +301,9 @@ describe('web Search Configuration Changes', () => {
     state.setEnableWebSearch(true);
 
     // Pre-search can be triggered for round 1
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
     state.markPreSearchTriggered(1);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
   });
 });
 
@@ -350,7 +351,7 @@ describe('chat Mode Changes', () => {
     state.setSelectedMode(ChatModes.DEBATING);
 
     // Round 0 moderator tracking preserved (server-side moderator has ANALYZING mode)
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
   });
 
   it('subsequent round uses new mode', () => {
@@ -371,8 +372,8 @@ describe('chat Mode Changes', () => {
     state.tryMarkModeratorCreated(1);
 
     // Both rounds tracked independently
-    expect(getStoreState(store).createdModeratorRounds.has(0)).toBe(true);
-    expect(getStoreState(store).createdModeratorRounds.has(1)).toBe(true);
+    expect(getStoreState(store).createdModeratorRounds.has(0)).toBeTruthy();
+    expect(getStoreState(store).createdModeratorRounds.has(1)).toBeTruthy();
   });
 });
 
@@ -442,10 +443,10 @@ describe('complete Configuration Change Journey', () => {
     expect(round2Participants).toHaveLength(3);
 
     // Pre-search was triggered for round 2
-    expect(finalState.triggeredPreSearchRounds.has(2)).toBe(true);
+    expect(finalState.triggeredPreSearchRounds.has(2)).toBeTruthy();
 
     // Web search now enabled
-    expect(finalState.enableWebSearch).toBe(true);
+    expect(finalState.enableWebSearch).toBeTruthy();
   });
 });
 
@@ -468,15 +469,15 @@ describe('tracking State Isolation Between Rounds', () => {
     const state = getStoreState(store);
 
     // Mark round 0 as created
-    expect(state.tryMarkModeratorCreated(0)).toBe(true);
-    expect(state.tryMarkModeratorCreated(0)).toBe(false); // Already marked
+    expect(state.tryMarkModeratorCreated(0)).toBeTruthy();
+    expect(state.tryMarkModeratorCreated(0)).toBeFalsy(); // Already marked
 
     // Round 1 is independent
-    expect(state.tryMarkModeratorCreated(1)).toBe(true);
-    expect(state.tryMarkModeratorCreated(1)).toBe(false);
+    expect(state.tryMarkModeratorCreated(1)).toBeTruthy();
+    expect(state.tryMarkModeratorCreated(1)).toBeFalsy();
 
     // Round 2 is independent
-    expect(state.tryMarkModeratorCreated(2)).toBe(true);
+    expect(state.tryMarkModeratorCreated(2)).toBeTruthy();
 
     // Check all are tracked
     expect(getStoreState(store).createdModeratorRounds.size).toBe(3);
@@ -485,14 +486,14 @@ describe('tracking State Isolation Between Rounds', () => {
   it('pre-search tracking per round is independent', () => {
     const state = getStoreState(store);
 
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeFalsy();
     state.markPreSearchTriggered(0);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
 
     // Round 1 independent
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
     state.markPreSearchTriggered(1);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(1)).toBeTruthy();
 
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(2);
   });
@@ -510,9 +511,9 @@ describe('tracking State Isolation Between Rounds', () => {
     state.clearPreSearchTracking(1);
 
     expect(getStoreState(store).triggeredPreSearchRounds.size).toBe(2);
-    expect(state.hasPreSearchBeenTriggered(0)).toBe(true);
-    expect(state.hasPreSearchBeenTriggered(1)).toBe(false);
-    expect(state.hasPreSearchBeenTriggered(2)).toBe(true);
+    expect(state.hasPreSearchBeenTriggered(0)).toBeTruthy();
+    expect(state.hasPreSearchBeenTriggered(1)).toBeFalsy();
+    expect(state.hasPreSearchBeenTriggered(2)).toBeTruthy();
   });
 });
 

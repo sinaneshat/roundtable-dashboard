@@ -22,19 +22,19 @@ async function getSesCredentials(): Promise<{
   try {
     return {
       accessKeyId: workersEnv.AWS_SES_ACCESS_KEY_ID || process.env.AWS_SES_ACCESS_KEY_ID || '',
-      secretAccessKey: workersEnv.AWS_SES_SECRET_ACCESS_KEY || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
-      region: workersEnv.AWS_SES_REGION || process.env.AWS_SES_REGION || 'us-east-1',
       fromEmail: workersEnv.FROM_EMAIL || process.env.FROM_EMAIL || 'noreply@example.com',
+      region: workersEnv.AWS_SES_REGION || process.env.AWS_SES_REGION || 'us-east-1',
       replyToEmail: workersEnv.SES_REPLY_TO_EMAIL || process.env.SES_REPLY_TO_EMAIL || 'noreply@example.com',
+      secretAccessKey: workersEnv.AWS_SES_SECRET_ACCESS_KEY || process.env.AWS_SES_SECRET_ACCESS_KEY || '',
     };
   } catch {
     // Fallback to process.env for local dev
     return {
       accessKeyId: process.env.AWS_SES_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY || '',
-      region: process.env.AWS_SES_REGION || 'us-east-1',
       fromEmail: process.env.FROM_EMAIL || 'noreply@example.com',
+      region: process.env.AWS_SES_REGION || 'us-east-1',
       replyToEmail: process.env.SES_REPLY_TO_EMAIL || 'noreply@example.com',
+      secretAccessKey: process.env.AWS_SES_SECRET_ACCESS_KEY || '',
     };
   }
 }
@@ -58,10 +58,10 @@ class EmailService {
 
     if (!accessKeyId || !secretAccessKey) {
       console.error({
-        log_type: 'ses_credentials_missing',
-        timestamp: new Date().toISOString(),
         has_access_key: Boolean(accessKeyId),
         has_secret_key: Boolean(secretAccessKey),
+        log_type: 'ses_credentials_missing',
+        timestamp: new Date().toISOString(),
       });
       throw new Error(
         'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
@@ -72,14 +72,14 @@ class EmailService {
   }
 
   private async getConfig() {
-    return getSesCredentials();
+    return await getSesCredentials();
   }
 
   private async sendEmail({
-    to,
-    subject,
     html,
+    subject,
     text,
+    to,
   }: {
     to: string | string[];
     subject: string;
@@ -98,21 +98,21 @@ class EmailService {
     const requestBody = {
       Content: {
         Simple: {
-          Subject: {
-            Data: subject,
-            Charset: 'UTF-8',
-          },
           Body: {
             Html: {
-              Data: html,
               Charset: 'UTF-8',
+              Data: html,
             },
             ...(text && {
               Text: {
-                Data: text,
                 Charset: 'UTF-8',
+                Data: text,
               },
             }),
+          },
+          Subject: {
+            Charset: 'UTF-8',
+            Data: subject,
           },
         },
       },
@@ -128,11 +128,11 @@ class EmailService {
       const response = await awsClient.fetch(
         `https://email.${config.region}.amazonaws.com/v2/email/outbound-emails`,
         {
-          method: 'POST',
+          body: JSON.stringify(requestBody),
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(requestBody),
+          method: 'POST',
         },
       );
 
@@ -140,12 +140,12 @@ class EmailService {
       if (!response.ok) {
         const errorBody = await response.text();
         console.error({
+          error_body: errorBody.slice(0, 500),
           log_type: 'ses_api_error',
-          timestamp: new Date().toISOString(),
+          region: config.region,
           status: response.status,
           statusText: response.statusText,
-          error_body: errorBody.slice(0, 500),
-          region: config.region,
+          timestamp: new Date().toISOString(),
         });
         throw new Error(
           `Failed to send email via SES: ${response.status} ${response.statusText}. ${errorBody}`,
@@ -169,19 +169,19 @@ class EmailService {
     // Render React Email template to HTML using renderToString (sync)
     // Cloudflare Workers doesn't support renderToReadableStream used by @react-email/render
     const markup = renderToString(MagicLink({
-      loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
+      loginUrl: magicLink,
     }));
     // Add DOCTYPE for proper email rendering
     const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">${markup}`;
 
     const text = `Sign in to ${BRAND.displayName} using this link: ${magicLink}. This link expires in ${expirationMinutes} minutes.`;
 
-    return this.sendEmail({
-      to,
-      subject: `Sign in to ${BRAND.displayName}`,
+    return await this.sendEmail({
       html,
+      subject: `Sign in to ${BRAND.displayName}`,
       text,
+      to,
     });
   }
 }

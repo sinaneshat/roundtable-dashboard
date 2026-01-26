@@ -18,8 +18,10 @@ import { LogHelpers } from '@/types/logger';
 import type {
   LoadAttachmentContentParams,
   LoadAttachmentContentResult,
+  LoadAttachmentContentUrlParams,
   LoadMessageAttachmentsParams,
   LoadMessageAttachmentsResult,
+  LoadMessageAttachmentsUrlParams,
   ModelFilePart,
   ModelFilePartBinary,
   ModelFilePartUrl,
@@ -32,17 +34,17 @@ import { MAX_BASE64_FILE_SIZE } from '@/types/uploads';
 // ============================================================================
 
 export async function loadAttachmentContent(params: LoadAttachmentContentParams): Promise<LoadAttachmentContentResult> {
-  const { attachmentIds, r2Bucket, db, logger } = params;
+  const { attachmentIds, db, logger, r2Bucket } = params;
 
   const fileParts: ModelFilePart[] = [];
-  const errors: Array<{ uploadId: string; error: string }> = [];
+  const errors: { uploadId: string; error: string }[] = [];
   let skipped = 0;
 
   if (!attachmentIds || attachmentIds.length === 0) {
     return {
-      fileParts: [],
       errors: [],
-      stats: { total: 0, loaded: 0, failed: 0, skipped: 0 },
+      fileParts: [],
+      stats: { failed: 0, loaded: 0, skipped: 0, total: 0 },
     };
   }
 
@@ -54,22 +56,22 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 
   if (uploads.length === 0 && attachmentIds.length > 0) {
     logger?.error('No uploads found in DB for given IDs - possible race condition or incorrect upload IDs', LogHelpers.operation({
-      operationName: 'loadAttachmentContent',
       attachmentCount: attachmentIds.length,
       foundUploads: 0,
+      operationName: 'loadAttachmentContent',
     }));
   } else if (uploads.length < attachmentIds.length) {
     logger?.error('Partial uploads found - some IDs not in DB', LogHelpers.operation({
-      operationName: 'loadAttachmentContent',
       attachmentCount: attachmentIds.length,
       foundUploads: uploads.length,
+      operationName: 'loadAttachmentContent',
     }));
   }
 
   logger?.info('Loading attachment content for AI model', LogHelpers.operation({
-    operationName: 'loadAttachmentContent',
     attachmentCount: attachmentIds.length,
     foundUploads: uploads.length,
+    operationName: 'loadAttachmentContent',
   }));
 
   for (const upload of uploads) {
@@ -77,9 +79,9 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
       // Skip files that AI models can't process visually
       if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
         logger?.debug('Skipping unsupported file type for AI processing', LogHelpers.operation({
+          mimeType: upload.mimeType,
           operationName: 'loadAttachmentContent',
           uploadId: upload.id,
-          mimeType: upload.mimeType,
         }));
         skipped++;
         continue;
@@ -88,10 +90,10 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
       // Skip files too large for memory-safe processing (128MB worker limit)
       if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
         logger?.warn('File too large for memory-safe processing, skipping', LogHelpers.operation({
-          operationName: 'loadAttachmentContent',
-          uploadId: upload.id,
           fileSize: upload.fileSize,
           maxSize: MAX_BASE64_FILE_SIZE,
+          operationName: 'loadAttachmentContent',
+          uploadId: upload.id,
         }));
         skipped++;
         continue;
@@ -102,14 +104,14 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 
       if (!data) {
         logger?.error('File not found in storage', LogHelpers.operation({
-          operationName: 'loadAttachmentContent',
-          uploadId: upload.id,
           filename: upload.filename,
+          operationName: 'loadAttachmentContent',
           r2Key: upload.r2Key,
+          uploadId: upload.id,
         }));
         errors.push({
-          uploadId: upload.id,
           error: 'File not found in storage',
+          uploadId: upload.id,
         });
         continue;
       }
@@ -119,43 +121,43 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
       const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
       fileParts.push({
-        type: MessagePartTypes.FILE,
         data: uint8Data,
-        mimeType: upload.mimeType,
         filename: upload.filename,
-        url: dataUrl,
         mediaType: upload.mimeType,
+        mimeType: upload.mimeType,
+        type: MessagePartTypes.FILE,
+        url: dataUrl,
       });
 
       logger?.debug('Loaded attachment content', LogHelpers.operation({
-        operationName: 'loadAttachmentContent',
-        uploadId: upload.id,
         filename: upload.filename,
         mimeType: upload.mimeType,
+        operationName: 'loadAttachmentContent',
         sizeKB: Math.round(upload.fileSize / 1024),
+        uploadId: upload.id,
       }));
     } catch (error) {
       const errorMessage
         = error instanceof Error ? error.message : 'Unknown error';
       logger?.error('Failed to load attachment content', LogHelpers.operation({
-        operationName: 'loadAttachmentContent',
-        uploadId: upload.id,
+        error: errorMessage,
         filename: upload.filename,
         mimeType: upload.mimeType,
-        error: errorMessage,
+        operationName: 'loadAttachmentContent',
+        uploadId: upload.id,
       }));
       errors.push({
-        uploadId: upload.id,
         error: errorMessage,
+        uploadId: upload.id,
       });
     }
   }
 
   const stats = {
-    total: attachmentIds.length,
-    loaded: fileParts.length,
     failed: errors.length,
+    loaded: fileParts.length,
     skipped,
+    total: attachmentIds.length,
   };
 
   logger?.info('Attachment content loading complete', LogHelpers.operation({
@@ -163,7 +165,7 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
     stats,
   }));
 
-  return { fileParts, errors, stats };
+  return { errors, fileParts, stats };
 }
 
 // ============================================================================
@@ -173,22 +175,15 @@ export async function loadAttachmentContent(params: LoadAttachmentContentParams)
 // File part for AI model consumption - includes both URL-based and full model parts
 export type UrlFilePart = ModelFilePartUrl | ModelImagePartUrl | ModelFilePartBinary | ModelFilePart;
 
-export type LoadAttachmentContentUrlParams = LoadAttachmentContentParams & {
-  /** Base URL of the application for generating signed URLs */
-  baseUrl: string;
-  /** User ID for signing URLs */
-  userId: string;
-  /** BETTER_AUTH_SECRET for signing */
-  secret: string;
-  /** Optional thread ID for URL signing */
-  threadId?: string;
-};
+// LoadAttachmentContentUrlParams is now defined via Zod schema in types/uploads.ts
+// Re-export for backwards compatibility
+export type { LoadAttachmentContentUrlParams } from '@/types/uploads';
 
 export type LoadAttachmentContentUrlResult = {
   fileParts: UrlFilePart[];
   /** Extracted text from PDFs/documents (not sent as file parts to avoid AI provider timeout) */
   extractedTextContent: string | null;
-  errors: Array<{ uploadId: string; error: string }>;
+  errors: { uploadId: string; error: string }[];
   stats: {
     total: number;
     loaded: number;
@@ -214,19 +209,19 @@ const PDF_MIME_TYPE = 'application/pdf';
 export async function loadAttachmentContentUrl(
   params: LoadAttachmentContentUrlParams,
 ): Promise<LoadAttachmentContentUrlResult> {
-  const { attachmentIds, r2Bucket, db, logger } = params;
+  const { attachmentIds, db, logger, r2Bucket } = params;
 
   const fileParts: UrlFilePart[] = [];
   const extractedTexts: string[] = [];
-  const errors: Array<{ uploadId: string; error: string }> = [];
+  const errors: { uploadId: string; error: string }[] = [];
   let skipped = 0;
 
   if (!attachmentIds || attachmentIds.length === 0) {
     return {
-      fileParts: [],
-      extractedTextContent: null,
       errors: [],
-      stats: { total: 0, loaded: 0, failed: 0, skipped: 0 },
+      extractedTextContent: null,
+      fileParts: [],
+      stats: { failed: 0, loaded: 0, skipped: 0, total: 0 },
     };
   }
 
@@ -238,16 +233,16 @@ export async function loadAttachmentContentUrl(
 
   if (uploads.length === 0 && attachmentIds.length > 0) {
     logger?.error('No uploads found in DB - possible race condition', LogHelpers.operation({
-      operationName: 'loadAttachmentContentUrl',
       attachmentCount: attachmentIds.length,
       foundUploads: 0,
+      operationName: 'loadAttachmentContentUrl',
     }));
   }
 
   logger?.info('Loading attachment content (unified Uint8Array mode)', LogHelpers.operation({
-    operationName: 'loadAttachmentContentUrl',
     attachmentCount: attachmentIds.length,
     foundUploads: uploads.length,
+    operationName: 'loadAttachmentContentUrl',
   }));
 
   for (const upload of uploads) {
@@ -255,9 +250,9 @@ export async function loadAttachmentContentUrl(
       // Skip files that AI models can't process
       if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
         logger?.debug('Skipping unsupported file type', LogHelpers.operation({
+          mimeType: upload.mimeType,
           operationName: 'loadAttachmentContentUrl',
           uploadId: upload.id,
-          mimeType: upload.mimeType,
         }));
         skipped++;
         continue;
@@ -277,11 +272,11 @@ export async function loadAttachmentContentUrl(
           extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractedText}`);
 
           logger?.debug('Using pre-extracted text', LogHelpers.operation({
+            filename: upload.filename,
+            fileSize: extractedText.length,
+            mimeType: upload.mimeType,
             operationName: 'loadAttachmentContentUrl',
             uploadId: upload.id,
-            filename: upload.filename,
-            mimeType: upload.mimeType,
-            fileSize: extractedText.length,
           }));
           continue;
         }
@@ -293,10 +288,10 @@ export async function loadAttachmentContentUrl(
           // For vision PDFs, check size before loading binary
           if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
             logger?.warn('Scanned PDF too large for binary loading, providing text fallback', LogHelpers.operation({
-              operationName: 'loadAttachmentContentUrl',
-              uploadId: upload.id,
               fileSize: upload.fileSize,
               maxSize: MAX_BASE64_FILE_SIZE,
+              operationName: 'loadAttachmentContentUrl',
+              uploadId: upload.id,
             }));
             // Provide text fallback for large scanned PDFs
             extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF is a scanned/image-based document (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB). It's too large to process visually. Please upload a text-based PDF or a smaller scanned document (max 10MB for visual processing).]`);
@@ -304,9 +299,9 @@ export async function loadAttachmentContentUrl(
           }
 
           logger?.info('PDF marked as requiring vision (scanned/image), loading binary', LogHelpers.operation({
+            filename: upload.filename,
             operationName: 'loadAttachmentContentUrl',
             uploadId: upload.id,
-            filename: upload.filename,
           }));
 
           const { data } = await getFile(r2Bucket, upload.r2Key);
@@ -315,18 +310,18 @@ export async function loadAttachmentContentUrl(
             const base64 = uint8ArrayToBase64(uint8Data);
             const dataUrl = `data:${upload.mimeType};base64,${base64}`;
             fileParts.push({
-              type: MessagePartTypes.FILE,
               data: uint8Data,
-              mimeType: upload.mimeType,
               filename: upload.filename,
-              url: dataUrl,
               mediaType: upload.mimeType,
+              mimeType: upload.mimeType,
+              type: MessagePartTypes.FILE,
+              url: dataUrl,
             } satisfies ModelFilePart);
 
             // Add text fallback for non-vision models
             extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF appears to be scanned/image-based. Text extraction was unsuccessful. If you have vision capabilities, please examine the attached PDF image. Otherwise, please ask the user to provide a text-based version or describe the contents.]`);
           } else {
-            errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+            errors.push({ error: 'File not found in storage', uploadId: upload.id });
           }
           continue;
         }
@@ -334,20 +329,20 @@ export async function loadAttachmentContentUrl(
         // No pre-extracted text - try synchronous extraction (fixes race condition)
         if (shouldExtractPdfText(upload.mimeType, upload.fileSize)) {
           logger?.info('Triggering synchronous PDF extraction', LogHelpers.operation({
-            operationName: 'loadAttachmentContentUrl',
-            uploadId: upload.id,
             filename: upload.filename,
+            operationName: 'loadAttachmentContentUrl',
             sizeKB: Math.round(upload.fileSize / 1024),
+            uploadId: upload.id,
           }));
 
           const { data } = await getFile(r2Bucket, upload.r2Key);
           if (!data) {
             logger?.error('File not found in storage', LogHelpers.operation({
               operationName: 'loadAttachmentContentUrl',
-              uploadId: upload.id,
               r2Key: upload.r2Key,
+              uploadId: upload.id,
             }));
-            errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+            errors.push({ error: 'File not found in storage', uploadId: upload.id });
             continue;
           }
 
@@ -357,26 +352,26 @@ export async function loadAttachmentContentUrl(
             extractedTexts.push(`[${fileTypeLabel}: ${upload.filename}]\n\n${extractionResult.text}`);
 
             logger?.info('Synchronous extraction succeeded', LogHelpers.operation({
+              fileSize: extractionResult.text.length,
               operationName: 'loadAttachmentContentUrl',
               uploadId: upload.id,
-              fileSize: extractionResult.text.length,
             }));
 
             // Update DB for future requests (fire-and-forget)
             db.update(tables.upload)
               .set({
                 metadata: {
+                  extractedAt: new Date().toISOString(),
                   extractedText: extractionResult.text,
                   totalPages: extractionResult.totalPages,
-                  extractedAt: new Date().toISOString(),
                 },
                 updatedAt: new Date(),
               })
               .where(eq(tables.upload.id, upload.id))
               .catch(err => logger?.error('Failed to save extracted text', LogHelpers.operation({
+                error: err instanceof Error ? err.message : 'Unknown',
                 operationName: 'loadAttachmentContentUrl',
                 uploadId: upload.id,
-                error: err instanceof Error ? err.message : 'Unknown',
               })));
             continue;
           }
@@ -385,9 +380,9 @@ export async function loadAttachmentContentUrl(
           // Also add a text fallback for models without vision support
           // NOTE: PDF.js may consume/transfer the ArrayBuffer, so we re-fetch for binary
           logger?.warn('Extraction failed, using binary fallback', LogHelpers.operation({
+            error: extractionResult.error,
             operationName: 'loadAttachmentContentUrl',
             uploadId: upload.id,
-            error: extractionResult.error,
           }));
 
           // Re-fetch file since PDF.js may have consumed the original ArrayBuffer
@@ -397,7 +392,7 @@ export async function loadAttachmentContentUrl(
               operationName: 'loadAttachmentContentUrl',
               uploadId: upload.id,
             }));
-            errors.push({ uploadId: upload.id, error: 'File re-fetch failed for binary fallback' });
+            errors.push({ error: 'File re-fetch failed for binary fallback', uploadId: upload.id });
             // Note: stats counter will be incremented at the end based on errors.length
             continue;
           }
@@ -406,12 +401,12 @@ export async function loadAttachmentContentUrl(
           const base64 = uint8ArrayToBase64(uint8Data);
           const dataUrl = `data:${upload.mimeType};base64,${base64}`;
           fileParts.push({
-            type: MessagePartTypes.FILE,
             data: uint8Data,
-            mimeType: upload.mimeType,
             filename: upload.filename,
-            url: dataUrl,
             mediaType: upload.mimeType,
+            mimeType: upload.mimeType,
+            type: MessagePartTypes.FILE,
+            url: dataUrl,
           } satisfies ModelFilePart);
 
           // Add text fallback explaining the PDF situation for non-vision models
@@ -423,10 +418,10 @@ export async function loadAttachmentContentUrl(
         // Large PDF without extracted text - provide helpful message instead of failing
         if (isPdf && upload.fileSize > MAX_BASE64_FILE_SIZE) {
           logger?.warn('Large PDF without extracted text, providing fallback message', LogHelpers.operation({
-            operationName: 'loadAttachmentContentUrl',
-            uploadId: upload.id,
             fileSize: upload.fileSize,
             maxSize: MAX_BASE64_FILE_SIZE,
+            operationName: 'loadAttachmentContentUrl',
+            uploadId: upload.id,
           }));
           extractedTexts.push(`[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF (max 10MB for in-memory processing).]`);
           continue;
@@ -438,10 +433,10 @@ export async function loadAttachmentContentUrl(
       // Check file size before binary loading (applies to images and other files)
       if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
         logger?.warn('File too large for binary loading, skipping', LogHelpers.operation({
-          operationName: 'loadAttachmentContentUrl',
-          uploadId: upload.id,
           fileSize: upload.fileSize,
           maxSize: MAX_BASE64_FILE_SIZE,
+          operationName: 'loadAttachmentContentUrl',
+          uploadId: upload.id,
         }));
         skipped++;
         continue;
@@ -453,12 +448,12 @@ export async function loadAttachmentContentUrl(
 
       if (!data) {
         logger?.error('File not found in storage', LogHelpers.operation({
-          operationName: 'loadAttachmentContentUrl',
-          uploadId: upload.id,
           filename: upload.filename,
+          operationName: 'loadAttachmentContentUrl',
           r2Key: upload.r2Key,
+          uploadId: upload.id,
         }));
-        errors.push({ uploadId: upload.id, error: 'File not found in storage' });
+        errors.push({ error: 'File not found in storage', uploadId: upload.id });
         continue;
       }
 
@@ -467,38 +462,38 @@ export async function loadAttachmentContentUrl(
       const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
       fileParts.push({
-        type: MessagePartTypes.FILE,
         data: uint8Data,
-        mimeType: upload.mimeType,
         filename: upload.filename,
-        url: dataUrl,
         mediaType: upload.mimeType,
+        mimeType: upload.mimeType,
+        type: MessagePartTypes.FILE,
+        url: dataUrl,
       } satisfies ModelFilePart);
 
       logger?.debug('Loaded file as Uint8Array with data URL', LogHelpers.operation({
-        operationName: 'loadAttachmentContentUrl',
-        uploadId: upload.id,
         filename: upload.filename,
         mimeType: upload.mimeType,
+        operationName: 'loadAttachmentContentUrl',
         sizeKB: Math.round(upload.fileSize / 1024),
+        uploadId: upload.id,
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger?.error('Failed to load attachment', LogHelpers.operation({
+        error: errorMessage,
+        filename: upload.filename,
         operationName: 'loadAttachmentContentUrl',
         uploadId: upload.id,
-        filename: upload.filename,
-        error: errorMessage,
       }));
-      errors.push({ uploadId: upload.id, error: errorMessage });
+      errors.push({ error: errorMessage, uploadId: upload.id });
     }
   }
 
   const stats = {
-    total: attachmentIds.length,
-    loaded: fileParts.length + extractedTexts.length,
     failed: errors.length,
+    loaded: fileParts.length + extractedTexts.length,
     skipped,
+    total: attachmentIds.length,
   };
 
   const extractedTextContent = extractedTexts.length > 0
@@ -510,7 +505,7 @@ export async function loadAttachmentContentUrl(
     stats,
   }));
 
-  return { fileParts, extractedTextContent, errors, stats };
+  return { errors, extractedTextContent, fileParts, stats };
 }
 
 export function uint8ArrayToBase64(bytes: Uint8Array): string {
@@ -536,10 +531,10 @@ export function isWithinSizeLimit(fileSize: number): boolean {
 }
 
 export async function loadMessageAttachments(params: LoadMessageAttachmentsParams): Promise<LoadMessageAttachmentsResult> {
-  const { messageIds, r2Bucket, db, logger } = params;
+  const { db, logger, messageIds, r2Bucket } = params;
 
   const filePartsByMessageId = new Map<string, ModelFilePart[]>();
-  const errors: Array<{ messageId: string; uploadId: string; error: string }>
+  const errors: { messageId: string; uploadId: string; error: string }[]
     = [];
   let totalUploads = 0;
   let loaded = 0;
@@ -548,14 +543,14 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
 
   if (!messageIds || messageIds.length === 0) {
     return {
-      filePartsByMessageId,
       errors: [],
+      filePartsByMessageId,
       stats: {
-        messagesWithAttachments: 0,
-        totalUploads: 0,
-        loaded: 0,
         failed: 0,
+        loaded: 0,
+        messagesWithAttachments: 0,
         skipped: 0,
+        totalUploads: 0,
       },
     };
   }
@@ -568,18 +563,18 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
 
   if (messageUploadsRaw.length === 0) {
     logger?.debug('No attachments found for messages', LogHelpers.operation({
-      operationName: 'loadMessageAttachments',
       messageCount: messageIds.length,
+      operationName: 'loadMessageAttachments',
     }));
     return {
-      filePartsByMessageId,
       errors: [],
+      filePartsByMessageId,
       stats: {
-        messagesWithAttachments: 0,
-        totalUploads: 0,
-        loaded: 0,
         failed: 0,
+        loaded: 0,
+        messagesWithAttachments: 0,
         skipped: 0,
+        totalUploads: 0,
       },
     };
   }
@@ -588,20 +583,20 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
   // Drizzle returns joined results with table names as keys: { message_upload: {...}, upload: {...} }
   const uploadsByMessageId = new Map<
     string,
-    Array<{
+    {
       uploadId: string;
       displayOrder: number;
       upload: (typeof messageUploadsRaw)[0]['upload'];
-    }>
+    }[]
   >();
 
   for (const row of messageUploadsRaw) {
     const messageUpload = row.message_upload;
     const existing = uploadsByMessageId.get(messageUpload.messageId) || [];
     existing.push({
-      uploadId: messageUpload.uploadId,
       displayOrder: messageUpload.displayOrder,
       upload: row.upload,
+      uploadId: messageUpload.uploadId,
     });
     uploadsByMessageId.set(messageUpload.messageId, existing);
   }
@@ -609,9 +604,9 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
   totalUploads = messageUploadsRaw.length;
 
   logger?.info('Loading attachment content for messages', LogHelpers.operation({
-    operationName: 'loadMessageAttachments',
     messageCount: messageIds.length,
     messagesWithAttachments: uploadsByMessageId.size,
+    operationName: 'loadMessageAttachments',
     totalUploads,
   }));
 
@@ -622,15 +617,15 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
     // Sort by display order
     uploads.sort((a, b) => a.displayOrder - b.displayOrder);
 
-    for (const { uploadId, upload } of uploads) {
+    for (const { upload, uploadId } of uploads) {
       try {
         // Skip files that AI models can't process visually
         if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
           logger?.debug('Skipping unsupported file type for AI processing in message', LogHelpers.operation({
-            operationName: 'loadMessageAttachments',
             messageId,
-            uploadId,
             mimeType: upload.mimeType,
+            operationName: 'loadMessageAttachments',
+            uploadId,
           }));
           skipped++;
           continue;
@@ -641,16 +636,16 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
 
         if (!data) {
           logger?.error('File not found in storage for message', LogHelpers.operation({
-            operationName: 'loadMessageAttachments',
-            messageId,
-            uploadId,
             filename: upload.filename,
+            messageId,
+            operationName: 'loadMessageAttachments',
             r2Key: upload.r2Key,
+            uploadId,
           }));
           errors.push({
+            error: 'File not found in storage',
             messageId,
             uploadId,
-            error: 'File not found in storage',
           });
           failed++;
           continue;
@@ -665,40 +660,40 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
         const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
         messageParts.push({
-          type: MessagePartTypes.FILE,
           // LanguageModelV2 format (what OpenRouter provider expects)
           data: uint8Data,
-          mimeType: upload.mimeType,
           filename: upload.filename,
+          mediaType: upload.mimeType,
+          mimeType: upload.mimeType,
+          type: MessagePartTypes.FILE,
           // UIMessage format (for streaming-orchestration message building)
           url: dataUrl,
-          mediaType: upload.mimeType,
         });
 
         loaded++;
 
         logger?.debug('Loaded attachment content for message', LogHelpers.operation({
-          operationName: 'loadMessageAttachments',
-          messageId,
-          uploadId,
           filename: upload.filename,
+          messageId,
           mimeType: upload.mimeType,
+          operationName: 'loadMessageAttachments',
           sizeKB: Math.round(upload.fileSize / 1024),
+          uploadId,
         }));
       } catch (error) {
         const errorMessage
           = error instanceof Error ? error.message : 'Unknown error';
         logger?.error('Failed to load attachment for message', LogHelpers.operation({
-          operationName: 'loadMessageAttachments',
-          messageId,
-          uploadId,
-          filename: upload.filename,
           error: errorMessage,
+          filename: upload.filename,
+          messageId,
+          operationName: 'loadMessageAttachments',
+          uploadId,
         }));
         errors.push({
+          error: errorMessage,
           messageId,
           uploadId,
-          error: errorMessage,
         });
         failed++;
       }
@@ -710,11 +705,11 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
   }
 
   const stats = {
-    messagesWithAttachments: uploadsByMessageId.size,
-    totalUploads,
-    loaded,
     failed,
+    loaded,
+    messagesWithAttachments: uploadsByMessageId.size,
     skipped,
+    totalUploads,
   };
 
   logger?.info('Message attachment loading complete', LogHelpers.operation({
@@ -722,29 +717,22 @@ export async function loadMessageAttachments(params: LoadMessageAttachmentsParam
     stats,
   }));
 
-  return { filePartsByMessageId, errors, stats };
+  return { errors, filePartsByMessageId, stats };
 }
 
 // ============================================================================
 // URL-Based Message Attachment Loading (Memory-Efficient)
 // ============================================================================
 
-export type LoadMessageAttachmentsUrlParams = LoadMessageAttachmentsParams & {
-  /** Base URL of the application for generating signed URLs */
-  baseUrl: string;
-  /** User ID for signing URLs */
-  userId: string;
-  /** BETTER_AUTH_SECRET for signing */
-  secret: string;
-  /** Optional thread ID for URL signing */
-  threadId?: string;
-};
+// LoadMessageAttachmentsUrlParams is now defined via Zod schema in types/uploads.ts
+// Re-export for backwards compatibility
+export type { LoadMessageAttachmentsUrlParams } from '@/types/uploads';
 
 export type LoadMessageAttachmentsUrlResult = {
   filePartsByMessageId: Map<string, UrlFilePart[]>;
   /** Extracted text from PDFs/documents by message ID (not sent as file parts to avoid AI provider timeout) */
   extractedTextByMessageId: Map<string, string>;
-  errors: Array<{ messageId: string; uploadId: string; error: string }>;
+  errors: { messageId: string; uploadId: string; error: string }[];
   stats: {
     messagesWithAttachments: number;
     totalUploads: number;
@@ -768,11 +756,11 @@ export type LoadMessageAttachmentsUrlResult = {
 export async function loadMessageAttachmentsUrl(
   params: LoadMessageAttachmentsUrlParams,
 ): Promise<LoadMessageAttachmentsUrlResult> {
-  const { messageIds, r2Bucket, db, logger } = params;
+  const { db, logger, messageIds, r2Bucket } = params;
 
   const filePartsByMessageId = new Map<string, UrlFilePart[]>();
   const extractedTextByMessageId = new Map<string, string>();
-  const errors: Array<{ messageId: string; uploadId: string; error: string }> = [];
+  const errors: { messageId: string; uploadId: string; error: string }[] = [];
   let totalUploads = 0;
   let loaded = 0;
   let failed = 0;
@@ -780,15 +768,15 @@ export async function loadMessageAttachmentsUrl(
 
   if (!messageIds || messageIds.length === 0) {
     return {
-      filePartsByMessageId,
-      extractedTextByMessageId,
       errors: [],
+      extractedTextByMessageId,
+      filePartsByMessageId,
       stats: {
-        messagesWithAttachments: 0,
-        totalUploads: 0,
-        loaded: 0,
         failed: 0,
+        loaded: 0,
+        messagesWithAttachments: 0,
         skipped: 0,
+        totalUploads: 0,
       },
     };
   }
@@ -801,19 +789,19 @@ export async function loadMessageAttachmentsUrl(
 
   if (messageUploadsRaw.length === 0) {
     logger?.debug('No attachments found for messages', LogHelpers.operation({
-      operationName: 'loadMessageAttachmentsUrl',
       messageCount: messageIds.length,
+      operationName: 'loadMessageAttachmentsUrl',
     }));
     return {
-      filePartsByMessageId,
-      extractedTextByMessageId,
       errors: [],
+      extractedTextByMessageId,
+      filePartsByMessageId,
       stats: {
-        messagesWithAttachments: 0,
-        totalUploads: 0,
-        loaded: 0,
         failed: 0,
+        loaded: 0,
+        messagesWithAttachments: 0,
         skipped: 0,
+        totalUploads: 0,
       },
     };
   }
@@ -821,20 +809,20 @@ export async function loadMessageAttachmentsUrl(
   // Group by message ID
   const uploadsByMessageId = new Map<
     string,
-    Array<{
+    {
       uploadId: string;
       displayOrder: number;
       upload: (typeof messageUploadsRaw)[0]['upload'];
-    }>
+    }[]
   >();
 
   for (const row of messageUploadsRaw) {
     const messageUpload = row.message_upload;
     const existing = uploadsByMessageId.get(messageUpload.messageId) || [];
     existing.push({
-      uploadId: messageUpload.uploadId,
       displayOrder: messageUpload.displayOrder,
       upload: row.upload,
+      uploadId: messageUpload.uploadId,
     });
     uploadsByMessageId.set(messageUpload.messageId, existing);
   }
@@ -842,9 +830,9 @@ export async function loadMessageAttachmentsUrl(
   totalUploads = messageUploadsRaw.length;
 
   logger?.info('Loading message attachments (unified Uint8Array mode)', LogHelpers.operation({
-    operationName: 'loadMessageAttachmentsUrl',
     messageCount: messageIds.length,
     messagesWithAttachments: uploadsByMessageId.size,
+    operationName: 'loadMessageAttachmentsUrl',
     totalUploads,
   }));
 
@@ -854,15 +842,15 @@ export async function loadMessageAttachmentsUrl(
 
     uploads.sort((a, b) => a.displayOrder - b.displayOrder);
 
-    for (const { uploadId, upload } of uploads) {
+    for (const { upload, uploadId } of uploads) {
       try {
         // Skip unsupported file types
         if (!AI_PROCESSABLE_MIME_SET.has(upload.mimeType)) {
           logger?.debug('Skipping unsupported file type', LogHelpers.operation({
-            operationName: 'loadMessageAttachmentsUrl',
             messageId,
-            uploadId,
             mimeType: upload.mimeType,
+            operationName: 'loadMessageAttachmentsUrl',
+            uploadId,
           }));
           skipped++;
           continue;
@@ -889,11 +877,11 @@ export async function loadMessageAttachmentsUrl(
             loaded++;
 
             logger?.debug('Using pre-extracted text', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
               filename: upload.filename,
               fileSize: extractedText.length,
+              messageId,
+              operationName: 'loadMessageAttachmentsUrl',
+              uploadId,
             }));
             continue;
           }
@@ -901,22 +889,22 @@ export async function loadMessageAttachmentsUrl(
           // No pre-extracted text - try synchronous extraction
           if (shouldExtractPdfText(upload.mimeType, upload.fileSize)) {
             logger?.info('Triggering synchronous PDF extraction', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
               filename: upload.filename,
+              messageId,
+              operationName: 'loadMessageAttachmentsUrl',
               sizeKB: Math.round(upload.fileSize / 1024),
+              uploadId,
             }));
 
             const { data } = await getFile(r2Bucket, upload.r2Key);
             if (!data) {
               logger?.error('File not found in storage', LogHelpers.operation({
-                operationName: 'loadMessageAttachmentsUrl',
                 messageId,
-                uploadId,
+                operationName: 'loadMessageAttachmentsUrl',
                 r2Key: upload.r2Key,
+                uploadId,
               }));
-              errors.push({ messageId, uploadId, error: 'File not found' });
+              errors.push({ error: 'File not found', messageId, uploadId });
               failed++;
               continue;
             }
@@ -935,27 +923,27 @@ export async function loadMessageAttachmentsUrl(
               loaded++;
 
               logger?.info('Synchronous extraction succeeded', LogHelpers.operation({
-                operationName: 'loadMessageAttachmentsUrl',
-                messageId,
-                uploadId,
                 fileSize: extractionResult.text.length,
+                messageId,
+                operationName: 'loadMessageAttachmentsUrl',
+                uploadId,
               }));
 
               // Update DB for future requests (fire-and-forget)
               db.update(tables.upload)
                 .set({
                   metadata: {
+                    extractedAt: new Date().toISOString(),
                     extractedText: extractionResult.text,
                     totalPages: extractionResult.totalPages,
-                    extractedAt: new Date().toISOString(),
                   },
                   updatedAt: new Date(),
                 })
                 .where(eq(tables.upload.id, upload.id))
                 .catch(err => logger?.error('Failed to save extracted text', LogHelpers.operation({
+                  error: err instanceof Error ? err.message : 'Unknown',
                   operationName: 'loadMessageAttachmentsUrl',
                   uploadId: upload.id,
-                  error: err instanceof Error ? err.message : 'Unknown',
                 })));
               continue;
             }
@@ -963,21 +951,21 @@ export async function loadMessageAttachmentsUrl(
             // Extraction failed - use binary as fallback
             // NOTE: PDF.js may consume/transfer the ArrayBuffer, so we re-fetch for binary
             logger?.warn('Extraction failed, using binary', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
               error: extractionResult.error,
+              messageId,
+              operationName: 'loadMessageAttachmentsUrl',
+              uploadId,
             }));
 
             // Re-fetch file since PDF.js may have consumed the original ArrayBuffer
             const { data: freshData } = await getFile(r2Bucket, upload.r2Key);
             if (!freshData || freshData.byteLength === 0) {
               logger?.error('File re-fetch failed for binary fallback', LogHelpers.operation({
-                operationName: 'loadMessageAttachmentsUrl',
                 messageId,
+                operationName: 'loadMessageAttachmentsUrl',
                 uploadId,
               }));
-              errors.push({ messageId, uploadId, error: 'File re-fetch failed for binary fallback' });
+              errors.push({ error: 'File re-fetch failed for binary fallback', messageId, uploadId });
               failed++;
               continue;
             }
@@ -988,12 +976,12 @@ export async function loadMessageAttachmentsUrl(
             const base64 = arrayBufferToBase64(freshData);
             const dataUrl = `data:${upload.mimeType};base64,${base64}`;
             messageParts.push({
-              type: MessagePartTypes.FILE,
               data: uint8Data,
-              mimeType: upload.mimeType,
               filename: upload.filename,
-              url: dataUrl,
               mediaType: upload.mimeType,
+              mimeType: upload.mimeType,
+              type: MessagePartTypes.FILE,
+              url: dataUrl,
             } satisfies ModelFilePart);
 
             // Add text fallback for non-vision models (same as loadAttachmentContentUrl)
@@ -1011,11 +999,11 @@ export async function loadMessageAttachmentsUrl(
           // Large PDF without extracted text - provide helpful message instead of failing
           if (isPdf && upload.fileSize > MAX_BASE64_FILE_SIZE) {
             logger?.warn('Large PDF without extracted text in message, providing fallback', LogHelpers.operation({
-              operationName: 'loadMessageAttachmentsUrl',
-              messageId,
-              uploadId,
               fileSize: upload.fileSize,
               maxSize: MAX_BASE64_FILE_SIZE,
+              messageId,
+              operationName: 'loadMessageAttachmentsUrl',
+              uploadId,
             }));
             const fallbackText = `[PDF: ${upload.filename}]\n\n[This PDF (${(upload.fileSize / 1024 / 1024).toFixed(1)}MB) is too large to process directly. Text extraction was not completed. Please try re-uploading the file, or use a smaller PDF.]`;
             const existing = extractedTextByMessageId.get(messageId) || '';
@@ -1031,11 +1019,11 @@ export async function loadMessageAttachmentsUrl(
         // Check file size before binary loading (applies to images and other files)
         if (upload.fileSize > MAX_BASE64_FILE_SIZE) {
           logger?.warn('File too large for binary loading in message, skipping', LogHelpers.operation({
-            operationName: 'loadMessageAttachmentsUrl',
-            messageId,
-            uploadId,
             fileSize: upload.fileSize,
             maxSize: MAX_BASE64_FILE_SIZE,
+            messageId,
+            operationName: 'loadMessageAttachmentsUrl',
+            uploadId,
           }));
           skipped++;
           continue;
@@ -1046,13 +1034,13 @@ export async function loadMessageAttachmentsUrl(
 
         if (!data) {
           logger?.error('File not found in storage', LogHelpers.operation({
-            operationName: 'loadMessageAttachmentsUrl',
-            messageId,
-            uploadId,
             filename: upload.filename,
+            messageId,
+            operationName: 'loadMessageAttachmentsUrl',
             r2Key: upload.r2Key,
+            uploadId,
           }));
-          errors.push({ messageId, uploadId, error: 'File not found' });
+          errors.push({ error: 'File not found', messageId, uploadId });
           failed++;
           continue;
         }
@@ -1063,34 +1051,34 @@ export async function loadMessageAttachmentsUrl(
         const dataUrl = `data:${upload.mimeType};base64,${base64}`;
 
         messageParts.push({
-          type: MessagePartTypes.FILE,
           data: uint8Data,
-          mimeType: upload.mimeType,
           filename: upload.filename,
-          url: dataUrl,
           mediaType: upload.mimeType,
+          mimeType: upload.mimeType,
+          type: MessagePartTypes.FILE,
+          url: dataUrl,
         } satisfies ModelFilePart);
 
         loaded++;
 
         logger?.debug('Loaded file as Uint8Array with data URL', LogHelpers.operation({
-          operationName: 'loadMessageAttachmentsUrl',
-          messageId,
-          uploadId,
           filename: upload.filename,
+          messageId,
           mimeType: upload.mimeType,
+          operationName: 'loadMessageAttachmentsUrl',
           sizeKB: Math.round(upload.fileSize / 1024),
+          uploadId,
         }));
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger?.error('Failed to process attachment', LogHelpers.operation({
-          operationName: 'loadMessageAttachmentsUrl',
-          messageId,
-          uploadId,
-          filename: upload.filename,
           error: errorMessage,
+          filename: upload.filename,
+          messageId,
+          operationName: 'loadMessageAttachmentsUrl',
+          uploadId,
         }));
-        errors.push({ messageId, uploadId, error: errorMessage });
+        errors.push({ error: errorMessage, messageId, uploadId });
         failed++;
       }
     }
@@ -1101,19 +1089,19 @@ export async function loadMessageAttachmentsUrl(
   }
 
   const stats = {
-    messagesWithAttachments: uploadsByMessageId.size,
-    totalUploads,
-    loaded,
     failed,
+    loaded,
+    messagesWithAttachments: uploadsByMessageId.size,
     skipped,
+    totalUploads,
   };
 
   logger?.info('Message attachment loading complete', LogHelpers.operation({
-    operationName: 'loadMessageAttachmentsUrl',
-    stats,
     filePartsCount: filePartsByMessageId.size,
+    operationName: 'loadMessageAttachmentsUrl',
     resultCount: extractedTextByMessageId.size,
+    stats,
   }));
 
-  return { filePartsByMessageId, extractedTextByMessageId, errors, stats };
+  return { errors, extractedTextByMessageId, filePartsByMessageId, stats };
 }

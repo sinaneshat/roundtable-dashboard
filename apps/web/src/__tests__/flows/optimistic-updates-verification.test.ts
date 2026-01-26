@@ -32,8 +32,8 @@ describe('thread Creation Optimistic Flow', () => {
     // Create optimistic user message (before server confirmation)
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = createTestUserMessage({
-      id: tempId,
       content: 'User question',
+      id: tempId,
       roundNumber: 0,
     });
 
@@ -52,8 +52,8 @@ describe('thread Creation Optimistic Flow', () => {
     // Optimistic message with temp ID
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage = createTestUserMessage({
-      id: tempId,
       content: 'User question',
+      id: tempId,
       roundNumber: 0,
     });
     store.getState().setMessages([optimisticMessage]);
@@ -61,8 +61,8 @@ describe('thread Creation Optimistic Flow', () => {
     // Server confirms with deterministic ID
     const deterministicId = `${thread.id}_r0_user`;
     const confirmedMessage = createTestUserMessage({
-      id: deterministicId,
       content: 'User question',
+      id: deterministicId,
       roundNumber: 0,
     });
 
@@ -91,7 +91,7 @@ describe('thread Creation Optimistic Flow', () => {
     expect(getCalls).toHaveLength(0);
 
     // Verify streaming state prevents unnecessary fetches
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 
   it('should handle duplicate message prevention during optimistic updates', () => {
@@ -100,8 +100,8 @@ describe('thread Creation Optimistic Flow', () => {
 
     const messageId = `${thread.id}_r0_user`;
     const message = createTestUserMessage({
-      id: messageId,
       content: 'Question',
+      id: messageId,
       roundNumber: 0,
     });
 
@@ -163,23 +163,23 @@ describe('participant Streaming State Prediction', () => {
     // Add messages as they complete
     const messages = [
       createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Q',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'R0',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p1`,
         content: 'R1',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
@@ -188,7 +188,7 @@ describe('participant Streaming State Prediction', () => {
 
     // Client-side message count matches expected server state
     expect(store.getState().messages).toHaveLength(3);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should track nextParticipantToTrigger for resumption', () => {
@@ -220,16 +220,16 @@ describe('aPI Call Counting', () => {
     // 2. Participant streams (one per participant)
     for (let i = 0; i < participantCount; i++) {
       trackApiCall(tracker, '/api/v1/threads/thread-123/stream', 'POST', {
-        threadId: 'thread-123',
-        roundNumber: 0,
         participantIndex: i,
+        roundNumber: 0,
+        threadId: 'thread-123',
       });
     }
 
     // 3. Moderator stream
     trackApiCall(tracker, '/api/v1/threads/thread-123/moderator', 'POST', {
-      threadId: 'thread-123',
       roundNumber: 0,
+      threadId: 'thread-123',
     });
 
     // Verify counts
@@ -320,15 +320,15 @@ describe('action Call Verification', () => {
 
     // First trigger - should succeed
     const didMark1 = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark1).toBe(true);
+    expect(didMark1).toBeTruthy();
 
     // Second trigger - should fail (already marked)
     const didMark2 = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark2).toBe(false);
+    expect(didMark2).toBeFalsy();
 
     // Third trigger - should still fail
     const didMark3 = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark3).toBe(false);
+    expect(didMark3).toBeFalsy();
   });
 
   it('should prevent duplicate moderator triggers via atomic tracking', () => {
@@ -336,15 +336,15 @@ describe('action Call Verification', () => {
 
     // First trigger - should succeed
     const didTrigger1 = store.getState().tryMarkModeratorCreated(0);
-    expect(didTrigger1).toBe(true);
+    expect(didTrigger1).toBeTruthy();
 
     // Second trigger - should fail
     const didTrigger2 = store.getState().tryMarkModeratorCreated(0);
-    expect(didTrigger2).toBe(false);
+    expect(didTrigger2).toBeFalsy();
 
     // Different round - should succeed
     const didTrigger3 = store.getState().tryMarkModeratorCreated(1);
-    expect(didTrigger3).toBe(true);
+    expect(didTrigger3).toBeTruthy();
   });
 });
 
@@ -355,13 +355,13 @@ describe('action Call Verification', () => {
 describe('race Condition Prevention', () => {
   it('should not have isStreaming and isModeratorStreaming true simultaneously', () => {
     const store = createTestChatStore();
-    const invalidStates: Array<{ isStreaming: boolean; isModeratorStreaming: boolean }> = [];
+    const invalidStates: { isStreaming: boolean; isModeratorStreaming: boolean }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       if (state.isStreaming && state.isModeratorStreaming) {
         invalidStates.push({
-          isStreaming: state.isStreaming,
           isModeratorStreaming: state.isModeratorStreaming,
+          isStreaming: state.isStreaming,
         });
       }
     });
@@ -379,7 +379,7 @@ describe('race Condition Prevention', () => {
 
   it('should not have isCreatingThread and isStreaming true simultaneously', () => {
     const store = createTestChatStore();
-    const invalidStates: Array<{ isCreatingThread: boolean; isStreaming: boolean }> = [];
+    const invalidStates: { isCreatingThread: boolean; isStreaming: boolean }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       if (state.isCreatingThread && state.isStreaming) {
@@ -406,19 +406,19 @@ describe('race Condition Prevention', () => {
 
     // Simulate concurrent updates
     const message1 = createTestAssistantMessage({
-      id: `${thread.id}_r0_p0`,
       content: 'First version',
-      roundNumber: 0,
+      id: `${thread.id}_r0_p0`,
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     const message2 = createTestAssistantMessage({
-      id: `${thread.id}_r0_p0`,
       content: 'Second version with more content',
-      roundNumber: 0,
+      id: `${thread.id}_r0_p0`,
       participantId: 'p0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     // Set both (simulating race)

@@ -208,15 +208,15 @@ describe('cache Validation', () => {
       const mockThread = createBaseMockThread({ id: 'thread-1', title: 'Thread 1' });
 
       const validData = {
+        pageParams: [undefined],
         pages: [
           {
-            success: true,
             data: {
               items: [mockThread],
             },
+            success: true,
           },
         ],
-        pageParams: [undefined],
       };
 
       const result = validateInfiniteQueryCache(validData);
@@ -228,15 +228,15 @@ describe('cache Validation', () => {
 
     it('should NOT recreate objects if data is already valid', () => {
       const validData = {
+        pageParams: [undefined],
         pages: [
           {
-            success: true,
             data: {
               items: [],
             },
+            success: true,
           },
         ],
-        pageParams: [undefined],
       };
 
       const result = validateInfiniteQueryCache(validData);
@@ -263,20 +263,20 @@ describe('cache Validation', () => {
 
     it('should validate valid thread detail payload', () => {
       const validData = {
-        success: true,
         data: {
-          thread: {
-            id: 'thread-1',
-            title: 'Test Thread',
-            slug: 'test-thread',
-            userId: 'user-1',
-            mode: ChatModes.COUNCIL,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          participants: [],
           messages: [],
+          participants: [],
+          thread: {
+            createdAt: new Date().toISOString(),
+            id: 'thread-1',
+            mode: ChatModes.COUNCIL,
+            slug: 'test-thread',
+            title: 'Test Thread',
+            updatedAt: new Date().toISOString(),
+            userId: 'user-1',
+          },
         },
+        success: true,
       };
 
       const result = validateThreadDetailPayloadCache(validData);
@@ -296,8 +296,8 @@ describe('cache Validation', () => {
     it('should return undefined if any page fails validation', () => {
       const mixedPages = [
         {
-          success: true,
           data: { items: [] },
+          success: true,
         },
         {
           invalid: 'page',
@@ -312,26 +312,26 @@ describe('cache Validation', () => {
     it('should validate all valid pages', () => {
       const validPages = [
         {
-          success: true,
           data: {
             items: [
               {
-                id: 'thread-1',
-                title: 'Thread 1',
-                slug: 'thread-1',
-                userId: 'user-1',
-                mode: ChatModes.COUNCIL,
                 createdAt: new Date().toISOString(),
+                id: 'thread-1',
+                mode: ChatModes.COUNCIL,
+                slug: 'thread-1',
+                title: 'Thread 1',
                 updatedAt: new Date().toISOString(),
+                userId: 'user-1',
               },
             ],
           },
+          success: true,
         },
         {
-          success: true,
           data: {
             items: [],
           },
+          success: true,
         },
       ];
 
@@ -351,22 +351,22 @@ describe('cache Validation', () => {
 
     it('should validate valid usage stats', () => {
       const validData = {
-        success: true,
         data: {
           credits: {
-            balance: 1000,
             available: 800,
+            balance: 1000,
             status: 'default',
           },
           plan: {
-            type: 'pro',
-            name: 'Pro Plan',
-            monthlyCredits: 10000,
             hasActiveSubscription: true,
+            monthlyCredits: 10000,
+            name: 'Pro Plan',
             nextRefillAt: new Date().toISOString(),
             pendingChange: null,
+            type: 'pro',
           },
         },
+        success: true,
       };
 
       const result = validateUsageStatsCache(validData);
@@ -386,7 +386,6 @@ describe('cache Validation', () => {
 
     it('should return null for invalid changelog structure', () => {
       const invalidData = {
-        success: true,
         data: {
           items: [
             {
@@ -396,6 +395,7 @@ describe('cache Validation', () => {
             },
           ],
         },
+        success: true,
       };
 
       const result = validateChangelogListCache(invalidData);
@@ -409,14 +409,14 @@ describe('optimistic Update Patterns', () => {
   describe('thread Update Optimistic Pattern', () => {
     it('should preserve object shape during optimistic update', () => {
       const previousThread = {
-        id: 'thread-1',
-        title: 'Original Title',
-        slug: 'original-slug',
-        userId: 'user-1',
-        mode: ChatModes.COUNCIL,
-        isFavorite: false,
         createdAt: new Date().toISOString(),
+        id: 'thread-1',
+        isFavorite: false,
+        mode: ChatModes.COUNCIL,
+        slug: 'original-slug',
+        title: 'Original Title',
         updatedAt: new Date().toISOString(),
+        userId: 'user-1',
       };
 
       const optimisticUpdate = {
@@ -436,19 +436,19 @@ describe('optimistic Update Patterns', () => {
     it('should validate optimistic update without mutation', () => {
       const mockThread = createBaseMockThread({
         id: 'thread-1',
-        title: 'Original Title',
         isFavorite: false,
+        title: 'Original Title',
       });
 
       const optimisticThread = {
         ...mockThread,
-        title: 'Updated Title',
         isFavorite: true,
+        title: 'Updated Title',
       };
 
       expect(optimisticThread.id).toBe('thread-1');
       expect(optimisticThread.title).toBe('Updated Title');
-      expect(optimisticThread.isFavorite).toBe(true);
+      expect(optimisticThread.isFavorite).toBeTruthy();
       expect(optimisticThread.slug).toBe(mockThread.slug);
     });
   });
@@ -457,36 +457,37 @@ describe('optimistic Update Patterns', () => {
     it('should update specific item in pages without recreating entire structure', () => {
       const pages = [
         {
-          success: true,
           data: {
             items: [
               {
-                id: 'thread-1',
-                title: 'Thread 1',
-                slug: 'thread-1',
-                userId: 'user-1',
-                mode: ChatModes.COUNCIL,
-                isFavorite: false,
                 createdAt: new Date().toISOString(),
+                id: 'thread-1',
+                isFavorite: false,
+                mode: ChatModes.COUNCIL,
+                slug: 'thread-1',
+                title: 'Thread 1',
                 updatedAt: new Date().toISOString(),
+                userId: 'user-1',
               },
               {
-                id: 'thread-2',
-                title: 'Thread 2',
-                slug: 'thread-2',
-                userId: 'user-1',
-                mode: ChatModes.COUNCIL,
-                isFavorite: false,
                 createdAt: new Date().toISOString(),
+                id: 'thread-2',
+                isFavorite: false,
+                mode: ChatModes.COUNCIL,
+                slug: 'thread-2',
+                title: 'Thread 2',
                 updatedAt: new Date().toISOString(),
+                userId: 'user-1',
               },
             ],
           },
+          success: true,
         },
       ];
       const updatedPages = pages.map((page) => {
-        if (!page.success || !page.data?.items)
+        if (!page.success || !page.data?.items) {
           return page;
+        }
 
         return {
           ...page,
@@ -501,8 +502,8 @@ describe('optimistic Update Patterns', () => {
         };
       });
 
-      expect(updatedPages[0].data?.items[0].isFavorite).toBe(true);
-      expect(updatedPages[0].data?.items[1].isFavorite).toBe(false);
+      expect(updatedPages[0].data?.items[0].isFavorite).toBeTruthy();
+      expect(updatedPages[0].data?.items[1].isFavorite).toBeFalsy();
     });
   });
 });
@@ -517,9 +518,9 @@ describe('invalidation Scope Precision', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.threadDetail(threadId);
 
-      expect(containsKey(patterns, queryKeys.threads.detail(threadId))).toBe(true);
-      expect(containsKey(patterns, queryKeys.threads.lists())).toBe(true);
-      expect(containsKey(patterns, queryKeys.threads.changelog(threadId))).toBe(true);
+      expect(containsKey(patterns, queryKeys.threads.detail(threadId))).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.threads.lists())).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.threads.changelog(threadId))).toBeTruthy();
     });
 
     it('should NOT invalidate other thread details', () => {
@@ -528,7 +529,7 @@ describe('invalidation Scope Precision', () => {
 
       const otherThreadKey = queryKeys.threads.detail('thread-456');
 
-      expect(containsKey(patterns, otherThreadKey)).toBe(false);
+      expect(containsKey(patterns, otherThreadKey)).toBeFalsy();
     });
 
     it('should be focused - not too broad', () => {
@@ -544,8 +545,8 @@ describe('invalidation Scope Precision', () => {
     it('should invalidate thread lists and usage stats', () => {
       const patterns = invalidationPatterns.threads;
 
-      expect(containsKey(patterns, queryKeys.threads.lists())).toBe(true);
-      expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
+      expect(containsKey(patterns, queryKeys.threads.lists())).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.usage.stats())).toBeTruthy();
     });
 
     it('should NOT invalidate specific thread details', () => {
@@ -555,7 +556,7 @@ describe('invalidation Scope Precision', () => {
         Array.isArray(key) && key.includes('detail'),
       );
 
-      expect(hasDetailKey).toBe(false);
+      expect(hasDetailKey).toBeFalsy();
     });
   });
 
@@ -563,16 +564,16 @@ describe('invalidation Scope Precision', () => {
     it('should invalidate subscriptions, usage, and models (cascading effect)', () => {
       const patterns = invalidationPatterns.subscriptions;
 
-      expect(containsKey(patterns, queryKeys.subscriptions.lists())).toBe(true);
-      expect(containsKey(patterns, queryKeys.subscriptions.current())).toBe(true);
-      expect(containsKey(patterns, queryKeys.usage.all)).toBe(true);
-      expect(containsKey(patterns, queryKeys.models.all)).toBe(true);
+      expect(containsKey(patterns, queryKeys.subscriptions.lists())).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.subscriptions.current())).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.usage.all)).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.models.all)).toBeTruthy();
     });
 
     it('should handle tier changes affecting model access', () => {
       const patterns = invalidationPatterns.subscriptions;
 
-      expect(containsKey(patterns, queryKeys.models.all)).toBe(true);
+      expect(containsKey(patterns, queryKeys.models.all)).toBeTruthy();
     });
   });
 
@@ -581,16 +582,16 @@ describe('invalidation Scope Precision', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.afterThreadMessage(threadId);
 
-      expect(containsKey(patterns, queryKeys.threads.detail(threadId))).toBe(true);
-      expect(containsKey(patterns, queryKeys.threads.lists())).toBe(true);
-      expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
+      expect(containsKey(patterns, queryKeys.threads.detail(threadId))).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.threads.lists())).toBeTruthy();
+      expect(containsKey(patterns, queryKeys.usage.stats())).toBeTruthy();
     });
 
     it('should update usage stats for credit consumption', () => {
       const threadId = 'thread-123';
       const patterns = invalidationPatterns.afterThreadMessage(threadId);
 
-      expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
+      expect(containsKey(patterns, queryKeys.usage.stats())).toBeTruthy();
     });
   });
 });
@@ -628,26 +629,26 @@ describe('stale Time Configuration', () => {
 describe('prefetch Cache Population', () => {
   it('should pre-populate thread detail with consistent structure', () => {
     const threadData = {
-      thread: {
-        id: 'thread-123',
-        title: 'Test Thread',
-        slug: 'test-thread',
-        userId: 'user-1',
-        mode: ChatModes.COUNCIL,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      participants: [],
       messages: [],
+      participants: [],
+      thread: {
+        createdAt: new Date().toISOString(),
+        id: 'thread-123',
+        mode: ChatModes.COUNCIL,
+        slug: 'test-thread',
+        title: 'Test Thread',
+        updatedAt: new Date().toISOString(),
+        userId: 'user-1',
+      },
       user: {
-        name: 'Test User',
         image: null,
+        name: 'Test User',
       },
     };
 
     const result = validateThreadDetailPayloadCache({
-      success: true,
       data: threadData,
+      success: true,
     });
 
     expect(result).not.toBeNull();
@@ -660,14 +661,14 @@ describe('prefetch Cache Population', () => {
     const preSearchData = {
       items: [
         {
-          id: 'ps-1',
-          threadId: 'thread-123',
-          roundNumber: 0,
-          query: 'test query',
-          status: 'completed',
-          results: [],
-          createdAt: new Date().toISOString(),
           completedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          id: 'ps-1',
+          query: 'test query',
+          results: [],
+          roundNumber: 0,
+          status: 'completed',
+          threadId: 'thread-123',
         },
       ],
     };
@@ -686,25 +687,25 @@ describe('prefetch Cache Population', () => {
 describe('mutation OnSuccess Optimistic Updates', () => {
   it('should correctly merge server response with optimistic update', () => {
     const optimisticUpdate = {
-      id: 'thread-123',
-      title: 'Optimistic Title',
-      isFavorite: true,
-      slug: 'thread-123',
-      userId: 'user-1',
-      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
+      id: 'thread-123',
+      isFavorite: true,
+      mode: ChatModes.COUNCIL,
+      slug: 'thread-123',
+      title: 'Optimistic Title',
       updatedAt: new Date().toISOString(),
+      userId: 'user-1',
     };
 
     const serverResponse = {
-      id: 'thread-123',
-      title: 'Optimistic Title',
-      isFavorite: true,
-      slug: 'thread-123',
-      userId: 'user-1',
-      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
+      id: 'thread-123',
+      isFavorite: true,
+      mode: ChatModes.COUNCIL,
+      slug: 'thread-123',
+      title: 'Optimistic Title',
       updatedAt: new Date().toISOString(),
+      userId: 'user-1',
       version: 2,
     };
 
@@ -720,8 +721,8 @@ describe('mutation OnSuccess Optimistic Updates', () => {
   it('should rollback optimistic update on error', () => {
     const previousState = {
       id: 'thread-123',
-      title: 'Original Title',
       isFavorite: false,
+      title: 'Original Title',
     };
 
     let currentState = {
@@ -731,19 +732,19 @@ describe('mutation OnSuccess Optimistic Updates', () => {
 
     currentState = previousState;
 
-    expect(currentState.isFavorite).toBe(false);
+    expect(currentState.isFavorite).toBeFalsy();
     expect(currentState.title).toBe('Original Title');
   });
 
   it('should validate optimistic update preserves required fields', () => {
     const baseThread = {
-      id: 'thread-123',
-      title: 'Original Title',
-      slug: 'thread-123',
-      userId: 'user-1',
-      mode: ChatModes.COUNCIL,
       createdAt: new Date().toISOString(),
+      id: 'thread-123',
+      mode: ChatModes.COUNCIL,
+      slug: 'thread-123',
+      title: 'Original Title',
       updatedAt: new Date().toISOString(),
+      userId: 'user-1',
     };
 
     const optimisticUpdate = {
@@ -758,7 +759,7 @@ describe('mutation OnSuccess Optimistic Updates', () => {
     expect(updated.id).toBe('thread-123');
     expect(updated.title).toBe('Original Title');
     expect(updated.userId).toBe('user-1');
-    expect(updated.isFavorite).toBe(true);
+    expect(updated.isFavorite).toBeTruthy();
   });
 });
 
@@ -770,25 +771,25 @@ describe('query Invalidation Timing', () => {
   it('should use immediate invalidation for critical data', () => {
     const patterns = invalidationPatterns.afterThreadMessage('thread-123');
 
-    expect(containsKey(patterns, queryKeys.usage.stats())).toBe(true);
+    expect(containsKey(patterns, queryKeys.usage.stats())).toBeTruthy();
   });
 
   it('should invalidate changelog incrementally', () => {
     const threadUpdatePattern = invalidationPatterns.threadDetail('thread-123');
 
-    expect(containsKey(threadUpdatePattern, queryKeys.threads.changelog('thread-123'))).toBe(true);
+    expect(containsKey(threadUpdatePattern, queryKeys.threads.changelog('thread-123'))).toBeTruthy();
   });
 
   it('should NOT invalidate models on every thread operation', () => {
     const threadPatterns = invalidationPatterns.threads;
 
-    expect(containsKey(threadPatterns, queryKeys.models.all)).toBe(false);
+    expect(containsKey(threadPatterns, queryKeys.models.all)).toBeFalsy();
   });
 
   it('should invalidate models on subscription changes', () => {
     const subscriptionPatterns = invalidationPatterns.subscriptions;
 
-    expect(containsKey(subscriptionPatterns, queryKeys.models.all)).toBe(true);
+    expect(containsKey(subscriptionPatterns, queryKeys.models.all)).toBeTruthy();
   });
 });
 
@@ -825,7 +826,7 @@ describe('cache Key Hierarchical Structure', () => {
       return Array.isArray(key) && key[0] === 'threads' && key[1] === 'list';
     };
 
-    expect(isListQuery(listKey)).toBe(true);
-    expect(isListQuery(queryKeys.threads.detail('thread-123'))).toBe(false);
+    expect(isListQuery(listKey)).toBeTruthy();
+    expect(isListQuery(queryKeys.threads.detail('thread-123'))).toBeFalsy();
   });
 });

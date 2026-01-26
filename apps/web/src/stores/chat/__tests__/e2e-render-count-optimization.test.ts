@@ -73,27 +73,27 @@ describe('chatOverviewScreen Render Count Optimization', () => {
 
       // initializeThread batches all state changes into 1 update
       const thread = {
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Test Thread',
-        slug: 'test-thread',
-        mode: 'brainstorming' as const,
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming' as const,
+        slug: 'test-thread',
+        title: 'Test Thread',
         updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [
         {
-          id: 'p1',
-          threadId: 'thread-123',
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p1',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -127,7 +127,7 @@ describe('chatOverviewScreen Render Count Optimization', () => {
        * - Input component won't re-render when participants change
        * - Minimizes cascading re-renders across unrelated components
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -146,8 +146,8 @@ describe('chatOverviewScreen Render Count Optimization', () => {
       store.getState().addParticipant({
         id: 'gpt-4',
         modelId: 'gpt-4',
-        role: null,
         priority: 0,
+        role: null,
       });
 
       unsubscribe();
@@ -160,9 +160,9 @@ describe('chatOverviewScreen Render Count Optimization', () => {
 
       // Set initial participants
       store.getState().setSelectedParticipants([
-        { id: 'gpt-4', modelId: 'gpt-4', role: null, priority: 0 },
-        { id: 'claude', modelId: 'claude', role: null, priority: 1 },
-        { id: 'gemini', modelId: 'gemini', role: null, priority: 2 },
+        { id: 'gpt-4', modelId: 'gpt-4', priority: 0, role: null },
+        { id: 'claude', modelId: 'claude', priority: 1, role: null },
+        { id: 'gemini', modelId: 'gemini', priority: 2, role: null },
       ]);
 
       let updateCount = 0;
@@ -210,12 +210,12 @@ describe('chatThreadScreen Streaming Render Count', () => {
       for (let i = 1; i <= 50; i++) {
         store.getState().setMessages([
           createTestAssistantMessage({
-            id: 'thread-123_r0_p0',
             content: 'Hello '.repeat(i),
-            roundNumber: 0,
+            finishReason: i === 50 ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+            id: 'thread-123_r0_p0',
             participantId: 'gpt-4',
             participantIndex: 0,
-            finishReason: i === 50 ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+            roundNumber: 0,
           }),
         ]);
       }
@@ -248,7 +248,7 @@ describe('chatThreadScreen Streaming Render Count', () => {
        *   - Prevents expensive sidebar layout recalculations
        *   - Maintains smooth streaming UX
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -303,7 +303,7 @@ describe('chatThreadScreen Streaming Render Count', () => {
        *   - Prevents re-rendering hundreds of completed message items
        *   - Only active streaming message re-renders
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -322,10 +322,10 @@ describe('chatThreadScreen Streaming Render Count', () => {
       for (let i = 1; i <= 30; i++) {
         store.getState().setMessages([
           createTestModeratorMessage({
-            id: 'thread-123_r0_moderator',
             content: 'Summary '.repeat(i),
-            roundNumber: 0,
             finishReason: i === 30 ? FinishReasons.STOP : FinishReasons.UNKNOWN,
+            id: 'thread-123_r0_moderator',
+            roundNumber: 0,
           }),
         ]);
       }
@@ -355,7 +355,7 @@ describe('chatThreadScreen Streaming Render Count', () => {
        *   - Isolates moderator rendering
        *   - Prevents unnecessary participant card re-renders
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 });
@@ -372,15 +372,15 @@ describe('sidebar Render Count Optimization', () => {
 
       // Set initial thread
       const thread = {
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'New Chat',
-        slug: 'new-chat-abc',
-        mode: 'brainstorming' as const,
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming' as const,
+        slug: 'new-chat-abc',
+        title: 'New Chat',
         updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       store.getState().setThread(thread);
@@ -422,7 +422,7 @@ describe('sidebar Render Count Optimization', () => {
        *   - Only sidebar header updates
        *   - No layout shifts during streaming
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 });
@@ -438,15 +438,15 @@ describe('store Selector Isolation', () => {
 
       // Set up initial state
       store.getState().setThread({
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorming',
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming',
+        slug: 'test',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       // Verify each state change is isolated
@@ -461,8 +461,8 @@ describe('store Selector Isolation', () => {
       // Change messages
       store.getState().setMessages([
         createTestUserMessage({
-          id: 'msg1',
           content: 'Hello',
+          id: 'msg1',
           roundNumber: 0,
         }),
       ]);
@@ -476,15 +476,15 @@ describe('store Selector Isolation', () => {
 
       // Change title
       store.getState().setThread({
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Updated Title',
-        slug: 'test',
-        mode: 'brainstorming',
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming',
+        slug: 'test',
+        title: 'Updated Title',
         updatedAt: new Date(),
+        userId: 'user-1',
       });
 
       expect(globalUpdates - before).toBe(3);
@@ -529,7 +529,7 @@ describe('store Selector Isolation', () => {
        *   - Prevents re-renders from object reference changes
        *   - Critical for components subscribing to multiple primitives
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -551,8 +551,8 @@ describe('store Selector Isolation', () => {
       store.getState().addParticipant({
         id: 'gpt-4',
         modelId: 'gpt-4',
-        role: null,
         priority: 0,
+        role: null,
       });
 
       unsub();
@@ -584,15 +584,15 @@ describe('slug Polling Render Count', () => {
     const store = createTestChatStore();
 
     const thread = {
-      id: 'thread-123',
-      userId: 'user-1',
-      title: 'New Chat',
-      slug: 'new-chat-abc',
-      mode: 'brainstorming' as const,
-      enableWebSearch: false,
-      isPublic: false,
       createdAt: new Date(),
+      enableWebSearch: false,
+      id: 'thread-123',
+      isPublic: false,
+      mode: 'brainstorming' as const,
+      slug: 'new-chat-abc',
+      title: 'New Chat',
       updatedAt: new Date(),
+      userId: 'user-1',
     };
 
     store.getState().setThread(thread);
@@ -608,8 +608,8 @@ describe('slug Polling Render Count', () => {
     // Update both title and slug - single setThread call
     const updatedThread = {
       ...thread,
-      title: 'AGI Discussion',
       slug: 'agi-discussion',
+      title: 'AGI Discussion',
     };
 
     store.getState().setThread(updatedThread);
@@ -645,7 +645,7 @@ describe('slug Polling Render Count', () => {
      *   - Only header text updates (cheap operation)
      *   - No layout shifts or flashing
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -680,8 +680,8 @@ describe('batched Operations Render Count', () => {
 
     // Verify all state was reset
     const state = store.getState();
-    expect(state.isStreaming).toBe(false);
-    expect(state.streamingRoundNumber).toBe(null);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.streamingRoundNumber).toBeNull();
     expect(state.currentParticipantIndex).toBe(0);
   });
 
@@ -720,7 +720,7 @@ describe('batched Operations Render Count', () => {
      *   - Initialization sequences
      *   - Complex state transitions
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -776,6 +776,6 @@ describe('performance Baseline Documentation', () => {
      *   - setThread > 1 update
      *   - Unrelated state changes cause cascade re-renders
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

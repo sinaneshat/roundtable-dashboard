@@ -25,16 +25,16 @@ type ModelPresetCardProps = {
 };
 
 export const ModelPresetCard = memo(({
-  preset,
   allModels,
-  userTier,
-  onSelect,
   className,
-  isSelected = false,
   incompatibleModelIds,
-  onCustomize,
+  isSelected = false,
   isUserPreset = false,
+  onCustomize,
   onDelete,
+  onSelect,
+  preset,
+  userTier,
 }: ModelPresetCardProps) => {
   const t = useTranslations();
   const isLocked = !canAccessPreset(preset, userTier);
@@ -49,8 +49,9 @@ export const ModelPresetCard = memo(({
   const isFullyDisabled = compatibleModelCount === 0;
 
   const handleClick = () => {
-    if (isLocked || isFullyDisabled)
+    if (isLocked || isFullyDisabled) {
       return;
+    }
     onSelect({ preset });
   };
 
@@ -153,8 +154,9 @@ export const ModelPresetCard = memo(({
         <div className="flex items-start gap-3 px-1 pb-1">
           {preset.modelRoles.map((modelRole) => {
             const model = allModels.find(m => m.id === modelRole.modelId);
-            if (!model)
+            if (!model) {
               return null;
+            }
 
             const isModelIncompatible = incompatibleModelIds?.has(modelRole.modelId) ?? false;
 

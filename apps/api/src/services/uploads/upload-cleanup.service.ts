@@ -28,22 +28,22 @@ export async function scheduleUploadCleanup<T extends Rpc.DurableObjectBranded>(
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
 
   const response = await stub.fetch('https://cleanup.internal/schedule', {
-    method: 'POST',
+    body: JSON.stringify({ r2Key, uploadId, userId }),
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ uploadId, userId, r2Key }),
+    method: 'POST',
   });
 
   if (!response.ok) {
     const error = await response.text();
     const errorContext: ErrorContext = {
       errorType: 'external_service',
-      service: 'UploadCleanupScheduler',
       operation: 'schedule',
+      service: 'UploadCleanupScheduler',
     };
     throw createError.internal(`Failed to schedule upload cleanup: ${error}`, errorContext);
   }
 
-  return response.json();
+  return await response.json();
 }
 
 export async function cancelUploadCleanup<T extends Rpc.DurableObjectBranded>(
@@ -53,16 +53,16 @@ export async function cancelUploadCleanup<T extends Rpc.DurableObjectBranded>(
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
 
   const response = await stub.fetch('https://cleanup.internal/cancel', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uploadId }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
   });
 
   if (!response.ok) {
     return { cancelled: false };
   }
 
-  return response.json();
+  return await response.json();
 }
 
 export async function getUploadCleanupState<T extends Rpc.DurableObjectBranded>(
@@ -79,7 +79,7 @@ export async function getUploadCleanupState<T extends Rpc.DurableObjectBranded>(
     return { state: null };
   }
 
-  return response.json();
+  return await response.json();
 }
 
 export function isCleanupSchedulerAvailable(env: CloudflareEnv): boolean {

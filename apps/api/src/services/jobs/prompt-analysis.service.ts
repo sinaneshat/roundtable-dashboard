@@ -35,44 +35,46 @@ async function getAiSdk() {
 
 // Schema for AI structured output
 const AIAnalysisOutputSchema = z.object({
+  enableWebSearch: z.boolean(),
+  mode: z.string(),
   participants: z.array(z.object({
     modelId: z.string(),
     role: z.string().nullable(),
   }).strict()).min(MIN_PARTICIPANTS_REQUIRED).max(5),
-  mode: z.string(),
-  enableWebSearch: z.boolean(),
 }).strict();
 
 // Default/fallback config
 const DEFAULT_JOB_CONFIG = {
+  enableWebSearch: false,
+  mode: 'brainstorming' as ChatMode,
   modelIds: ['google/gemini-2.5-flash', 'anthropic/claude-sonnet-4.5', 'openai/gpt-5.1'],
   participants: [
     { modelId: 'google/gemini-2.5-flash', role: 'Analyst' as const },
     { modelId: 'anthropic/claude-sonnet-4.5', role: 'Strategist' as const },
     { modelId: 'openai/gpt-5.1', role: 'Critic' as const },
   ],
-  mode: 'brainstorming' as ChatMode,
-  enableWebSearch: false,
   reasoning: 'Default configuration: diverse model selection for balanced perspectives.',
 };
 
 export type JobPromptAnalysisResult = {
   modelIds: string[];
-  participants: Array<{ modelId: string; role: string | null }>;
+  participants: { modelId: string; role: string | null }[];
   mode: ChatMode;
   enableWebSearch: boolean;
   reasoning: string;
 };
 
 function isValidShortRoleName(role: string | null | undefined): role is (typeof SHORT_ROLE_NAMES)[number] {
-  if (!role)
+  if (!role) {
     return false;
+  }
   return ShortRoleNameSchema.safeParse(role).success;
 }
 
 function isValidChatMode(mode: string | undefined): mode is ChatMode {
-  if (!mode)
+  if (!mode) {
     return false;
+  }
   return ChatModeSchema.safeParse(mode).success;
 }
 
@@ -85,11 +87,11 @@ function getAvailableModelInfo(): AnalyzeModelInfo[] {
   );
 
   return userFacingModels.map(m => ({
-    id: m.id,
-    name: m.name,
     description: m.description || '',
-    isReasoning: m.is_reasoning_model,
     hasVision: m.supports_vision,
+    id: m.id,
+    isReasoning: m.is_reasoning_model,
+    name: m.name,
   }));
 }
 
@@ -128,25 +130,28 @@ export async function analyzePromptForJob(
     );
 
     const result = await generateObject({
+      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.default),
       model: client.chat(PROMPT_ANALYSIS_MODEL_ID),
+      prompt,
       schema: AIAnalysisOutputSchema,
       system: systemPrompt,
-      prompt,
       temperature: 0.3,
-      abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.default),
     });
 
     const output = result.object;
 
     // Validate participants
-    const validParticipants: Array<{ modelId: string; role: string | null }> = [];
+    const validParticipants: { modelId: string; role: string | null }[] = [];
     for (const p of output.participants) {
-      if (!p?.modelId)
+      if (!p?.modelId) {
         continue;
-      if (!accessibleModelIds.includes(p.modelId))
+      }
+      if (!accessibleModelIds.includes(p.modelId)) {
         continue;
-      if (validParticipants.length >= maxModels)
+      }
+      if (validParticipants.length >= maxModels) {
         break;
+      }
 
       validParticipants.push({
         modelId: p.modelId,
@@ -162,10 +167,10 @@ export async function analyzePromptForJob(
     const validatedMode = isValidChatMode(output.mode) ? output.mode : DEFAULT_CHAT_MODE;
 
     const analysisResult: JobPromptAnalysisResult = {
+      enableWebSearch: output.enableWebSearch ?? false,
+      mode: validatedMode,
       modelIds: validParticipants.map(p => p.modelId),
       participants: validParticipants,
-      mode: validatedMode,
-      enableWebSearch: output.enableWebSearch ?? false,
       reasoning: `AI analysis: Selected ${validParticipants.length} models for ${validatedMode} mode. Web search: ${output.enableWebSearch ? 'enabled' : 'disabled'}.`,
     };
 
@@ -221,12 +226,12 @@ Determine:
 Respond with JSON.`;
 
     const result = await generateObject({
+      abortSignal: AbortSignal.timeout(30000), // 30s timeout
       model: client.chat(PROMPT_ANALYSIS_MODEL_ID),
+      prompt,
       schema: RoundAnalysisSchema,
       system: systemPrompt,
-      prompt,
       temperature: 0.2,
-      abortSignal: AbortSignal.timeout(30000), // 30s timeout
     });
 
     const validatedMode = isValidChatMode(result.object.mode) ? result.object.mode : 'analyzing';

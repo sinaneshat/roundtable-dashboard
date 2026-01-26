@@ -17,13 +17,13 @@ import type { GetProductResponse, ListProductsResponse, Price, Product } from '@
  */
 export function createMockPrice(overrides?: Partial<Price>): Price {
   return {
-    id: overrides?.id ?? 'price_test_123',
-    productId: overrides?.productId ?? 'prod_test_123',
-    unitAmount: overrides?.unitAmount ?? 999,
-    currency: overrides?.currency ?? 'usd',
-    interval: overrides?.interval ?? UIBillingIntervals.MONTH,
-    trialPeriodDays: overrides?.trialPeriodDays ?? null,
     active: overrides?.active ?? true,
+    currency: overrides?.currency ?? 'usd',
+    id: overrides?.id ?? 'price_test_123',
+    interval: overrides?.interval ?? UIBillingIntervals.MONTH,
+    productId: overrides?.productId ?? 'prod_test_123',
+    trialPeriodDays: overrides?.trialPeriodDays ?? null,
+    unitAmount: overrides?.unitAmount ?? 999,
   };
 }
 
@@ -37,16 +37,16 @@ export function createMockProduct(overrides?: Partial<Product>): Product {
   const defaultPrices = hasPricesKey ? overrides.prices : [createMockPrice({ productId })];
 
   return {
-    id: productId,
-    name: overrides?.name ?? 'Pro Plan',
-    description: overrides?.description ?? 'Professional features for power users',
     active: overrides?.active ?? true,
+    description: overrides?.description ?? 'Professional features for power users',
     features: overrides?.features ?? [
       'Unlimited AI conversations',
       'Access to all models',
       'Priority support',
       'Advanced analytics',
     ],
+    id: productId,
+    name: overrides?.name ?? 'Pro Plan',
     prices: defaultPrices,
   };
 }
@@ -56,20 +56,20 @@ export function createMockProduct(overrides?: Partial<Product>): Product {
  */
 export function createMockFreeProduct(): Product {
   return createMockProduct({
-    id: 'prod_free',
-    name: 'Free Plan',
     description: 'Get started with basic features',
     features: [
       '100 credits per month',
       'Basic AI models',
       'Community support',
     ],
+    id: 'prod_free',
+    name: 'Free Plan',
     prices: [
       createMockPrice({
         id: 'price_free',
+        interval: UIBillingIntervals.MONTH,
         productId: 'prod_free',
         unitAmount: 0,
-        interval: UIBillingIntervals.MONTH,
       }),
     ],
   });
@@ -80,8 +80,6 @@ export function createMockFreeProduct(): Product {
  */
 export function createMockProProduct(): Product {
   return createMockProduct({
-    id: 'prod_pro',
-    name: 'Pro Plan',
     description: 'Advanced features for professionals',
     features: [
       'Unlimited AI conversations',
@@ -89,13 +87,15 @@ export function createMockProProduct(): Product {
       'Priority support',
       'Advanced analytics',
     ],
+    id: 'prod_pro',
+    name: 'Pro Plan',
     prices: [
       createMockPrice({
         id: 'price_pro_monthly',
-        productId: 'prod_pro',
-        unitAmount: 1999,
         interval: UIBillingIntervals.MONTH,
+        productId: 'prod_pro',
         trialPeriodDays: 14,
+        unitAmount: 1999,
       }),
     ],
   });
@@ -106,8 +106,6 @@ export function createMockProProduct(): Product {
  */
 export function createMockEnterpriseProduct(): Product {
   return createMockProduct({
-    id: 'prod_enterprise',
-    name: 'Enterprise Plan',
     description: 'Custom solutions for teams',
     features: [
       'Everything in Pro',
@@ -116,12 +114,14 @@ export function createMockEnterpriseProduct(): Product {
       'SLA guarantees',
       'Volume discounts',
     ],
+    id: 'prod_enterprise',
+    name: 'Enterprise Plan',
     prices: [
       createMockPrice({
         id: 'price_enterprise_monthly',
+        interval: UIBillingIntervals.MONTH,
         productId: 'prod_enterprise',
         unitAmount: 9999,
-        interval: UIBillingIntervals.MONTH,
       }),
     ],
   });
@@ -147,11 +147,11 @@ export function createMockProductCatalog(): Product[] {
  */
 export function createProductsListResponse(products: Product[]): ListProductsResponse {
   return {
-    success: true,
     data: {
-      items: products,
       count: products.length,
+      items: products,
     },
+    success: true,
   };
 }
 
@@ -160,10 +160,10 @@ export function createProductsListResponse(products: Product[]): ListProductsRes
  */
 export function createProductDetailResponse(product: Product): GetProductResponse {
   return {
-    success: true,
     data: {
       product,
     },
+    success: true,
   };
 }
 
@@ -172,11 +172,11 @@ export function createProductDetailResponse(product: Product): GetProductRespons
  */
 export function createEmptyProductsListResponse(): ListProductsResponse {
   return {
-    success: true,
     data: {
-      items: [],
       count: 0,
+      items: [],
     },
+    success: true,
   };
 }
 
@@ -185,11 +185,11 @@ export function createEmptyProductsListResponse(): ListProductsResponse {
  */
 export function createProductErrorResponse(message = 'Product not found'): ApiErrorResponse {
   return {
-    success: false,
     error: {
       code: 'NOT_FOUND',
       message,
     },
+    success: false,
   };
 }
 
@@ -198,10 +198,10 @@ export function createProductErrorResponse(message = 'Product not found'): ApiEr
  */
 export function createProductsListErrorResponse(message = 'Failed to fetch products'): ApiErrorResponse {
   return {
-    success: false,
     error: {
       code: 'INTERNAL_SERVER_ERROR',
       message,
     },
+    success: false,
   };
 }

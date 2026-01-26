@@ -38,7 +38,7 @@ import { getRoundNumber } from '@/lib/utils';
  * Simulates the deduplication logic from chat-message-list.tsx:643-779
  * This tests the actual algorithm used in production
  */
-function deduplicateMessages(messages: Array<TestUserMessage | TestAssistantMessage>) {
+function deduplicateMessages(messages: (TestUserMessage | TestAssistantMessage)[]) {
   const seenMessageIds = new Set<string>();
   const seenAssistantMessages = new Set<string>();
   const _seenModeratorRounds = new Set<number>(); // Prefixed - reserved for moderator deduplication
@@ -81,8 +81,9 @@ function deduplicateMessages(messages: Array<TestUserMessage | TestAssistantMess
         }
         // This is a deterministic ID message - find and replace the temp ID message
         const existingTempIdx = result.findIndex((m) => {
-          if (m.role !== MessageRoles.ASSISTANT)
+          if (m.role !== MessageRoles.ASSISTANT) {
             return false;
+          }
           const mMeta = m.metadata;
           const mRound = mMeta.roundNumber;
           const mPid = mMeta.participantId;
@@ -118,7 +119,7 @@ function deduplicateMessages(messages: Array<TestUserMessage | TestAssistantMess
 /**
  * Groups deduplicated messages by round for verification
  */
-function groupByRound(messages: Array<TestUserMessage | TestAssistantMessage>) {
+function groupByRound(messages: (TestUserMessage | TestAssistantMessage)[]) {
   const rounds = new Map<number, typeof messages>();
 
   for (const msg of messages) {
@@ -127,8 +128,9 @@ function groupByRound(messages: Array<TestUserMessage | TestAssistantMessage>) {
       rounds.set(round, []);
     }
     const roundMessages = rounds.get(round);
-    if (!roundMessages)
+    if (!roundMessages) {
       throw new Error(`expected round ${round} to have messages`);
+    }
     roundMessages.push(msg);
   }
 
@@ -139,7 +141,7 @@ function groupByRound(messages: Array<TestUserMessage | TestAssistantMessage>) {
  * Verifies no message from round N appears in round M
  */
 function assertRoundIsolation(
-  messages: Array<TestUserMessage | TestAssistantMessage>,
+  messages: (TestUserMessage | TestAssistantMessage)[],
   round1: number,
   round2: number,
 ) {
@@ -152,7 +154,8 @@ function assertRoundIsolation(
   const round2Ids = new Set(round2Messages.map(m => m.id));
 
   round1Ids.forEach((id) => {
-    expect(round2Ids.has(id), `Message ${id} leaked from round ${round1} to round ${round2}`).toBe(false);
+    // Verifying no cross-round message leakage
+    expect(round2Ids.has(id)).toBeFalsy();
   });
 }
 
@@ -167,24 +170,24 @@ describe('cross-Round Message Deduplication', () => {
       // This means if a message ID collides across rounds, second occurrence is dropped
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'user-msg', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'user-msg', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'participant-response', // ⚠️ Non-unique ID across rounds
           content: 'Round 0 Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'participant-response', // ⚠️ Non-unique ID across rounds
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1
-        createTestUserMessage({ id: 'user-msg-2', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'user-msg-2', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'participant-response', // ⚠️ SAME ID, different round
           content: 'Round 1 Response',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'participant-response', // ⚠️ SAME ID, different round
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -209,40 +212,40 @@ describe('cross-Round Message Deduplication', () => {
       // Common pattern: participant-0, participant-1 used every round
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0', // Deterministic ID pattern
           content: 'Round 0, Participant 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0', // Deterministic ID pattern
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p1',
           content: 'Round 0, Participant 1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - SAME PARTICIPANTS
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'thread_r1_p0', // Different round, same participant
           content: 'Round 1, Participant 0',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p0', // Different round, same participant
           participantId: 'participant-0', // SAME participantId as round 0
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'thread_r1_p1',
           content: 'Round 1, Participant 1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p1',
           participantId: 'participant-1', // SAME participantId as round 0
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -276,32 +279,32 @@ describe('cross-Round Message Deduplication', () => {
     it('sHOULD use (roundNumber, participantIndex) as composite key', () => {
       // Test that dedupeKey correctly includes round number
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'temp-gen-123',
           content: 'Streaming...',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'temp-gen-123',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0', // Deterministic ID
           content: 'Complete',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0', // Deterministic ID
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - DIFFERENT ROUND, SAME PARTICIPANT
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'thread_r1_p0', // Deterministic ID for round 1
           content: 'Round 1 Response',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p0', // Deterministic ID for round 1
           participantId: 'p0', // SAME participant
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -331,32 +334,32 @@ describe('cross-Round Message Deduplication', () => {
       // Regression test: Ensure deduplication within round 0 doesn't affect round 1
       const messages = [
         // Round 0 - Two versions of same participant message (temp + real)
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'temp-p0-r0',
           content: 'Streaming R0...',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'temp-p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'db-p0-r0',
           content: 'Complete R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'db-p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - Same participant, fresh message
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'db-p0-r1',
           content: 'Complete R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'db-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -384,28 +387,28 @@ describe('cross-Round Message Deduplication', () => {
       const messages = [
         // Round 0 - Optimistic user message
         createTestUserMessage({
-          id: 'optimistic-user-0-12345',
           content: 'Question 0',
+          id: 'optimistic-user-0-12345',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 0 - Real user message arrives (different ID, so both kept)
         createTestUserMessage({
-          id: 'db-user-0',
           content: 'Question 0',
+          id: 'db-user-0',
           roundNumber: 0,
         }),
         // Round 1 - New optimistic message
         createTestUserMessage({
-          id: 'optimistic-user-1-67890',
           content: 'Question 1',
+          id: 'optimistic-user-1-67890',
           roundNumber: 1,
         }),
       ];
@@ -422,33 +425,33 @@ describe('cross-Round Message Deduplication', () => {
     it('sHOULD handle optimistic assistant messages per round', () => {
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'R0 P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - Optimistic
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'gen-temp-r1-p0', // Temp ID
           content: 'Streaming R1...',
-          roundNumber: 1,
+          finishReason: FinishReasons.UNKNOWN,
+          id: 'gen-temp-r1-p0', // Temp ID
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN,
+          roundNumber: 1,
         }),
         // Round 1 - Real message arrives
         createTestAssistantMessage({
-          id: 'thread_r1_p0', // Deterministic ID
           content: 'Complete R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p0', // Deterministic ID
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -477,36 +480,36 @@ describe('cross-Round Message Deduplication', () => {
     it('sHOULD keep moderator messages isolated per round', () => {
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'Participant response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: 'Round 0 summary',
-          roundNumber: 0,
           finishReason: FinishReasons.STOP,
+          id: 'thread_r0_moderator',
+          roundNumber: 0,
         }),
         // Round 1
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'thread_r1_p0',
           content: 'Participant response',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestModeratorMessage({
-          id: 'thread_r1_moderator',
           content: 'Round 1 summary',
-          roundNumber: 1,
           finishReason: FinishReasons.STOP,
+          id: 'thread_r1_moderator',
+          roundNumber: 1,
         }),
       ];
 
@@ -534,40 +537,40 @@ describe('cross-Round Message Deduplication', () => {
     it('sHOULD maintain correct order within each round after deduplication', () => {
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'R0 P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p1',
           content: 'R0 P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - Inserted out of order
         createTestAssistantMessage({
-          id: 'thread_r1_p1',
           content: 'R1 P1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
-        }),
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
-        createTestAssistantMessage({
-          id: 'thread_r1_p0',
-          content: 'R1 P0',
           roundNumber: 1,
+        }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
+        createTestAssistantMessage({
+          content: 'R1 P0',
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r1_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -578,7 +581,7 @@ describe('cross-Round Message Deduplication', () => {
 
       // Verify round 0 order
       const round0Indices = deduplicated
-        .map((m, idx) => ({ m, idx }))
+        .map((m, idx) => ({ idx, m }))
         .filter(({ m }) => getRoundNumber(m.metadata) === 0)
         .map(({ idx }) => idx);
 
@@ -590,31 +593,31 @@ describe('cross-Round Message Deduplication', () => {
 
       // Check all expected IDs present
       const round1Ids = new Set(round1Messages.map(m => m.id));
-      expect(round1Ids.has('u1')).toBe(true);
-      expect(round1Ids.has('thread_r1_p0')).toBe(true);
-      expect(round1Ids.has('thread_r1_p1')).toBe(true);
+      expect(round1Ids.has('u1')).toBeTruthy();
+      expect(round1Ids.has('thread_r1_p0')).toBeTruthy();
+      expect(round1Ids.has('thread_r1_p1')).toBeTruthy();
     });
 
     it('sHOULD preserve insertion order when processing messages', () => {
       // Test that first occurrence is kept when IDs collide
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'duplicate-id', // First occurrence - round 0
           content: 'First',
+          finishReason: FinishReasons.STOP,
+          id: 'duplicate-id', // First occurrence - round 0
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          finishReason: FinishReasons.STOP,
         }),
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'duplicate-id', // Second occurrence - round 1 (should be dropped by seenMessageIds)
           content: 'Second',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'duplicate-id', // Second occurrence - round 1 (should be dropped by seenMessageIds)
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -645,14 +648,14 @@ describe('cross-Round Message Deduplication', () => {
 
     it('sHOULD handle single round', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -661,24 +664,24 @@ describe('cross-Round Message Deduplication', () => {
     });
 
     it('sHOULD handle many rounds with same participants', () => {
-      const messages: Array<TestUserMessage | TestAssistantMessage> = [];
+      const messages: (TestUserMessage | TestAssistantMessage)[] = [];
 
       // Create 10 rounds, each with 3 participants
       for (let round = 0; round < 10; round++) {
         messages.push(createTestUserMessage({
-          id: `u${round}`,
           content: `Q${round}`,
+          id: `u${round}`,
           roundNumber: round,
         }));
 
         for (let p = 0; p < 3; p++) {
           messages.push(createTestAssistantMessage({
-            id: `thread_r${round}_p${p}`,
             content: `R${round} P${p}`,
-            roundNumber: round,
+            finishReason: FinishReasons.STOP,
+            id: `thread_r${round}_p${p}`,
             participantId: `p${p}`,
             participantIndex: p,
-            finishReason: FinishReasons.STOP,
+            roundNumber: round,
           }));
         }
       }
@@ -691,23 +694,23 @@ describe('cross-Round Message Deduplication', () => {
       // Verify each round has correct count
       for (let round = 0; round < 10; round++) {
         const roundMessages = deduplicated.filter(m => getRoundNumber(m.metadata) === round);
-        expect(roundMessages, `Round ${round} should have 4 messages`).toHaveLength(4);
+        expect(roundMessages).toHaveLength(4);
       }
     });
 
     it('sHOULD handle missing metadata gracefully', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         {
           id: 'malformed',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'Malformed' }],
           metadata: {} as TestAssistantMessage['metadata'], // Intentionally incomplete for edge case test
+          parts: [{ text: 'Malformed', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       // Should not crash, but behavior depends on getRoundNumber fallback
-      const deduplicated = deduplicateMessages(messages as Array<TestUserMessage | TestAssistantMessage>);
+      const deduplicated = deduplicateMessages(messages as (TestUserMessage | TestAssistantMessage)[]);
       expect(deduplicated.length).toBeGreaterThanOrEqual(1); // At least user message
     });
   });

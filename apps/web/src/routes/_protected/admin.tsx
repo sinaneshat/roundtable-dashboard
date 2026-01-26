@@ -11,9 +11,9 @@ export const Route = createFileRoute('/_protected/admin')({
 
     return { session };
   },
+  component: AdminLayout,
   // Layout route caching: Prevent unnecessary loader re-runs
   staleTime: Infinity,
-  component: AdminLayout,
 });
 
 /**

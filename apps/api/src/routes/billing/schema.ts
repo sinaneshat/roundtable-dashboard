@@ -14,23 +14,23 @@ import {
 
 const PriceSchema = stripePriceSelectSchema
   .pick({
-    id: true,
-    productId: true,
-    unitAmount: true,
-    currency: true,
-    interval: true,
-    trialPeriodDays: true,
     active: true,
+    currency: true,
+    id: true,
+    interval: true,
+    productId: true,
+    trialPeriodDays: true,
+    unitAmount: true,
   })
   .openapi('Price');
 
 const ProductSchema = stripeProductSelectSchema
   .pick({
+    active: true,
+    description: true,
+    features: true,
     id: true,
     name: true,
-    description: true,
-    active: true,
-    features: true,
   })
   .extend({
     prices: z.array(PriceSchema).optional().openapi({
@@ -40,12 +40,12 @@ const ProductSchema = stripeProductSelectSchema
   .openapi('Product');
 
 const ProductListPayloadSchema = z.object({
-  items: z.array(ProductSchema).openapi({
-    description: 'List of available products with prices',
-  }),
   count: z.number().int().nonnegative().openapi({
     description: 'Total number of products',
     example: 3,
+  }),
+  items: z.array(ProductSchema).openapi({
+    description: 'List of available products with prices',
   }),
 }).openapi('ProductListPayload');
 
@@ -64,6 +64,10 @@ export const ProductDetailResponseSchema = createApiResponseSchema(ProductDetail
 // ============================================================================
 
 export const CheckoutRequestSchema = z.object({
+  cancelUrl: CoreSchemas.url().optional().openapi({
+    description: 'Redirect URL if checkout is canceled (defaults to /chat/pricing)',
+    example: 'https://app.example.com/chat/pricing',
+  }),
   priceId: CoreSchemas.id().openapi({
     description: 'Stripe price ID for the subscription',
     example: 'price_1ABC123',
@@ -71,10 +75,6 @@ export const CheckoutRequestSchema = z.object({
   successUrl: CoreSchemas.url().optional().openapi({
     description: 'Redirect URL after successful checkout (defaults to /chat)',
     example: 'https://app.example.com/chat',
-  }),
-  cancelUrl: CoreSchemas.url().optional().openapi({
-    description: 'Redirect URL if checkout is canceled (defaults to /chat/pricing)',
-    example: 'https://app.example.com/chat/pricing',
   }),
 }).openapi('CheckoutRequest');
 
@@ -117,32 +117,32 @@ export const CustomerPortalResponseSchema = createApiResponseSchema(CustomerPort
 
 const SubscriptionSchema = stripeSubscriptionSelectSchema
   .pick({
-    id: true,
-    status: true,
-    priceId: true,
     cancelAtPeriodEnd: true,
+    id: true,
+    priceId: true,
+    status: true,
   })
   .extend({
-    currentPeriodStart: z.string().openapi({ description: 'Current period start date (ISO string)' }),
-    currentPeriodEnd: z.string().openapi({ description: 'Current period end date (ISO string)' }),
     canceledAt: z.string().nullable().openapi({ description: 'Cancellation date (ISO string or null)' }),
-    trialStart: z.string().nullable().openapi({ description: 'Trial start date (ISO string or null)' }),
-    trialEnd: z.string().nullable().openapi({ description: 'Trial end date (ISO string or null)' }),
+    currentPeriodEnd: z.string().openapi({ description: 'Current period end date (ISO string)' }),
+    currentPeriodStart: z.string().openapi({ description: 'Current period start date (ISO string)' }),
     price: stripePriceSelectSchema
       .pick({ productId: true })
       .openapi({
         description: 'Price details with product ID',
       }),
+    trialEnd: z.string().nullable().openapi({ description: 'Trial end date (ISO string or null)' }),
+    trialStart: z.string().nullable().openapi({ description: 'Trial start date (ISO string or null)' }),
   })
   .openapi('Subscription');
 
 const SubscriptionListPayloadSchema = z.object({
-  items: z.array(SubscriptionSchema).openapi({
-    description: 'List of user subscriptions',
-  }),
   count: z.number().int().nonnegative().openapi({
     description: 'Total number of subscriptions',
     example: 2,
+  }),
+  items: z.array(SubscriptionSchema).openapi({
+    description: 'List of user subscriptions',
   }),
 }).openapi('SubscriptionListPayload');
 
@@ -161,25 +161,25 @@ export const SubscriptionDetailResponseSchema = createApiResponseSchema(Subscrip
 // ============================================================================
 
 const WebhookPayloadSchema = z.object({
-  received: z.boolean().openapi({
-    description: 'Whether webhook was received successfully',
-    example: true,
-  }),
   event: z.object({
     id: z.string().openapi({
       description: 'Stripe event ID',
       example: 'evt_1ABC123',
     }),
-    type: z.string().openapi({
-      description: 'Stripe event type',
-      example: 'customer.subscription.updated',
-    }),
     processed: z.boolean().openapi({
       description: 'Whether event was processed',
       example: true,
     }),
+    type: z.string().openapi({
+      description: 'Stripe event type',
+      example: 'customer.subscription.updated',
+    }),
   }).optional().openapi({
     description: 'Webhook event details',
+  }),
+  received: z.boolean().openapi({
+    description: 'Whether webhook was received successfully',
+    example: true,
   }),
 }).openapi('WebhookPayload');
 
@@ -204,30 +204,30 @@ export const CancelSubscriptionRequestSchema = z.object({
 }).openapi('CancelSubscriptionRequest');
 
 const SubscriptionChangePayloadSchema = z.object({
-  subscription: SubscriptionSchema.openapi({
-    description: 'Updated subscription details',
-  }),
-  message: z.string().openapi({
-    description: 'Success message describing the change',
-    example: 'Subscription upgraded successfully',
-  }),
   changeDetails: z.object({
-    oldPrice: PriceSchema.openapi({
-      description: 'Previous price details before the change',
-    }),
-    newPrice: PriceSchema.openapi({
-      description: 'New price details after the change',
+    isDowngrade: z.boolean().openapi({
+      description: 'Whether this change is a downgrade (true) or upgrade (false)',
+      example: false,
     }),
     isUpgrade: z.boolean().openapi({
       description: 'Whether this change is an upgrade (true) or downgrade (false)',
       example: true,
     }),
-    isDowngrade: z.boolean().openapi({
-      description: 'Whether this change is a downgrade (true) or upgrade (false)',
-      example: false,
+    newPrice: PriceSchema.openapi({
+      description: 'New price details after the change',
+    }),
+    oldPrice: PriceSchema.openapi({
+      description: 'Previous price details before the change',
     }),
   }).optional().openapi({
     description: 'Details about the subscription change for showing before/after comparison',
+  }),
+  message: z.string().openapi({
+    description: 'Success message describing the change',
+    example: 'Subscription upgraded successfully',
+  }),
+  subscription: SubscriptionSchema.openapi({
+    description: 'Updated subscription details',
   }),
 }).openapi('SubscriptionChangePayload');
 
@@ -253,9 +253,9 @@ export const SyncedSubscriptionStateSchema = z.object({
 }).openapi('SyncedSubscriptionState');
 
 const TierChangeSchema = z.object({
-  previousTier: SubscriptionTierSchema.openapi({
-    description: 'Previous subscription tier before sync',
-    example: 'free',
+  newPriceId: z.string().nullable().openapi({
+    description: 'New Stripe price ID (null for free tier)',
+    example: 'price_1ABC123',
   }),
   newTier: SubscriptionTierSchema.openapi({
     description: 'New subscription tier after sync',
@@ -265,20 +265,20 @@ const TierChangeSchema = z.object({
     description: 'Previous Stripe price ID (null for free tier)',
     example: null,
   }),
-  newPriceId: z.string().nullable().openapi({
-    description: 'New Stripe price ID (null for free tier)',
-    example: 'price_1ABC123',
+  previousTier: SubscriptionTierSchema.openapi({
+    description: 'Previous subscription tier before sync',
+    example: 'free',
   }),
 }).openapi('TierChange');
 
 export const CreditPurchaseInfoSchema = z.object({
-  creditsGranted: z.number().openapi({
-    description: 'Number of credits granted from purchase',
-    example: 10000,
-  }),
   amountPaid: z.number().openapi({
     description: 'Amount paid in cents',
     example: 1000,
+  }),
+  creditsGranted: z.number().openapi({
+    description: 'Number of credits granted from purchase',
+    example: 10000,
   }),
   currency: z.string().openapi({
     description: 'Currency of payment',
@@ -287,9 +287,12 @@ export const CreditPurchaseInfoSchema = z.object({
 }).openapi('CreditPurchaseInfo');
 
 export const SyncAfterCheckoutPayloadSchema = z.object({
-  synced: z.boolean().openapi({
-    description: 'Whether sync was successful',
-    example: true,
+  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
+    description: 'Credit purchase info (null for subscription-only purchases)',
+  }),
+  creditsBalance: z.number().openapi({
+    description: 'Current credits balance after purchase',
+    example: 10000,
   }),
   purchaseType: PurchaseTypeSchema.openapi({
     description: 'Type of purchase that was made',
@@ -298,15 +301,12 @@ export const SyncAfterCheckoutPayloadSchema = z.object({
   subscription: SyncedSubscriptionStateSchema.nullable().openapi({
     description: 'Synced subscription state (for subscription purchases)',
   }),
-  creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
-    description: 'Credit purchase info (null for subscription-only purchases)',
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
   }),
   tierChange: TierChangeSchema.openapi({
     description: 'Tier change information for comparison UI',
-  }),
-  creditsBalance: z.number().openapi({
-    description: 'Current credits balance after purchase',
-    example: 10000,
   }),
 }).openapi('SyncAfterCheckoutPayload');
 
@@ -320,26 +320,26 @@ export const SyncAfterCheckoutResponseSchema = createApiResponseSchema(
 
 export const WebhookHeadersSchema = z.object({
   'stripe-signature': z.string().min(1).openapi({
-    param: {
-      name: 'stripe-signature',
-      in: 'header',
-    },
-    example: 't=1234567890,v1=abcdef...',
     description: 'Stripe webhook signature for verification',
+    example: 't=1234567890,v1=abcdef...',
+    param: {
+      in: 'header',
+      name: 'stripe-signature',
+    },
   }),
 });
 
 export const SyncCreditsAfterCheckoutPayloadSchema = z.object({
-  synced: z.boolean().openapi({
-    description: 'Whether sync was successful',
-    example: true,
-  }),
   creditPurchase: CreditPurchaseInfoSchema.nullable().openapi({
     description: 'Credit purchase info (null if no recent purchase found)',
   }),
   creditsBalance: z.number().openapi({
     description: 'Current credits balance after purchase',
     example: 10000,
+  }),
+  synced: z.boolean().openapi({
+    description: 'Whether sync was successful',
+    example: true,
   }),
 }).openapi('SyncCreditsAfterCheckoutPayload');
 
@@ -354,11 +354,11 @@ export type Subscription = z.infer<typeof SubscriptionSchema>;
 // ============================================================================
 
 export const SubscriptionDateFieldsSchema = stripeSubscriptionSelectSchema.pick({
-  currentPeriodStart: true,
-  currentPeriodEnd: true,
   canceledAt: true,
-  trialStart: true,
+  currentPeriodEnd: true,
+  currentPeriodStart: true,
   trialEnd: true,
+  trialStart: true,
 });
 
 export type SubscriptionDateFields = z.infer<typeof SubscriptionDateFieldsSchema>;

@@ -21,8 +21,8 @@ import { createChatStore } from '../store';
 // ============================================================================
 
 type ApiCallTracker = {
-  calls: Array<{ endpoint: string; method: string; timestamp: number; params?: unknown }>;
-  getCallsByEndpoint: (endpoint: string) => Array<{ method: string; timestamp: number; params?: unknown }>;
+  calls: { endpoint: string; method: string; timestamp: number; params?: unknown }[];
+  getCallsByEndpoint: (endpoint: string) => { method: string; timestamp: number; params?: unknown }[];
   getCallCount: (endpoint: string) => number;
   getTotalCalls: () => number;
   clear: () => void;
@@ -33,18 +33,18 @@ function createApiCallTracker(): ApiCallTracker {
 
   return {
     calls,
-    getCallsByEndpoint: endpoint => calls.filter(c => c.endpoint.includes(endpoint)),
-    getCallCount: endpoint => calls.filter(c => c.endpoint.includes(endpoint)).length,
-    getTotalCalls: () => calls.length,
     clear: () => {
       calls.length = 0;
     },
+    getCallCount: endpoint => calls.filter(c => c.endpoint.includes(endpoint)).length,
+    getCallsByEndpoint: endpoint => calls.filter(c => c.endpoint.includes(endpoint)),
+    getTotalCalls: () => calls.length,
   };
 }
 
 // Simulate API call tracking
 function trackApiCall(tracker: ApiCallTracker, endpoint: string, method: string, params?: unknown): void {
-  tracker.calls.push({ endpoint, method, timestamp: Date.now(), params });
+  tracker.calls.push({ endpoint, method, params, timestamp: Date.now() });
 }
 
 // ============================================================================
@@ -70,8 +70,8 @@ describe('pre-Search API Call Optimization', () => {
     store.setState({ enableWebSearch: false });
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Hello',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -99,8 +99,8 @@ describe('pre-Search API Call Optimization', () => {
     store.setState({ enableWebSearch: true });
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Search for something',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -108,14 +108,14 @@ describe('pre-Search API Call Optimization', () => {
 
     // Simulate pre-search placeholder creation
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_123',
-      roundNumber: 0,
-      userQuery: 'Search for something',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_123',
+      userQuery: 'Search for something',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -132,12 +132,12 @@ describe('pre-Search API Call Optimization', () => {
 
     if (didMarkAgain) {
       // This should NOT happen due to atomic check
-      trackApiCall(apiTracker, '/api/v1/chat/threads/:id/rounds/:round/pre-search', 'POST', { roundNumber: 0, duplicate: true });
+      trackApiCall(apiTracker, '/api/v1/chat/threads/:id/rounds/:round/pre-search', 'POST', { duplicate: true, roundNumber: 0 });
     }
 
     // ASSERTION: Only ONE pre-search call due to atomic check-and-mark
-    expect(didMark).toBe(true);
-    expect(didMarkAgain).toBe(false);
+    expect(didMark).toBeTruthy();
+    expect(didMarkAgain).toBeFalsy();
     expect(apiTracker.getCallCount('pre-search')).toBe(1);
   });
 
@@ -156,7 +156,7 @@ describe('pre-Search API Call Optimization', () => {
     const shouldPoll = hasPendingPreSearch ? 500 : false;
 
     // ASSERTION: Should NOT poll when no pending pre-searches
-    expect(shouldPoll).toBe(false);
+    expect(shouldPoll).toBeFalsy();
   });
 
   it('should stop polling once pre-search completes', () => {
@@ -164,14 +164,14 @@ describe('pre-Search API Call Optimization', () => {
 
     // Setup: Pre-search exists and is PENDING
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_123',
-      roundNumber: 0,
-      userQuery: 'Test',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_123',
+      userQuery: 'Test',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -189,7 +189,7 @@ describe('pre-Search API Call Optimization', () => {
     hasPendingPreSearch = preSearches.some(ps => ps.status === MessageStatuses.PENDING);
     shouldPoll = hasPendingPreSearch ? 500 : false;
 
-    expect(shouldPoll).toBe(false); // Should NOT poll during STREAMING
+    expect(shouldPoll).toBeFalsy(); // Should NOT poll during STREAMING
 
     // Update to COMPLETE - should definitely not poll
     store.getState().updatePreSearchStatus(0, MessageStatuses.COMPLETE);
@@ -198,7 +198,7 @@ describe('pre-Search API Call Optimization', () => {
     hasPendingPreSearch = preSearches.some(ps => ps.status === MessageStatuses.PENDING);
     shouldPoll = hasPendingPreSearch ? 500 : false;
 
-    expect(shouldPoll).toBe(false); // Should NOT poll after COMPLETE
+    expect(shouldPoll).toBeFalsy(); // Should NOT poll after COMPLETE
   });
 });
 
@@ -222,9 +222,9 @@ describe('changelog API Call Optimization', () => {
 
     // Simulate submission with no config changes
     const configChanged = {
-      participants: false,
-      mode: false,
       enableWebSearch: false,
+      mode: false,
+      participants: false,
     };
 
     // This is the logic from useUpdateThreadMutation.onSuccess
@@ -235,7 +235,7 @@ describe('changelog API Call Optimization', () => {
     }
 
     // ASSERTION: No changelog fetch when no config changes
-    expect(shouldInvalidateChangelog).toBe(false);
+    expect(shouldInvalidateChangelog).toBeFalsy();
     expect(apiTracker.getCallCount('changelog')).toBe(0);
   });
 
@@ -244,9 +244,9 @@ describe('changelog API Call Optimization', () => {
 
     // Simulate submission with participant changes
     const configChanged = {
-      participants: true,
-      mode: false,
       enableWebSearch: false,
+      mode: false,
+      participants: true,
     };
 
     const shouldInvalidateChangelog = configChanged.participants || configChanged.mode || configChanged.enableWebSearch;
@@ -256,7 +256,7 @@ describe('changelog API Call Optimization', () => {
     }
 
     // ASSERTION: Changelog invalidated when participants change
-    expect(shouldInvalidateChangelog).toBe(true);
+    expect(shouldInvalidateChangelog).toBeTruthy();
     expect(apiTracker.getCallCount('changelog')).toBe(1);
   });
 });
@@ -281,9 +281,9 @@ describe('thread Creation API Optimization', () => {
 
     // Simulate thread creation - should be a single POST
     trackApiCall(apiTracker, '/api/v1/chat/threads', 'POST', {
-      title: 'New Thread',
       mode: 'council',
       participants: [{ modelId: 'gpt-4' }],
+      title: 'New Thread',
     });
 
     // ASSERTION: Only ONE thread creation call
@@ -295,22 +295,22 @@ describe('thread Creation API Optimization', () => {
 
     // Simulate thread creation
     const createResponse = {
-      thread: { id: 'thread_123', mode: 'council', enableWebSearch: true },
       participants: [{ id: 'p1', modelId: 'gpt-4' }],
+      thread: { enableWebSearch: true, id: 'thread_123', mode: 'council' },
     };
 
     trackApiCall(apiTracker, '/api/v1/chat/threads', 'POST');
 
     // After creation, check if PATCH is needed
     const currentConfig = {
-      mode: 'council',
       enableWebSearch: true,
+      mode: 'council',
       participants: [{ modelId: 'gpt-4' }],
     };
 
     const serverConfig = {
-      mode: createResponse.thread.mode,
       enableWebSearch: createResponse.thread.enableWebSearch,
+      mode: createResponse.thread.mode,
       participants: createResponse.participants.map(p => ({ modelId: p.modelId })),
     };
 
@@ -322,7 +322,7 @@ describe('thread Creation API Optimization', () => {
     }
 
     // ASSERTION: No PATCH when config matches
-    expect(configMatches).toBe(true);
+    expect(configMatches).toBeTruthy();
     expect(apiTracker.calls.filter(c => c.method === 'PATCH')).toHaveLength(0);
   });
 });
@@ -354,11 +354,12 @@ describe('participant Streaming API Optimization', () => {
     // Simulate sequential participant streaming
     for (let i = 0; i < participants.length; i++) {
       const participant = participants[i];
-      if (!participant)
+      if (!participant) {
         throw new Error('expected participant');
+      }
       trackApiCall(apiTracker, '/api/v1/chat', 'POST', {
-        participantIndex: i,
         participantId: participant.id,
+        participantIndex: i,
       });
     }
 
@@ -388,7 +389,7 @@ describe('participant Streaming API Optimization', () => {
     // Simulate duplicate trigger (e.g., from re-render)
     if (!triggeredParticipants.has(participantIndex0)) {
       triggeredParticipants.add(participantIndex0);
-      trackApiCall(apiTracker, '/api/v1/chat', 'POST', { participantIndex: 0, duplicate: true });
+      trackApiCall(apiTracker, '/api/v1/chat', 'POST', { duplicate: true, participantIndex: 0 });
     }
 
     // Simulate first trigger for participant 1
@@ -457,12 +458,12 @@ describe('moderator API Optimization', () => {
     const shouldTrigger2 = !store.getState().isStreaming && !triggeredModeratorRounds.has(roundNumber);
     if (shouldTrigger2) {
       triggeredModeratorRounds.add(roundNumber);
-      trackApiCall(apiTracker, '/api/v1/chat/threads/:id/rounds/:round/moderator', 'POST', { roundNumber, duplicate: true });
+      trackApiCall(apiTracker, '/api/v1/chat/threads/:id/rounds/:round/moderator', 'POST', { duplicate: true, roundNumber });
     }
 
     // ASSERTION: Only ONE moderator call
-    expect(shouldTrigger1).toBe(true);
-    expect(shouldTrigger2).toBe(false);
+    expect(shouldTrigger1).toBeTruthy();
+    expect(shouldTrigger2).toBeFalsy();
     expect(apiTracker.getCallCount('moderator')).toBe(1);
   });
 });
@@ -487,8 +488,8 @@ describe('full Round API Call Summary', () => {
 
     // Scenario: New thread, 2 participants, NO web search
     const scenario = {
-      isNewThread: true,
       enableWebSearch: false,
+      isNewThread: true,
       participantCount: 2,
     };
 
@@ -521,8 +522,8 @@ describe('full Round API Call Summary', () => {
 
     // Scenario: New thread, 2 participants, WITH web search
     const scenario = {
-      isNewThread: true,
       enableWebSearch: true,
+      isNewThread: true,
       participantCount: 2,
     };
 
@@ -552,9 +553,9 @@ describe('full Round API Call Summary', () => {
 
     // Scenario: Existing thread, 2 participants, NO config change
     const scenario = {
-      isNewThread: false,
       configChanged: false,
       enableWebSearch: false,
+      isNewThread: false,
       participantCount: 2,
     };
 
@@ -597,10 +598,10 @@ describe('full Round API Call Summary', () => {
 
     // Scenario: Existing thread, config changes (participant added)
     const scenario = {
-      isNewThread: false,
-      configChanged: true,
       changeType: 'participants',
+      configChanged: true,
       enableWebSearch: false,
+      isNewThread: false,
       participantCount: 3, // Added one participant
     };
 
@@ -644,18 +645,18 @@ describe('query Refetch Prevention', () => {
   it('should verify TanStack Query refetch settings prevent unnecessary calls', () => {
     // Document the expected query settings
     const expectedQuerySettings = {
-      preSearch: {
-        refetchOnMount: false,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        refetchInterval: 'conditional (500ms when PENDING, false otherwise)',
-        refetchIntervalInBackground: false,
-      },
       changelog: {
         // Uses global defaults which should all be false
         placeholderData: 'previousData (prevents flickering)',
         retry: false,
         throwOnError: false,
+      },
+      preSearch: {
+        refetchInterval: 'conditional (500ms when PENDING, false otherwise)',
+        refetchIntervalInBackground: false,
+        refetchOnMount: false,
+        refetchOnReconnect: false,
+        refetchOnWindowFocus: false,
       },
       threadDetail: {
         // Optimistic updates, no refetching needed
@@ -669,9 +670,9 @@ describe('query Refetch Prevention', () => {
     // 3. Refetch on reconnect (prevents calls on network recovery)
     // 4. Background polling when tab inactive
 
-    expect(expectedQuerySettings.preSearch.refetchOnMount).toBe(false);
-    expect(expectedQuerySettings.preSearch.refetchOnWindowFocus).toBe(false);
-    expect(expectedQuerySettings.preSearch.refetchOnReconnect).toBe(false);
+    expect(expectedQuerySettings.preSearch.refetchOnMount).toBeFalsy();
+    expect(expectedQuerySettings.preSearch.refetchOnWindowFocus).toBeFalsy();
+    expect(expectedQuerySettings.preSearch.refetchOnReconnect).toBeFalsy();
   });
 
   it('should verify optimistic updates prevent need for refetches', () => {

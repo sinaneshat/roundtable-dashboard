@@ -23,10 +23,10 @@ type StatusPageSkeletonProps = {
  * Reused by: BillingSuccessSkeleton, BillingFailureSkeleton
  */
 export function StatusPageSkeleton({
-  showPlanInfo = false,
-  showRedirectText = false,
   actionCount = 1,
   className,
+  showPlanInfo = false,
+  showRedirectText = false,
   ...props
 }: StatusPageSkeletonProps) {
   return (

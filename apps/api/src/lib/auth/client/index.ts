@@ -32,18 +32,18 @@ export const authClient = createAuthClient({
 
 // Export Better Auth hooks and methods directly
 export const {
-  // Session management
-  useSession,
+  deleteUser,
   getSession,
 
   // Authentication methods
   signIn,
-  signUp,
   signOut,
+  signUp,
 
   // User management
   updateUser,
-  deleteUser,
+  // Session management
+  useSession,
 } = authClient;
 
 // Types are exported from @/lib/auth/types for consistency

@@ -12,13 +12,13 @@
  * @see https://developers.cloudflare.com/workers-ai/platform/pricing/
  */
 export const CLOUDFLARE_AI_PRICING = {
-  'llama-3.1-8b-instruct': {
-    input: 0.282, // $ per million input tokens
-    output: 0.827, // $ per million output tokens
-  },
   'bge-base-en-v1.5': {
     input: 0.067, // $ per million tokens (embedding)
     output: 0, // embeddings don't have output cost
+  },
+  'llama-3.1-8b-instruct': {
+    input: 0.282, // $ per million input tokens
+    output: 0.827, // $ per million output tokens
   },
 } as const;
 

@@ -45,7 +45,7 @@ type ParticipantContext = {
 
 type RoundHistory = {
   roundNumber: number;
-  messages: Array<TestUserMessage | TestAssistantMessage>;
+  messages: (TestUserMessage | TestAssistantMessage)[];
   preSearch?: StoredPreSearch;
 };
 
@@ -60,8 +60,8 @@ type ConversationHistory = {
 
 function createConversationHistory(threadId: string): ConversationHistory {
   return {
-    threadId,
     rounds: [],
+    threadId,
   };
 }
 
@@ -72,31 +72,31 @@ function addRoundToHistory(
   participantResponses: string[],
   preSearch?: StoredPreSearch,
 ): ConversationHistory {
-  const messages: Array<TestUserMessage | TestAssistantMessage> = [];
+  const messages: (TestUserMessage | TestAssistantMessage)[] = [];
 
   // Add user message
   messages.push(createTestUserMessage({
-    id: `${history.threadId}_r${roundNumber}_user`,
     content: userMessage,
+    id: `${history.threadId}_r${roundNumber}_user`,
     roundNumber,
   }));
 
   // Add participant messages
   participantResponses.forEach((response, index) => {
     messages.push(createTestAssistantMessage({
-      id: `${history.threadId}_r${roundNumber}_p${index}`,
       content: response,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      id: `${history.threadId}_r${roundNumber}_p${index}`,
       participantId: `participant-${index}`,
       participantIndex: index,
-      finishReason: FinishReasons.STOP,
+      roundNumber,
     }));
   });
 
   const round: RoundHistory = {
-    roundNumber,
     messages,
     preSearch,
+    roundNumber,
   };
 
   return {
@@ -115,9 +115,9 @@ function getParticipantContext(
   participantIndex: number,
 ): ParticipantContext {
   const availableContext: MessageContext = {
-    userMessages: [],
     assistantMessages: [],
     preSearchResults: [],
+    userMessages: [],
   };
 
   // Get all messages from previous rounds
@@ -154,13 +154,13 @@ function getParticipantContext(
   }
 
   return {
+    availableContext,
     participantIndex,
     roundNumber,
-    availableContext,
   };
 }
 
-function getAllMessagesForRound(history: ConversationHistory, roundNumber: number): Array<TestUserMessage | TestAssistantMessage> {
+function getAllMessagesForRound(history: ConversationHistory, roundNumber: number): (TestUserMessage | TestAssistantMessage)[] {
   const round = history.rounds.find(r => r.roundNumber === roundNumber);
   return round?.messages || [];
 }
@@ -524,9 +524,9 @@ describe('multi-Round Message Context Sharing E2E', () => {
       const allR1Messages = getAllMessagesForRound(history, 1);
       const allR2Messages = getAllMessagesForRound(history, 2);
 
-      expect(allR0Messages.every(m => m.metadata.roundNumber === 0)).toBe(true);
-      expect(allR1Messages.every(m => m.metadata.roundNumber === 1)).toBe(true);
-      expect(allR2Messages.every(m => m.metadata.roundNumber === 2)).toBe(true);
+      expect(allR0Messages.every(m => m.metadata.roundNumber === 0)).toBeTruthy();
+      expect(allR1Messages.every(m => m.metadata.roundNumber === 1)).toBeTruthy();
+      expect(allR2Messages.every(m => m.metadata.roundNumber === 2)).toBeTruthy();
     });
   });
 
@@ -581,25 +581,26 @@ describe('multi-Round Message Context Sharing E2E', () => {
       // Round 0: Regenerated (simulated by removing and re-adding)
       // In real implementation, messages would be deleted and recreated
       const round0 = history.rounds[0];
-      if (!round0)
+      if (!round0) {
         throw new Error('expected round 0');
+      }
       round0.messages = round0.messages.filter(m => m.role === UIMessageRoles.USER);
       round0.messages.push(
         createTestAssistantMessage({
-          id: 'thread-123_r0_p0_retry',
           content: 'Regenerated R0P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0_retry',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r0_p1_retry',
           content: 'Regenerated R0P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p1_retry',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       );
 

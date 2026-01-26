@@ -34,38 +34,38 @@ import { createChatStore } from '../store';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date().toISOString(),
     enableWebSearch: false,
+    id: 'thread-123',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
     lastMessageAt: new Date().toISOString(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date().toISOString(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   };
 }
 
-function createParticipant(index: number, threadId: string = 'thread-123'): ChatParticipant {
+function createParticipant(index: number, threadId = 'thread-123'): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId,
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date().toISOString(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -74,63 +74,63 @@ function createParticipantMessage(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  content: string = '',
+  content = '',
   finishReason: string = FinishReasons.UNKNOWN,
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: content
-      ? [{ type: MessagePartTypes.TEXT, text: content }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: content.length, totalTokens: content.length },
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: content.length, promptTokens: 0, totalTokens: content.length },
     },
+    parts: content
+      ? [{ text: content, type: MessagePartTypes.TEXT }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createModeratorMessage(
   threadId: string,
   roundNumber: number,
-  content: string = '',
+  content = '',
   finishReason: string = FinishReasons.UNKNOWN,
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: content
-      ? [{ type: MessagePartTypes.TEXT, text: content }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      isModerator: true,
-      participantIndex: -1,
       finishReason,
       hasError: false,
-      usage: { promptTokens: 0, completionTokens: content.length, totalTokens: content.length },
+      isModerator: true,
+      participantIndex: -1,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: content.length, promptTokens: 0, totalTokens: content.length },
     },
+    parts: content
+      ? [{ text: content, type: MessagePartTypes.TEXT }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createPreSearch(threadId: string, roundNumber: number, status: string = MessageStatuses.PENDING) {
   return {
-    id: `presearch-${roundNumber}`,
-    threadId,
-    roundNumber,
-    userQuery: 'Test query',
-    status,
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status,
+    threadId,
+    updatedAt: new Date(),
+    userQuery: 'Test query',
   };
 }
 
@@ -158,7 +158,7 @@ function getModeratorMessage(messages: UIMessage[], roundNumber: number): UIMess
 describe('immediate Placeholder Appearance After Submission', () => {
   it('should show ALL participant placeholders immediately after setStreamingRoundNumber', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -170,8 +170,8 @@ describe('immediate Placeholder Appearance After Submission', () => {
 
     // User submits message
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -195,7 +195,7 @@ describe('immediate Placeholder Appearance After Submission', () => {
 
   it('should show participant placeholders before any streaming occurs', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -218,7 +218,7 @@ describe('immediate Placeholder Appearance After Submission', () => {
     expect(state.pendingMessage).toBe('Test question');
 
     // No actual streaming has started yet, but placeholders should be visible
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
 
     // UI can now render placeholders for all participants based on:
     // - streamingRoundNumber = 0
@@ -227,14 +227,14 @@ describe('immediate Placeholder Appearance After Submission', () => {
 
   it('should show moderator placeholder immediately after setStreamingRoundNumber', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -260,7 +260,7 @@ describe('immediate Placeholder Appearance After Submission', () => {
 describe('pre-Search Placeholder Lifecycle', () => {
   it('should show pre-search placeholder FIRST when web search enabled', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
@@ -268,8 +268,8 @@ describe('pre-Search Placeholder Lifecycle', () => {
 
     // User submits with web search enabled
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research topic',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -291,12 +291,12 @@ describe('pre-Search Placeholder Lifecycle', () => {
     // 3. Moderator placeholder (waiting for participants)
 
     // But participants shouldn't start streaming yet (blocked by pre-search)
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
   });
 
   it('should transition pre-search from PENDING → STREAMING → COMPLETE', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
@@ -316,11 +316,11 @@ describe('pre-Search Placeholder Lifecycle', () => {
 
     // Pre-search completes with results
     store.getState().updatePreSearchData(0, {
+      failureCount: 0,
       queries: [{ query: 'test', rationale: 'testing' }],
       results: [],
-      summary: 'Test results',
       successCount: 1,
-      failureCount: 0,
+      summary: 'Test results',
       totalResults: 1,
       totalTime: 1000,
     });
@@ -334,7 +334,7 @@ describe('pre-Search Placeholder Lifecycle', () => {
 
   it('should NOT start participant streaming while pre-search is PENDING', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
@@ -350,7 +350,7 @@ describe('pre-Search Placeholder Lifecycle', () => {
     expect(state.preSearches[0]?.status).toBe(MessageStatuses.PENDING);
 
     // Participant streaming should be blocked
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
 
     // The streaming trigger checks shouldWaitForPreSearch() which returns true
     // when pre-search status is PENDING or STREAMING
@@ -358,7 +358,7 @@ describe('pre-Search Placeholder Lifecycle', () => {
 
   it('should allow participant streaming after pre-search COMPLETE', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
@@ -378,7 +378,7 @@ describe('pre-Search Placeholder Lifecycle', () => {
     expect(state.preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
 
     // Participant streaming is now allowed
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
   });
 });
 
@@ -389,7 +389,7 @@ describe('pre-Search Placeholder Lifecycle', () => {
 describe('participant Placeholder Lifecycle', () => {
   it('should show placeholders for ALL participants immediately', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -399,8 +399,8 @@ describe('participant Placeholder Lifecycle', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -420,7 +420,7 @@ describe('participant Placeholder Lifecycle', () => {
 
   it('should show placeholder → streaming → complete for each participant', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -429,8 +429,8 @@ describe('participant Placeholder Lifecycle', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -451,7 +451,7 @@ describe('participant Placeholder Lifecycle', () => {
     state = store.getState();
     expect(getParticipantMessages(state.messages, 0)).toHaveLength(1);
     expect(state.currentParticipantIndex).toBe(0);
-    expect(state.isStreaming).toBe(true);
+    expect(state.isStreaming).toBeTruthy();
 
     // P0 streams chunks
     const p0Streaming = createParticipantMessage('thread-123', 0, 0, 'Streaming...', FinishReasons.UNKNOWN);
@@ -464,8 +464,8 @@ describe('participant Placeholder Lifecycle', () => {
     state = store.getState();
     const p0Message = getParticipantMessages(state.messages, 0)[0];
     expect(p0Message?.metadata).toMatchObject({
-      participantIndex: 0,
       finishReason: FinishReasons.STOP,
+      participantIndex: 0,
     });
 
     // Phase 4: P1 Streaming
@@ -488,7 +488,7 @@ describe('participant Placeholder Lifecycle', () => {
 
   it('should preserve participant order during streaming', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -498,8 +498,8 @@ describe('participant Placeholder Lifecycle', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -527,7 +527,7 @@ describe('participant Placeholder Lifecycle', () => {
 describe('moderator Placeholder Lifecycle', () => {
   it('should show moderator placeholder after all participants complete', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -536,8 +536,8 @@ describe('moderator Placeholder Lifecycle', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
 
@@ -555,24 +555,24 @@ describe('moderator Placeholder Lifecycle', () => {
     const state = store.getState();
 
     // Verify: Moderator is streaming
-    expect(state.isModeratorStreaming).toBe(true);
-    expect(state.isStreaming).toBe(false);
+    expect(state.isModeratorStreaming).toBeTruthy();
+    expect(state.isStreaming).toBeFalsy();
 
     // No moderator message yet, but placeholder should show
     expect(getModeratorMessage(state.messages, 0)).toBeUndefined();
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isModeratorStreaming).toBeTruthy();
   });
 
   it('should transition moderator from placeholder → streaming → complete', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     const p0 = createParticipantMessage('thread-123', 0, 0, 'P0 done', FinishReasons.STOP);
@@ -585,7 +585,7 @@ describe('moderator Placeholder Lifecycle', () => {
     store.getState().setIsModeratorStreaming(true);
 
     let state = store.getState();
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isModeratorStreaming).toBeTruthy();
     expect(getModeratorMessage(state.messages, 0)).toBeUndefined();
 
     // Phase 2: Moderator streaming (chunks arriving)
@@ -599,8 +599,8 @@ describe('moderator Placeholder Lifecycle', () => {
     const modMessage = getModeratorMessage(state.messages, 0);
     expect(modMessage).toBeDefined();
     expect(modMessage?.metadata).toMatchObject({
-      isModerator: true,
       finishReason: FinishReasons.UNKNOWN,
+      isModerator: true,
     });
 
     // Phase 3: Moderator complete
@@ -609,23 +609,23 @@ describe('moderator Placeholder Lifecycle', () => {
     store.getState().setIsModeratorStreaming(false);
 
     state = store.getState();
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isModeratorStreaming).toBeFalsy();
     expect(getModeratorMessage(state.messages, 0)?.metadata).toMatchObject({
-      isModerator: true,
       finishReason: FinishReasons.STOP,
+      isModerator: true,
     });
   });
 
   it('should show moderator placeholder even when no moderator message exists yet', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test',
+      id: 'user_r0',
       roundNumber: 0,
     });
     const p0 = createParticipantMessage('thread-123', 0, 0, 'P0 done', FinishReasons.STOP);
@@ -639,7 +639,7 @@ describe('moderator Placeholder Lifecycle', () => {
     const state = store.getState();
 
     // Placeholder should show based on isModeratorStreaming flag
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isModeratorStreaming).toBeTruthy();
     expect(getModeratorMessage(state.messages, 0)).toBeUndefined();
 
     // UI renders placeholder because:
@@ -655,7 +655,7 @@ describe('moderator Placeholder Lifecycle', () => {
 describe('placeholder Preservation During PATCH/Changelog', () => {
   it('should NOT remove placeholders when config changes trigger PATCH', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -674,7 +674,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 
     const stateBeforePatch = store.getState();
     expect(stateBeforePatch.configChangeRoundNumber).toBe(0);
-    expect(stateBeforePatch.isWaitingForChangelog).toBe(true);
+    expect(stateBeforePatch.isWaitingForChangelog).toBeTruthy();
     expect(stateBeforePatch.streamingRoundNumber).toBe(0);
 
     // PATCH response updates thread/participants
@@ -688,7 +688,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 
     // CRITICAL: These should be PRESERVED (not reset to null/false)
     expect(stateAfterPatch.configChangeRoundNumber).toBe(0);
-    expect(stateAfterPatch.isWaitingForChangelog).toBe(true);
+    expect(stateAfterPatch.isWaitingForChangelog).toBeTruthy();
     expect(stateAfterPatch.streamingRoundNumber).toBe(0);
     expect(stateAfterPatch.pendingMessage).toBe('Test');
     expect(stateAfterPatch.expectedParticipantIds).toEqual(['model-0', 'model-1']);
@@ -698,7 +698,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 
   it('should preserve placeholders during changelog fetch after PATCH', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
@@ -713,7 +713,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     const stateWhileWaiting = store.getState();
-    expect(stateWhileWaiting.isWaitingForChangelog).toBe(true);
+    expect(stateWhileWaiting.isWaitingForChangelog).toBeTruthy();
     expect(stateWhileWaiting.configChangeRoundNumber).toBe(0);
     expect(stateWhileWaiting.streamingRoundNumber).toBe(0);
 
@@ -724,14 +724,14 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
     const stateAfterUpdate = store.getState();
 
     // Still preserved
-    expect(stateAfterUpdate.isWaitingForChangelog).toBe(true);
+    expect(stateAfterUpdate.isWaitingForChangelog).toBeTruthy();
     expect(stateAfterUpdate.configChangeRoundNumber).toBe(0);
     expect(stateAfterUpdate.streamingRoundNumber).toBe(0);
   });
 
   it('should verify pendingMessage triggers placeholder preservation', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     // Initialize on THREAD screen
@@ -755,7 +755,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 
   it('should NOT preserve state when neither pendingMessage nor config changes exist', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     // Initial load (no active submission)
@@ -768,7 +768,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 
     // Simulate page refresh with new data
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user_r0', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'user_r0', roundNumber: 0 }),
       createParticipantMessage('thread-123', 0, 0, 'Response', FinishReasons.STOP),
     ];
 
@@ -790,7 +790,7 @@ describe('placeholder Preservation During PATCH/Changelog', () => {
 describe('complete Flow with All Placeholders', () => {
   it('should show pre-search → participants → moderator placeholders in sequence', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -800,8 +800,8 @@ describe('complete Flow with All Placeholders', () => {
     store.getState().setEnableWebSearch(true);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research topic',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -855,7 +855,7 @@ describe('complete Flow with All Placeholders', () => {
     store.getState().setIsModeratorStreaming(true);
 
     state = store.getState();
-    expect(state.isModeratorStreaming).toBe(true);
+    expect(state.isModeratorStreaming).toBeTruthy();
     // Moderator placeholder shows
 
     const moderator = createModeratorMessage('thread-123', 0, 'Summary', FinishReasons.STOP);
@@ -864,7 +864,7 @@ describe('complete Flow with All Placeholders', () => {
 
     state = store.getState();
     expect(getModeratorMessage(state.messages, 0)).toBeDefined();
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isModeratorStreaming).toBeFalsy();
     // Moderator complete
 
     // === FINAL STATE ===
@@ -872,21 +872,21 @@ describe('complete Flow with All Placeholders', () => {
 
     const finalState = store.getState();
     expect(finalState.streamingRoundNumber).toBeNull();
-    expect(finalState.isStreaming).toBe(false);
-    expect(finalState.isModeratorStreaming).toBe(false);
+    expect(finalState.isStreaming).toBeFalsy();
+    expect(finalState.isModeratorStreaming).toBeFalsy();
     expect(finalState.messages).toHaveLength(4); // user + p0 + p1 + moderator
   });
 
   it('should handle complete flow WITHOUT web search', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Simple question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -941,8 +941,8 @@ describe('screen Mode Context for Placeholders', () => {
     const participantConfig = participants.map((p, i) => ({
       id: p.id,
       modelId: p.modelId,
-      role: null,
       priority: i,
+      role: null,
     }));
 
     store.getState().setSelectedParticipants(participantConfig);
@@ -963,7 +963,7 @@ describe('screen Mode Context for Placeholders', () => {
 
   it('should handle placeholders on THREAD screen (subsequent rounds)', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [createParticipant(0, 'thread-123')];
 
     store.getState().setScreenMode(ScreenModes.THREAD);
@@ -988,7 +988,7 @@ describe('screen Mode Context for Placeholders', () => {
 describe('timeline Element Ordering During Submission', () => {
   it('should show user message FIRST immediately after submission', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -999,8 +999,8 @@ describe('timeline Element Ordering During Submission', () => {
 
     // User submits message
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1016,7 +1016,7 @@ describe('timeline Element Ordering During Submission', () => {
 
   it('should show pre-search BEFORE participant placeholders when web search enabled', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1026,8 +1026,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().setEnableWebSearch(true);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1051,12 +1051,12 @@ describe('timeline Element Ordering During Submission', () => {
     expect(state.streamingRoundNumber).toBe(0);
 
     // Pre-search exists and participants haven't started streaming yet
-    expect(state.isStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
   });
 
   it('should show participant placeholders in PRIORITY ORDER', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'), // priority 0 (highest)
       createParticipant(1, 'thread-123'), // priority 1
@@ -1066,8 +1066,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1087,7 +1087,7 @@ describe('timeline Element Ordering During Submission', () => {
 
   it('should show moderator placeholder AFTER all participants', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1096,8 +1096,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1122,7 +1122,7 @@ describe('timeline Element Ordering During Submission', () => {
 
   it('should maintain COMPLETE ordering: User → PreSearch → P0 → P1 → Moderator', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1133,8 +1133,8 @@ describe('timeline Element Ordering During Submission', () => {
 
     // Step 1: User submits
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1202,7 +1202,7 @@ describe('timeline Element Ordering During Submission', () => {
 
   it('should NOT reorder elements during streaming', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: false });
+    const thread = createThread({ enableWebSearch: false, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1211,8 +1211,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().initializeThread(thread, participants, []);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Test question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1260,7 +1260,7 @@ describe('timeline Element Ordering During Submission', () => {
 
   it('should show all placeholders IMMEDIATELY on streamingRoundNumber set', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1271,8 +1271,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().setEnableWebSearch(true);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -1301,13 +1301,13 @@ describe('timeline Element Ordering During Submission', () => {
     // The moderator renders when: isActuallyLatestRound && !isRoundComplete && isStreamingRound
 
     // All of this happens BEFORE any streaming actually starts
-    expect(state.isStreaming).toBe(false);
-    expect(state.isModeratorStreaming).toBe(false);
+    expect(state.isStreaming).toBeFalsy();
+    expect(state.isModeratorStreaming).toBeFalsy();
   });
 
   it('should NOT remove any elements during streaming', () => {
     const store = createChatStore();
-    const thread = createThread({ id: 'thread-123', enableWebSearch: true });
+    const thread = createThread({ enableWebSearch: true, id: 'thread-123' });
     const participants = [
       createParticipant(0, 'thread-123'),
       createParticipant(1, 'thread-123'),
@@ -1317,8 +1317,8 @@ describe('timeline Element Ordering During Submission', () => {
     store.getState().setEnableWebSearch(true);
 
     const userMessage = createTestUserMessage({
-      id: 'user_r0',
       content: 'Research question',
+      id: 'user_r0',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);

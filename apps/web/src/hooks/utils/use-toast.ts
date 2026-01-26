@@ -1,6 +1,7 @@
 // Inspired by react-hot-toast library
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { z } from 'zod';
 
 import type {
   ToastActionElement,
@@ -10,12 +11,18 @@ import type {
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 5000;
 
-type ToasterToast = ToastProps & {
-  id: string;
-  title?: ReactNode;
-  description?: ReactNode;
-  action?: ToastActionElement;
-};
+/**
+ * ToasterToast schema - extends ToastProps with required toast fields
+ */
+const _ToasterToastSchema = z.custom<ToastProps>().and(
+  z.object({
+    action: z.custom<ToastActionElement>().optional(),
+    description: z.custom<ReactNode>().optional(),
+    id: z.string(),
+    title: z.custom<ReactNode>().optional(),
+  }),
+);
+type ToasterToast = z.infer<typeof _ToasterToastSchema>;
 
 // ============================================================================
 // TOAST ACTION TYPE ENUM (Simplified - internal use only)
@@ -24,9 +31,9 @@ type ToasterToast = ToastProps & {
 // CONSTANT OBJECT - For usage in code
 const ToastActionTypes = {
   ADD_TOAST: 'ADD_TOAST' as const,
-  UPDATE_TOAST: 'UPDATE_TOAST' as const,
   DISMISS_TOAST: 'DISMISS_TOAST' as const,
   REMOVE_TOAST: 'REMOVE_TOAST' as const,
+  UPDATE_TOAST: 'UPDATE_TOAST' as const,
 } as const;
 
 let count = 0;
@@ -68,8 +75,8 @@ function addToRemoveQueue(toastId: string) {
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId);
     dispatch({
-      type: ToastActionTypes.REMOVE_TOAST,
       toastId,
+      type: ToastActionTypes.REMOVE_TOAST,
     });
   }, TOAST_REMOVE_DELAY);
 
@@ -127,7 +134,7 @@ export function reducer(state: State, action: Action): State {
   }
 }
 
-const listeners: Array<(state: State) => void> = [];
+const listeners: ((state: State) => void)[] = [];
 
 let memoryState: State = { toasts: [] };
 
@@ -145,27 +152,28 @@ export function toast({ ...props }: Toast) {
 
   const update = (props: ToasterToast) =>
     dispatch({
-      type: ToastActionTypes.UPDATE_TOAST,
       toast: { ...props, id },
+      type: ToastActionTypes.UPDATE_TOAST,
     });
-  const dismiss = () => dispatch({ type: ToastActionTypes.DISMISS_TOAST, toastId: id });
+  const dismiss = () => dispatch({ toastId: id, type: ToastActionTypes.DISMISS_TOAST });
 
   dispatch({
-    type: ToastActionTypes.ADD_TOAST,
     toast: {
       ...props,
       id,
-      open: true,
       onOpenChange: (open) => {
-        if (!open)
+        if (!open) {
           dismiss();
+        }
       },
+      open: true,
     },
+    type: ToastActionTypes.ADD_TOAST,
   });
 
   return {
-    id,
     dismiss,
+    id,
     update,
   };
 }
@@ -186,7 +194,7 @@ export function useToast() {
 
   return {
     ...state,
+    dismiss: (toastId?: string) => dispatch({ toastId, type: ToastActionTypes.DISMISS_TOAST }),
     toast,
-    dismiss: (toastId?: string) => dispatch({ type: ToastActionTypes.DISMISS_TOAST, toastId }),
   };
 }

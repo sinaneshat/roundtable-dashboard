@@ -33,20 +33,20 @@ import {
  * Protected route - requires authentication
  */
 export const listApiKeysRoute = createRoute({
+  description: 'Get all API keys for the authenticated user (without key values)',
   method: 'get',
   path: '/auth/api-keys',
-  tags: ['api-keys'],
-  summary: 'List API keys',
-  description: 'Get all API keys for the authenticated user (without key values)',
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'API keys retrieved successfully',
       content: {
         'application/json': { schema: ListApiKeysResponseSchema },
       },
+      description: 'API keys retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'List API keys',
+  tags: ['api-keys'],
 });
 
 /**
@@ -54,23 +54,23 @@ export const listApiKeysRoute = createRoute({
  * Protected route - requires authentication
  */
 export const getApiKeyRoute = createRoute({
+  description: 'Get details of a specific API key (without key value)',
   method: 'get',
   path: '/auth/api-keys/:keyId',
-  tags: ['api-keys'],
-  summary: 'Get API key details',
-  description: 'Get details of a specific API key (without key value)',
   request: {
     params: ApiKeyIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'API key retrieved successfully',
       content: {
         'application/json': { schema: GetApiKeyResponseSchema },
       },
+      description: 'API key retrieved successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Get API key details',
+  tags: ['api-keys'],
 });
 
 /**
@@ -78,30 +78,30 @@ export const getApiKeyRoute = createRoute({
  * Protected route - requires authentication
  */
 export const createApiKeyRoute = createRoute({
+  description: 'Create a new API key (returns the key value once - save it!)',
   method: 'post',
   path: '/auth/api-keys',
-  tags: ['api-keys'],
-  summary: 'Create API key',
-  description: 'Create a new API key (returns the key value once - save it!)',
   request: {
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: CreateApiKeyRequestSchema,
         },
       },
+      required: true,
     },
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
-      description: 'API key created successfully',
       content: {
         'application/json': { schema: CreateApiKeyResponseSchema },
       },
+      description: 'API key created successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Create API key',
+  tags: ['api-keys'],
 });
 
 /**
@@ -109,31 +109,31 @@ export const createApiKeyRoute = createRoute({
  * Protected route - requires authentication
  */
 export const updateApiKeyRoute = createRoute({
+  description: 'Update an existing API key settings',
   method: 'patch',
   path: '/auth/api-keys/:keyId',
-  tags: ['api-keys'],
-  summary: 'Update API key',
-  description: 'Update an existing API key settings',
   request: {
-    params: ApiKeyIdParamSchema,
     body: {
-      required: true,
       content: {
         'application/json': {
           schema: UpdateApiKeyRequestSchema,
         },
       },
+      required: true,
     },
+    params: ApiKeyIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'API key updated successfully',
       content: {
         'application/json': { schema: UpdateApiKeyResponseSchema },
       },
+      description: 'API key updated successfully',
     },
     ...createMutationRouteResponses(),
   },
+  summary: 'Update API key',
+  tags: ['api-keys'],
 });
 
 /**
@@ -141,21 +141,21 @@ export const updateApiKeyRoute = createRoute({
  * Protected route - requires authentication
  */
 export const deleteApiKeyRoute = createRoute({
+  description: 'Delete an API key (this action cannot be undone)',
   method: 'delete',
   path: '/auth/api-keys/:keyId',
-  tags: ['api-keys'],
-  summary: 'Delete API key',
-  description: 'Delete an API key (this action cannot be undone)',
   request: {
     params: ApiKeyIdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'API key deleted successfully',
       content: {
         'application/json': { schema: DeleteApiKeyResponseSchema },
       },
+      description: 'API key deleted successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Delete API key',
+  tags: ['api-keys'],
 });

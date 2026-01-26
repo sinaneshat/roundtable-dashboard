@@ -32,12 +32,12 @@ export function RHFDatePicker<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({
-  title,
-  name,
   description,
+  disabled,
+  name,
   placeholder,
   required,
-  disabled,
+  title,
 }: RHFDatePickerProps<TFieldValues, TName>) {
   const t = useTranslations();
   const { control } = useFormContext<TFieldValues>();
@@ -82,8 +82,9 @@ export function RHFDatePicker<
                   data-testid={field.name}
                   selected={selectedDate}
                   onSelect={(date: Date | undefined) => {
-                    if (!date)
+                    if (!date) {
                       return;
+                    }
 
                     const utcTimestamp = format(date, 'yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
                     field.onChange(utcTimestamp);

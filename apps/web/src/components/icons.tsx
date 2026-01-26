@@ -139,133 +139,133 @@ export const Icons = {
   // Alerts & Status
   alertCircle: AlertCircle,
   alertTriangle: AlertTriangle,
-  triangleAlert: TriangleAlert,
-  checkCircle: CheckCircle,
-  xCircle: XCircle,
-
   // Arrows & Navigation
   arrowDown: ArrowDown,
   arrowLeft: ArrowLeft,
   arrowRight: ArrowRight,
+
   arrowUp: ArrowUp,
   arrowUpCircle: ArrowUpCircle,
-  chevronDown: ChevronDown,
-  chevronLeft: ChevronLeft,
-  chevronRight: ChevronRight,
-  chevronUp: ChevronUp,
-  chevronsUpDown: ChevronsUpDown,
-  home: House,
-
-  // Actions
-  camera: Camera,
-  check: Check,
-  copy: Copy,
-  download: Download,
-  externalLink: ExternalLink,
-  lock: Lock,
-  lockOpen: LockOpen,
-  video: Video,
-  logOut: LogOut,
-  minus: Minus,
-  pause: Pause,
-  pencil: Pencil,
-  pin: Pin,
-  play: Play,
-  plus: Plus,
-  refreshCw: RefreshCw,
-  search: Search,
-  share: Share,
-  trash: Trash2,
-  upload: Upload,
-  x: X,
-
   // Files & Documents
   book: Book,
   bookOpen: BookOpen,
+  // Concepts & Ideas
+  brain: Brain,
+  // Users & Roles
+  briefcase: Briefcase,
+  // UI Elements
+  calendar: Calendar,
+  // Actions
+  camera: Camera,
+  check: Check,
+  checkCircle: CheckCircle,
+  chevronDown: ChevronDown,
+
+  chevronLeft: ChevronLeft,
+  chevronRight: ChevronRight,
+  chevronsUpDown: ChevronsUpDown,
+  chevronUp: ChevronUp,
+  circle: Circle,
+  clock: Clock,
+  code: Code2,
+  // Finance & Commerce
+  coins: Coins,
+  copy: Copy,
+  creditCard: CreditCard,
+  database: Database,
+  download: Download,
+  externalLink: ExternalLink,
+  eye: Eye,
+  eyeOff: EyeOff,
   file: File,
   fileCode: FileCode,
   fileImage: FileImage,
   fileJson: FileJson,
   fileQuestion: FileQuestion,
   fileSearch: FileSearch,
+
   fileText: FileText,
   fileX: FileX,
+  gift: Gift,
+  globe: Globe,
+  graduationCap: GraduationCap,
+  gripVertical: GripVertical,
+  hammer: Hammer,
+  home: House,
+  image: Image,
+  infinity: InfinityIcon,
 
+  info: Info,
+  instagram: InstagramIcon,
+  key: Key,
+  layers: Layers,
+  lightbulb: Lightbulb,
+
+  loader: Loader2,
+  lock: Lock,
+  lockOpen: LockOpen,
+  logOut: LogOut,
   // Communication
   mail: Mail,
+  menu: Menu,
   messageSquare: MessageSquare,
   messagesSquare: MessagesSquare,
   mic: Mic,
-  paperclip: Paperclip,
-
-  // UI Elements
-  calendar: Calendar,
-  circle: Circle,
-  clock: Clock,
-  code: Code2,
-  eye: Eye,
-  eyeOff: EyeOff,
-  globe: Globe,
-  gripVertical: GripVertical,
-  image: Image,
-  info: Info,
-  loader: Loader2,
-  menu: Menu,
+  minus: Minus,
   moreHorizontal: MoreHorizontal,
   moreVertical: MoreVertical,
   package: Package,
   panelLeft: PanelLeft,
+  paperclip: Paperclip,
+  pause: Pause,
+  pencil: Pencil,
+  pin: Pin,
+  play: Play,
+  plus: Plus,
+  // Brand/Social
+  reddit: RedditIcon,
+  refreshCw: RefreshCw,
+
+  scale: Scale,
+  search: Search,
+  share: Share,
+
+  shieldAlert: ShieldAlert,
   slidersHorizontal: SlidersHorizontal,
   sparkles: Sparkles,
   square: Square,
   squareStack: SquareStack,
   stopCircle: StopCircle,
-  zap: Zap,
-
-  // Finance & Commerce
-  coins: Coins,
-  creditCard: CreditCard,
-  gift: Gift,
-
-  // Users & Roles
-  briefcase: Briefcase,
-  graduationCap: GraduationCap,
-  key: Key,
-  shieldAlert: ShieldAlert,
-  user: User,
-  userCheck: UserCheck,
-  userCog: UserCog,
-  users: Users,
-
-  // Concepts & Ideas
-  brain: Brain,
-  hammer: Hammer,
-  infinity: InfinityIcon,
-  layers: Layers,
-  lightbulb: Lightbulb,
-  scale: Scale,
   swords: Swords,
   target: Target,
-  trendingUp: TrendingUp,
-  wrench: Wrench,
 
   // Feedback
   thumbsDown: ThumbsDown,
   thumbsUp: ThumbsUp,
+  trash: Trash2,
+  trendingUp: TrendingUp,
+  triangleAlert: TriangleAlert,
+  twitter: TwitterIcon,
+  upload: Upload,
+  user: User,
+  userCheck: UserCheck,
+  userCog: UserCog,
 
-  // Connectivity
-  wifi: Wifi,
-  wifiOff: WifiOff,
-  database: Database,
+  users: Users,
+  video: Video,
 
   // Audio
   volume2: Volume2,
   volumeX: VolumeX,
+  // Connectivity
+  wifi: Wifi,
 
-  // Brand/Social
-  reddit: RedditIcon,
-  twitter: TwitterIcon,
-  instagram: InstagramIcon,
+  wifiOff: WifiOff,
+  wrench: Wrench,
+
+  x: X,
+  xCircle: XCircle,
+  zap: Zap,
 } as const;
 
 export type IconName = keyof typeof Icons;

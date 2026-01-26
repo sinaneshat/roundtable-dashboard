@@ -13,18 +13,18 @@ type EmailLinkProps = {
 };
 
 const colorStyles: Record<string, CSSProperties> = {
-  primary: { color: colors.primary },
-  secondary: { color: colors.secondary },
   dark: { color: colors.foreground },
   muted: { color: colors.mutedForeground },
+  primary: { color: colors.primary },
+  secondary: { color: colors.secondary },
 };
 
 export function EmailLink({
   children,
-  href,
-  target = '_blank',
   color = 'primary',
+  href,
   style,
+  target = '_blank',
 }: EmailLinkProps) {
   const combinedStyle: CSSProperties = {
     textDecoration: 'underline',

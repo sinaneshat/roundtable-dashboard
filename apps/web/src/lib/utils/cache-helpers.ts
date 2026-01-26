@@ -32,7 +32,7 @@
  * });
  * ```
  */
-export function createPrefetchMeta(requestId: string = 'prefetch') {
+export function createPrefetchMeta(requestId = 'prefetch') {
   return {
     requestId,
     timestamp: new Date().toISOString(),
@@ -55,8 +55,8 @@ export function createPrefetchMeta(requestId: string = 'prefetch') {
  */
 export function createEmptyListCache() {
   return {
-    success: true,
     data: { items: [] },
     meta: createPrefetchMeta(),
+    success: true,
   } as const;
 }

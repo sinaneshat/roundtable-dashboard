@@ -30,10 +30,22 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed',
 ): StoredPreSearch {
   return {
+    completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: status === 'failed' ? 'Search failed' : null,
     id: `presearch-round-${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    userQuery: `Query for round ${roundNumber}`,
+    searchData: status === 'complete'
+      ? {
+          failureCount: 0,
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
+          summary: 'Search complete',
+          totalResults: 0,
+          totalTime: 100,
+        }
+      : null,
     status: status === 'pending'
       ? MessageStatuses.PENDING
       : status === 'streaming'
@@ -41,20 +53,8 @@ function createPreSearch(
         : status === 'complete'
           ? MessageStatuses.COMPLETE
           : MessageStatuses.FAILED,
-    searchData: status === 'complete'
-      ? {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          summary: 'Search complete',
-          successCount: 1,
-          failureCount: 0,
-          totalResults: 0,
-          totalTime: 100,
-        }
-      : null,
-    errorMessage: status === 'failed' ? 'Search failed' : null,
-    createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    threadId: 'thread-123',
+    userQuery: `Query for round ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -65,51 +65,51 @@ function createPreSearch(
 describe('shouldWaitForPreSearch Function', () => {
   describe('web Search Disabled Cases', () => {
     it('returns false when web search is disabled and no pre-search exists', () => {
-      expect(shouldWaitForPreSearch(false, undefined)).toBe(false);
+      expect(shouldWaitForPreSearch(false, undefined)).toBeFalsy();
     });
 
     it('returns false when web search is disabled even with PENDING pre-search', () => {
       const preSearch = createPreSearch(0, 'pending');
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
 
     it('returns false when web search is disabled even with STREAMING pre-search', () => {
       const preSearch = createPreSearch(0, 'streaming');
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
 
     it('returns false when web search is disabled with COMPLETE pre-search', () => {
       const preSearch = createPreSearch(0, 'complete');
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
   });
 
   describe('web Search Enabled - Blocking Cases', () => {
     it('bLOCKS when web search enabled but no pre-search exists yet', () => {
       // This is the initial state - we need to create the pre-search first
-      expect(shouldWaitForPreSearch(true, undefined)).toBe(true);
+      expect(shouldWaitForPreSearch(true, undefined)).toBeTruthy();
     });
 
     it('bLOCKS when pre-search is PENDING', () => {
       const preSearch = createPreSearch(0, 'pending');
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
 
     it('bLOCKS when pre-search is STREAMING', () => {
       const preSearch = createPreSearch(0, 'streaming');
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
   });
 
   describe('web Search Enabled - Non-Blocking Cases', () => {
     it('aLLOWS when pre-search is COMPLETE', () => {
       const preSearch = createPreSearch(0, 'complete');
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
 
     it('aLLOWS when pre-search is FAILED (graceful degradation)', () => {
       const preSearch = createPreSearch(0, 'failed');
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 });
@@ -137,11 +137,11 @@ describe('store Pre-Search State Management', () => {
 
       // Update with complete data
       store.getState().updatePreSearchData(0, {
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-        results: [],
-        summary: 'Done',
-        successCount: 1,
         failureCount: 0,
+        queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+        results: [],
+        successCount: 1,
+        summary: 'Done',
         totalResults: 0,
         totalTime: 100,
       });
@@ -162,38 +162,38 @@ describe('store Pre-Search State Management', () => {
     it('tryMarkPreSearchTriggered returns true only once per round', () => {
       // First attempt - should succeed
       const firstAttempt = store.getState().tryMarkPreSearchTriggered(0);
-      expect(firstAttempt).toBe(true);
+      expect(firstAttempt).toBeTruthy();
 
       // Second attempt - should fail (already triggered)
       const secondAttempt = store.getState().tryMarkPreSearchTriggered(0);
-      expect(secondAttempt).toBe(false);
+      expect(secondAttempt).toBeFalsy();
 
       // Third attempt - still fails
       const thirdAttempt = store.getState().tryMarkPreSearchTriggered(0);
-      expect(thirdAttempt).toBe(false);
+      expect(thirdAttempt).toBeFalsy();
     });
 
     it('different rounds can each be triggered once', () => {
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
-      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
-      expect(store.getState().tryMarkPreSearchTriggered(2)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
+      expect(store.getState().tryMarkPreSearchTriggered(2)).toBeTruthy();
 
       // Re-triggering any should fail
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
-      expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(false);
-      expect(store.getState().tryMarkPreSearchTriggered(2)).toBe(false);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
+      expect(store.getState().tryMarkPreSearchTriggered(1)).toBeFalsy();
+      expect(store.getState().tryMarkPreSearchTriggered(2)).toBeFalsy();
     });
 
     it('clearing tracking allows re-trigger', () => {
       // Trigger round 0
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
 
       // Clear tracking
       store.getState().clearPreSearchTracking(0);
 
       // Should allow re-trigger
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
     });
   });
 
@@ -223,14 +223,14 @@ describe('store Pre-Search State Management', () => {
 
   describe('hasPreSearchBeenTriggered Check', () => {
     it('returns false for untriggered round', () => {
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('returns true after markPreSearchTriggered', () => {
       store.getState().markPreSearchTriggered(0);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
   });
 });
@@ -262,9 +262,9 @@ describe('multi-Round Pre-Search Coordination', () => {
       const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
       const r2 = store.getState().preSearches.find(ps => ps.roundNumber === 2);
 
-      expect(shouldWaitForPreSearch(true, r0)).toBe(false); // Complete - don't wait
-      expect(shouldWaitForPreSearch(true, r1)).toBe(true); // Streaming - wait
-      expect(shouldWaitForPreSearch(true, r2)).toBe(true); // Pending - wait
+      expect(shouldWaitForPreSearch(true, r0)).toBeFalsy(); // Complete - don't wait
+      expect(shouldWaitForPreSearch(true, r1)).toBeTruthy(); // Streaming - wait
+      expect(shouldWaitForPreSearch(true, r2)).toBeTruthy(); // Pending - wait
     });
 
     it('completing one round does not affect others', () => {
@@ -276,11 +276,11 @@ describe('multi-Round Pre-Search Coordination', () => {
 
       // Round 0 should not block
       const r0 = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, r0)).toBe(false);
+      expect(shouldWaitForPreSearch(true, r0)).toBeFalsy();
 
       // Round 1 should still block
       const r1 = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-      expect(shouldWaitForPreSearch(true, r1)).toBe(true);
+      expect(shouldWaitForPreSearch(true, r1)).toBeTruthy();
     });
   });
 
@@ -324,7 +324,7 @@ describe('edge Cases and Error Scenarios', () => {
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
 
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 
@@ -335,13 +335,13 @@ describe('edge Cases and Error Scenarios', () => {
 
       // Should still block until it completes
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       // Trigger tracking is reset after refresh (Set not persisted)
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
 
       // So we can re-trigger (attempt resumption)
-      expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+      expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
     });
 
     it('handles resumption when pre-search was COMPLETE before refresh', () => {
@@ -349,7 +349,7 @@ describe('edge Cases and Error Scenarios', () => {
 
       // Should not block
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeFalsy();
     });
   });
 
@@ -359,33 +359,33 @@ describe('edge Cases and Error Scenarios', () => {
 
       // With web search enabled - blocked
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
 
       // User toggles web search off - should not block anymore
-      expect(shouldWaitForPreSearch(false, preSearch)).toBe(false);
+      expect(shouldWaitForPreSearch(false, preSearch)).toBeFalsy();
     });
   });
 
   describe('placeholder Pre-Search Handling', () => {
     it('placeholder pre-search still blocks correctly', () => {
       const placeholder: StoredPreSearch = {
-        id: 'placeholder-round-0',
-        threadId: 'thread-123',
-        roundNumber: 0,
-        userQuery: 'Query',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'placeholder-round-0',
+        roundNumber: 0,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: 'thread-123',
+        userQuery: 'Query',
       } as StoredPreSearch;
 
       store.getState().addPreSearch(placeholder);
 
       // Placeholder should block just like regular pre-search
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 0);
-      expect(preSearch?.id.startsWith('placeholder-')).toBe(true);
-      expect(shouldWaitForPreSearch(true, preSearch)).toBe(true);
+      expect(preSearch?.id.startsWith('placeholder-')).toBeTruthy();
+      expect(shouldWaitForPreSearch(true, preSearch)).toBeTruthy();
     });
   });
 
@@ -437,6 +437,6 @@ describe('pre-Search Activity Tracking', () => {
 
     // Activity should be cleared (returns undefined or 0 when no activity)
     const activityTime = store.getState().getPreSearchActivityTime(0);
-    expect(activityTime === undefined || activityTime === 0).toBe(true);
+    expect(activityTime === undefined || activityTime === 0).toBeTruthy();
   });
 });

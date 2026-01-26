@@ -78,8 +78,8 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
  * - Type-only solution: Zustand's middleware composition creates dynamic types
  */
 const NOOP_STORE = {
-  getState: () => ({}) as ChatStore,
   getInitialState: () => ({}) as ChatStore,
+  getState: () => ({}) as ChatStore,
   setState: () => {},
   subscribe: () => () => {},
 } as unknown as ChatStoreApi;

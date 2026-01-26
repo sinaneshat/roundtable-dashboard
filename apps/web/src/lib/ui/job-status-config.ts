@@ -5,10 +5,10 @@ import type { LucideIcon } from 'lucide-react';
 import { Icons } from '@/components/icons';
 
 export const JOB_STATUS_ICONS: Record<AutomatedJobStatus, LucideIcon> = {
-  pending: Icons.clock,
-  running: Icons.loader,
   completed: Icons.checkCircle,
   failed: Icons.alertCircle,
+  pending: Icons.clock,
+  running: Icons.loader,
 };
 
 export type JobStatusConfig = {
@@ -20,7 +20,7 @@ export type JobStatusConfig = {
 export function getJobStatusConfig(status: AutomatedJobStatus): JobStatusConfig {
   return {
     icon: JOB_STATUS_ICONS[status],
-    variant: getJobStatusBadgeVariant(status),
     isAnimated: status === 'running',
+    variant: getJobStatusBadgeVariant(status),
   };
 }

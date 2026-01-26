@@ -27,8 +27,8 @@ export function useSubscriptionsQuery() {
 
   return useQuery({
     ...subscriptionsQueryOptions,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     retry: false,
     throwOnError: false,
   });
@@ -46,12 +46,12 @@ export function useSubscriptionQuery(subscriptionId: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.subscriptions.detail(subscriptionId),
-    queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
-    staleTime: STALE_TIMES.subscriptions, // 1 minute - fresh after mutations via invalidation
-    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated && !!subscriptionId,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
+    queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
+    queryKey: queryKeys.subscriptions.detail(subscriptionId),
     retry: false,
+    staleTime: STALE_TIMES.subscriptions, // 1 minute - fresh after mutations via invalidation
     throwOnError: false,
   });
 }

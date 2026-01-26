@@ -33,18 +33,18 @@ import { createChatStore } from '../store';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'test-thread',
-    slug: 'test-slug',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORM,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORM,
+    slug: 'test-slug',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -52,25 +52,25 @@ function createThread(overrides?: Partial<ChatThread>): ChatThread {
 function createParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'p1',
-      threadId: 'test-thread',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'p1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread',
       updatedAt: new Date(),
     },
     {
-      id: 'p2',
-      threadId: 'test-thread',
-      modelId: 'claude-3-5-sonnet',
-      role: 'Critic',
-      priority: 1,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'p2',
+      isEnabled: true,
+      modelId: 'claude-3-5-sonnet',
+      priority: 1,
+      role: 'Critic',
+      settings: null,
+      threadId: 'test-thread',
       updatedAt: new Date(),
     },
   ];
@@ -83,13 +83,13 @@ function createUserMessage(roundNumber: number, text: string, isOptimistic = fal
 
   return {
     id,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
       ...(isOptimistic ? { isOptimistic: true } : {}),
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -100,35 +100,35 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `thread_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      participantId: `p${participantIndex + 1}`,
-      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
       finishReason: 'stop',
       hasError: false,
-      isTransient: false,
       isPartialResponse: false,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+      isTransient: false,
+      model: participantIndex === 0 ? 'gpt-4o' : 'claude-3-5-sonnet',
+      participantId: `p${participantIndex + 1}`,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createModeratorMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `thread_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber,
-      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
       finishReason: 'stop',
+      isModerator: true,
+      model: ModelIds.GOOGLE_GEMINI_3_FLASH_PREVIEW,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -144,8 +144,9 @@ function groupMessagesByRound(messages: UIMessage[]): Map<number, UIMessage[]> {
       messagesByRound.set(roundNum, []);
     }
     const roundMessages = messagesByRound.get(roundNum);
-    if (!roundMessages)
+    if (!roundMessages) {
       throw new Error(`Expected round ${roundNum} messages to exist`);
+    }
     roundMessages.push(message);
   });
 
@@ -233,7 +234,7 @@ describe('message Visibility E2E', () => {
       const userMessages = messages.filter(m => m.role === MessageRoles.USER);
 
       expect(userMessages).toHaveLength(1);
-      expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMessages[0].parts[0]).toEqual({ text: 'Initial question', type: 'text' });
       expect(getRoundNumber(userMessages[0].metadata)).toBe(0);
     });
 
@@ -241,13 +242,13 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
 
-      expect(messagesByRound.has(0)).toBe(true);
+      expect(messagesByRound.has(0)).toBeTruthy();
 
       const round0 = messagesByRound.get(0);
       const userMessage = round0 ? round0.find(m => m.role === MessageRoles.USER) : undefined;
 
       expect(userMessage).toBeDefined();
-      expect(userMessage?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMessage?.parts[0]).toEqual({ text: 'Initial question', type: 'text' });
     });
 
     it('sTEP 3: User message survives deduplication', () => {
@@ -256,15 +257,16 @@ describe('message Visibility E2E', () => {
 
       const userMessages = deduplicated.filter(m => m.role === MessageRoles.USER);
       expect(userMessages).toHaveLength(1);
-      expect(userMessages[0].parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMessages[0].parts[0]).toEqual({ text: 'Initial question', type: 'text' });
     });
 
     it('sTEP 4: All messages visible in final render pipeline', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round0 = messagesByRound.get(0);
-      if (!round0)
+      if (!round0) {
         throw new Error('Expected round 0 messages to exist');
+      }
       const deduplicated = deduplicateMessages(round0);
 
       // Should have: 1 user + 2 participants + 1 moderator = 4 messages
@@ -293,7 +295,7 @@ describe('message Visibility E2E', () => {
       );
 
       expect(round1UserMsgs).toHaveLength(1);
-      expect(round1UserMsgs[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(round1UserMsgs[0].parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
 
     it('sTEP 2: Optimistic message grouped in timeline', () => {
@@ -303,14 +305,15 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
 
-      expect(messagesByRound.has(1)).toBe(true);
+      expect(messagesByRound.has(1)).toBeTruthy();
 
       const round1 = messagesByRound.get(1);
-      if (!round1)
+      if (!round1) {
         throw new Error('Expected round 1 messages to exist');
+      }
       expect(round1).toHaveLength(1);
       expect(round1[0].role).toBe(MessageRoles.USER);
-      expect(round1[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(round1[0].parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
 
     it('sTEP 3: Optimistic message survives deduplication BEFORE DB message', () => {
@@ -320,8 +323,9 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round1 = messagesByRound.get(1);
-      if (!round1)
+      if (!round1) {
         throw new Error('Expected round 1 messages to exist');
+      }
       const deduplicated = deduplicateMessages(round1);
 
       expect(deduplicated).toHaveLength(1);
@@ -341,14 +345,15 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round1 = messagesByRound.get(1);
-      if (!round1)
+      if (!round1) {
         throw new Error('Expected round 1 messages to exist');
+      }
       const deduplicated = deduplicateMessages(round1);
 
       // Should have only DB message (optimistic replaced)
       expect(deduplicated).toHaveLength(1);
       expect(deduplicated[0].id).toBe('thread_r1_user');
-      expect(deduplicated[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(deduplicated[0].parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
 
     it('sTEP 5: User message visible throughout streaming lifecycle', () => {
@@ -435,9 +440,9 @@ describe('message Visibility E2E', () => {
       const messagesByRound = groupMessagesByRound(messages);
 
       expect(messagesByRound.size).toBe(3); // Rounds 0, 1, 2
-      expect(messagesByRound.has(0)).toBe(true);
-      expect(messagesByRound.has(1)).toBe(true);
-      expect(messagesByRound.has(2)).toBe(true);
+      expect(messagesByRound.has(0)).toBeTruthy();
+      expect(messagesByRound.has(1)).toBeTruthy();
+      expect(messagesByRound.has(2)).toBeTruthy();
     });
 
     it('sTEP 3: Each round maintains correct user message', () => {
@@ -449,27 +454,30 @@ describe('message Visibility E2E', () => {
 
       // Round 0
       const round0 = messagesByRound.get(0);
-      if (!round0)
+      if (!round0) {
         throw new Error('Expected round 0 messages to exist');
+      }
       const round0Dedup = deduplicateMessages(round0);
       const round0User = round0Dedup.find(m => m.role === MessageRoles.USER);
-      expect(round0User?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(round0User?.parts[0]).toEqual({ text: 'Initial question', type: 'text' });
 
       // Round 1
       const round1 = messagesByRound.get(1);
-      if (!round1)
+      if (!round1) {
         throw new Error('Expected round 1 messages to exist');
+      }
       const round1Dedup = deduplicateMessages(round1);
       const round1User = round1Dedup.find(m => m.role === MessageRoles.USER);
-      expect(round1User?.parts[0]).toEqual({ type: 'text', text: 'Follow-up 1' });
+      expect(round1User?.parts[0]).toEqual({ text: 'Follow-up 1', type: 'text' });
 
       // Round 2
       const round2 = messagesByRound.get(2);
-      if (!round2)
+      if (!round2) {
         throw new Error('Expected round 2 messages to exist');
+      }
       const round2Dedup = deduplicateMessages(round2);
       const round2User = round2Dedup.find(m => m.role === MessageRoles.USER);
-      expect(round2User?.parts[0]).toEqual({ type: 'text', text: 'Follow-up 2' });
+      expect(round2User?.parts[0]).toEqual({ text: 'Follow-up 2', type: 'text' });
     });
   });
 
@@ -503,7 +511,7 @@ describe('message Visibility E2E', () => {
       store.getState().setMessages(msgs => [...msgs, streamingMsg]);
 
       let messages = store.getState().messages;
-      expect(messages.some(m => m.id === 'streaming-temp-id')).toBe(true);
+      expect(messages.some(m => m.id === 'streaming-temp-id')).toBeTruthy();
 
       // Replace with final ID
       const finalMsg = createAssistantMessage(1, 0, 'Complete response');
@@ -512,8 +520,8 @@ describe('message Visibility E2E', () => {
         .setMessages(msgs => msgs.map(m => (m.id === 'streaming-temp-id' ? finalMsg : m)));
 
       messages = store.getState().messages;
-      expect(messages.some(m => m.id === 'thread_r1_p0')).toBe(true);
-      expect(messages.some(m => m.id === 'streaming-temp-id')).toBe(false);
+      expect(messages.some(m => m.id === 'thread_r1_p0')).toBeTruthy();
+      expect(messages.some(m => m.id === 'streaming-temp-id')).toBeFalsy();
     });
   });
 
@@ -598,9 +606,9 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
 
-      expect(messagesByRound.has(0)).toBe(true);
-      expect(messagesByRound.has(1)).toBe(true);
-      expect(messagesByRound.has(2)).toBe(true);
+      expect(messagesByRound.has(0)).toBeTruthy();
+      expect(messagesByRound.has(1)).toBeTruthy();
+      expect(messagesByRound.has(2)).toBeTruthy();
     });
   });
 
@@ -613,7 +621,7 @@ describe('message Visibility E2E', () => {
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Initial question' });
+      expect(userMsg?.parts[0]).toEqual({ text: 'Initial question', type: 'text' });
     });
 
     it('user message: round 1', () => {
@@ -627,7 +635,7 @@ describe('message Visibility E2E', () => {
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Q1' });
+      expect(userMsg?.parts[0]).toEqual({ text: 'Q1', type: 'text' });
     });
 
     it('user message: round 2+', () => {
@@ -644,15 +652,16 @@ describe('message Visibility E2E', () => {
 
       const userMsg = deduplicated.find(m => m.role === MessageRoles.USER);
       expect(userMsg).toBeDefined();
-      expect(userMsg?.parts[0]).toEqual({ type: 'text', text: 'Q2' });
+      expect(userMsg?.parts[0]).toEqual({ text: 'Q2', type: 'text' });
     });
 
     it('participant message: round 0', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round0 = messagesByRound.get(0);
-      if (!round0)
+      if (!round0) {
         throw new Error('Expected round 0 messages to exist');
+      }
       const deduplicated = deduplicateMessages(round0);
 
       const participantMsgs = deduplicated.filter(
@@ -672,8 +681,9 @@ describe('message Visibility E2E', () => {
       const messages = store.getState().messages;
       const messagesByRound = groupMessagesByRound(messages);
       const round1 = messagesByRound.get(1);
-      if (!round1)
+      if (!round1) {
         throw new Error('Expected round 1 messages to exist');
+      }
       const deduplicated = deduplicateMessages(round1);
 
       const participantMsgs = deduplicated.filter(
@@ -690,7 +700,7 @@ describe('message Visibility E2E', () => {
 
       const moderatorMsg = deduplicated.find(m => m.metadata?.isModerator === true);
       expect(moderatorMsg).toBeDefined();
-      expect(moderatorMsg?.parts[0]).toEqual({ type: 'text', text: 'Summary' });
+      expect(moderatorMsg?.parts[0]).toEqual({ text: 'Summary', type: 'text' });
     });
 
     it('moderator message: round 1', () => {
@@ -709,7 +719,7 @@ describe('message Visibility E2E', () => {
 
       const moderatorMsg = deduplicated.find(m => m.metadata?.isModerator === true);
       expect(moderatorMsg).toBeDefined();
-      expect(moderatorMsg?.parts[0]).toEqual({ type: 'text', text: 'Summary 1' });
+      expect(moderatorMsg?.parts[0]).toEqual({ text: 'Summary 1', type: 'text' });
     });
   });
 });

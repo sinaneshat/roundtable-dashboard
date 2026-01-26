@@ -39,17 +39,17 @@ const StripeSubscriptionStatusSchemaLocal = z.enum(STRIPE_SUBSCRIPTION_STATUSES)
  * Minimal Stripe Price schema for subscription items
  */
 const StripePriceSchema = z.object({
-  id: z.string(),
-  object: z.literal('price'),
   active: z.boolean(),
   billing_scheme: z.literal('per_unit'),
   created: z.number(),
   currency: z.string(),
   custom_unit_amount: z.null(),
+  id: z.string(),
   livemode: z.boolean(),
   lookup_key: z.null(),
   metadata: z.record(z.string(), z.string()),
   nickname: z.null(),
+  object: z.literal('price'),
   product: z.string(),
   recurring: z.object({
     aggregate_usage: z.null(),
@@ -71,14 +71,14 @@ const StripePriceSchema = z.object({
  * Stripe subscription item schema
  */
 const StripeSubscriptionItemSchema = z.object({
-  id: z.string(),
-  object: z.literal('subscription_item'),
   billing_thresholds: z.null(),
   created: z.number(),
-  current_period_start: z.number(),
   current_period_end: z.number(),
+  current_period_start: z.number(),
   discounts: z.array(z.string()),
+  id: z.string(),
   metadata: z.record(z.string(), z.string()),
+  object: z.literal('subscription_item'),
   plan: z.null(),
   price: StripePriceSchema,
   quantity: z.number(),
@@ -90,13 +90,11 @@ const StripeSubscriptionItemSchema = z.object({
  * Stripe subscription schema - defines fields used in webhook handlers
  */
 const MockStripeSubscriptionSchema = z.object({
-  id: z.string(),
-  object: z.literal('subscription'),
   application: z.null(),
   application_fee_percent: z.null(),
   automatic_tax: z.object({
-    enabled: z.boolean(),
     disabled_reason: z.null(),
+    enabled: z.boolean(),
     liability: z.null(),
   }),
   billing_cycle_anchor: z.number(),
@@ -109,8 +107,8 @@ const MockStripeSubscriptionSchema = z.object({
   collection_method: z.literal('charge_automatically'),
   created: z.number(),
   currency: z.string(),
-  current_period_start: z.number(),
   current_period_end: z.number(),
+  current_period_start: z.number(),
   customer: z.string(),
   days_until_due: z.null(),
   default_payment_method: z.null(),
@@ -120,20 +118,22 @@ const MockStripeSubscriptionSchema = z.object({
   discount: z.null(),
   discounts: z.array(z.string()),
   ended_at: z.null(),
+  id: z.string(),
   invoice_settings: z.object({
     account_tax_ids: z.null(),
     issuer: z.object({ type: z.literal('self') }),
   }),
   items: z.object({
-    object: z.literal('list'),
     data: z.array(StripeSubscriptionItemSchema),
     has_more: z.boolean(),
+    object: z.literal('list'),
     url: z.string(),
   }),
   latest_invoice: z.null(),
   livemode: z.boolean(),
   metadata: z.record(z.string(), z.string()),
   next_pending_invoice_item_invoice: z.null(),
+  object: z.literal('subscription'),
   on_behalf_of: z.null(),
   pause_collection: z.null(),
   payment_settings: z.null(),
@@ -188,13 +188,11 @@ export function createMockStripeSubscription(
   const priceId = options.priceId ?? 'price_pro_monthly';
 
   const data = {
-    id: subscriptionId,
-    object: 'subscription' as const,
     application: null,
     application_fee_percent: null,
     automatic_tax: {
-      enabled: false,
       disabled_reason: null,
+      enabled: false,
       liability: null,
     },
     billing_cycle_anchor: options.currentPeriodStart ?? now,
@@ -207,8 +205,8 @@ export function createMockStripeSubscription(
     collection_method: 'charge_automatically' as const,
     created: now - 86400,
     currency: 'usd',
-    current_period_start: options.currentPeriodStart ?? now,
     current_period_end: options.currentPeriodEnd ?? periodEnd,
+    current_period_start: options.currentPeriodStart ?? now,
     customer: options.customer ?? 'cus_test_123',
     days_until_due: null,
     default_payment_method: null,
@@ -218,35 +216,35 @@ export function createMockStripeSubscription(
     discount: null,
     discounts: [],
     ended_at: null,
+    id: subscriptionId,
     invoice_settings: {
       account_tax_ids: null,
       issuer: { type: 'self' as const },
     },
     items: {
-      object: 'list' as const,
       data: [
         {
-          id: `si_${Math.random().toString(36).substring(7)}`,
-          object: 'subscription_item' as const,
           billing_thresholds: null,
           created: now,
-          current_period_start: options.currentPeriodStart ?? now,
           current_period_end: options.currentPeriodEnd ?? periodEnd,
+          current_period_start: options.currentPeriodStart ?? now,
           discounts: [],
+          id: `si_${Math.random().toString(36).substring(7)}`,
           metadata: {},
+          object: 'subscription_item' as const,
           plan: null,
           price: {
-            id: priceId,
-            object: 'price' as const,
             active: true,
             billing_scheme: 'per_unit' as const,
             created: now - 86400 * 30,
             currency: 'usd',
             custom_unit_amount: null,
+            id: priceId,
             livemode: false,
             lookup_key: null,
             metadata: {},
             nickname: null,
+            object: 'price' as const,
             product: 'prod_pro_plan',
             recurring: {
               aggregate_usage: null,
@@ -269,12 +267,14 @@ export function createMockStripeSubscription(
         },
       ],
       has_more: false,
+      object: 'list' as const,
       url: '/v1/subscription_items',
     },
     latest_invoice: null,
     livemode: false,
     metadata: {},
     next_pending_invoice_item_invoice: null,
+    object: 'subscription' as const,
     on_behalf_of: null,
     pause_collection: null,
     payment_settings: null,
@@ -310,8 +310,6 @@ const StripeInvoiceStatusSchemaLocal = z.enum(INVOICE_STATUSES);
  * Stripe invoice line item schema
  */
 const StripeInvoiceLineItemSchema = z.object({
-  id: z.string(),
-  object: z.literal('line_item'),
   amount: z.number(),
   amount_excluding_tax: z.number(),
   currency: z.string(),
@@ -319,9 +317,11 @@ const StripeInvoiceLineItemSchema = z.object({
   discount_amounts: z.array(z.string()),
   discountable: z.boolean(),
   discounts: z.array(z.string()),
+  id: z.string(),
   invoice: z.string(),
   livemode: z.boolean(),
   metadata: z.record(z.string(), z.string()),
+  object: z.literal('line_item'),
   parent: z.null(),
   period: z.object({
     end: z.number(),
@@ -355,8 +355,6 @@ const StripeBillingReasonSchemaLocal = z.enum(STRIPE_BILLING_REASONS);
  * Stripe invoice schema - defines fields used in webhook handlers
  */
 const MockStripeInvoiceSchema = z.object({
-  id: z.string(),
-  object: z.literal('invoice'),
   account_country: z.string(),
   account_name: z.string(),
   account_tax_ids: z.null(),
@@ -403,20 +401,22 @@ const MockStripeInvoiceSchema = z.object({
   footer: z.null(),
   from_invoice: z.null(),
   hosted_invoice_url: z.null(),
+  id: z.string(),
   invoice_pdf: z.null(),
   issuer: z.object({ type: z.literal('self') }),
   last_finalization_error: z.null(),
   latest_revision: z.null(),
   lines: z.object({
-    object: z.literal('list'),
     data: z.array(StripeInvoiceLineItemSchema),
     has_more: z.boolean(),
+    object: z.literal('list'),
     url: z.string(),
   }),
   livemode: z.boolean(),
   metadata: z.record(z.string(), z.string()),
   next_payment_attempt: z.null(),
   number: z.null(),
+  object: z.literal('invoice'),
   on_behalf_of: z.null(),
   paid: z.boolean(),
   paid_out_of_band: z.boolean(),
@@ -479,8 +479,6 @@ export function createMockStripeInvoice(
   const status = options.status ?? InvoiceStatuses.PAID;
 
   const data = {
-    id: invoiceId,
-    object: 'invoice' as const,
     account_country: 'US',
     account_name: 'Test Account',
     account_tax_ids: null,
@@ -527,16 +525,14 @@ export function createMockStripeInvoice(
     footer: null,
     from_invoice: null,
     hosted_invoice_url: null,
+    id: invoiceId,
     invoice_pdf: null,
     issuer: { type: 'self' as const },
     last_finalization_error: null,
     latest_revision: null,
     lines: {
-      object: 'list' as const,
       data: [
         {
-          id: `il_${Math.random().toString(36).substring(7)}`,
-          object: 'line_item' as const,
           amount: amountPaid,
           amount_excluding_tax: amountPaid,
           currency: 'usd',
@@ -544,9 +540,11 @@ export function createMockStripeInvoice(
           discount_amounts: [],
           discountable: true,
           discounts: [],
+          id: `il_${Math.random().toString(36).substring(7)}`,
           invoice: invoiceId,
           livemode: false,
           metadata: {},
+          object: 'line_item' as const,
           parent: null,
           period: {
             end: now + 30 * 24 * 60 * 60,
@@ -571,12 +569,14 @@ export function createMockStripeInvoice(
         },
       ],
       has_more: false,
+      object: 'list' as const,
       url: '/v1/invoices/lines',
     },
     livemode: false,
     metadata: {},
     next_payment_attempt: null,
     number: null,
+    object: 'invoice' as const,
     on_behalf_of: null,
     paid: status === InvoiceStatuses.PAID,
     paid_out_of_band: false,
@@ -623,8 +623,6 @@ export function createMockStripeInvoice(
  * Stripe customer schema
  */
 const MockStripeCustomerSchema = z.object({
-  id: z.string(),
-  object: z.literal('customer'),
   address: z.null(),
   balance: z.number(),
   created: z.number(),
@@ -634,6 +632,7 @@ const MockStripeCustomerSchema = z.object({
   description: z.null(),
   discount: z.null(),
   email: z.string(),
+  id: z.string(),
   invoice_prefix: z.null(),
   invoice_settings: z.object({
     custom_fields: z.null(),
@@ -645,6 +644,7 @@ const MockStripeCustomerSchema = z.object({
   metadata: z.record(z.string(), z.string()),
   name: z.string(),
   next_invoice_sequence: z.number(),
+  object: z.literal('customer'),
   phone: z.null(),
   preferred_locales: z.null(),
   shipping: z.null(),
@@ -669,8 +669,6 @@ export function createMockStripeCustomer(
   const now = Math.floor(Date.now() / 1000);
 
   const data = {
-    id: options.id ?? `cus_${Math.random().toString(36).substring(7)}`,
-    object: 'customer' as const,
     address: null,
     balance: 0,
     created: now,
@@ -680,6 +678,7 @@ export function createMockStripeCustomer(
     description: null,
     discount: null,
     email: options.email ?? 'test@example.com',
+    id: options.id ?? `cus_${Math.random().toString(36).substring(7)}`,
     invoice_prefix: null,
     invoice_settings: {
       custom_fields: null,
@@ -691,6 +690,7 @@ export function createMockStripeCustomer(
     metadata: {},
     name: options.name ?? 'Test Customer',
     next_invoice_sequence: 1,
+    object: 'customer' as const,
     phone: null,
     preferred_locales: null,
     shipping: null,
@@ -709,14 +709,14 @@ export function createMockStripeCustomer(
  * Stripe event schema
  */
 const MockStripeEventSchema = z.object({
-  id: z.string(),
-  object: z.literal('event'),
   api_version: z.string(),
   created: z.number(),
   data: z.object({
     object: z.unknown(),
   }),
+  id: z.string(),
   livemode: z.boolean(),
+  object: z.literal('event'),
   pending_webhooks: z.number(),
   request: z.null(),
   type: z.string(),
@@ -737,14 +737,14 @@ export function createMockStripeEvent<T>(
   const now = Math.floor(Date.now() / 1000);
 
   const eventData = {
-    id: `evt_${Math.random().toString(36).substring(7)}`,
-    object: 'event' as const,
     api_version: '2025-12-15.clover',
     created: now,
     data: {
       object: data,
     },
+    id: `evt_${Math.random().toString(36).substring(7)}`,
     livemode: false,
+    object: 'event' as const,
     pending_webhooks: 0,
     request: null,
     type,

@@ -29,8 +29,8 @@ type PostHogProviderProps = {
  * Environment detection via import.meta.env (Vite build-time replacement).
  */
 export default function PostHogProvider({
-  children,
   apiKey,
+  children,
 }: PostHogProviderProps) {
   const initStarted = useRef(false);
 
@@ -71,34 +71,34 @@ export default function PostHogProvider({
     posthog.init(apiKey, {
       // Route through our API reverse proxy to bypass ad blockers
       api_host: apiHost,
-      ui_host: 'https://us.posthog.com',
+      autocapture: true,
+
+      capture_exceptions: true,
+      capture_pageleave: 'if_capture_pageview',
 
       // Pageview: Manual control for SPA accuracy
       capture_pageview: false,
-      capture_pageleave: 'if_capture_pageview',
-
-      // Core tracking
-      person_profiles: 'identified_only',
-      autocapture: true,
-      capture_exceptions: true,
-      session_recording: {
-        maskAllInputs: true,
-        maskTextSelector: '[data-private], .ph-mask',
-        blockClass: 'ph-no-capture',
-        blockSelector: '[data-ph-no-capture]',
-        recordCrossOriginIframes: false,
-      },
-
-      // Other config
-      scroll_root_selector: '#root',
       // Disable debug mode to prevent verbose console logging
       debug: false,
-
       // Expose to window + capture initial pageview
       loaded: (ph) => {
         window.posthog = ph as typeof window.posthog;
         ph.capture('$pageview');
       },
+      // Core tracking
+      person_profiles: 'identified_only',
+
+      // Other config
+      scroll_root_selector: '#root',
+      session_recording: {
+        blockClass: 'ph-no-capture',
+        blockSelector: '[data-ph-no-capture]',
+        maskAllInputs: true,
+        maskTextSelector: '[data-private], .ph-mask',
+        recordCrossOriginIframes: false,
+      },
+
+      ui_host: 'https://us.posthog.com',
     });
 
     // Set window.posthog immediately after init call

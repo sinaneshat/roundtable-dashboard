@@ -17,35 +17,52 @@
 
 import { AnalyzePromptSseEvents } from '@roundtable/shared';
 import { useCallback, useRef, useState } from 'react';
+import { z } from 'zod';
 
 import type { AnalyzePromptPayload } from '@/services/api';
 import { analyzePromptStreamService } from '@/services/api';
 import { AUTO_MODE_FALLBACK_CONFIG } from '@/stores/chat/store-defaults';
 
-type AnalyzePromptStreamState = {
-  isStreaming: boolean;
-  error: Error | null;
-  partialConfig: Partial<AnalyzePromptPayload> | null;
-};
+// ============================================================================
+// TYPE SCHEMAS - Zod-based for proper type inference
+// ============================================================================
 
-type StreamConfigOptions = {
-  prompt: string;
-  /** ✅ GRANULAR: Whether image files are attached - requires supports_vision */
-  hasImageFiles?: boolean;
-  /** ✅ GRANULAR: Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
-  hasDocumentFiles?: boolean;
-};
+/**
+ * Internal state schema for the hook
+ */
+const AnalyzePromptStreamStateSchema = z.object({
+  error: z.custom<Error | null>(),
+  isStreaming: z.boolean(),
+  partialConfig: z.custom<Partial<AnalyzePromptPayload> | null>(),
+});
+type AnalyzePromptStreamState = z.infer<typeof AnalyzePromptStreamStateSchema>;
 
-type AnalyzePromptStreamResult = AnalyzePromptStreamState & {
-  streamConfig: (options: StreamConfigOptions) => Promise<AnalyzePromptPayload | null>;
-  abort: () => void;
-  reset: () => void;
-};
+/**
+ * Stream config options schema
+ */
+const _StreamConfigOptionsSchema = z.object({
+  /** Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
+  hasDocumentFiles: z.boolean().optional(),
+  /** Whether image files are attached - requires supports_vision */
+  hasImageFiles: z.boolean().optional(),
+  prompt: z.string(),
+});
+type StreamConfigOptions = z.infer<typeof _StreamConfigOptionsSchema>;
+
+/**
+ * Full result schema - state + functions
+ */
+const _AnalyzePromptStreamResultSchema = AnalyzePromptStreamStateSchema.extend({
+  abort: z.custom<() => void>(),
+  reset: z.custom<() => void>(),
+  streamConfig: z.custom<(options: StreamConfigOptions) => Promise<AnalyzePromptPayload | null>>(),
+});
+type AnalyzePromptStreamResult = z.infer<typeof _AnalyzePromptStreamResultSchema>;
 
 export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
   const [state, setState] = useState<AnalyzePromptStreamState>({
-    isStreaming: false,
     error: null,
+    isStreaming: false,
     partialConfig: null,
   });
 
@@ -61,14 +78,14 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
   const reset = useCallback(() => {
     abort();
     setState({
-      isStreaming: false,
       error: null,
+      isStreaming: false,
       partialConfig: null,
     });
   }, [abort]);
 
   const streamConfig = useCallback(async (options: StreamConfigOptions): Promise<AnalyzePromptPayload | null> => {
-    const { prompt, hasImageFiles = false, hasDocumentFiles = false } = options;
+    const { hasDocumentFiles = false, hasImageFiles = false, prompt } = options;
 
     // Abort any existing stream
     abort();
@@ -77,14 +94,14 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
     abortControllerRef.current = abortController;
 
     setState({
-      isStreaming: true,
       error: null,
+      isStreaming: true,
       partialConfig: null,
     });
 
     try {
       const response = await analyzePromptStreamService({
-        json: { prompt, hasImageFiles, hasDocumentFiles },
+        json: { hasDocumentFiles, hasImageFiles, prompt },
       });
 
       if (!response.ok) {
@@ -144,8 +161,9 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
         }
 
         const { done, value } = await reader.read();
-        if (done)
+        if (done) {
           break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
 
@@ -185,8 +203,8 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
       console.error('[AnalyzeStream] Error:', error);
 
       setState({
-        isStreaming: false,
         error,
+        isStreaming: false,
         partialConfig: null,
       });
 
@@ -196,8 +214,8 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
 
   return {
     ...state,
-    streamConfig,
     abort,
     reset,
+    streamConfig,
   };
 }

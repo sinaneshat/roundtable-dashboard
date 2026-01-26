@@ -17,10 +17,10 @@ const UNKNOWN_ERROR_MESSAGE = 'An unknown error occurred' as const;
 // ClientErrorDetailsSchema: Used for parsing error responses on the frontend/client-side
 // Note: Different from @/api/common/error-handling ErrorDetailsSchema which uses discriminated unions for API error construction
 export const ClientErrorDetailsSchema = z.object({
-  errorName: z.string().optional(),
-  stack: z.string().optional(),
-  errorType: z.string().optional(),
   context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  errorName: z.string().optional(),
+  errorType: z.string().optional(),
+  stack: z.string().optional(),
 }).strict().optional();
 
 export type ClientErrorDetails = z.infer<typeof ClientErrorDetailsSchema>;
@@ -32,9 +32,9 @@ type ErrorContextValue = string | number | boolean | null;
 // ============================================================================
 
 export const RequestMetaSchema = z.object({
+  correlationId: z.string().optional(),
   requestId: z.string().optional(),
   timestamp: z.string().optional(),
-  correlationId: z.string().optional(),
 }).strict();
 
 export type RequestMeta = z.infer<typeof RequestMetaSchema>;
@@ -44,12 +44,12 @@ export type RequestMeta = z.infer<typeof RequestMetaSchema>;
 // ============================================================================
 
 export const ApiErrorDetailsSchema = z.object({
-  message: z.string(),
   code: z.string().optional(),
+  details: ClientErrorDetailsSchema,
+  message: z.string(),
+  meta: RequestMetaSchema.optional(),
   status: z.number().int().positive().optional(),
   validationErrors: z.array(ValidationErrorSchema).optional(),
-  details: ClientErrorDetailsSchema,
-  meta: RequestMetaSchema.optional(),
 }).strict();
 
 export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
@@ -202,7 +202,7 @@ export function getApiErrorMessage(error: unknown, fallback: string = UNKNOWN_ER
 }
 
 export function formatValidationErrorsAsString(
-  validationErrors: ReadonlyArray<ValidationError>,
+  validationErrors: readonly ValidationError[],
 ): string {
   if (!validationErrors || validationErrors.length === 0) {
     return 'Validation failed';

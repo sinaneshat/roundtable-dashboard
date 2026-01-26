@@ -34,14 +34,14 @@ describe('multi-Participant Round Completion', () => {
   ): UIMessage {
     return {
       id,
-      role: MessageRoles.ASSISTANT,
-      parts: [{ type: 'text', text: content }],
       metadata: {
-        roundNumber,
-        participantIndex,
         participantId,
+        participantIndex,
         role: MessageRoles.ASSISTANT,
+        roundNumber,
       },
+      parts: [{ text: content, type: 'text' }],
+      role: MessageRoles.ASSISTANT,
     };
   }
 
@@ -49,17 +49,17 @@ describe('multi-Participant Round Completion', () => {
   function createUserMessage(id: string, content: string, roundNumber: number): UIMessage {
     return {
       id,
+      metadata: { role: MessageRoles.USER, roundNumber },
+      parts: [{ text: content, type: 'text' }],
       role: MessageRoles.USER,
-      parts: [{ type: 'text', text: content }],
-      metadata: { roundNumber, role: MessageRoles.USER },
     };
   }
 
   describe('basic Multi-Participant Flow', () => {
     it('should track all participants in round', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
+      const p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2, p3]);
       store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
@@ -70,8 +70,8 @@ describe('multi-Participant Round Completion', () => {
     });
 
     it('should track currentParticipantIndex during streaming', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setIsStreaming(true);
@@ -85,8 +85,8 @@ describe('multi-Participant Round Completion', () => {
     });
 
     it('should complete round when all participants respond', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
@@ -111,7 +111,7 @@ describe('multi-Participant Round Completion', () => {
       store.getState().completeStreaming();
 
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.currentParticipantIndex).toBe(0);
       expect(state.messages).toHaveLength(3);
     });
@@ -119,8 +119,8 @@ describe('multi-Participant Round Completion', () => {
 
   describe('participant Index Validation', () => {
     it('should validate participantIndex matches actual participant', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
@@ -137,8 +137,8 @@ describe('multi-Participant Round Completion', () => {
 
     it('should detect mismatch when participants reordered', () => {
       // Initial order - set via setParticipants (backend source of truth)
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
@@ -160,8 +160,8 @@ describe('multi-Participant Round Completion', () => {
 
   describe('config Changes Mid-Round', () => {
     it('should NOT affect current round when config changes mid-streaming', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
@@ -177,11 +177,11 @@ describe('multi-Participant Round Completion', () => {
       store.getState().setCurrentParticipantIndex(1);
 
       // User changes config mid-round (should not affect current round)
-      const _p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const _p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: null, threadId: 't1', updatedAt: new Date() };
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ]);
       store.getState().setHasPendingConfigChanges(true);
 
@@ -198,13 +198,13 @@ describe('multi-Participant Round Completion', () => {
       store.getState().completeStreaming();
 
       // Config change flag is set for NEXT round
-      expect(store.getState().hasPendingConfigChanges).toBe(true);
+      expect(store.getState().hasPendingConfigChanges).toBeTruthy();
     });
 
     it('should apply config changes only at NEXT round start', () => {
       // Round 0 complete
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2]);
       store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
@@ -217,9 +217,9 @@ describe('multi-Participant Round Completion', () => {
 
       // User adds participant for next round
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ]);
       store.getState().setHasPendingConfigChanges(true);
 
@@ -234,9 +234,9 @@ describe('multi-Participant Round Completion', () => {
 
   describe('incomplete Round Handling', () => {
     it('should track incomplete round for resumption', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 2, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
+      const p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: null, threadId: 't1', updatedAt: new Date() };
 
       store.getState().setParticipants([p1, p2, p3]);
       store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
@@ -253,12 +253,12 @@ describe('multi-Participant Round Completion', () => {
 
       const state = store.getState();
       expect(state.nextParticipantToTrigger).toEqual({ index: 1, participantId: 'p2' });
-      expect(state.waitingToStartStreaming).toBe(true);
+      expect(state.waitingToStartStreaming).toBeTruthy();
     });
 
     it('should resume from correct participant after page refresh', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       // Simulate page refresh - store rehydrated with trigger state
       store.getState().setParticipants([p1, p2]);
@@ -275,8 +275,8 @@ describe('multi-Participant Round Completion', () => {
     });
 
     it('should NOT resume if config changed since round started', () => {
-      const p1 = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
-      const p2 = { id: 'p2', modelId: 'claude-3', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p1 = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
+      const p2 = { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
 
       // Round started with p1, p2
       store.getState().setParticipants([p1, p2]);
@@ -284,7 +284,7 @@ describe('multi-Participant Round Completion', () => {
       store.getState().setWaitingToStartStreaming(true);
 
       // Config changed - p2 replaced with p3
-      const p3 = { id: 'p3', modelId: 'gemini-pro', role: null, priority: 1, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const p3 = { createdAt: new Date(), id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 1, role: null, threadId: 't1', updatedAt: new Date() };
       store.getState().setParticipants([p1, p3]);
 
       // Trigger now invalid - p2 not in participants
@@ -304,9 +304,9 @@ describe('multi-Participant Round Completion', () => {
       store.getState().registerAnimation(1);
 
       const state = store.getState();
-      expect(state.pendingAnimations.has(0)).toBe(true);
-      expect(state.pendingAnimations.has(1)).toBe(true);
-      expect(state.pendingAnimations.has(2)).toBe(false);
+      expect(state.pendingAnimations.has(0)).toBeTruthy();
+      expect(state.pendingAnimations.has(1)).toBeTruthy();
+      expect(state.pendingAnimations.has(2)).toBeFalsy();
     });
 
     it('should clear pending animation when participant completes', () => {
@@ -317,8 +317,8 @@ describe('multi-Participant Round Completion', () => {
       store.getState().completeAnimation(0);
 
       const state = store.getState();
-      expect(state.pendingAnimations.has(0)).toBe(false);
-      expect(state.pendingAnimations.has(1)).toBe(true);
+      expect(state.pendingAnimations.has(0)).toBeFalsy();
+      expect(state.pendingAnimations.has(1)).toBeTruthy();
     });
 
     it('should clear all animations on completeStreaming', () => {
@@ -364,7 +364,7 @@ describe('multi-Participant Round Completion', () => {
 
       store.getState().completeStreaming();
 
-      expect(store.getState().streamingRoundNumber).toBe(null);
+      expect(store.getState().streamingRoundNumber).toBeNull();
     });
   });
 
@@ -372,24 +372,24 @@ describe('multi-Participant Round Completion', () => {
     it('should track moderator creation per round', () => {
       store.getState().markModeratorCreated(0);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
     });
 
     it('should NOT create duplicate moderator in same round', () => {
       const firstResult = store.getState().tryMarkModeratorCreated(0);
       const secondResult = store.getState().tryMarkModeratorCreated(0);
 
-      expect(firstResult).toBe(true); // First call succeeds
-      expect(secondResult).toBe(false); // Second call fails (already created)
+      expect(firstResult).toBeTruthy(); // First call succeeds
+      expect(secondResult).toBeFalsy(); // Second call fails (already created)
     });
 
     it('should allow moderator in each round', () => {
       store.getState().markModeratorCreated(0);
       store.getState().markModeratorCreated(1);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
     });
   });
 
@@ -397,26 +397,26 @@ describe('multi-Participant Round Completion', () => {
     it('should track pre-search trigger per round', () => {
       store.getState().markPreSearchTriggered(0);
 
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('should NOT trigger duplicate pre-search in same round', () => {
       const firstResult = store.getState().tryMarkPreSearchTriggered(0);
       const secondResult = store.getState().tryMarkPreSearchTriggered(0);
 
-      expect(firstResult).toBe(true);
-      expect(secondResult).toBe(false);
+      expect(firstResult).toBeTruthy();
+      expect(secondResult).toBeFalsy();
     });
 
     it('should block participant streaming until pre-search completes', () => {
       store.getState().setEnableWebSearch(true);
       store.getState().addPreSearch({
         id: 'pre-search-0',
-        threadId: 'thread-1',
         roundNumber: 0,
-        status: 'in-progress',
         searchData: null,
+        status: 'in-progress',
+        threadId: 'thread-1',
         userQuery: 'Test',
       });
 

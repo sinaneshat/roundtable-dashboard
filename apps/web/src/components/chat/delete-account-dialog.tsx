@@ -19,10 +19,10 @@ export type DeleteAccountDialogProps = {
 };
 
 export function DeleteAccountDialog({
-  open,
-  onOpenChange,
-  onConfirm,
   isProcessing = false,
+  onConfirm,
+  onOpenChange,
+  open,
 }: DeleteAccountDialogProps) {
   const t = useTranslations();
 

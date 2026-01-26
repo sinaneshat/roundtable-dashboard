@@ -44,8 +44,9 @@ function simulateAiSdkToStoreSync(
   // Find store-only messages
   const storeOnlyMessages = storeMessages.filter((m) => {
     // Keep messages that are in store but not in AI SDK
-    if (chatMessageIds.has(m.id))
+    if (chatMessageIds.has(m.id)) {
       return false;
+    }
 
     // ✅ CRITICAL FIX: Preserve non-participant-trigger user messages
     if (m.role === MessageRoles.USER) {
@@ -58,8 +59,9 @@ function simulateAiSdkToStoreSync(
     // Preserve messages from different rounds (they might have been filtered by AI SDK)
     const chatRounds = new Set(aiSdkMessages.map(cm => getRoundNumber(cm.metadata)));
     const msgRound = getRoundNumber(m.metadata);
-    if (msgRound !== null && !chatRounds.has(msgRound))
+    if (msgRound !== null && !chatRounds.has(msgRound)) {
       return true;
+    }
 
     return false;
   });
@@ -131,37 +133,37 @@ function simulateDeduplication(messages: UIMessage[]): UIMessage[] {
 function createOptimisticUserMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `optimistic-user-${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: UIMessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createDbUserMessage(threadId: string, roundNumber: number, text: string): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
       role: UIMessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createParticipantTriggerMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `trigger-${roundNumber}-${Date.now()}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: {
+      isParticipantTrigger: true,
       role: UIMessageRoles.USER,
       roundNumber,
-      isParticipantTrigger: true,
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -173,15 +175,15 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text }],
     metadata: {
+      model: 'test-model',
+      participantId: `participant-${participantIndex}`,
+      participantIndex,
       role: UIMessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      participantId: `participant-${participantIndex}`,
-      model: 'test-model',
     },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -211,8 +213,9 @@ describe('useMultiParticipantChat Integration', () => {
       // CRITICAL ASSERTION: Original user message must be preserved
       const originalUserMsg = merged.find(m => m.id === 'thread-1_r1_user');
       expect(originalUserMsg).toBeDefined();
-      if (!originalUserMsg)
+      if (!originalUserMsg) {
         throw new Error('Expected originalUserMsg to be defined');
+      }
       expect(getUserMetadata(originalUserMsg.metadata)?.isParticipantTrigger).toBeFalsy();
 
       // STEP 4: Deduplication filters out participant trigger
@@ -225,7 +228,7 @@ describe('useMultiParticipantChat Integration', () => {
 
       expect(round1UserMessages).toHaveLength(1);
       expect(round1UserMessages[0].id).toBe('thread-1_r1_user');
-      expect(round1UserMessages[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up' });
+      expect(round1UserMessages[0].parts[0]).toEqual({ text: 'Follow-up', type: 'text' });
     });
 
     it('should handle multiple rounds without losing user messages', () => {
@@ -257,7 +260,7 @@ describe('useMultiParticipantChat Integration', () => {
         const meta = getUserMetadata(m.metadata);
         return meta?.isParticipantTrigger;
       });
-      expect(hasTriggers).toBe(false);
+      expect(hasTriggers).toBeFalsy();
     });
   });
 
@@ -453,16 +456,16 @@ describe('useMultiParticipantChat Integration', () => {
 
       const merged = simulateAiSdkToStoreSync(aiSdkMessages, storeMessages);
       expect(merged).toHaveLength(1);
-      expect(merged[0].metadata?.isParticipantTrigger).toBe(true);
+      expect(merged[0].metadata?.isParticipantTrigger).toBeTruthy();
     });
 
     it('should handle null metadata gracefully', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'msg-null-meta',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Test' }],
           metadata: createInvalidMetadata('null'),
+          parts: [{ text: 'Test', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -476,9 +479,9 @@ describe('useMultiParticipantChat Integration', () => {
       const storeMessages: UIMessage[] = [
         {
           id: 'msg-no-round',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'No round number' }],
           metadata: { role: UIMessageRoles.USER },
+          parts: [{ text: 'No round number', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -551,11 +554,12 @@ describe('useMultiParticipantChat Integration', () => {
       );
 
       expect(round1User).toBeDefined();
-      if (!round1User)
+      if (!round1User) {
         throw new Error('Expected round1User to be defined');
+      }
       expect(round1User.id).toBe('thread-1_r1_user');
       expect(getUserMetadata(round1User.metadata)?.isParticipantTrigger).toBeFalsy();
-      expect(round1User.parts[0]).toEqual({ type: 'text', text: 'Follow-up question' });
+      expect(round1User.parts[0]).toEqual({ text: 'Follow-up question', type: 'text' });
     });
   });
 });

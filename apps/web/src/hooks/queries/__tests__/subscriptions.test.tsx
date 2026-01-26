@@ -36,8 +36,8 @@ function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false,
         gcTime: 0,
+        retry: false,
       },
     },
   });
@@ -104,11 +104,11 @@ describe('useSubscriptionsQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
     expect(result.current.data?.data?.items).toHaveLength(3);
-    expect(result.current.data?.success).toBe(true);
+    expect(result.current.data?.success).toBeTruthy();
   });
 
   it('should return empty list from cache', async () => {
@@ -121,7 +121,7 @@ describe('useSubscriptionsQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
     expect(result.current.data?.data?.items).toHaveLength(0);
@@ -140,7 +140,7 @@ describe('useSubscriptionsQuery', () => {
     });
 
     // Query should be disabled
-    expect(result.current.isPending).toBe(true);
+    expect(result.current.isPending).toBeTruthy();
     expect(result.current.fetchStatus).toBe('idle');
   });
 
@@ -154,10 +154,10 @@ describe('useSubscriptionsQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
-    expect(result.current.data?.success).toBe(false);
+    expect(result.current.data?.success).toBeFalsy();
     expect(result.current.data?.error?.message).toBe('Failed to fetch subscriptions');
   });
 });
@@ -193,11 +193,11 @@ describe('useSubscriptionQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
     expect(result.current.data?.data?.subscription.id).toBe('sub_test_123');
-    expect(result.current.data?.success).toBe(true);
+    expect(result.current.data?.success).toBeTruthy();
   });
 
   it('should not fetch when user is not authenticated', async () => {
@@ -212,7 +212,7 @@ describe('useSubscriptionQuery', () => {
     });
 
     // Query should be disabled
-    expect(result.current.isPending).toBe(true);
+    expect(result.current.isPending).toBeTruthy();
     expect(result.current.fetchStatus).toBe('idle');
   });
 
@@ -222,7 +222,7 @@ describe('useSubscriptionQuery', () => {
     });
 
     // Query should be disabled
-    expect(result.current.isPending).toBe(true);
+    expect(result.current.isPending).toBeTruthy();
     expect(result.current.fetchStatus).toBe('idle');
   });
 
@@ -236,10 +236,10 @@ describe('useSubscriptionQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
-    expect(result.current.data?.success).toBe(false);
+    expect(result.current.data?.success).toBeFalsy();
     expect(result.current.data?.error?.code).toBe('NOT_FOUND');
     expect(result.current.data?.error?.message).toBe('Subscription not found');
   });
@@ -254,10 +254,10 @@ describe('useSubscriptionQuery', () => {
     });
 
     await waitFor(() => {
-      expect(result.current.isSuccess).toBe(true);
+      expect(result.current.isSuccess).toBeTruthy();
     });
 
-    expect(result.current.data?.success).toBe(false);
+    expect(result.current.data?.success).toBeFalsy();
     expect(result.current.data?.error?.message).toBe('Unauthorized');
   });
 });

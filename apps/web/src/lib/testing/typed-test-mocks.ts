@@ -39,12 +39,12 @@ export function createApiCallTracker(): ApiCallTracker {
 
   return {
     calls,
-    getCallsByEndpoint: endpoint => calls.filter(c => c.endpoint.includes(endpoint)),
-    getCallCount: endpoint => calls.filter(c => c.endpoint.includes(endpoint)).length,
-    getTotalCalls: () => calls.length,
     clear: () => {
       calls.length = 0;
     },
+    getCallCount: endpoint => calls.filter(c => c.endpoint.includes(endpoint)).length,
+    getCallsByEndpoint: endpoint => calls.filter(c => c.endpoint.includes(endpoint)),
+    getTotalCalls: () => calls.length,
   };
 }
 
@@ -54,7 +54,7 @@ export function trackApiCall(
   method: string,
   params?: ApiCallParams,
 ): void {
-  tracker.calls.push({ endpoint, method, timestamp: Date.now(), params });
+  tracker.calls.push({ endpoint, method, params, timestamp: Date.now() });
 }
 
 /**
@@ -90,19 +90,15 @@ export function createCallTracker(): CallTracker {
   let currentTick = 0;
 
   return {
-    calls,
-    currentTick,
-    recordCall: (type: string, args?: CallRecordArgs) => {
-      calls.push({
-        type,
-        timestamp: Date.now(),
-        tick: currentTick,
-        args,
-      });
-    },
     advanceTick: () => {
       currentTick++;
     },
+    calls,
+    clear: () => {
+      calls.length = 0;
+      currentTick = 0;
+    },
+    currentTick,
     getCallsInTick: (tick: number) => {
       return calls.filter(c => c.tick === tick);
     },
@@ -125,9 +121,13 @@ export function createCallTracker(): CallTracker {
 
       return duplicates;
     },
-    clear: () => {
-      calls.length = 0;
-      currentTick = 0;
+    recordCall: (type: string, args?: CallRecordArgs) => {
+      calls.push({
+        args,
+        tick: currentTick,
+        timestamp: Date.now(),
+        type,
+      });
     },
   };
 }
@@ -142,7 +142,7 @@ export type QueryKeyParam = {
   messageId?: string;
 };
 
-export type QueryKey = ReadonlyArray<string | number | QueryKeyParam>;
+export type QueryKey = readonly (string | number | QueryKeyParam)[];
 
 export type QueryFetchRecord = {
   queryKey: QueryKey;
@@ -163,24 +163,25 @@ export function createQueryFetchTracker(): QueryFetchTracker {
   const fetches: QueryFetchRecord[] = [];
 
   return {
-    fetches,
-    recordFetch(queryKey: QueryKey, cacheHit: boolean, staleTime?: number) {
-      fetches.push({
-        queryKey,
-        cacheHit,
-        staleTime,
-        timestamp: Date.now(),
-      });
+    clear: () => {
+      fetches.length = 0;
     },
-    getFetchCount: () => fetches.length,
+    fetches,
     getCacheHitRate: () => {
-      if (fetches.length === 0)
+      if (fetches.length === 0) {
         return 0;
+      }
       const hits = fetches.filter(f => f.cacheHit).length;
       return hits / fetches.length;
     },
-    clear: () => {
-      fetches.length = 0;
+    getFetchCount: () => fetches.length,
+    recordFetch(queryKey: QueryKey, cacheHit: boolean, staleTime?: number) {
+      fetches.push({
+        cacheHit,
+        queryKey,
+        staleTime,
+        timestamp: Date.now(),
+      });
     },
   };
 }
@@ -220,9 +221,16 @@ export function createStateUpdateTracker(): StateUpdateTracker {
   const changes: StateChange[] = [];
 
   return {
-    updateCount,
-    lastState,
     changes,
+    clear: () => {
+      updateCount = 0;
+      Object.keys(lastState).forEach((key) => {
+        delete lastState[key as keyof TrackedState];
+      });
+      changes.length = 0;
+    },
+    getUpdateCount: () => updateCount,
+    lastState,
     trackUpdate: (state: TrackedState) => {
       updateCount++;
       for (const [key, value] of Object.entries(state)) {
@@ -238,14 +246,7 @@ export function createStateUpdateTracker(): StateUpdateTracker {
         }
       }
     },
-    getUpdateCount: () => updateCount,
-    clear: () => {
-      updateCount = 0;
-      Object.keys(lastState).forEach((key) => {
-        delete lastState[key as keyof TrackedState];
-      });
-      changes.length = 0;
-    },
+    updateCount,
   };
 }
 
@@ -280,10 +281,10 @@ export function createFlowCallRecord(
   data?: FlowCallData,
 ): FlowCallRecord {
   return {
-    type,
-    roundNumber,
     data,
+    roundNumber,
     timestamp: Date.now(),
+    type,
   };
 }
 
@@ -364,6 +365,8 @@ export function createMockStreamingResponse(init: MockStreamingResponseInit): Re
   let chunkIndex = 0;
 
   const reader: MockReadableStreamReader = {
+    cancel: async () => {},
+    closed: Promise.resolve(),
     read: async () => {
       if (chunkIndex >= chunks.length) {
         return { done: true, value: undefined };
@@ -378,8 +381,6 @@ export function createMockStreamingResponse(init: MockStreamingResponseInit): Re
       };
     },
     releaseLock: () => {},
-    closed: Promise.resolve(),
-    cancel: async () => {},
   };
 
   const body: MockReadableStreamBody = {
@@ -387,10 +388,10 @@ export function createMockStreamingResponse(init: MockStreamingResponseInit): Re
   };
 
   const responseInit: ResponseInit = {
-    status,
     headers: new Headers({
       'content-type': contentType,
     }),
+    status,
   };
 
   return new Response(body as ReadableStream<Uint8Array>, responseInit);
@@ -402,10 +403,10 @@ export function createMockStreamingResponse(init: MockStreamingResponseInit): Re
  */
 export function createMockJsonResponse<T>(data: T, status = 200): Response {
   const responseInit: ResponseInit = {
-    status,
     headers: new Headers({
       'content-type': 'application/json',
     }),
+    status,
   };
 
   return new Response(JSON.stringify(data), responseInit);
@@ -429,10 +430,10 @@ type InvalidMetadataObject = {
 
 export function createInvalidMetadata(type: InvalidMetadataType): unknown {
   const variants: Record<InvalidMetadataType, unknown> = {
-    'null': null,
-    'undefined': undefined,
     'empty': {},
     'missing-round': { role: MessageRoles.USER } satisfies InvalidMetadataObject,
+    'null': null,
+    'undefined': undefined,
   };
 
   return variants[type];

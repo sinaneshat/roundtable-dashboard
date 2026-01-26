@@ -30,37 +30,37 @@ import { createChatStore } from '../store';
 
 function createMockThread(threadId: string) {
   return {
-    id: threadId,
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active' as const,
+    createdAt: new Date(),
     enableWebSearch: true,
+    id: threadId,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createMockParticipants(threadId: string, count: number): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId,
-    modelId: `provider/model-${i}`,
-    role: `Role ${i}`,
-    customRoleId: null,
-    priority: i,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `provider/model-${i}`,
+    priority: i,
+    role: `Role ${i}`,
+    settings: null,
+    threadId,
     updatedAt: new Date(),
   }));
 }
@@ -72,9 +72,9 @@ function createUserMessage(threadId: string, roundNumber: number, text: string):
   };
   return {
     id: `${threadId}_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -86,23 +86,23 @@ function createAssistantMessage(
   text: string,
 ): ApiMessage {
   const metadata: DbAssistantMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    roundNumber,
+    finishReason: 'stop',
+    hasError: false,
+    isPartialResponse: false,
+    isTransient: false,
+    model: `provider/model-${participantIndex}`,
     participantId,
     participantIndex,
     participantRole: `Role ${participantIndex}`,
-    model: `provider/model-${participantIndex}`,
-    finishReason: 'stop',
-    usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-    hasError: false,
-    isTransient: false,
-    isPartialResponse: false,
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
+    usage: { completionTokens: 20, promptTokens: 10, totalTokens: 30 },
   };
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -112,18 +112,18 @@ function createModeratorMessage(
   text: string,
 ): ApiMessage {
   const metadata: DbModeratorMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    isModerator: true,
-    roundNumber,
-    model: 'moderator-model',
     finishReason: 'stop',
     hasError: false,
+    isModerator: true,
+    model: 'moderator-model',
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
   };
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -133,23 +133,23 @@ function createPreSearch(
   userQuery: string,
 ): StoredPreSearch {
   return {
+    completedAt: new Date(),
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${threadId}-r${roundNumber}`,
-    threadId,
     roundNumber,
-    userQuery,
-    status: MessageStatuses.COMPLETE,
     searchData: {
-      queries: [{ query: userQuery, rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-      results: [],
-      summary: 'test summary',
-      successCount: 1,
       failureCount: 0,
+      queries: [{ index: 0, query: userQuery, rationale: 'test', searchDepth: 'basic', total: 1 }],
+      results: [],
+      successCount: 1,
+      summary: 'test summary',
       totalResults: 0,
       totalTime: 100,
     },
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: new Date(),
+    status: MessageStatuses.COMPLETE,
+    threadId,
+    userQuery,
   } as StoredPreSearch;
 }
 
@@ -192,10 +192,12 @@ function extractTimelinePositions(
   messagesByRound.forEach((roundMessages) => {
     roundMessages.sort((a, b) => {
       // User messages come first
-      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+      if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
         return -1;
-      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+      }
+      if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
         return 1;
+      }
 
       // For assistant messages, sort by participantIndex
       // Moderator (isModerator: true, no participantIndex) comes LAST
@@ -204,10 +206,12 @@ function extractTimelinePositions(
         const bIsModerator = isModeratorMessage(b);
 
         // Moderator always comes after participants
-        if (aIsModerator && !bIsModerator)
+        if (aIsModerator && !bIsModerator) {
           return 1;
-        if (!aIsModerator && bIsModerator)
+        }
+        if (!aIsModerator && bIsModerator) {
           return -1;
+        }
 
         // Neither is moderator - sort by participantIndex
         const indexA = getParticipantIndex(a.metadata) ?? 0;
@@ -242,8 +246,8 @@ function extractTimelinePositions(
     // Add pre-search first (if exists)
     if (roundPreSearch) {
       positions.push({
-        type: 'pre-search',
         roundNumber,
+        type: 'pre-search',
       });
     }
 
@@ -252,24 +256,24 @@ function extractTimelinePositions(
       for (const msg of roundMessages) {
         if (msg.role === MessageRoles.USER) {
           positions.push({
-            type: 'user',
-            roundNumber,
             messageId: msg.id,
+            roundNumber,
+            type: 'user',
           });
         } else if (msg.role === MessageRoles.ASSISTANT) {
           if (isModeratorMessage(msg)) {
             positions.push({
-              type: 'moderator',
-              roundNumber,
               messageId: msg.id,
+              roundNumber,
+              type: 'moderator',
             });
           } else {
             const participantIndex = getParticipantIndex(msg.metadata) ?? 0;
             positions.push({
-              type: 'participant',
-              roundNumber,
-              participantIndex,
               messageId: msg.id,
+              participantIndex,
+              roundNumber,
+              type: 'participant',
             });
           }
         }
@@ -288,15 +292,15 @@ function expectTimelineOrder(
   expected: TimelinePosition[],
 ) {
   // Compare without messageId (it's implementation detail)
-  const actual = positions.map(({ type, roundNumber, participantIndex }) => ({
-    type,
-    roundNumber,
+  const actual = positions.map(({ participantIndex, roundNumber, type }) => ({
     participantIndex,
+    roundNumber,
+    type,
   }));
-  const exp = expected.map(({ type, roundNumber, participantIndex }) => ({
-    type,
-    roundNumber,
+  const exp = expected.map(({ participantIndex, roundNumber, type }) => ({
     participantIndex,
+    roundNumber,
+    type,
   }));
 
   expect(actual).toEqual(exp);
@@ -312,8 +316,9 @@ function expectRoundBoundaries(positions: TimelinePosition[]) {
   for (let i = 0; i < sortedRounds.length - 1; i++) {
     const currentRound = sortedRounds[i];
     const nextRound = sortedRounds[i + 1];
-    if (currentRound === undefined || nextRound === undefined)
+    if (currentRound === undefined || nextRound === undefined) {
       continue;
+    }
 
     // Find indices of messages from each round
     const currentRoundIndices = positions
@@ -380,11 +385,11 @@ describe('timeline cross-round ordering', () => {
       );
 
       expectTimelineOrder(positionsR1, [
-        { type: 'pre-search', roundNumber: 1 },
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
+        { roundNumber: 1, type: 'pre-search' },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
       ]);
 
       // Add Round 2: user → p0 → p1 → moderator (no pre-search)
@@ -404,16 +409,16 @@ describe('timeline cross-round ordering', () => {
       // Full expected order
       expectTimelineOrder(positionsR1R2, [
         // Round 1
-        { type: 'pre-search', roundNumber: 1 },
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
+        { roundNumber: 1, type: 'pre-search' },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
         // Round 2
-        { type: 'user', roundNumber: 2 },
-        { type: 'participant', roundNumber: 2, participantIndex: 0 },
-        { type: 'participant', roundNumber: 2, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 2 },
+        { roundNumber: 2, type: 'user' },
+        { participantIndex: 0, roundNumber: 2, type: 'participant' },
+        { participantIndex: 1, roundNumber: 2, type: 'participant' },
+        { roundNumber: 2, type: 'moderator' },
       ]);
 
       // Verify round boundaries are respected
@@ -456,15 +461,15 @@ describe('timeline cross-round ordering', () => {
 
       // Timeline should CORRECT the order via sorting
       expectTimelineOrder(positions, [
-        { type: 'pre-search', roundNumber: 1 },
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
-        { type: 'user', roundNumber: 2 },
-        { type: 'participant', roundNumber: 2, participantIndex: 0 },
-        { type: 'participant', roundNumber: 2, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 2 },
+        { roundNumber: 1, type: 'pre-search' },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
+        { roundNumber: 2, type: 'user' },
+        { participantIndex: 0, roundNumber: 2, type: 'participant' },
+        { participantIndex: 1, roundNumber: 2, type: 'participant' },
+        { roundNumber: 2, type: 'moderator' },
       ]);
 
       expectRoundBoundaries(positions);
@@ -515,22 +520,22 @@ describe('timeline cross-round ordering', () => {
 
       expectTimelineOrder(positions, [
         // R1 with pre-search
-        { type: 'pre-search', roundNumber: 1 },
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
+        { roundNumber: 1, type: 'pre-search' },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
         // R2 without pre-search
-        { type: 'user', roundNumber: 2 },
-        { type: 'participant', roundNumber: 2, participantIndex: 0 },
-        { type: 'participant', roundNumber: 2, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 2 },
+        { roundNumber: 2, type: 'user' },
+        { participantIndex: 0, roundNumber: 2, type: 'participant' },
+        { participantIndex: 1, roundNumber: 2, type: 'participant' },
+        { roundNumber: 2, type: 'moderator' },
         // R3 with pre-search
-        { type: 'pre-search', roundNumber: 3 },
-        { type: 'user', roundNumber: 3 },
-        { type: 'participant', roundNumber: 3, participantIndex: 0 },
-        { type: 'participant', roundNumber: 3, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 3 },
+        { roundNumber: 3, type: 'pre-search' },
+        { roundNumber: 3, type: 'user' },
+        { participantIndex: 0, roundNumber: 3, type: 'participant' },
+        { participantIndex: 1, roundNumber: 3, type: 'participant' },
+        { roundNumber: 3, type: 'moderator' },
       ]);
 
       expectRoundBoundaries(positions);
@@ -566,11 +571,11 @@ describe('timeline cross-round ordering', () => {
 
       // Should be sorted by participantIndex, not arrival order
       expectTimelineOrder(positions, [
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 2 },
-        { type: 'moderator', roundNumber: 1 },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { participantIndex: 2, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
       ]);
     });
   });
@@ -603,11 +608,11 @@ describe('timeline cross-round ordering', () => {
       );
 
       expectTimelineOrder(positions, [
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
-        { type: 'user', roundNumber: 2 },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
+        { roundNumber: 2, type: 'user' },
       ]);
 
       expectRoundBoundaries(positions);
@@ -642,13 +647,13 @@ describe('timeline cross-round ordering', () => {
       );
 
       expectTimelineOrder(positions, [
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
-        { type: 'user', roundNumber: 2 },
-        { type: 'participant', roundNumber: 2, participantIndex: 0 },
-        { type: 'participant', roundNumber: 2, participantIndex: 1 },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
+        { roundNumber: 2, type: 'user' },
+        { participantIndex: 0, roundNumber: 2, type: 'participant' },
+        { participantIndex: 1, roundNumber: 2, type: 'participant' },
       ]);
 
       expectRoundBoundaries(positions);
@@ -803,14 +808,14 @@ describe('timeline cross-round ordering', () => {
 
       // Now both rounds complete with moderators
       expectTimelineOrder(positions, [
-        { type: 'user', roundNumber: 1 },
-        { type: 'participant', roundNumber: 1, participantIndex: 0 },
-        { type: 'participant', roundNumber: 1, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 1 },
-        { type: 'user', roundNumber: 2 },
-        { type: 'participant', roundNumber: 2, participantIndex: 0 },
-        { type: 'participant', roundNumber: 2, participantIndex: 1 },
-        { type: 'moderator', roundNumber: 2 },
+        { roundNumber: 1, type: 'user' },
+        { participantIndex: 0, roundNumber: 1, type: 'participant' },
+        { participantIndex: 1, roundNumber: 1, type: 'participant' },
+        { roundNumber: 1, type: 'moderator' },
+        { roundNumber: 2, type: 'user' },
+        { participantIndex: 0, roundNumber: 2, type: 'participant' },
+        { participantIndex: 1, roundNumber: 2, type: 'participant' },
+        { roundNumber: 2, type: 'moderator' },
       ]);
 
       expectRoundBoundaries(positions);

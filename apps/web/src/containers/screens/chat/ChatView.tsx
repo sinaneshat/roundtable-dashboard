@@ -118,19 +118,19 @@ export type ChatViewProps = {
 };
 
 export function ChatView({
-  user,
-  slug,
-  mode,
-  onSubmit,
   chatAttachments,
-  threadId: serverThreadId,
+  initialChangelog,
   initialMessages,
   initialParticipants,
   initialPreSearches,
-  initialChangelog,
   memoryEventsByRound,
+  mode,
   onDeleteMemory,
+  onSubmit,
   skipEntranceAnimations = false,
+  slug,
+  threadId: serverThreadId,
+  user,
 }: ChatViewProps) {
   const t = useTranslations();
 
@@ -145,70 +145,70 @@ export function ChatView({
   }, []);
 
   const {
-    messages,
-    isStreaming,
-    currentParticipantIndex,
+    addChangelogItems,
+    autoMode,
+    changelogItems,
     contextParticipants,
-    preSearches,
-    thread,
     createdThreadId,
-    isModeratorStreaming,
-    streamingRoundNumber,
-    waitingToStartStreaming,
-    isCreatingThread,
-    pendingMessage,
+    currentParticipantIndex,
+    currentResumptionPhase,
+    enableWebSearch,
     hasInitiallyLoaded,
-    showInitialUI,
-    preSearchResumption,
+    inputValue,
+    isAnalyzingPrompt,
+    isCreatingThread,
+    isModeratorStreaming,
+    isStreaming,
+    messages,
+    modelOrder,
     moderatorResumption,
+    pendingMessage,
+    preSearches,
+    preSearchResumption,
+    resumptionRoundNumber,
     selectedMode,
     selectedParticipants,
-    inputValue,
-    setInputValue,
-    setSelectedParticipants,
-    enableWebSearch,
-    modelOrder,
-    setModelOrder,
-    autoMode,
     setAutoMode,
-    isAnalyzingPrompt,
-    currentResumptionPhase,
-    resumptionRoundNumber,
-    changelogItems,
-    addChangelogItems,
+    setInputValue,
+    setModelOrder,
+    setSelectedParticipants,
+    showInitialUI,
+    streamingRoundNumber,
+    thread,
+    waitingToStartStreaming,
   } = useChatStore(
     useShallow(s => ({
-      messages: s.messages,
-      isStreaming: s.isStreaming,
-      currentParticipantIndex: s.currentParticipantIndex,
+      addChangelogItems: s.addChangelogItems,
+      autoMode: s.autoMode,
+      changelogItems: s.changelogItems,
       contextParticipants: s.participants,
-      preSearches: s.preSearches,
-      thread: s.thread,
       createdThreadId: s.createdThreadId,
-      isModeratorStreaming: s.isModeratorStreaming,
-      streamingRoundNumber: s.streamingRoundNumber,
-      waitingToStartStreaming: s.waitingToStartStreaming,
-      isCreatingThread: s.isCreatingThread,
-      pendingMessage: s.pendingMessage,
+      currentParticipantIndex: s.currentParticipantIndex,
+      currentResumptionPhase: s.currentResumptionPhase,
+      enableWebSearch: s.enableWebSearch,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
-      showInitialUI: s.showInitialUI,
-      preSearchResumption: s.preSearchResumption,
+      inputValue: s.inputValue,
+      isAnalyzingPrompt: s.isAnalyzingPrompt,
+      isCreatingThread: s.isCreatingThread,
+      isModeratorStreaming: s.isModeratorStreaming,
+      isStreaming: s.isStreaming,
+      messages: s.messages,
+      modelOrder: s.modelOrder,
       moderatorResumption: s.moderatorResumption,
+      pendingMessage: s.pendingMessage,
+      preSearches: s.preSearches,
+      preSearchResumption: s.preSearchResumption,
+      resumptionRoundNumber: s.resumptionRoundNumber,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
-      inputValue: s.inputValue,
-      setInputValue: s.setInputValue,
-      setSelectedParticipants: s.setSelectedParticipants,
-      enableWebSearch: s.enableWebSearch,
-      modelOrder: s.modelOrder,
-      setModelOrder: s.setModelOrder,
-      autoMode: s.autoMode,
       setAutoMode: s.setAutoMode,
-      isAnalyzingPrompt: s.isAnalyzingPrompt,
-      currentResumptionPhase: s.currentResumptionPhase,
-      resumptionRoundNumber: s.resumptionRoundNumber,
-      changelogItems: s.changelogItems,
-      addChangelogItems: s.addChangelogItems,
+      setInputValue: s.setInputValue,
+      setModelOrder: s.setModelOrder,
+      setSelectedParticipants: s.setSelectedParticipants,
+      showInitialUI: s.showInitialUI,
+      streamingRoundNumber: s.streamingRoundNumber,
+      thread: s.thread,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
@@ -331,8 +331,9 @@ export function ChatView({
       return [];
     }
     return customRolesData.pages.flatMap((page) => {
-      if (!page?.success)
+      if (!page?.success) {
         return [];
+      }
       return page.data.items;
     });
   }, [customRolesData?.pages]);
@@ -353,8 +354,9 @@ export function ChatView({
     // Deduplicate by ID
     const seen = new Set<string>();
     return items.filter((item: ApiChangelog) => {
-      if (seen.has(item.id))
+      if (seen.has(item.id)) {
         return false;
+      }
       seen.add(item.id);
       return true;
     });
@@ -381,15 +383,16 @@ export function ChatView({
   }, [mode, effectiveThreadId, changelog.length, changelogItems.length, changelogResponse?.success, initialChangelog?.length]);
 
   const orderedModels = useOrderedModels({
-    selectedParticipants,
     allEnabledModels,
     modelOrder,
+    selectedParticipants,
   });
 
   // Sort selected models to top when modal opens (on revisit)
   useEffect(() => {
-    if (!isModelModalOpen.value || selectedParticipants.length === 0)
+    if (!isModelModalOpen.value || selectedParticipants.length === 0) {
       return;
+    }
 
     // Get selected model IDs sorted by priority
     const selectedModelIds = [...selectedParticipants]
@@ -424,11 +427,13 @@ export function ChatView({
 
     // Check for images in thread and attachments
     const existingImageFiles = messages.some((msg) => {
-      if (!msg.parts)
+      if (!msg.parts) {
         return false;
+      }
       return msg.parts.some((part) => {
-        if (!isFilePart(part))
+        if (!isFilePart(part)) {
           return false;
+        }
         return isImageFile(part.mediaType);
       });
     });
@@ -439,11 +444,13 @@ export function ChatView({
 
     // Check for documents in thread and attachments
     const existingDocumentFiles = messages.some((msg) => {
-      if (!msg.parts)
+      if (!msg.parts) {
         return false;
+      }
       return msg.parts.some((part) => {
-        if (!isFilePart(part))
+        if (!isFilePart(part)) {
           return false;
+        }
         return isDocumentFile(part.mediaType);
       });
     });
@@ -453,7 +460,7 @@ export function ChatView({
     const hasDocuments = existingDocumentFiles || newDocumentFiles;
 
     // Build file list for capability checking
-    const files: Array<{ mimeType: string }> = [];
+    const files: { mimeType: string }[] = [];
     if (hasImages) {
       files.push({ mimeType: 'image/png' }); // Representative image type
     }
@@ -464,16 +471,16 @@ export function ChatView({
     // Get detailed incompatibility info
     // Map models to the shape expected by getDetailedIncompatibleModelIds
     const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
-      id: m.id,
       capabilities: {
-        vision: m.supports_vision,
         file: m.supports_file,
+        vision: m.supports_vision,
       },
+      id: m.id,
     }));
     const {
+      fileIncompatibleIds,
       incompatibleIds,
       visionIncompatibleIds,
-      fileIncompatibleIds,
     } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
     // Merge with tier-restricted models
@@ -482,9 +489,9 @@ export function ChatView({
     }
 
     return {
+      fileIncompatibleModelIds: fileIncompatibleIds,
       incompatibleModelIds: incompatible,
       visionIncompatibleModelIds: visionIncompatibleIds,
-      fileIncompatibleModelIds: fileIncompatibleIds,
     };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
@@ -500,8 +507,8 @@ export function ChatView({
   // ✅ SSR FIX: effectiveMessages/effectiveParticipants/effectivePreSearches computed earlier
   // for use in completedRoundNumbers. Use effectivePreSearches for timeline.
   const timelineItems: TimelineItem[] = useThreadTimeline({
-    messages: effectiveMessages,
     changelog,
+    messages: effectiveMessages,
     preSearches: effectivePreSearches,
   });
 
@@ -531,8 +538,8 @@ export function ChatView({
   const isDesktop = useMediaQuery('(min-width: 768px)', true);
 
   const threadActions = useThreadActions({
-    slug: slug || '',
     isRoundInProgress: isStreaming || isModeratorStreaming,
+    slug: slug || '',
   });
 
   useEffect(() => {
@@ -644,8 +651,8 @@ export function ChatView({
   // Chat scroll hook provides manual scrollToBottom for user-initiated actions only
   // NO auto-scroll on page load - user controls their scroll position
   useChatScroll({
-    messages,
     enableNearBottomDetection: true,
+    messages,
   });
 
   const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
@@ -685,15 +692,15 @@ export function ChatView({
       );
 
       // Build set of accessible model IDs to filter server response
-      const accessibleModelIds: Set<string> = new Set(
+      const accessibleModelIds = new Set<string>(
         allEnabledModels.filter((m: Model) => m.is_accessible_to_user).map((m: Model) => m.id),
       );
 
       // Consolidated auto mode analysis - updates store directly
       await analyzeAndApply({
-        prompt: inputValue.trim(),
-        hasImageFiles,
         accessibleModelIds,
+        hasImageFiles,
+        prompt: inputValue.trim(),
       });
     }
     await onSubmit(e);
@@ -723,8 +730,9 @@ export function ChatView({
     const newModelOrder = reordered
       .map(om => om.model.id)
       .filter((id) => {
-        if (seen.has(id))
+        if (seen.has(id)) {
           return false;
+        }
         seen.add(id);
         return true;
       });
@@ -775,8 +783,8 @@ export function ChatView({
       const newParticipant = {
         id: modelId,
         modelId,
-        role: '',
         priority: selectedParticipants.length,
+        role: '',
       };
       const updated = [...selectedParticipants, newParticipant].sort((a, b) => {
         const aIdx = modelOrder.indexOf(a.modelId);
@@ -795,7 +803,7 @@ export function ChatView({
 
   const handleModelRoleChange = useCallback((modelId: string, role: string, customRoleId?: string) => {
     const updated = selectedParticipants.map(p =>
-      p.modelId === modelId ? { ...p, role, customRoleId } : p,
+      p.modelId === modelId ? { ...p, customRoleId, role } : p,
     );
     if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(updated);
@@ -806,7 +814,7 @@ export function ChatView({
 
   const handleModelRoleClear = useCallback((modelId: string) => {
     const updated = selectedParticipants.map(p =>
-      p.modelId === modelId ? { ...p, role: '', customRoleId: undefined } : p,
+      p.modelId === modelId ? { ...p, customRoleId: undefined, role: '' } : p,
     );
     if (mode === ScreenModes.THREAD) {
       threadActions.handleParticipantsChange(updated);
@@ -920,7 +928,7 @@ export function ChatView({
                   status={isInputBlocked ? 'submitted' : 'ready'}
                   placeholder={t('chat.input.placeholder')}
                   participants={selectedParticipants}
-                  showCreditAlert={true}
+                  showCreditAlert
                   attachments={chatAttachments.attachments}
                   onAddAttachments={chatAttachments.addFiles}
                   onRemoveAttachment={chatAttachments.removeAttachment}
@@ -976,10 +984,10 @@ export function ChatView({
           selectedCount={selectedParticipants.length}
           maxModels={userTierConfig.max_models}
           userTierInfo={{
-            tier_name: userTierConfig.tier_name,
-            max_models: userTierConfig.max_models,
-            current_tier: userTierConfig.tier,
             can_upgrade: userTierConfig.can_upgrade,
+            current_tier: userTierConfig.tier,
+            max_models: userTierConfig.max_models,
+            tier_name: userTierConfig.tier_name,
           }}
           visionIncompatibleModelIds={visionIncompatibleModelIds}
           fileIncompatibleModelIds={fileIncompatibleModelIds}

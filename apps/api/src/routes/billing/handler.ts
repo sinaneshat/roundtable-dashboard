@@ -14,7 +14,7 @@ import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/
 import { revenueTracking } from '@/lib/analytics';
 import { getWebappEnvFromContext } from '@/lib/config/base-urls';
 import { STRIPE_WEBHOOK_EVENT_TYPES, StripeWebhookEventTypes } from '@/lib/enums';
-import { isObject } from '@/lib/utils';
+import { extractProperty, isObject } from '@/lib/utils';
 import { cacheCustomerId, getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
 import type { ApiEnv } from '@/types';
 
@@ -49,11 +49,11 @@ function validateSubscriptionOwnership(
 function serializeSubscriptionDates<T extends SubscriptionDateFields>(subscription: T) {
   return {
     ...subscription,
-    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
-    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
     canceledAt: subscription.canceledAt?.toISOString() ?? null,
-    trialStart: subscription.trialStart?.toISOString() ?? null,
+    currentPeriodEnd: subscription.currentPeriodEnd.toISOString(),
+    currentPeriodStart: subscription.currentPeriodStart.toISOString(),
     trialEnd: subscription.trialEnd?.toISOString() ?? null,
+    trialStart: subscription.trialStart?.toISOString() ?? null,
   };
 }
 
@@ -158,8 +158,8 @@ export const listProductsHandler: RouteHandler<typeof listProductsRoute, ApiEnv>
 export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = createHandler(
   {
     auth: 'public',
-    validateParams: IdParamSchema,
     operationName: 'getProduct',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { id } = c.validated.params;
@@ -232,8 +232,8 @@ export const getProductHandler: RouteHandler<typeof getProductRoute, ApiEnv> = c
 export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSessionRoute, ApiEnv> = createHandlerWithBatch(
   {
     auth: 'session',
-    validateBody: CheckoutRequestSchema,
     operationName: 'createCheckoutSession',
+    validateBody: CheckoutRequestSchema,
   },
   async (c, batch) => {
     const { user } = c.auth();
@@ -261,19 +261,19 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       let customerId: string;
 
       if (!cachedCustomerId) {
-        const customer = await stripeService.createCustomer({
-          email: user.email,
-          name: user.name || undefined,
-          metadata: { userId: user.id },
-        });
+        // Only include name in options if truthy to satisfy exactOptionalPropertyTypes
+        const customerOptions = user.name
+          ? { email: user.email, metadata: { userId: user.id }, name: user.name }
+          : { email: user.email, metadata: { userId: user.id } };
+        const customer = await stripeService.createCustomer(customerOptions);
 
         const [insertedCustomer] = await batch.db.insert(tables.stripeCustomer).values({
-          id: customer.id,
-          userId: user.id,
-          email: customer.email ?? user.email,
-          name: customer.name ?? null,
           createdAt: new Date(customer.created * 1000),
+          email: customer.email ?? user.email,
+          id: customer.id,
+          name: customer.name ?? null,
           updatedAt: new Date(),
+          userId: user.id,
         }).returning();
 
         if (!insertedCustomer) {
@@ -298,11 +298,11 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
 
       const session = await stripeService.createCheckoutSession({
-        priceId: body.priceId,
-        customerId,
-        successUrl,
         cancelUrl,
+        customerId,
         metadata: { userId: user.id },
+        priceId: body.priceId,
+        successUrl,
       });
 
       if (!session.url) {
@@ -336,8 +336,8 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
 export const createCustomerPortalSessionHandler: RouteHandler<typeof createCustomerPortalSessionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CustomerPortalRequestSchema,
     operationName: 'createCustomerPortalSession',
+    validateBody: CustomerPortalRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -424,8 +424,8 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
 export const getSubscriptionHandler: RouteHandler<typeof getSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getSubscription',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -488,20 +488,20 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
     const getCurrentState = async () => {
       const [usage, balance] = await Promise.all([
         db.query.userChatUsage.findFirst({
-          where: eq(tables.userChatUsage.userId, user.id),
           columns: { subscriptionTier: true },
+          where: eq(tables.userChatUsage.userId, user.id),
         }),
         getUserCreditBalance(user.id).catch(() => ({ available: 0 })),
       ]);
       return {
-        tier: usage?.subscriptionTier || SubscriptionTiers.FREE,
         balance: balance.available,
+        tier: usage?.subscriptionTier || SubscriptionTiers.FREE,
       };
     };
 
     // Helper: check for existing active subscription
     const getExistingSubscription = async (customerId: string) => {
-      return db.query.stripeSubscription.findFirst({
+      return await db.query.stripeSubscription.findFirst({
         where: and(
           eq(tables.stripeSubscription.customerId, customerId),
           eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
@@ -514,26 +514,26 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
       const customerId = await getCustomerIdByUserId(user.id);
 
       if (!customerId) {
-        const { tier, balance } = await getCurrentState();
+        const { balance, tier } = await getCurrentState();
         return Responses.ok(c, {
-          synced: false,
+          creditPurchase: null,
+          creditsBalance: balance,
           purchaseType: PurchaseTypes.NONE,
           subscription: null,
-          creditPurchase: null,
+          synced: false,
           tierChange: {
-            previousTier: tier,
+            newPriceId: null,
             newTier: tier,
             previousPriceId: null,
-            newPriceId: null,
+            previousTier: tier,
           },
-          creditsBalance: balance,
         });
       }
 
       // ✅ PERF: Only fetch subscriptionTier field instead of full record
       const previousUsage = await db.query.userChatUsage.findFirst({
-        where: eq(tables.userChatUsage.userId, user.id),
         columns: { subscriptionTier: true },
+        where: eq(tables.userChatUsage.userId, user.id),
       });
       const previousTier = previousUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
@@ -541,15 +541,16 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 
       // ✅ PERF: Only fetch subscriptionTier field instead of full record
       const newUsage = await db.query.userChatUsage.findFirst({
-        where: eq(tables.userChatUsage.userId, user.id),
         columns: { subscriptionTier: true },
+        where: eq(tables.userChatUsage.userId, user.id),
       });
       const newTier = newUsage?.subscriptionTier || SubscriptionTiers.FREE;
 
       const balance = await getUserCreditBalance(user.id);
 
       return Responses.ok(c, {
-        synced: true,
+        creditPurchase: null,
+        creditsBalance: balance.available,
         purchaseType: hasSyncedSubscription(syncedState) ? PurchaseTypes.SUBSCRIPTION : PurchaseTypes.NONE,
         subscription: hasSyncedSubscription(syncedState)
           ? {
@@ -557,14 +558,13 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
               subscriptionId: syncedState.subscriptionId,
             }
           : null,
-        creditPurchase: null,
+        synced: true,
         tierChange: {
-          previousTier,
+          newPriceId: null,
           newTier,
           previousPriceId: null,
-          newPriceId: null,
+          previousTier,
         },
-        creditsBalance: balance.available,
       });
     } catch {
       // On sync failure, check if user already has active subscription (revisit scenario)
@@ -574,40 +574,40 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         const existingSub = await getExistingSubscription(customerId).catch(() => null);
         if (existingSub) {
           // User already has active subscription - return success state
-          const { tier, balance } = await getCurrentState();
+          const { balance, tier } = await getCurrentState();
           return Responses.ok(c, {
-            synced: true,
+            creditPurchase: null,
+            creditsBalance: balance,
             purchaseType: PurchaseTypes.SUBSCRIPTION,
             subscription: {
               status: existingSub.status,
               subscriptionId: existingSub.id,
             },
-            creditPurchase: null,
+            synced: true,
             tierChange: {
-              previousTier: tier,
+              newPriceId: null,
               newTier: tier,
               previousPriceId: null,
-              newPriceId: null,
+              previousTier: tier,
             },
-            creditsBalance: balance,
           });
         }
       }
 
       // No existing subscription found - return error state
-      const { tier, balance } = await getCurrentState();
+      const { balance, tier } = await getCurrentState();
       return Responses.ok(c, {
-        synced: false,
+        creditPurchase: null,
+        creditsBalance: balance,
         purchaseType: PurchaseTypes.NONE,
         subscription: null,
-        creditPurchase: null,
+        synced: false,
         tierChange: {
-          previousTier: tier,
+          newPriceId: null,
           newTier: tier,
           previousPriceId: null,
-          newPriceId: null,
+          previousTier: tier,
         },
-        creditsBalance: balance,
       });
     }
   },
@@ -624,9 +624,9 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
 export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: SwitchSubscriptionRequestSchema,
     operationName: 'switchSubscription',
+    validateBody: SwitchSubscriptionRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -708,6 +708,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
         });
       } else if (isDowngrade) {
         await stripeService.updateSubscription(subscriptionId, {
+          billing_cycle_anchor: 'unchanged',
           items: [
             {
               id: subscriptionItemId,
@@ -715,7 +716,6 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
             },
           ],
           proration_behavior: StripeProratioBehaviors.NONE,
-          billing_cycle_anchor: 'unchanged',
         });
       } else {
         await stripeService.updateSubscription(subscriptionId, {
@@ -734,14 +734,14 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       const refreshedSubscription = await fetchRefreshedSubscription(db, subscriptionId);
 
       return Responses.ok(c, {
-        subscription: serializeSubscriptionDates(refreshedSubscription),
-        message: 'Subscription updated successfully',
         changeDetails: {
-          oldPrice: currentPrice,
-          newPrice,
-          isUpgrade,
           isDowngrade,
+          isUpgrade,
+          newPrice,
+          oldPrice: currentPrice,
         },
+        message: 'Subscription updated successfully',
+        subscription: serializeSubscriptionDates(refreshedSubscription),
       });
     } catch (error) {
       if (error instanceof AppError) {
@@ -761,9 +761,9 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
 export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: CancelSubscriptionRequestSchema,
     operationName: 'cancelSubscription',
+    validateBody: CancelSubscriptionRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -811,8 +811,8 @@ export const cancelSubscriptionHandler: RouteHandler<typeof cancelSubscriptionRo
         : `Subscription will be canceled at the end of the current billing period (${refreshedSubscription.currentPeriodEnd.toLocaleDateString()}). You retain access until then.`;
 
       return Responses.ok(c, {
-        subscription: serializeSubscriptionDates(refreshedSubscription),
         message,
+        subscription: serializeSubscriptionDates(refreshedSubscription),
       });
     } catch (error) {
       if (error instanceof AppError) {
@@ -857,23 +857,23 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
 
       if (existingEvent?.processed) {
         return Responses.ok(c, {
-          received: true,
           event: {
             id: event.id,
-            type: event.type,
             processed: true,
+            type: event.type,
           },
+          received: true,
         });
       }
 
       const eventData = isObject(event.data.object) ? event.data.object : {};
 
       await batch.db.insert(tables.stripeWebhookEvent).values({
-        id: event.id,
-        type: event.type,
-        data: eventData,
-        processed: false,
         createdAt: new Date(event.created * 1000),
+        data: eventData,
+        id: event.id,
+        processed: false,
+        type: event.type,
       }).onConflictDoNothing();
 
       const processAsync = async () => {
@@ -893,22 +893,22 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
       }
 
       return Responses.ok(c, {
-        received: true,
         event: {
           id: event.id,
-          type: event.type,
           processed: true,
+          type: event.type,
         },
+        received: true,
       });
     } catch {
       return Responses.ok(c, {
-        received: true,
         event: {
-          id: 'unknown',
-          type: 'unknown',
-          processed: false,
           error: 'Processing failed - logged for investigation',
+          id: 'unknown',
+          processed: false,
+          type: 'unknown',
         },
+        received: true,
       });
     }
   },
@@ -925,29 +925,29 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
 const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [...STRIPE_WEBHOOK_EVENT_TYPES];
 
 const StripeInvoiceSchema = z.object({
-  id: z.string(),
   amount_paid: z.number(),
-  currency: z.string(),
-  subscription: z.union([z.string(), z.object({ id: z.string() }), z.null()]).optional(),
   billing_reason: z.string().optional(),
+  currency: z.string(),
+  id: z.string(),
+  last_finalization_error: z.object({
+    message: z.string().optional(),
+  }).optional(),
   lines: z.object({
     data: z.array(z.object({
       description: z.string().optional(),
     })),
   }).optional(),
-  last_finalization_error: z.object({
-    message: z.string().optional(),
-  }).optional(),
+  subscription: z.union([z.string(), z.object({ id: z.string() }), z.null()]).optional(),
 });
 
 const StripeSubscriptionSchema = z.object({
-  id: z.string(),
   currency: z.string().optional(),
+  id: z.string(),
   items: z.object({
     data: z.array(z.object({
       price: z.object({
-        unit_amount: z.number().optional(),
         nickname: z.string().optional(),
+        unit_amount: z.number().optional(),
       }).optional(),
     })),
   }).optional(),
@@ -959,18 +959,21 @@ async function trackRevenueFromWebhook(
   customerId: string,
 ): Promise<void> {
   const obj = event.data.object;
-  if (!isObject(obj))
+  if (!isObject(obj)) {
     return;
+  }
 
   try {
     switch (event.type) {
       case StripeWebhookEventTypes.INVOICE_PAID: {
         const invoiceResult = StripeInvoiceSchema.safeParse(obj);
-        if (!invoiceResult.success)
+        if (!invoiceResult.success) {
           return;
+        }
         const invoice = invoiceResult.data;
-        if (!invoice.amount_paid || invoice.amount_paid <= 0)
+        if (!invoice.amount_paid || invoice.amount_paid <= 0) {
           return;
+        }
 
         const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
         const subscriptionId = typeof subscriptionData === 'string'
@@ -985,64 +988,68 @@ async function trackRevenueFromWebhook(
 
         if (isFirstInvoice) {
           await revenueTracking.subscriptionStarted({
-            revenue: invoice.amount_paid,
             currency: invoice.currency.toUpperCase(),
-            product: invoice.lines?.data[0]?.description ?? undefined,
-            subscription_id: subscriptionId,
             invoice_id: invoice.id,
+            lifetime_value: invoice.amount_paid,
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            revenue: invoice.amount_paid,
+            subscription_id: subscriptionId,
             subscription_status: 'active',
             total_revenue: invoice.amount_paid,
-            lifetime_value: invoice.amount_paid,
-          }, { userId, customerId });
+          }, { customerId, userId });
         } else {
           await revenueTracking.subscriptionRenewed({
-            revenue: invoice.amount_paid,
             currency: invoice.currency.toUpperCase(),
-            product: invoice.lines?.data[0]?.description ?? undefined,
-            subscription_id: subscriptionId,
             invoice_id: invoice.id,
+            product: invoice.lines?.data[0]?.description ?? undefined,
+            revenue: invoice.amount_paid,
+            subscription_id: subscriptionId,
             subscription_status: 'active',
-          }, { userId, customerId });
+          }, { customerId, userId });
         }
         break;
       }
 
       case StripeWebhookEventTypes.INVOICE_PAYMENT_FAILED: {
         const invoiceResult = StripeInvoiceSchema.safeParse(obj);
-        if (!invoiceResult.success)
+        if (!invoiceResult.success) {
           return;
+        }
         const invoice = invoiceResult.data;
         const subscriptionData = 'subscription' in invoice ? invoice.subscription : null;
         const subscriptionId = typeof subscriptionData === 'string'
           ? subscriptionData
           : (isObject(subscriptionData) && 'id' in subscriptionData ? String(subscriptionData.id) : undefined);
 
+        // Conditionally include properties to satisfy exactOptionalPropertyTypes
         await revenueTracking.paymentFailed({
-          subscription_id: subscriptionId,
           invoice_id: invoice.id,
-          error_message: invoice.last_finalization_error?.message,
           subscription_status: 'past_due',
-        }, { userId, customerId });
+          ...(invoice.last_finalization_error?.message !== undefined && { error_message: invoice.last_finalization_error.message }),
+          ...(subscriptionId !== undefined && { subscription_id: subscriptionId }),
+        }, { customerId, userId });
         break;
       }
 
       case StripeWebhookEventTypes.CUSTOMER_SUBSCRIPTION_DELETED: {
         const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
-        if (!subscriptionResult.success)
+        if (!subscriptionResult.success) {
           return;
+        }
         const subscription = subscriptionResult.data;
         await revenueTracking.subscriptionCanceled({
-          subscription_id: subscription.id,
           product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+          subscription_id: subscription.id,
           subscription_status: 'canceled',
-        }, { userId, customerId });
+        }, { customerId, userId });
         break;
       }
 
       case StripeWebhookEventTypes.CUSTOMER_SUBSCRIPTION_UPDATED: {
         const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
-        if (!subscriptionResult.success)
+        if (!subscriptionResult.success) {
           return;
+        }
         const subscription = subscriptionResult.data;
         const previousAttributes = event.data.previous_attributes;
 
@@ -1067,20 +1074,20 @@ async function trackRevenueFromWebhook(
 
           if (currentAmount > previousAmount) {
             await revenueTracking.subscriptionUpgraded({
-              revenue: currentAmount,
               currency: (subscription.currency ?? 'usd').toUpperCase(),
-              subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+              revenue: currentAmount,
+              subscription_id: subscription.id,
               subscription_status: 'active',
-            }, { userId, customerId });
+            }, { customerId, userId });
           } else if (currentAmount < previousAmount) {
             await revenueTracking.subscriptionDowngraded({
-              revenue: currentAmount,
               currency: (subscription.currency ?? 'usd').toUpperCase(),
-              subscription_id: subscription.id,
               product: subscription.items?.data[0]?.price?.nickname ?? undefined,
+              revenue: currentAmount,
+              subscription_id: subscription.id,
               subscription_status: 'active',
-            }, { userId, customerId });
+            }, { customerId, userId });
           }
         }
         break;
@@ -1105,8 +1112,10 @@ function extractCustomerId(event: Stripe.Event): string | null {
     return customer;
   }
 
-  if (isObject(customer) && typeof customer.id === 'string') {
-    return customer.id;
+  // Use extractProperty to access index signature safely
+  const customerId = extractProperty(customer, 'id', (v): v is string => typeof v === 'string');
+  if (customerId !== undefined) {
+    return customerId;
   }
 
   throw createError.badRequest(
@@ -1156,16 +1165,16 @@ export const syncCreditsAfterCheckoutHandler: RouteHandler<typeof syncCreditsAft
     try {
       const balance = await getUserCreditBalance(user.id);
       return Responses.ok(c, {
-        synced: true,
         creditPurchase: null,
         creditsBalance: balance.available,
+        synced: true,
       });
     } catch {
       const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
       return Responses.ok(c, {
-        synced: false,
         creditPurchase: null,
         creditsBalance: balance.available,
+        synced: false,
       });
     }
   },

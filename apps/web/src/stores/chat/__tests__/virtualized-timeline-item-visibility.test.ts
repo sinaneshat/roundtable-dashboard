@@ -38,13 +38,14 @@ function createTimelineItems(messages: UIMessage[]): TimelineItem[] {
 
   sortedRounds.forEach((roundNumber) => {
     const roundMessages = messagesByRound.get(roundNumber);
-    if (!roundMessages)
+    if (!roundMessages) {
       return;
+    }
     timeline.push({
-      type: 'messages',
       data: roundMessages,
       key: `round-${roundNumber}-messages`,
       roundNumber,
+      type: 'messages',
     });
   });
 
@@ -75,22 +76,22 @@ function getVisibleItems(
 function createUserMessage(roundNumber: number, text: string): UIMessage {
   return {
     id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createAssistantMessage(roundNumber: number, participantIndex: number): UIMessage {
   return {
     id: `assistant-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: 'Response' }],
     metadata: {
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
     },
+    parts: [{ text: 'Response', type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -164,7 +165,7 @@ describe('virtualized Timeline Item Visibility', () => {
 
       // Both rounds should be visible
       expect(visibleItems).toHaveLength(2);
-      expect(visibleItems.some(item => item.roundNumber === 1)).toBe(true);
+      expect(visibleItems.some(item => item.roundNumber === 1)).toBeTruthy();
     });
 
     it('should calculate correct visible range for small item count', () => {
@@ -215,8 +216,8 @@ describe('virtualized Timeline Item Visibility', () => {
       expect(visibleAfter).toHaveLength(2);
       expect(visibleAfter[1].roundNumber).toBe(1);
       expect((visibleAfter[1].data as UIMessage[])[0].parts[0]).toEqual({
-        type: 'text',
         text: 'Follow-up',
+        type: 'text',
       });
     });
   });

@@ -60,8 +60,9 @@ type PageContext = {
  * Safely parse search params from router
  */
 function parseSearchParams(params: unknown): TrackableSearchParams | null {
-  if (!params || typeof params !== 'object')
+  if (!params || typeof params !== 'object') {
     return null;
+  }
   const result = TrackableSearchParamsSchema.safeParse(params);
   return result.success ? result.data : null;
 }
@@ -70,14 +71,16 @@ function parseSearchParams(params: unknown): TrackableSearchParams | null {
  * Build URL search string from parsed params
  */
 function buildSearchString(params: TrackableSearchParams | null): string {
-  if (!params)
+  if (!params) {
     return '';
+  }
   const entries = Object.entries(params).filter(
     (entry): entry is [string, string] =>
       typeof entry[1] === 'string' && entry[1].length > 0,
   );
-  if (entries.length === 0)
+  if (entries.length === 0) {
     return '';
+  }
   return `?${new URLSearchParams(entries).toString()}`;
 }
 
@@ -129,10 +132,12 @@ function extractPageContext(pathname: string, searchParams: TrackableSearchParam
     const hasParams = Object.values(searchParams).some(v => typeof v === 'string' && v.length > 0);
     if (hasParams) {
       context.hasQueryParams = true;
-      if (searchParams.model)
+      if (searchParams.model) {
         context.selectedModel = searchParams.model;
-      if (searchParams.view)
+      }
+      if (searchParams.view) {
         context.viewMode = searchParams.view;
+      }
     }
   }
 
@@ -156,14 +161,16 @@ export function PageViewTracker() {
   const isFirstRender = useRef(true);
 
   useEffect(() => {
-    if (!posthog)
+    if (!posthog) {
       return;
+    }
 
     const currentPath = `${pathname}${buildSearchString(searchParams)}`;
 
     // Avoid duplicate tracking of the same path
-    if (lastTrackedPath.current === currentPath)
+    if (lastTrackedPath.current === currentPath) {
       return;
+    }
 
     // Skip first render - initial pageview captured in PostHogProvider loaded callback
     const shouldCapture = !isFirstRender.current;
@@ -184,8 +191,8 @@ export function PageViewTracker() {
 
     // Register super properties for ALL subsequent events
     posthog.register({
-      current_section: context.section || 'unknown',
       current_page: pathname,
+      current_section: context.section || 'unknown',
       page_type: context.section,
       ...(context.hasThread !== undefined && { has_thread: context.hasThread }),
       ...(context.hasProject !== undefined && { has_project: context.hasProject }),

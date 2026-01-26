@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 
 // Direct import avoids circular dependency through @/hooks/utils barrel export
 import { shouldRetryMutation } from '@/hooks/utils/mutation-retry';
@@ -23,22 +24,28 @@ type UploadPartResult = Awaited<ReturnType<typeof uploadPartService>>;
 type CompleteMultipartUploadResult = Awaited<ReturnType<typeof completeMultipartUploadService>>;
 type AbortMultipartUploadResult = Awaited<ReturnType<typeof abortMultipartUploadService>>;
 
-/**
- * Input type for secure upload mutation
- * Matches secureUploadService parameters as object for mutation compatibility
- */
-type SecureUploadInput = {
-  file: File;
-  signal?: AbortSignal;
-};
+// ============================================================================
+// INPUT TYPE SCHEMAS - Zod-based mutation input types
+// ============================================================================
 
 /**
- * Input type for upload part mutation
- * Augmented with signal for abort support
+ * Secure upload input schema
  */
-type UploadPartInput = Parameters<typeof uploadPartService>[0] & {
-  signal?: AbortSignal;
-};
+const _SecureUploadInputSchema = z.object({
+  file: z.custom<File>(val => val instanceof File),
+  signal: z.custom<AbortSignal>(val => val === undefined || val instanceof AbortSignal).optional(),
+});
+type SecureUploadInput = z.infer<typeof _SecureUploadInputSchema>;
+
+/**
+ * Upload part input schema - extends RPC request type with signal for abort support
+ */
+const _UploadPartInputSchema = z.custom<Parameters<typeof uploadPartService>[0]>().and(
+  z.object({
+    signal: z.custom<AbortSignal>(val => val === undefined || val instanceof AbortSignal).optional(),
+  }),
+);
+type UploadPartInput = z.infer<typeof _UploadPartInputSchema>;
 
 export function useSecureUploadMutation() {
   const queryClient = useQueryClient();
@@ -93,15 +100,21 @@ export function useUpdateAttachmentMutation() {
   });
 }
 
+// Context type for optimistic updates
+type DeleteAttachmentContext = { previousAttachments?: ListAttachmentsResponse };
+
 export function useDeleteAttachmentMutation() {
   const queryClient = useQueryClient();
 
-  return useMutation<DeleteAttachmentResult, Error, Parameters<typeof deleteAttachmentService>[0], { previousAttachments?: ListAttachmentsResponse }>({
+  return useMutation<DeleteAttachmentResult, Error, Parameters<typeof deleteAttachmentService>[0], DeleteAttachmentContext>({
     mutationFn: deleteAttachmentService,
-    onMutate: async (data) => {
+    onMutate: async (data): Promise<DeleteAttachmentContext> => {
       const attachmentId = data.param?.id;
-      if (!attachmentId)
-        return { previousAttachments: undefined };
+      if (!attachmentId) {
+        // ✅ exactOptionalPropertyTypes: Return typed empty context
+        const emptyContext: DeleteAttachmentContext = {};
+        return emptyContext;
+      }
 
       await queryClient.cancelQueries({ queryKey: queryKeys.uploads.all });
 
@@ -124,7 +137,12 @@ export function useDeleteAttachmentMutation() {
         },
       );
 
-      return { previousAttachments };
+      // ✅ exactOptionalPropertyTypes: Build context conditionally
+      const context: DeleteAttachmentContext = {};
+      if (previousAttachments !== undefined) {
+        context.previousAttachments = previousAttachments;
+      }
+      return context;
     },
     onError: (_error, _variables, context) => {
       if (context?.previousAttachments) {
@@ -158,8 +176,9 @@ export function useUploadPartMutation() {
     mutationFn: ({ signal, ...data }) => uploadPartService(data, signal),
     retry: (failureCount, error) => {
       // Don't retry if aborted
-      if (error.name === 'AbortError')
+      if (error.name === 'AbortError') {
         return false;
+      }
       return failureCount < 3;
     },
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 30000),
@@ -204,24 +223,22 @@ export function useMultipartUpload() {
   const abortMutation = useAbortMultipartUploadMutation();
 
   return {
+    abort: abortMutation,
+    complete: completeMutation,
     // Mutations
     create: createMutation,
-    uploadPart: uploadPartMutation,
-    complete: completeMutation,
-    abort: abortMutation,
-
-    // Combined loading state
-    isUploading:
-      createMutation.isPending
-      || uploadPartMutation.isPending
-      || completeMutation.isPending,
-
     // Combined error state
     error:
       createMutation.error
       || uploadPartMutation.error
       || completeMutation.error
       || abortMutation.error,
+
+    // Combined loading state
+    isUploading:
+      createMutation.isPending
+      || uploadPartMutation.isPending
+      || completeMutation.isPending,
 
     // Reset all mutations
     reset: () => {
@@ -230,5 +247,7 @@ export function useMultipartUpload() {
       completeMutation.reset();
       abortMutation.reset();
     },
+
+    uploadPart: uploadPartMutation,
   };
 }

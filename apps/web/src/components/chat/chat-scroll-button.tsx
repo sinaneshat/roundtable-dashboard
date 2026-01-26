@@ -13,8 +13,8 @@ type ChatScrollButtonProps = {
 };
 
 export function ChatScrollButton({
-  variant = ScrollButtonVariants.FLOATING,
   className,
+  variant = ScrollButtonVariants.FLOATING,
 }: ChatScrollButtonProps) {
   const t = useTranslations();
   const [showButton, setShowButton] = useState(false);
@@ -59,15 +59,16 @@ export function ChatScrollButton({
     // Scroll to absolute bottom of the document
     rafRef.current = requestAnimationFrame(() => {
       window.scrollTo({
-        top: document.documentElement.scrollHeight,
         behavior: 'smooth',
+        top: document.documentElement.scrollHeight,
       });
       rafRef.current = null;
     });
   }, []);
 
-  if (!showButton)
+  if (!showButton) {
     return null;
+  }
 
   if (variant === ScrollButtonVariants.INPUT) {
     return (

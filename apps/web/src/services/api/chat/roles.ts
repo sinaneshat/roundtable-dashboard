@@ -94,6 +94,6 @@ export async function deleteCustomRoleService(data: DeleteCustomRoleRequest) {
 export type CustomRole = Extract<
   ListCustomRolesResponse,
   { success: true }
-> extends { data: { items: Array<infer R> } }
+> extends { data: { items: (infer R)[] } }
   ? R
   : never;

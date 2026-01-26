@@ -41,24 +41,24 @@ function createChangelog(
   changeType: string,
 ): ChatThreadChangelog {
   return {
-    id,
-    threadId: 'thread-1',
-    roundNumber,
     changeType: changeType as ChatThreadChangelog['changeType'],
-    data: {} as ChatThreadChangelog['data'],
     createdAt: new Date(`2024-01-01T00:0${roundNumber}:00Z`),
+    data: {} as ChatThreadChangelog['data'],
+    id,
+    roundNumber,
+    threadId: 'thread-1',
   };
 }
 
 function createPreSearch(roundNumber: number): StoredPreSearch {
   return {
-    threadId: 'thread-1',
+    completedAt: new Date(`2024-01-01T00:0${roundNumber}:02Z`).toISOString(),
+    executedAt: new Date(`2024-01-01T00:0${roundNumber}:01Z`).toISOString(),
+    query: `Search query for round ${roundNumber}`,
+    results: [],
     roundNumber,
     status: 'complete',
-    query: `Search query for round ${roundNumber}`,
-    executedAt: new Date(`2024-01-01T00:0${roundNumber}:01Z`).toISOString(),
-    completedAt: new Date(`2024-01-01T00:0${roundNumber}:02Z`).toISOString(),
-    results: [],
+    threadId: 'thread-1',
     totalResults: 0,
   };
 }
@@ -76,29 +76,29 @@ describe('useThreadTimeline - Single Round Grouping', () => {
   describe('initial round (round 0) with all message types', () => {
     it('groups all messages correctly in round 0', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
         createTestModeratorMessage({
-          id: 'msg-mod-0',
           content: 'Moderator summary',
+          id: 'msg-mod-0',
           roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.type).toBe('messages');
@@ -108,25 +108,25 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
     it('orders messages correctly: user -> participants -> moderator', () => {
       const messages = [
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator', id: 'msg-mod-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
-        }),
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
-        createTestAssistantMessage({
-          id: 'msg-p0',
-          content: 'Participant 0',
           roundNumber: 0,
+        }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
+        createTestAssistantMessage({
+          content: 'Participant 0',
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       expect(orderedMessages?.[0]?.role).toBe(UIMessageRoles.USER);
@@ -137,31 +137,31 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
     it('participants are sorted by participantIndex', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p2',
           content: 'Participant 2',
-          roundNumber: 0,
+          id: 'msg-p2',
           participantId: 'p2',
           participantIndex: 2,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       expect(orderedMessages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
@@ -171,32 +171,32 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
     it('moderator always comes last after all participants', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator', id: 'msg-mod-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p2',
           content: 'Participant 2',
-          roundNumber: 0,
+          id: 'msg-p2',
           participantId: 'p2',
           participantIndex: 2,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       const lastMessage = orderedMessages && orderedMessages.length > 0 ? orderedMessages[orderedMessages.length - 1] : undefined;
@@ -207,20 +207,20 @@ describe('useThreadTimeline - Single Round Grouping', () => {
   describe('changelog integration with round', () => {
     it('includes changelog before messages in timeline', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       expect(timeline).toHaveLength(2);
       expect(timeline[0]?.type).toBe('changelog');
@@ -231,7 +231,7 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
     it('deduplicates changelog items by id', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
       ];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
@@ -239,19 +239,19 @@ describe('useThreadTimeline - Single Round Grouping', () => {
         createChangelog('cl-2', 0, 'participant_removed'),
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       const changelogItem = timeline.find(item => item.type === 'changelog');
       expect(changelogItem?.data).toHaveLength(2);
     });
 
     it('skips changelog-only rounds without messages or pre-search', () => {
-      const messages: Array<ReturnType<typeof createTestUserMessage>> = [];
+      const messages: ReturnType<typeof createTestUserMessage>[] = [];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       expect(timeline).toHaveLength(0);
     });
@@ -259,10 +259,10 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
   describe('pre-search integration with round', () => {
     it('renders pre-search for orphaned round (round without messages)', () => {
-      const messages: Array<ReturnType<typeof createTestUserMessage>> = [];
+      const messages: ReturnType<typeof createTestUserMessage>[] = [];
       const preSearches = [createPreSearch(0)];
 
-      const timeline = getTimeline({ messages, changelog: [], preSearches });
+      const timeline = getTimeline({ changelog: [], messages, preSearches });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.type).toBe('pre-search');
@@ -271,30 +271,30 @@ describe('useThreadTimeline - Single Round Grouping', () => {
 
     it('does NOT render pre-search at timeline level when round has messages', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
       const preSearches = [createPreSearch(0)];
 
-      const timeline = getTimeline({ messages, changelog: [], preSearches });
+      const timeline = getTimeline({ changelog: [], messages, preSearches });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.type).toBe('messages');
-      expect(timeline.some(item => item.type === 'pre-search')).toBe(false);
+      expect(timeline.some(item => item.type === 'pre-search')).toBeFalsy();
     });
 
     it('renders changelog + pre-search for orphaned round', () => {
-      const messages: Array<ReturnType<typeof createTestUserMessage>> = [];
+      const messages: ReturnType<typeof createTestUserMessage>[] = [];
       const changelog = [createChangelog('cl-1', 0, 'participant_added')];
       const preSearches = [createPreSearch(0)];
 
-      const timeline = getTimeline({ messages, changelog, preSearches });
+      const timeline = getTimeline({ changelog, messages, preSearches });
 
       expect(timeline).toHaveLength(2);
       expect(timeline[0]?.type).toBe('changelog');
@@ -311,25 +311,25 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
   describe('non-initial rounds (round 1+) appear correctly', () => {
     it('groups messages from round 0 and round 1 separately', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question 1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question 1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'Round 0 Participant 0',
+          id: 'msg-p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Question 2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Question 2', id: 'msg-user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r1',
           content: 'Round 1 Participant 0',
-          roundNumber: 1,
+          id: 'msg-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(2);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -340,33 +340,33 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
 
     it('round 1 messages are correctly ordered: user -> participants -> moderator', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question 1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question 1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'Round 0 Participant',
-          roundNumber: 0,
+          id: 'msg-p0-r0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
-        createTestModeratorMessage({ id: 'msg-mod-1', content: 'Moderator R1', roundNumber: 1 }),
+        createTestModeratorMessage({ content: 'Moderator R1', id: 'msg-mod-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p1-r1',
           content: 'Round 1 Participant 1',
-          roundNumber: 1,
+          id: 'msg-p1-r1',
           participantId: 'p1',
           participantIndex: 1,
-        }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Question 2', roundNumber: 1 }),
-        createTestAssistantMessage({
-          id: 'msg-p0-r1',
-          content: 'Round 1 Participant 0',
           roundNumber: 1,
+        }),
+        createTestUserMessage({ content: 'Question 2', id: 'msg-user-1', roundNumber: 1 }),
+        createTestAssistantMessage({
+          content: 'Round 1 Participant 0',
+          id: 'msg-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const round1 = timeline.find(item => item.roundNumber === 1);
       expect(round1?.type).toBe('messages');
@@ -380,33 +380,33 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
 
     it('handles 3 consecutive rounds with correct ordering', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'R0 P0',
+          id: 'msg-p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r1',
           content: 'R1 P0',
+          id: 'msg-p0-r1',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 1,
-          participantId: 'p0',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'msg-user-2', content: 'Q3', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Q3', id: 'msg-user-2', roundNumber: 2 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r2',
           content: 'R2 P0',
-          roundNumber: 2,
+          id: 'msg-p0-r2',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 2,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(3);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -418,21 +418,21 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
   describe('changelog integration across multiple rounds', () => {
     it('associates changelog with correct rounds', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'R0 P0',
+          id: 'msg-p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r1',
           content: 'R1 P0',
-          roundNumber: 1,
+          id: 'msg-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
       const changelog = [
@@ -440,7 +440,7 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
         createChangelog('cl-2', 1, 'participant_removed'),
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       expect(timeline).toHaveLength(4);
       expect(timeline[0]?.type).toBe('changelog');
@@ -455,15 +455,15 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
 
     it('changelog appears before messages in each round', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
       ];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
         createChangelog('cl-2', 1, 'participant_added'),
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       const round0Items = timeline.filter(item => item.roundNumber === 0);
       expect(round0Items[0]?.type).toBe('changelog');
@@ -478,18 +478,18 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
   describe('pre-search integration across multiple rounds', () => {
     it('orphaned pre-search in round 1 renders correctly', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'R0 P0',
-          roundNumber: 0,
+          id: 'msg-p0-r0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
       const preSearches = [createPreSearch(1)];
 
-      const timeline = getTimeline({ messages, changelog: [], preSearches });
+      const timeline = getTimeline({ changelog: [], messages, preSearches });
 
       expect(timeline).toHaveLength(2);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -500,12 +500,12 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
 
     it('orphaned pre-search with changelog renders correctly', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
       ];
       const changelog = [createChangelog('cl-1', 1, 'participant_added')];
       const preSearches = [createPreSearch(1)];
 
-      const timeline = getTimeline({ messages, changelog, preSearches });
+      const timeline = getTimeline({ changelog, messages, preSearches });
 
       expect(timeline).toHaveLength(3);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -525,13 +525,13 @@ describe('useThreadTimeline - Multi-Round Grouping', () => {
 describe('useThreadTimeline - Edge Cases', () => {
   describe('empty states', () => {
     it('returns empty timeline when no messages, changelog, or pre-searches', () => {
-      const timeline = getTimeline({ messages: [], changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages: [] });
 
       expect(timeline).toHaveLength(0);
     });
 
     it('returns empty timeline when only empty arrays provided', () => {
-      const timeline = getTimeline({ messages: [], changelog: [], preSearches: [] });
+      const timeline = getTimeline({ changelog: [], messages: [], preSearches: [] });
 
       expect(timeline).toHaveLength(0);
     });
@@ -540,10 +540,10 @@ describe('useThreadTimeline - Edge Cases', () => {
   describe('missing metadata handling', () => {
     it('handles messages with roundNumber 0 correctly', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -551,11 +551,11 @@ describe('useThreadTimeline - Edge Cases', () => {
 
     it('groups messages with same roundNumber together', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.data).toHaveLength(2);
@@ -565,10 +565,10 @@ describe('useThreadTimeline - Edge Cases', () => {
   describe('moderator-only rounds', () => {
     it('handles round with only moderator message', () => {
       const messages = [
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator only', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator only', id: 'msg-mod-0', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.type).toBe('messages');
@@ -577,11 +577,11 @@ describe('useThreadTimeline - Edge Cases', () => {
 
     it('moderator comes after user in moderator-only participant round', () => {
       const messages = [
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator', id: 'msg-mod-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       expect(orderedMessages?.[0]?.role).toBe(UIMessageRoles.USER);
@@ -592,31 +592,31 @@ describe('useThreadTimeline - Edge Cases', () => {
   describe('participant ordering edge cases', () => {
     it('handles participants with non-sequential indices', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p5',
           content: 'Participant 5',
-          roundNumber: 0,
+          id: 'msg-p5',
           participantId: 'p5',
           participantIndex: 5,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p2',
           content: 'Participant 2',
-          roundNumber: 0,
+          id: 'msg-p2',
           participantId: 'p2',
           participantIndex: 2,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       expect(orderedMessages?.[1]?.metadata).toHaveProperty('participantIndex', 0);
@@ -626,17 +626,17 @@ describe('useThreadTimeline - Edge Cases', () => {
 
     it('handles single participant correctly', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.data).toHaveLength(2);
@@ -646,12 +646,12 @@ describe('useThreadTimeline - Edge Cases', () => {
   describe('round ordering', () => {
     it('rounds are sorted in chronological order', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-2', content: 'Q3', roundNumber: 2 }),
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q3', id: 'msg-user-2', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline[0]?.roundNumber).toBe(0);
       expect(timeline[1]?.roundNumber).toBe(1);
@@ -660,12 +660,12 @@ describe('useThreadTimeline - Edge Cases', () => {
 
     it('handles non-sequential round numbers', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-5', content: 'Q6', roundNumber: 5 }),
-        createTestUserMessage({ id: 'msg-user-2', content: 'Q3', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q6', id: 'msg-user-5', roundNumber: 5 }),
+        createTestUserMessage({ content: 'Q3', id: 'msg-user-2', roundNumber: 2 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(3);
       expect(timeline[0]?.roundNumber).toBe(0);
@@ -677,31 +677,31 @@ describe('useThreadTimeline - Edge Cases', () => {
   describe('complex multi-round scenarios', () => {
     it('handles complete flow: multiple rounds with changelog and pre-search', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'R0 P0',
-          roundNumber: 0,
+          id: 'msg-p0-r0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1-r0',
           content: 'R0 P1',
-          roundNumber: 0,
+          id: 'msg-p1-r0',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'R0 Mod', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestModeratorMessage({ content: 'R0 Mod', id: 'msg-mod-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r1',
           content: 'R1 P0',
-          roundNumber: 1,
+          id: 'msg-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
-        createTestModeratorMessage({ id: 'msg-mod-1', content: 'R1 Mod', roundNumber: 1 }),
+        createTestModeratorMessage({ content: 'R1 Mod', id: 'msg-mod-1', roundNumber: 1 }),
       ];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
@@ -709,7 +709,7 @@ describe('useThreadTimeline - Edge Cases', () => {
       ];
       const preSearches = [createPreSearch(2)];
 
-      const timeline = getTimeline({ messages, changelog, preSearches });
+      const timeline = getTimeline({ changelog, messages, preSearches });
 
       // 5 items total:
       // Round 0: changelog + messages
@@ -745,39 +745,39 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
   describe('non-initial round messages not appearing (BUG FIX)', () => {
     it('round 1+ messages appear in timeline', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
-        createTestUserMessage({ id: 'msg-user-2', content: 'Q3', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q3', id: 'msg-user-2', roundNumber: 2 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(3);
-      expect(timeline.some(item => item.roundNumber === 1)).toBe(true);
-      expect(timeline.some(item => item.roundNumber === 2)).toBe(true);
+      expect(timeline.some(item => item.roundNumber === 1)).toBeTruthy();
+      expect(timeline.some(item => item.roundNumber === 2)).toBeTruthy();
     });
 
     it('round 1 messages are not grouped with round 0', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r0',
           content: 'R0 P0',
+          id: 'msg-p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
         }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'msg-p0-r1',
           content: 'R1 P0',
-          roundNumber: 1,
+          id: 'msg-p0-r1',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 1,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const round0 = timeline.find(item => item.roundNumber === 0);
       const round1 = timeline.find(item => item.roundNumber === 1);
@@ -791,42 +791,42 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
     it('user message is always first in round regardless of input order', () => {
       const messages = [
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator', id: 'msg-mod-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline[0]?.data[0]?.role).toBe(UIMessageRoles.USER);
     });
 
     it('moderator never appears before participants', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Question', roundNumber: 0 }),
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Moderator', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'msg-user-0', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Moderator', id: 'msg-mod-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       const orderedMessages = timeline[0]?.data;
       const moderatorIndex = orderedMessages
@@ -847,25 +847,25 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
   describe('round grouping correctness (BUG FIX)', () => {
     it('messages with same roundNumber are in same timeline item', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'P0',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'P1',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
-        createTestModeratorMessage({ id: 'msg-mod-0', content: 'Mod', roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Mod', id: 'msg-mod-0', roundNumber: 0 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(1);
       expect(timeline[0]?.data).toHaveLength(4);
@@ -873,11 +873,11 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
 
     it('messages with different roundNumbers are in separate timeline items', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
-        createTestUserMessage({ id: 'msg-user-1', content: 'Q2', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'msg-user-1', roundNumber: 1 }),
       ];
 
-      const timeline = getTimeline({ messages, changelog: [] });
+      const timeline = getTimeline({ changelog: [], messages });
 
       expect(timeline).toHaveLength(2);
       expect(timeline[0]?.data).toHaveLength(1);
@@ -888,14 +888,14 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
   describe('changelog rendering (BUG FIX)', () => {
     it('changelog only renders when round has messages or pre-search', () => {
       const messages = [
-        createTestUserMessage({ id: 'msg-user-0', content: 'Q1', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'msg-user-0', roundNumber: 0 }),
       ];
       const changelog = [
         createChangelog('cl-1', 0, 'participant_added'),
         createChangelog('cl-2', 1, 'participant_added'), // No messages in round 1
       ];
 
-      const timeline = getTimeline({ messages, changelog });
+      const timeline = getTimeline({ changelog, messages });
 
       const round1Changelog = timeline.find(
         item => item.type === 'changelog' && item.roundNumber === 1,
@@ -904,13 +904,13 @@ describe('useThreadTimeline - Bug Regression Tests', () => {
     });
 
     it('changelog renders when round has pre-search but no messages', () => {
-      const messages: Array<ReturnType<typeof createTestUserMessage>> = [];
+      const messages: ReturnType<typeof createTestUserMessage>[] = [];
       const changelog = [createChangelog('cl-1', 0, 'participant_added')];
       const preSearches = [createPreSearch(0)];
 
-      const timeline = getTimeline({ messages, changelog, preSearches });
+      const timeline = getTimeline({ changelog, messages, preSearches });
 
-      expect(timeline.some(item => item.type === 'changelog')).toBe(true);
+      expect(timeline.some(item => item.type === 'changelog')).toBeTruthy();
     });
   });
 });

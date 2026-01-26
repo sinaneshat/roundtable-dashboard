@@ -82,16 +82,17 @@ function groupMessagesByRound(
 
     if (!roundMap.has(roundNumber)) {
       roundMap.set(roundNumber, {
-        roundNumber,
-        userMessage: null,
         participantMessages: [],
+        roundNumber,
         summary: null,
+        userMessage: null,
       });
     }
 
     const group = roundMap.get(roundNumber);
-    if (!group)
+    if (!group) {
       throw new Error('expected round group');
+    }
 
     if (msg.role === MessageRoles.USER) {
       group.userMessage = msg;
@@ -145,11 +146,13 @@ function getRoundElementOrder(group: RoundGroup): string[] {
  */
 function isOptimisticMessage(msg: TestMessage | { id: string; metadata?: { isOptimistic?: boolean } }): boolean {
   // Check ID prefix first (primary method)
-  if (msg.id.startsWith('optimistic-'))
+  if (msg.id.startsWith('optimistic-')) {
     return true;
+  }
   // Check metadata flag as fallback
-  if (msg.metadata && 'isOptimistic' in msg.metadata && msg.metadata.isOptimistic === true)
+  if (msg.metadata && 'isOptimistic' in msg.metadata && msg.metadata.isOptimistic === true) {
     return true;
+  }
   return false;
 }
 
@@ -169,8 +172,9 @@ function filterOptimisticDuplicates(messages: TestMessage[]): TestMessage[] {
   );
 
   const filteredOptimistic = optimisticMessages.filter((m) => {
-    if (m.role !== MessageRoles.USER)
+    if (m.role !== MessageRoles.USER) {
       return true;
+    }
     const round = getRoundNumber(m.metadata) ?? 0;
     return !realRounds.has(round);
   });
@@ -186,22 +190,22 @@ describe('message Grouping by Round', () => {
   describe('single Round Grouping', () => {
     it('groups user and participant messages together', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Question', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'Response 1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r0',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -217,23 +221,23 @@ describe('message Grouping by Round', () => {
   describe('multi Round Grouping', () => {
     it('separates messages into correct rounds', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          finishReason: FinishReasons.STOP,
         }),
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'p0-r1',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -246,23 +250,23 @@ describe('message Grouping by Round', () => {
 
     it('handles out-of-order message arrays', () => {
       const messages = [
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r1',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -277,30 +281,30 @@ describe('message Grouping by Round', () => {
   describe('participant Message Ordering', () => {
     it('orders participants by participantIndex within round', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p2-r0',
           content: 'R2',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p2-r0',
           participantId: 'p2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'R1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r0',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -316,14 +320,14 @@ describe('message Grouping by Round', () => {
   describe('summary Inclusion', () => {
     it('attaches summary to correct round', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -342,36 +346,36 @@ describe('uI Element Order', () => {
   describe('round Element Sequence', () => {
     it('orders: user → participants → summary', () => {
       const group: RoundGroup = {
-        roundNumber: 0,
-        userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
         participantMessages: [
           createTestAssistantMessage({
-            id: 'p0-r0',
             content: 'R0',
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP,
+            id: 'p0-r0',
             participantId: 'p0',
             participantIndex: 0,
-            finishReason: FinishReasons.STOP,
+            roundNumber: 0,
           }),
           createTestAssistantMessage({
-            id: 'p1-r0',
             content: 'R1',
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP,
+            id: 'p1-r0',
             participantId: 'p1',
             participantIndex: 1,
-            finishReason: FinishReasons.STOP,
+            roundNumber: 0,
           }),
         ],
+        roundNumber: 0,
         summary: {
+          completedAt: new Date(),
+          createdAt: new Date(),
+          errorMessage: null,
           id: 'summary-0',
-          threadId: 'thread-123',
           roundNumber: 0,
           status: MessageStatuses.COMPLETE,
           summaryData: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          completedAt: new Date(),
+          threadId: 'thread-123',
         } as StoredModeratorSummary,
+        userMessage: createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       };
 
       const order = getRoundElementOrder(group);
@@ -386,28 +390,28 @@ describe('uI Element Order', () => {
 
     it('excludes incomplete summary from order', () => {
       const group: RoundGroup = {
-        roundNumber: 0,
-        userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
         participantMessages: [
           createTestAssistantMessage({
-            id: 'p0-r0',
             content: 'R',
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP,
+            id: 'p0-r0',
             participantId: 'p0',
             participantIndex: 0,
-            finishReason: FinishReasons.STOP,
+            roundNumber: 0,
           }),
         ],
+        roundNumber: 0,
         summary: {
+          completedAt: null,
+          createdAt: new Date(),
+          errorMessage: null,
           id: 'summary-0',
-          threadId: 'thread-123',
           roundNumber: 0,
           status: MessageStatuses.STREAMING, // Not complete
           summaryData: null,
-          errorMessage: null,
-          createdAt: new Date(),
-          completedAt: null,
+          threadId: 'thread-123',
         } as StoredModeratorSummary,
+        userMessage: createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       };
 
       const order = getRoundElementOrder(group);
@@ -417,10 +421,10 @@ describe('uI Element Order', () => {
 
     it('handles round with only user message (during streaming)', () => {
       const group: RoundGroup = {
-        roundNumber: 0,
-        userMessage: createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
         participantMessages: [],
+        roundNumber: 0,
         summary: null,
+        userMessage: createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       };
 
       const order = getRoundElementOrder(group);
@@ -432,23 +436,23 @@ describe('uI Element Order', () => {
   describe('multi Round Visual Stack', () => {
     it('stacks rounds sequentially', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
           roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
-          finishReason: FinishReasons.STOP,
         }),
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'p0-r1',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
@@ -474,36 +478,36 @@ describe('optimistic Message Handling', () => {
     it('detects optimistic message by flag', () => {
       const msg = {
         id: 'real-id',
-        role: MessageRoles.USER as const,
-        parts: [{ type: 'text' as const, text: 'Test' }],
         metadata: {
+          isOptimistic: true,
           role: MessageRoles.USER,
           roundNumber: 0,
-          isOptimistic: true,
         },
+        parts: [{ text: 'Test', type: 'text' as const }],
+        role: MessageRoles.USER as const,
       };
 
-      expect(isOptimisticMessage(msg)).toBe(true);
+      expect(isOptimisticMessage(msg)).toBeTruthy();
     });
 
     it('detects optimistic message by id prefix', () => {
       const msg = {
         id: 'optimistic-123-r0',
-        role: MessageRoles.USER as const,
-        parts: [{ type: 'text' as const, text: 'Test' }],
         metadata: {
           role: MessageRoles.USER,
           roundNumber: 0,
         },
+        parts: [{ text: 'Test', type: 'text' as const }],
+        role: MessageRoles.USER as const,
       };
 
-      expect(isOptimisticMessage(msg)).toBe(true);
+      expect(isOptimisticMessage(msg)).toBeTruthy();
     });
 
     it('identifies real message', () => {
-      const msg = createTestUserMessage({ id: 'msg-123', content: 'Test', roundNumber: 0 });
+      const msg = createTestUserMessage({ content: 'Test', id: 'msg-123', roundNumber: 0 });
 
-      expect(isOptimisticMessage(msg)).toBe(false);
+      expect(isOptimisticMessage(msg)).toBeFalsy();
     });
   });
 
@@ -512,15 +516,15 @@ describe('optimistic Message Handling', () => {
       const messages = [
         {
           id: 'optimistic-123-r0',
-          role: MessageRoles.USER as const,
-          parts: [{ type: 'text' as const, text: 'Test' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: 0,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Test', type: 'text' as const }],
+          role: MessageRoles.USER as const,
         },
-        createTestUserMessage({ id: 'real-msg-r0', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'real-msg-r0', roundNumber: 0 }),
       ];
 
       const filtered = filterOptimisticDuplicates(messages);
@@ -533,13 +537,13 @@ describe('optimistic Message Handling', () => {
       const messages = [
         {
           id: 'optimistic-123-r0',
-          role: MessageRoles.USER as const,
-          parts: [{ type: 'text' as const, text: 'Test' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: 0,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Test', type: 'text' as const }],
+          role: MessageRoles.USER as const,
         },
       ];
 
@@ -550,24 +554,24 @@ describe('optimistic Message Handling', () => {
 
     it('handles mixed rounds with optimistic', () => {
       const messages = [
-        createTestUserMessage({ id: 'real-r0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'real-r0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         {
           id: 'optimistic-r1',
-          role: MessageRoles.USER as const,
-          parts: [{ type: 'text' as const, text: 'Q1' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: 1,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Q1', type: 'text' as const }],
+          role: MessageRoles.USER as const,
         },
       ];
 
@@ -587,14 +591,14 @@ describe('message Replacement Patterns', () => {
   describe('streaming Message Update', () => {
     it('replaces streaming message content in-place', () => {
       const messages: TestMessage[] = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Partial...',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          roundNumber: 0,
         }),
       ];
 
@@ -603,7 +607,7 @@ describe('message Replacement Patterns', () => {
         if (m.id === 'p0-r0') {
           return {
             ...m,
-            parts: [{ type: 'text' as const, text: 'Partial... more content...' }],
+            parts: [{ text: 'Partial... more content...', type: 'text' as const }],
           };
         }
         return m;
@@ -615,12 +619,12 @@ describe('message Replacement Patterns', () => {
 
     it('finalizes message with finish reason', () => {
       const finalizedMsg = createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'Complete response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       });
 
       expect(finalizedMsg.metadata.finishReason).toBe(FinishReasons.STOP);
@@ -630,14 +634,14 @@ describe('message Replacement Patterns', () => {
   describe('regeneration Message Replacement', () => {
     it('removes old messages and adds new ones', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0-old',
           content: 'Old response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0-old',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -645,8 +649,9 @@ describe('message Replacement Patterns', () => {
       // ✅ TYPE-SAFE: Use type guard and getRoundNumber helper
       const roundToRegenerate = 0;
       let updatedMessages = messages.filter((m) => {
-        if (!isAssistantMessage(m))
+        if (!isAssistantMessage(m)) {
           return true;
+        }
         return m.metadata.roundNumber !== roundToRegenerate;
       });
 
@@ -656,12 +661,12 @@ describe('message Replacement Patterns', () => {
       updatedMessages = [
         ...updatedMessages,
         createTestAssistantMessage({
-          id: 'p0-r0-new',
           content: 'New response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0-new',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -679,14 +684,14 @@ describe('round Boundaries', () => {
   describe('round Start Detection', () => {
     it('detects new round when user message round increases', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -698,7 +703,7 @@ describe('round Boundaries', () => {
       const newRoundNumber = 1;
       const isNewRound = newRoundNumber > currentMaxRound;
 
-      expect(isNewRound).toBe(true);
+      expect(isNewRound).toBeTruthy();
     });
   });
 
@@ -706,30 +711,30 @@ describe('round Boundaries', () => {
     it('detects complete round when all participants have finishReason', () => {
       const participantCount = 3;
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'R1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r0',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p2-r0',
           content: 'R2',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p2-r0',
           participantId: 'p2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -744,20 +749,20 @@ describe('round Boundaries', () => {
 
       const hasAllParticipants = roundMessages.length === participantCount;
 
-      expect(allComplete && hasAllParticipants).toBe(true);
+      expect(allComplete && hasAllParticipants).toBeTruthy();
     });
 
     it('detects incomplete round when participant missing finishReason', () => {
       // ✅ TYPE-SAFE: Use createTestAssistantMessage for properly typed message
       const messages: TestMessage[] = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Streaming...',
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          id: 'p0-r0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.UNKNOWN, // Still streaming
+          roundNumber: 0,
         }),
       ];
 
@@ -770,7 +775,7 @@ describe('round Boundaries', () => {
         m.metadata.finishReason === FinishReasons.STOP
         || m.metadata.finishReason === FinishReasons.LENGTH);
 
-      expect(allComplete).toBe(false);
+      expect(allComplete).toBeFalsy();
     });
   });
 });
@@ -791,7 +796,7 @@ describe('empty States', () => {
   describe('no Participants in Round', () => {
     it('handles round with only user message', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       ];
 
       const groups = groupMessagesByRound(messages, []);
@@ -811,15 +816,15 @@ describe('error Message Display', () => {
   describe('participant Error', () => {
     it('shows error message inline with participant', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Error: Rate limit exceeded',
-          roundNumber: 0,
-          participantId: 'p0',
-          participantIndex: 0,
           finishReason: FinishReasons.ERROR,
           hasError: true,
+          id: 'p0-r0',
+          participantId: 'p0',
+          participantIndex: 0,
+          roundNumber: 0,
         }),
       ];
 
@@ -827,7 +832,7 @@ describe('error Message Display', () => {
       const errorMsg = groups[0]?.participantMessages[0];
 
       // ✅ TYPE-SAFE: participantMessages is already TestAssistantMessage[]
-      expect(errorMsg?.metadata.hasError).toBe(true);
+      expect(errorMsg?.metadata.hasError).toBeTruthy();
       expect(errorMsg?.metadata.finishReason).toBe(FinishReasons.ERROR);
     });
   });
@@ -844,15 +849,15 @@ describe('large Conversations', () => {
       const messages: TestMessage[] = [];
 
       for (let round = 0; round < 20; round++) {
-        messages.push(createTestUserMessage({ id: `u${round}`, content: `Q${round}`, roundNumber: round }));
+        messages.push(createTestUserMessage({ content: `Q${round}`, id: `u${round}`, roundNumber: round }));
         for (let p = 0; p < 3; p++) {
           messages.push(createTestAssistantMessage({
-            id: `p${p}-r${round}`,
             content: `R${round}-P${p}`,
-            roundNumber: round,
+            finishReason: FinishReasons.STOP,
+            id: `p${p}-r${round}`,
             participantId: `p${p}`,
             participantIndex: p,
-            finishReason: FinishReasons.STOP,
+            roundNumber: round,
           }));
         }
       }
@@ -867,17 +872,17 @@ describe('large Conversations', () => {
   describe('many Participants', () => {
     it('handles 10 participants per round', () => {
       const messages: TestMessage[] = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       ];
 
       for (let p = 0; p < 10; p++) {
         messages.push(createTestAssistantMessage({
-          id: `p${p}-r0`,
           content: `R-P${p}`,
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: `p${p}-r0`,
           participantId: `p${p}`,
           participantIndex: p,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }));
       }
 

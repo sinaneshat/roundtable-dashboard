@@ -85,12 +85,12 @@ export function useDragDrop(
   }, [onFilesDropped]);
 
   return {
-    isDragging,
     dragHandlers: {
       onDragEnter: handleDragEnter,
       onDragLeave: handleDragLeave,
       onDragOver: handleDragOver,
       onDrop: handleDrop,
     },
+    isDragging,
   };
 }

@@ -18,10 +18,10 @@ import { z } from 'zod';
  * can contain any JSON-serializable structure defined by the application
  */
 export const DataPartSchema = z.object({
+  data: z.unknown(),
   type: z.string().regex(/^data-/, {
     message: 'Custom data part type must start with "data-"',
   }),
-  data: z.unknown(),
 });
 
 /**

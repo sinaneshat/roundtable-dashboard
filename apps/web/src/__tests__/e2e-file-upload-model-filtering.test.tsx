@@ -40,9 +40,9 @@ import { createChatStore } from '@/stores/chat';
 vi.mock('@/lib/toast', () => ({
   toastManager: {
     error: vi.fn(),
-    warning: vi.fn(),
-    success: vi.fn(),
     info: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -53,7 +53,7 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>();
   return {
     ...actual,
-    Link: ({ children, to, className, onClick, ...props }: {
+    Link: ({ children, className, onClick, to, ...props }: {
       children: ReactNode;
       to: string;
       className?: string;
@@ -68,21 +68,21 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 // Mock queries
 vi.mock('@/hooks/queries', () => ({
-  useModelsQuery: () => ({ data: null, isLoading: false }),
   useCustomRolesQuery: () => ({ data: null, isLoading: false }),
-  useUserPresetsQuery: () => ({ data: null, isLoading: false }),
-  useUsageStatsQuery: () => ({ data: null, isLoading: false }),
+  useModelsQuery: () => ({ data: null, isLoading: false }),
   useThreadPreSearchesQuery: () => ({ data: [], isLoading: false }),
   useThreadRoundChangelogQuery: () => ({ data: null, isLoading: false }),
+  useUsageStatsQuery: () => ({ data: null, isLoading: false }),
+  useUserPresetsQuery: () => ({ data: null, isLoading: false }),
 }));
 
 // Mock mutations
 vi.mock('@/hooks/mutations', () => ({
-  useCreateCustomRoleMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDeleteCustomRoleMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCreateUserPresetMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useUpdateUserPresetMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDeleteUserPresetMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCreateCustomRoleMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateUserPresetMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useDeleteCustomRoleMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useDeleteUserPresetMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useUpdateUserPresetMutation: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
 
 // ============================================================================
@@ -91,20 +91,20 @@ vi.mock('@/hooks/mutations', () => ({
 
 function createMockModel(overrides: Partial<Model> = {}): Model {
   return {
-    id: 'test-model',
-    name: 'Test Model',
-    provider: 'test',
     context_window: 128000,
-    max_completion_tokens: 4096,
     description: 'Test model description',
-    supports_vision: false,
-    supports_file: false,
-    required_tier: 'free',
-    required_tier_name: null,
+    id: 'test-model',
     is_accessible_to_user: true,
     is_deprecated: false,
+    max_completion_tokens: 4096,
+    name: 'Test Model',
     pricing_input: 0.01,
     pricing_output: 0.03,
+    provider: 'test',
+    required_tier: 'free',
+    required_tier_name: null,
+    supports_file: false,
+    supports_vision: false,
     ...overrides,
   };
 }
@@ -115,14 +115,14 @@ function createOrderedModel(model: Model, participant: ChatParticipant | null = 
 
 function createMockParticipant(overrides: Partial<ChatParticipant> = {}): ChatParticipant {
   return {
-    id: 'participant-1',
-    threadId: 'thread-1',
-    modelId: 'test-model',
-    role: null,
-    priority: 0,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    id: 'participant-1',
+    isEnabled: true,
+    modelId: 'test-model',
+    priority: 0,
+    role: null,
+    settings: null,
+    threadId: 'thread-1',
     updatedAt: new Date(),
     ...overrides,
   };
@@ -131,8 +131,8 @@ function createMockParticipant(overrides: Partial<ChatParticipant> = {}): ChatPa
 function createMockAttachment(overrides: Partial<PendingAttachment> = {}): PendingAttachment {
   const file = new File(['test'], 'test.png', { type: 'image/png' });
   return {
-    id: 'attachment-1',
     file,
+    id: 'attachment-1',
     status: 'completed',
     uploadId: 'upload-1',
     ...overrides,
@@ -142,8 +142,8 @@ function createMockAttachment(overrides: Partial<PendingAttachment> = {}): Pendi
 function TestWrapper({ children }: { children: ReactNode }) {
   const [queryClient] = React.useState(() => new QueryClient({
     defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
       mutations: { retry: false },
+      queries: { gcTime: 0, retry: false },
     },
   }));
 
@@ -177,15 +177,15 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const visionModel = createMockModel({
         id: 'vision-model',
         name: 'Vision Model',
-        supports_vision: true,
         supports_file: false,
+        supports_vision: true,
       });
 
       const nonVisionModel = createMockModel({
         id: 'non-vision-model',
         name: 'Non-Vision Model',
-        supports_vision: false,
         supports_file: false,
+        supports_vision: false,
       });
 
       const orderedModels: OrderedModel[] = [
@@ -233,15 +233,15 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const fileModel = createMockModel({
         id: 'file-model',
         name: 'File Model',
-        supports_vision: false,
         supports_file: true,
+        supports_vision: false,
       });
 
       const nonFileModel = createMockModel({
         id: 'non-file-model',
         name: 'Non-File Model',
-        supports_vision: false,
         supports_file: false,
+        supports_vision: false,
       });
 
       const orderedModels: OrderedModel[] = [
@@ -284,29 +284,29 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const fullModel = createMockModel({
         id: 'full-model',
         name: 'Full Model',
-        supports_vision: true,
         supports_file: true,
+        supports_vision: true,
       });
 
       const visionOnlyModel = createMockModel({
         id: 'vision-only-model',
         name: 'Vision Only Model',
-        supports_vision: true,
         supports_file: false,
+        supports_vision: true,
       });
 
       const fileOnlyModel = createMockModel({
         id: 'file-only-model',
         name: 'File Only Model',
-        supports_vision: false,
         supports_file: true,
+        supports_vision: false,
       });
 
       const neitherModel = createMockModel({
         id: 'neither-model',
         name: 'Neither Model',
-        supports_vision: false,
         supports_file: false,
+        supports_vision: false,
       });
 
       const orderedModels: OrderedModel[] = [
@@ -412,81 +412,81 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const visionModel = createMockModel({
         id: 'vision-model',
         name: 'Vision Model',
-        supports_vision: true,
         supports_file: false,
+        supports_vision: true,
       });
 
       const nonVisionModel = createMockModel({
         id: 'non-vision-model',
         name: 'Non-Vision Model',
-        supports_vision: false,
         supports_file: false,
+        supports_vision: false,
       });
 
       const models = [visionModel, nonVisionModel];
 
       const imageFile = createMockAttachment({
-        id: 'img-1',
         file: new File(['test'], 'test.png', { type: 'image/png' }),
+        id: 'img-1',
       });
 
       const attachments = [imageFile];
 
       // Simulate model capabilities
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
       const { visionIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
       // Non-vision model should be in incompatible set
-      expect(visionIncompatibleIds.has('non-vision-model')).toBe(true);
-      expect(visionIncompatibleIds.has('vision-model')).toBe(false);
+      expect(visionIncompatibleIds.has('non-vision-model')).toBeTruthy();
+      expect(visionIncompatibleIds.has('vision-model')).toBeFalsy();
     });
 
     it('should auto-deselect model when PDF is uploaded and model lacks file support', () => {
       const fileModel = createMockModel({
         id: 'file-model',
         name: 'File Model',
-        supports_vision: false,
         supports_file: true,
+        supports_vision: false,
       });
 
       const nonFileModel = createMockModel({
         id: 'non-file-model',
         name: 'Non-File Model',
-        supports_vision: false,
         supports_file: false,
+        supports_vision: false,
       });
 
       const models = [fileModel, nonFileModel];
 
       const pdfFile = createMockAttachment({
-        id: 'pdf-1',
         file: new File(['test'], 'test.pdf', { type: 'application/pdf' }),
+        id: 'pdf-1',
       });
 
       const attachments = [pdfFile];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
       const { fileIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
       // Non-file model should be in incompatible set
-      expect(fileIncompatibleIds.has('non-file-model')).toBe(true);
-      expect(fileIncompatibleIds.has('file-model')).toBe(false);
+      expect(fileIncompatibleIds.has('non-file-model')).toBeTruthy();
+      expect(fileIncompatibleIds.has('file-model')).toBeFalsy();
     });
 
     it('should show toast with specific reason when models are auto-deselected due to images', () => {
@@ -550,38 +550,38 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'vision-model',
           name: 'Vision Model',
-          supports_vision: true,
           supports_file: false,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'non-vision-model',
           name: 'Non-Vision Model',
-          supports_vision: false,
           supports_file: false,
+          supports_vision: false,
         }),
       ];
 
       const attachments = [
         createMockAttachment({
-          id: 'img-1',
           file: new File(['test'], 'image.png', { type: 'image/png' }),
+          id: 'img-1',
         }),
       ];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
       const { incompatibleIds, visionIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
       expect(incompatibleIds.size).toBe(1);
-      expect(incompatibleIds.has('non-vision-model')).toBe(true);
-      expect(visionIncompatibleIds.has('non-vision-model')).toBe(true);
+      expect(incompatibleIds.has('non-vision-model')).toBeTruthy();
+      expect(visionIncompatibleIds.has('non-vision-model')).toBeTruthy();
     });
 
     it('should separately track vision and file incompatibilities', () => {
@@ -589,79 +589,79 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'full-model',
           name: 'Full Model',
-          supports_vision: true,
           supports_file: true,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'vision-only',
           name: 'Vision Only',
-          supports_vision: true,
           supports_file: false,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'file-only',
           name: 'File Only',
-          supports_vision: false,
           supports_file: true,
+          supports_vision: false,
         }),
         createMockModel({
           id: 'neither',
           name: 'Neither',
-          supports_vision: false,
           supports_file: false,
+          supports_vision: false,
         }),
       ];
 
       const attachments = [
         createMockAttachment({
-          id: 'img-1',
           file: new File(['test'], 'image.png', { type: 'image/png' }),
+          id: 'img-1',
         }),
         createMockAttachment({
-          id: 'pdf-1',
           file: new File(['test'], 'doc.pdf', { type: 'application/pdf' }),
+          id: 'pdf-1',
         }),
       ];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
-      const { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
+      const { fileIncompatibleIds, incompatibleIds, visionIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
       // Total incompatible: vision-only (file), file-only (vision), neither (both)
       expect(incompatibleIds.size).toBe(3);
 
       // Vision incompatible: file-only, neither
       expect(visionIncompatibleIds.size).toBe(2);
-      expect(visionIncompatibleIds.has('file-only')).toBe(true);
-      expect(visionIncompatibleIds.has('neither')).toBe(true);
+      expect(visionIncompatibleIds.has('file-only')).toBeTruthy();
+      expect(visionIncompatibleIds.has('neither')).toBeTruthy();
 
       // File incompatible: vision-only, neither
       expect(fileIncompatibleIds.size).toBe(2);
-      expect(fileIncompatibleIds.has('vision-only')).toBe(true);
-      expect(fileIncompatibleIds.has('neither')).toBe(true);
+      expect(fileIncompatibleIds.has('vision-only')).toBeTruthy();
+      expect(fileIncompatibleIds.has('neither')).toBeTruthy();
     });
 
     it('should filter participants correctly when files are added', () => {
       const thread: ChatThread = {
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        slug: 'test-thread',
-        title: 'Test Thread',
-        mode: ChatModes.BRAINSTORM,
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        enableWebSearch: false,
-        isAiGeneratedTitle: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: ChatModes.BRAINSTORM,
+        slug: 'test-thread',
+        status: 'active',
+        title: 'Test Thread',
+        updatedAt: new Date(),
       };
 
       const visionParticipant = createMockParticipant({
@@ -679,9 +679,9 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const messages: UIMessage[] = [
         {
           id: 'msg-1',
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Hello' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -705,8 +705,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         { mimeType: 'image/webp' },
       ];
 
-      expect(filesHaveImages(imageFiles)).toBe(true);
-      expect(filesHaveDocuments(imageFiles)).toBe(false);
+      expect(filesHaveImages(imageFiles)).toBeTruthy();
+      expect(filesHaveDocuments(imageFiles)).toBeFalsy();
     });
 
     it('should correctly detect document files', () => {
@@ -716,8 +716,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
       ];
 
-      expect(filesHaveDocuments(documentFiles)).toBe(true);
-      expect(filesHaveImages(documentFiles)).toBe(false);
+      expect(filesHaveDocuments(documentFiles)).toBeTruthy();
+      expect(filesHaveImages(documentFiles)).toBeFalsy();
     });
 
     it('should correctly detect mixed file types', () => {
@@ -726,8 +726,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         { mimeType: 'application/pdf' },
       ];
 
-      expect(filesHaveImages(mixedFiles)).toBe(true);
-      expect(filesHaveDocuments(mixedFiles)).toBe(true);
+      expect(filesHaveImages(mixedFiles)).toBeTruthy();
+      expect(filesHaveDocuments(mixedFiles)).toBeTruthy();
     });
   });
 
@@ -737,14 +737,14 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'vision-model',
           name: 'Vision Model',
-          supports_vision: true,
           supports_file: false,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'non-vision-model',
           name: 'Non-Vision Model',
-          supports_vision: false,
           supports_file: false,
+          supports_vision: false,
         }),
       ];
 
@@ -763,14 +763,14 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'file-model',
           name: 'File Model',
-          supports_vision: false,
           supports_file: true,
+          supports_vision: false,
         }),
         createMockModel({
           id: 'non-file-model',
           name: 'Non-File Model',
-          supports_vision: false,
           supports_file: false,
+          supports_vision: false,
         }),
       ];
 
@@ -789,20 +789,20 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'full-model',
           name: 'Full Model',
-          supports_vision: true,
           supports_file: true,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'vision-only',
           name: 'Vision Only',
-          supports_vision: true,
           supports_file: false,
+          supports_vision: true,
         }),
         createMockModel({
           id: 'file-only',
           name: 'File Only',
-          supports_vision: false,
           supports_file: true,
+          supports_vision: false,
         }),
       ];
 
@@ -810,10 +810,12 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       const hasDocumentFiles = true;
 
       const filteredModels = allModels.filter((m) => {
-        if (hasImageFiles && !m.supports_vision)
+        if (hasImageFiles && !m.supports_vision) {
           return false;
-        if (hasDocumentFiles && !m.supports_file)
+        }
+        if (hasDocumentFiles && !m.supports_file) {
           return false;
+        }
         return true;
       });
 
@@ -830,11 +832,11 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       ];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const { incompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, []);
@@ -856,11 +858,11 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       ];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
@@ -874,37 +876,37 @@ describe('e2E: File Upload Model Filtering Flow', () => {
         createMockModel({
           id: 'neither-model',
           name: 'Neither',
-          supports_vision: false,
           supports_file: false,
+          supports_vision: false,
         }),
       ];
 
       const attachments = [
         createMockAttachment({
-          id: 'img-1',
           file: new File(['test'], 'image.png', { type: 'image/png' }),
+          id: 'img-1',
         }),
         createMockAttachment({
-          id: 'pdf-1',
           file: new File(['test'], 'doc.pdf', { type: 'application/pdf' }),
+          id: 'pdf-1',
         }),
       ];
 
       const modelsWithCapabilities = models.map(m => ({
-        id: m.id,
         capabilities: {
-          vision: m.supports_vision,
           file: m.supports_file,
+          vision: m.supports_vision,
         },
+        id: m.id,
       }));
 
       const files = attachments.map(a => ({ mimeType: a.file.type }));
-      const { incompatibleIds, visionIncompatibleIds, fileIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
+      const { fileIncompatibleIds, incompatibleIds, visionIncompatibleIds } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
       // Model should appear in all incompatibility sets
-      expect(incompatibleIds.has('neither-model')).toBe(true);
-      expect(visionIncompatibleIds.has('neither-model')).toBe(true);
-      expect(fileIncompatibleIds.has('neither-model')).toBe(true);
+      expect(incompatibleIds.has('neither-model')).toBeTruthy();
+      expect(visionIncompatibleIds.has('neither-model')).toBeTruthy();
+      expect(fileIncompatibleIds.has('neither-model')).toBeTruthy();
     });
 
     it('should not show toast on initial page load (only when user adds files)', () => {
@@ -912,7 +914,7 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       // First render = initial mount, no toast
       // Subsequent renders = user action, show toast
       // Verified in ChatThreadScreen.tsx:204-207 and ChatOverviewScreen.tsx:507
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 });

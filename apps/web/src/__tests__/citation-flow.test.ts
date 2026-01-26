@@ -99,13 +99,13 @@ describe('citation Parser', () => {
 
   describe('hasCitations', () => {
     it('should return true for text with citations', () => {
-      expect(hasCitations('Check [mem_abc123] for info')).toBe(true);
-      expect(hasCitations('See [rag_file1] and [att_upload1]')).toBe(true);
+      expect(hasCitations('Check [mem_abc123] for info')).toBeTruthy();
+      expect(hasCitations('See [rag_file1] and [att_upload1]')).toBeTruthy();
     });
 
     it('should return false for text without citations', () => {
-      expect(hasCitations('No citations here')).toBe(false);
-      expect(hasCitations('Invalid [ana_test] prefix')).toBe(false);
+      expect(hasCitations('No citations here')).toBeFalsy();
+      expect(hasCitations('Invalid [ana_test] prefix')).toBeFalsy();
     });
   });
 
@@ -133,21 +133,22 @@ describe('citation Resolution', () => {
 
       const sourceMap: CitationSourceMap = new Map();
       sourceMap.set('mem_abc12345', {
+        content: 'This is the memory content',
         id: 'mem_abc12345',
-        type: CitationSourceTypes.MEMORY,
+        metadata: { importance: 0.8 },
         sourceId: 'abc12345-full-id',
         title: 'Test Memory',
-        content: 'This is the memory content',
-        metadata: { importance: 0.8 },
+        type: CitationSourceTypes.MEMORY,
       });
 
       const dbCitations = toDbCitations(parsed, (sourceId) => {
         const source = sourceMap.get(sourceId);
-        if (!source)
+        if (!source) {
           return undefined;
+        }
         return {
-          title: source.title,
           excerpt: source.content.slice(0, 300),
+          title: source.title,
         };
       });
 
@@ -179,24 +180,24 @@ describe('citation Source Map Merging', () => {
 
     // Simulate RAG sources added first (from autorag)
     const ragSource: CitableSource = {
+      content: 'Content from indexed file',
       id: 'rag_file123',
-      type: CitationSourceTypes.RAG,
+      metadata: { filename: 'indexed-file.pdf' },
       sourceId: 'file123',
       title: 'indexed-file.pdf',
-      content: 'Content from indexed file',
-      metadata: { filename: 'indexed-file.pdf' },
+      type: CitationSourceTypes.RAG,
     };
     citationSourceMap.set('rag_file123', ragSource);
 
     // Simulate citable context sources (memories, threads, etc.)
     const citableContextSourceMap: CitationSourceMap = new Map();
     const memorySource: CitableSource = {
+      content: 'Important project context',
       id: 'mem_abc123',
-      type: CitationSourceTypes.MEMORY,
+      metadata: { importance: 0.9 },
       sourceId: 'abc123',
       title: 'Project Memory',
-      content: 'Important project context',
-      metadata: { importance: 0.9 },
+      type: CitationSourceTypes.MEMORY,
     };
     citableContextSourceMap.set('mem_abc123', memorySource);
 
@@ -207,8 +208,8 @@ describe('citation Source Map Merging', () => {
 
     // Verify both sources are preserved
     expect(citationSourceMap.size).toBe(2);
-    expect(citationSourceMap.has('rag_file123')).toBe(true);
-    expect(citationSourceMap.has('mem_abc123')).toBe(true);
+    expect(citationSourceMap.has('rag_file123')).toBeTruthy();
+    expect(citationSourceMap.has('mem_abc123')).toBeTruthy();
   });
 
   it('should handle empty citable context without losing existing sources', () => {
@@ -216,12 +217,12 @@ describe('citation Source Map Merging', () => {
 
     // Add RAG source first
     citationSourceMap.set('rag_test1', {
+      content: 'Test content',
       id: 'rag_test1',
-      type: CitationSourceTypes.RAG,
+      metadata: {},
       sourceId: 'test1',
       title: 'test.pdf',
-      content: 'Test content',
-      metadata: {},
+      type: CitationSourceTypes.RAG,
     });
 
     // Empty citable context (no memories, threads, etc.)
@@ -233,7 +234,7 @@ describe('citation Source Map Merging', () => {
     }
 
     expect(citationSourceMap.size).toBe(1);
-    expect(citationSourceMap.has('rag_test1')).toBe(true);
+    expect(citationSourceMap.has('rag_test1')).toBeTruthy();
   });
 });
 
@@ -241,9 +242,9 @@ describe('search Context with Citations', () => {
   it('should generate citation IDs in sch_qXrY format', () => {
     // Verify the format of search citation IDs
     const citationPattern = /^\[sch_q\d+r\d+\]$/;
-    expect(citationPattern.test('[sch_q0r0]')).toBe(true);
-    expect(citationPattern.test('[sch_q1r2]')).toBe(true);
-    expect(citationPattern.test('[sch_q10r5]')).toBe(true);
+    expect(citationPattern.test('[sch_q0r0]')).toBeTruthy();
+    expect(citationPattern.test('[sch_q1r2]')).toBeTruthy();
+    expect(citationPattern.test('[sch_q10r5]')).toBeTruthy();
   });
 
   it('should parse search citations correctly', () => {
@@ -271,12 +272,12 @@ describe('full Citation Flow Integration', () => {
     const sourceMap: CitationSourceMap = new Map();
 
     const sources: CitableSource[] = [
-      { id: 'mem_abc123', type: CitationSourceTypes.MEMORY, sourceId: 'abc123', title: 'Memory 1', content: 'Memory content', metadata: {} },
-      { id: 'att_upload1', type: CitationSourceTypes.ATTACHMENT, sourceId: 'upload1', title: 'file.pdf', content: 'File content', metadata: { filename: 'file.pdf' } },
-      { id: 'rag_file456', type: CitationSourceTypes.RAG, sourceId: 'file456', title: 'indexed.pdf', content: 'Indexed content', metadata: {} },
-      { id: 'thd_thread1', type: CitationSourceTypes.THREAD, sourceId: 'thread1', title: 'Previous Chat', content: 'Chat content', metadata: {} },
-      { id: 'sch_query1', type: CitationSourceTypes.SEARCH, sourceId: 'query1', title: 'Search Result', content: 'Search content', metadata: {} },
-      { id: 'mod_round0', type: CitationSourceTypes.MODERATOR, sourceId: 'round0', title: 'Moderator Summary', content: 'Summary content', metadata: {} },
+      { content: 'Memory content', id: 'mem_abc123', metadata: {}, sourceId: 'abc123', title: 'Memory 1', type: CitationSourceTypes.MEMORY },
+      { content: 'File content', id: 'att_upload1', metadata: { filename: 'file.pdf' }, sourceId: 'upload1', title: 'file.pdf', type: CitationSourceTypes.ATTACHMENT },
+      { content: 'Indexed content', id: 'rag_file456', metadata: {}, sourceId: 'file456', title: 'indexed.pdf', type: CitationSourceTypes.RAG },
+      { content: 'Chat content', id: 'thd_thread1', metadata: {}, sourceId: 'thread1', title: 'Previous Chat', type: CitationSourceTypes.THREAD },
+      { content: 'Search content', id: 'sch_query1', metadata: {}, sourceId: 'query1', title: 'Search Result', type: CitationSourceTypes.SEARCH },
+      { content: 'Summary content', id: 'mod_round0', metadata: {}, sourceId: 'round0', title: 'Moderator Summary', type: CitationSourceTypes.MODERATOR },
     ];
 
     for (const source of sources) {
@@ -290,11 +291,12 @@ describe('full Citation Flow Integration', () => {
     // Resolve to DB format
     const dbCitations = toDbCitations(parsed, (sourceId) => {
       const source = sourceMap.get(sourceId);
-      if (!source)
+      if (!source) {
         return undefined;
+      }
       return {
-        title: source.title,
         excerpt: source.content,
+        title: source.title,
       };
     });
 

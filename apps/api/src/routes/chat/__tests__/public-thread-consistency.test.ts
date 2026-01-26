@@ -15,17 +15,17 @@ describe('public Thread Data Consistency', () => {
     it('should return all participants regardless of isEnabled status', () => {
       // Simulate a thread where participant was disabled after contributing
       const allParticipants = [
-        { id: 'p1', modelId: 'gpt-4', isEnabled: true, priority: 0 },
-        { id: 'p2', modelId: 'claude-3', isEnabled: false, priority: 1 }, // Disabled after contributing
-        { id: 'p3', modelId: 'gemini', isEnabled: true, priority: 2 },
+        { id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0 },
+        { id: 'p2', isEnabled: false, modelId: 'claude-3', priority: 1 }, // Disabled after contributing
+        { id: 'p3', isEnabled: true, modelId: 'gemini', priority: 2 },
       ];
 
       // Messages reference all three participants
       const messages = [
-        { id: 'm1', role: 'user', roundNumber: 0, content: 'Hello' },
-        { id: 'm2', role: 'assistant', roundNumber: 0, participantId: 'p1' },
-        { id: 'm3', role: 'assistant', roundNumber: 0, participantId: 'p2' }, // From disabled participant
-        { id: 'm4', role: 'assistant', roundNumber: 0, participantId: 'p3' },
+        { content: 'Hello', id: 'm1', role: 'user', roundNumber: 0 },
+        { id: 'm2', participantId: 'p1', role: 'assistant', roundNumber: 0 },
+        { id: 'm3', participantId: 'p2', role: 'assistant', roundNumber: 0 }, // From disabled participant
+        { id: 'm4', participantId: 'p3', role: 'assistant', roundNumber: 0 },
       ];
 
       // Public thread should return ALL participants (fix applied)
@@ -100,8 +100,8 @@ describe('public Thread Data Consistency', () => {
       ];
 
       const messageWithIndex = {
-        participantIndex: 1,
         participantId: undefined as string | undefined,
+        participantIndex: 1,
       };
 
       // Fallback to index-based lookup
@@ -115,10 +115,10 @@ describe('public Thread Data Consistency', () => {
     it('should only show complete rounds on public view', () => {
       const messages = [
         // Round 0 - complete
-        { roundNumber: 0, role: 'user' },
-        { roundNumber: 0, role: 'assistant', participantId: 'p1' },
+        { role: 'user', roundNumber: 0 },
+        { participantId: 'p1', role: 'assistant', roundNumber: 0 },
         // Round 1 - incomplete (no assistant response)
-        { roundNumber: 1, role: 'user' },
+        { role: 'user', roundNumber: 1 },
       ];
 
       // Determine complete rounds
@@ -209,7 +209,7 @@ describe('public Thread Data Consistency', () => {
       ];
 
       const messagesWithMissingIds = [
-        { role: 'assistant', participantId: undefined, participantIndex: 0 },
+        { participantId: undefined, participantIndex: 0, role: 'assistant' },
       ];
 
       // Should fall back to participantIndex

@@ -60,11 +60,12 @@ export async function getModelIconBase64(modelId: string): Promise<string> {
   const assets = await getOGAssets();
   // Try embedded asset first (covers common providers)
   const embedded = assets.getModelIconBase64Sync(modelId);
-  if (embedded)
+  if (embedded) {
     return embedded;
+  }
 
   // Fallback to fetch for uncommon models (with caching)
-  return fetchImageBase64(`static/icons/ai-models/openrouter.png`);
+  return await fetchImageBase64(`static/icons/ai-models/openrouter.png`);
 }
 
 // ============================================================================
@@ -79,16 +80,18 @@ const imageCache = new Map<string, string>();
  */
 async function fetchImageBase64(relativePath: string): Promise<string> {
   const cached = imageCache.get(relativePath);
-  if (cached)
+  if (cached) {
     return cached;
+  }
 
   try {
     const baseUrl = getAppBaseUrl();
     const imageUrl = `${baseUrl}/${relativePath}`;
     const response = await fetch(imageUrl);
 
-    if (!response.ok)
+    if (!response.ok) {
       return '';
+    }
 
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);

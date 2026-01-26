@@ -65,22 +65,22 @@ function simulateDeduplication(messages: UIMessage[]): UIMessage[] {
 function createUserMessage(id: string, roundNumber: number, text: string): UIMessage {
   return {
     id,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createAssistantMessage(id: string, roundNumber: number): UIMessage {
   return {
     id,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: 'Response' }],
     metadata: {
+      participantIndex: 0,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex: 0,
     },
+    parts: [{ text: 'Response', type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -102,7 +102,7 @@ describe('user Message Deduplication', () => {
       expect(round1Users[0].id).toBe('optimistic-user-1');
 
       // CRITICAL: Message must be in final render output
-      expect(result.some(m => m.id === 'optimistic-user-1')).toBe(true);
+      expect(result.some(m => m.id === 'optimistic-user-1')).toBeTruthy();
     });
 
     it('should replace optimistic with DB message when DB message comes after', () => {
@@ -122,10 +122,8 @@ describe('user Message Deduplication', () => {
       expect(round1Users[0].id).toBe('thread_r1_user');
 
       // CRITICAL: User message STILL visible, just with different ID
-      expect(result.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1)).toBe(
-        true,
-      );
-      expect(result.some(m => m.id === 'thread_r1_user')).toBe(true);
+      expect(result.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1)).toBeTruthy();
+      expect(result.some(m => m.id === 'thread_r1_user')).toBeTruthy();
     });
 
     it('should skip optimistic when DB message comes first (BUG SCENARIO)', () => {
@@ -148,9 +146,7 @@ describe('user Message Deduplication', () => {
       expect(round1Users[0].id).toBe('thread_r1_user');
 
       // CRITICAL: User message MUST still be visible (not removed completely)
-      expect(result.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1)).toBe(
-        true,
-      );
+      expect(result.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1)).toBeTruthy();
     });
   });
 
@@ -171,7 +167,7 @@ describe('user Message Deduplication', () => {
         m => m.role === MessageRoles.USER && m.metadata?.roundNumber === 1,
       );
       expect(round1Users).toHaveLength(1);
-      expect(round1Users[0].parts[0]).toEqual({ type: 'text', text: 'Follow-up' });
+      expect(round1Users[0].parts[0]).toEqual({ text: 'Follow-up', type: 'text' });
     });
 
     it('should preserve user message order within timeline item', () => {
@@ -240,7 +236,7 @@ describe('user Message Deduplication', () => {
         );
 
         expect(userMsgForRound).toBeDefined();
-        expect(userMsgForRound?.parts[0]).toEqual({ type: 'text', text: `Round ${roundNum}` });
+        expect(userMsgForRound?.parts[0]).toEqual({ text: `Round ${roundNum}`, type: 'text' });
       }
     });
 
@@ -253,7 +249,7 @@ describe('user Message Deduplication', () => {
         createUserMessage('optimistic-user-1', roundNum, 'Q1'),
       ];
       const result1 = simulateDeduplication(state1);
-      expect(result1.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBe(true);
+      expect(result1.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBeTruthy();
 
       // State 2: Both optimistic and DB (during transition)
       const state2 = [
@@ -262,7 +258,7 @@ describe('user Message Deduplication', () => {
         createUserMessage('thread_r1_user', roundNum, 'Q1'),
       ];
       const result2 = simulateDeduplication(state2);
-      expect(result2.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBe(true);
+      expect(result2.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBeTruthy();
 
       // State 3: DB only (after replacement)
       const state3 = [
@@ -270,7 +266,7 @@ describe('user Message Deduplication', () => {
         createUserMessage('thread_r1_user', roundNum, 'Q1'),
       ];
       const result3 = simulateDeduplication(state3);
-      expect(result3.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBe(true);
+      expect(result3.some(m => m.role === MessageRoles.USER && m.metadata?.roundNumber === roundNum)).toBeTruthy();
     });
 
     it('gUARANTEE: deduplication never removes ALL user messages for a round', () => {
@@ -291,7 +287,7 @@ describe('user Message Deduplication', () => {
 
       // MUST have at least one user message
       expect(round1Users.length).toBeGreaterThanOrEqual(1);
-      expect(round1Users[0].parts[0]).toEqual({ type: 'text', text: 'Q1' });
+      expect(round1Users[0].parts[0]).toEqual({ text: 'Q1', type: 'text' });
     });
 
     it('gUARANTEE: message visibility independent of message order', () => {
@@ -323,7 +319,7 @@ describe('user Message Deduplication', () => {
         );
 
         expect(round1User).toBeDefined();
-        expect(round1User?.parts[0]).toEqual({ type: 'text', text: 'Q1' });
+        expect(round1User?.parts[0]).toEqual({ text: 'Q1', type: 'text' });
       });
     });
 

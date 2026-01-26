@@ -42,23 +42,23 @@ import {
 
 // Mock TanStack Query
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({
-    setQueryData: vi.fn(),
-    setQueriesData: vi.fn(),
-    invalidateQueries: vi.fn(),
-  }),
+  infiniteQueryOptions: (opts: unknown) => opts,
   QueryClient: vi.fn(() => ({
-    setQueryData: vi.fn(),
-    setQueriesData: vi.fn(),
     invalidateQueries: vi.fn(),
+    setQueriesData: vi.fn(),
+    setQueryData: vi.fn(),
   })),
   queryOptions: (opts: unknown) => opts,
-  infiniteQueryOptions: (opts: unknown) => opts,
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    setQueriesData: vi.fn(),
+    setQueryData: vi.fn(),
+  }),
 }));
 
 // Mock session
 vi.mock('@/lib/auth/client', () => ({
-  useSession: () => ({ data: { user: { name: 'Test User', image: null } } }),
+  useSession: () => ({ data: { user: { image: null, name: 'Test User' } } }),
 }));
 
 // Mock TanStack Router
@@ -70,7 +70,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 // Mock query hooks
 vi.mock('@/hooks/queries', () => ({
-  useThreadSlugStatusQuery: vi.fn((_threadId: string | null, _enabled: boolean) => ({
+  useThreadMessagesQuery: vi.fn(() => ({
     data: null,
     isLoading: false,
   })),
@@ -82,7 +82,7 @@ vi.mock('@/hooks/queries', () => ({
     data: null,
     isLoading: false,
   })),
-  useThreadMessagesQuery: vi.fn(() => ({
+  useThreadSlugStatusQuery: vi.fn((_threadId: string | null, _enabled: boolean) => ({
     data: null,
     isLoading: false,
   })),
@@ -92,8 +92,8 @@ vi.mock('@/hooks/queries', () => ({
 const mockHistoryReplaceState = vi.fn();
 Object.defineProperty(window, 'history', {
   value: {
-    state: {},
     replaceState: mockHistoryReplaceState,
+    state: {},
   },
   writable: true,
 });
@@ -110,10 +110,10 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
 
       // Initial: No thread created yet
       store.setState({
-        showInitialUI: false,
+        createdThreadId: null,
         isStreaming: false,
         screenMode: ScreenModes.OVERVIEW,
-        createdThreadId: null,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -137,9 +137,9 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
         createdThreadId: 'thread-123',
         screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -152,7 +152,7 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       rerender();
 
       // Should stop polling (verified by checking state)
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
     });
 
     it('should NOT restart polling effect when unrelated state changes', () => {
@@ -160,10 +160,10 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
         createdThreadId: 'thread-123',
-        screenMode: ScreenModes.OVERVIEW,
         messages: [],
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -175,8 +175,8 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
         store.setState({
           messages: [
             createTestUserMessage({
-              id: 'msg-1',
               content: 'Hello',
+              id: 'msg-1',
               roundNumber: 0,
             }),
           ],
@@ -200,17 +200,17 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       mockHistoryReplaceState.mockClear();
 
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
         thread: {
+          createdAt: new Date(),
           id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
           slug: 'test-slug',
           title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
           updatedAt: new Date(),
-          lastMessageAt: null,
           userId: 'user-1',
         },
       });
@@ -234,17 +234,17 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
 
       // Simulate AI slug already set
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
         thread: {
+          createdAt: new Date(),
           id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
           slug: 'ai-generated-slug',
           title: 'AI Title',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
           updatedAt: new Date(),
-          lastMessageAt: null,
           userId: 'user-1',
         },
       });
@@ -274,21 +274,21 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         messages: [],
         participants: [],
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -301,8 +301,8 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
         store.setState({
           messages: [
             createTestModeratorMessage({
-              id: 'mod-1',
               content: 'Summary',
+              id: 'mod-1',
               roundNumber: 0,
             }),
           ],
@@ -320,32 +320,32 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: true, // User clicked "New Chat"
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         messages: [
           createTestModeratorMessage({
-            id: 'mod-1',
             content: 'Summary',
+            id: 'mod-1',
             roundNumber: 0,
           }),
         ],
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: true, // User clicked "New Chat"
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       renderHook(() => useFlowController({ enabled: true }), { wrapper });
 
       // Should not navigate (verified by showInitialUI check)
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
     });
   });
 
@@ -355,9 +355,9 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
         createdThreadId: 'thread-123',
         screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -371,7 +371,7 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       rerender();
 
       // Verify reset happened (refs are internal, but state is observable)
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
 
       // Return to non-initial UI - should be able to navigate again
       act(() => {
@@ -380,7 +380,7 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
 
       rerender();
 
-      expect(store.getState().showInitialUI).toBe(false);
+      expect(store.getState().showInitialUI).toBeFalsy();
     });
   });
 
@@ -390,64 +390,64 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         createdThreadId: 'thread-123',
+        isModeratorStreaming: false,
+        isStreaming: false,
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
           createTestAssistantMessage({
-            id: 'assist-1',
             content: 'Response 1',
-            roundNumber: 0,
+            id: 'assist-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
           createTestAssistantMessage({
-            id: 'assist-2',
             content: 'Response 2',
-            roundNumber: 0,
+            id: 'assist-2',
             participantId: 'p2',
             participantIndex: 1,
+            roundNumber: 0,
           }),
         ],
         participants: [
           {
-            id: 'p1',
+            createdAt: new Date(),
             displayOrder: 0,
+            id: 'p1',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'gpt-4',
             participantRole: null,
             providerId: 'openai',
-            modelId: 'gpt-4',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
-            id: 'p2',
+            createdAt: new Date(),
             displayOrder: 1,
+            id: 'p2',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'claude-3',
             participantRole: null,
             providerId: 'anthropic',
-            modelId: 'claude-3',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
         ],
-        isStreaming: false,
-        isModeratorStreaming: false,
-        screenMode: ScreenModes.OVERVIEW,
         pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       // Render hook - the effect should read fresh state from storeApi.getState()
@@ -463,61 +463,61 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
+        isStreaming: true, // Still streaming participants
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
           createTestAssistantMessage({
-            id: 'assist-1',
             content: 'Response 1',
-            roundNumber: 0,
+            id: 'assist-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
           createTestAssistantMessage({
-            id: 'assist-2',
             content: 'Response 2',
-            roundNumber: 0,
+            id: 'assist-2',
             participantId: 'p2',
             participantIndex: 1,
+            roundNumber: 0,
           }),
         ],
         participants: [
           {
-            id: 'p1',
+            createdAt: new Date(),
             displayOrder: 0,
+            id: 'p1',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'gpt-4',
             participantRole: null,
             providerId: 'openai',
-            modelId: 'gpt-4',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
-            id: 'p2',
+            createdAt: new Date(),
             displayOrder: 1,
+            id: 'p2',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'claude-3',
             participantRole: null,
             providerId: 'anthropic',
-            modelId: 'claude-3',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
         ],
-        isStreaming: true, // Still streaming participants
         screenMode: ScreenModes.OVERVIEW,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       const { result } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
@@ -533,59 +533,59 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
 
       // Initial state with partial responses
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         createdThreadId: 'thread-123',
+        isStreaming: false,
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
           createTestAssistantMessage({
-            id: 'assist-1',
             content: 'Response 1',
-            roundNumber: 0,
+            id: 'assist-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
         ],
         participants: [
           {
-            id: 'p1',
+            createdAt: new Date(),
             displayOrder: 0,
+            id: 'p1',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'gpt-4',
             participantRole: null,
             providerId: 'openai',
-            modelId: 'gpt-4',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
           {
-            id: 'p2',
+            createdAt: new Date(),
             displayOrder: 1,
+            id: 'p2',
             isEnabled: true,
+            maxTokens: 1000,
+            modelId: 'claude-3',
             participantRole: null,
             providerId: 'anthropic',
-            modelId: 'claude-3',
             temperature: 0.7,
-            maxTokens: 1000,
-            createdAt: new Date(),
             updatedAt: new Date(),
           },
         ],
-        isStreaming: false,
-        screenMode: ScreenModes.OVERVIEW,
         pendingAnimations: new Set(),
+        screenMode: ScreenModes.OVERVIEW,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
-      const { result, rerender } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
+      const { rerender, result } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
 
       // Should be IDLE (not all participants responded)
       expect(result.current.flowState).toBe(FlowStates.IDLE);
@@ -596,11 +596,11 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
           messages: [
             ...store.getState().messages,
             createTestAssistantMessage({
-              id: 'assist-2',
               content: 'Response 2',
-              roundNumber: 0,
+              id: 'assist-2',
               participantId: 'p2',
               participantIndex: 1,
+              roundNumber: 0,
             }),
           ],
         });
@@ -625,12 +625,12 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       store.setState({
         isStreaming: true,
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
         ],
         screenMode: ScreenModes.OVERVIEW,
       });
 
-      const { result, rerender } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
+      const { rerender, result } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
 
       // Streaming
       expect(result.current.flowState).toBe(FlowStates.STREAMING_PARTICIPANTS);
@@ -645,7 +645,7 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
       // streamingJustCompleted should prevent immediate moderator creation
       // (can't directly observe internal state, but we verify flow state logic)
       await waitFor(() => {
-        expect(store.getState().isStreaming).toBe(false);
+        expect(store.getState().isStreaming).toBeFalsy();
       });
     });
 
@@ -655,7 +655,7 @@ describe('effect Dependency Optimization - useEffect Arrays', () => {
 
       store.setState({
         isStreaming: true,
-        messages: [createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 })],
+        messages: [createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 })],
         screenMode: ScreenModes.OVERVIEW,
       });
 
@@ -685,19 +685,19 @@ describe('effect Dependency Optimization - useCallback Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         messages: [],
         participants: [],
         preSearches: [],
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -707,7 +707,7 @@ describe('effect Dependency Optimization - useCallback Arrays', () => {
       // Change state that's NOT in callback deps (messages)
       act(() => {
         store.setState({
-          messages: [createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 })],
+          messages: [createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 })],
         });
       });
 
@@ -724,24 +724,24 @@ describe('effect Dependency Optimization - useCallback Arrays', () => {
 
       // Initial state
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         createdThreadId: 'thread-123',
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
         ],
         participants: [],
         preSearches: [],
-        showInitialUI: false,
         screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -752,11 +752,11 @@ describe('effect Dependency Optimization - useCallback Arrays', () => {
           messages: [
             ...store.getState().messages,
             createTestAssistantMessage({
-              id: 'assist-1',
               content: 'Response',
-              roundNumber: 0,
+              id: 'assist-1',
               participantId: 'p1',
               participantIndex: 0,
+              roundNumber: 0,
             }),
           ],
         });
@@ -780,9 +780,9 @@ describe('effect Dependency Optimization - useMemo Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
         isStreaming: false,
         screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -805,17 +805,17 @@ describe('effect Dependency Optimization - useMemo Arrays', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        thread: null,
         createdThreadId: null,
+        isCreatingThread: false,
+        isModeratorStreaming: false,
+        isStreaming: false,
         messages: [],
         participants: [],
-        isStreaming: false,
-        isModeratorStreaming: false,
-        isCreatingThread: false,
         screenMode: ScreenModes.OVERVIEW,
+        thread: null,
       });
 
-      const { result, rerender } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
+      const { rerender, result } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
 
       const stateBefore = result.current.flowState;
 
@@ -837,29 +837,29 @@ describe('effect Dependency Optimization - useMemo Arrays', () => {
 
       // Create many messages
       const messages = [
-        createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
         ...Array.from({ length: 10 }, (_, i) =>
           createTestAssistantMessage({
-            id: `assist-${i}`,
             content: `Response ${i}`,
-            roundNumber: 0,
+            id: `assist-${i}`,
             participantId: `p${i}`,
             participantIndex: i,
+            roundNumber: 0,
           })),
       ];
 
       store.setState({
         messages,
         participants: Array.from({ length: 10 }, (_, i) => ({
-          id: `p${i}`,
+          createdAt: new Date(),
           displayOrder: i,
+          id: `p${i}`,
           isEnabled: true,
+          maxTokens: 1000,
+          modelId: 'gpt-4',
           participantRole: null,
           providerId: 'openai',
-          modelId: 'gpt-4',
           temperature: 0.7,
-          maxTokens: 1000,
-          createdAt: new Date(),
           updatedAt: new Date(),
         })),
         screenMode: ScreenModes.OVERVIEW,
@@ -902,17 +902,17 @@ describe('effect Dependency Optimization - useMemo Arrays', () => {
 
       store.setState({
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
           createTestAssistantMessage({
-            id: 'assist-1',
             content: 'Response',
-            roundNumber: 0,
+            id: 'assist-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
           createTestModeratorMessage({
-            id: 'mod-1',
             content: 'Summary',
+            id: 'mod-1',
             roundNumber: 0,
           }),
         ],
@@ -942,7 +942,7 @@ describe('effect Dependency Optimization - useMemo Arrays', () => {
         screenMode: ScreenModes.OVERVIEW,
       });
 
-      const { result, rerender } = renderHook(() => useFlowLoading({ mode: ScreenModes.OVERVIEW }), { wrapper });
+      const { rerender, result } = renderHook(() => useFlowLoading({ mode: ScreenModes.OVERVIEW }), { wrapper });
 
       const detailsBefore = result.current.loadingDetails;
 
@@ -970,26 +970,26 @@ describe('effect Dependency Optimization - Refs vs State for Guards', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         messages: [
           createTestModeratorMessage({
-            id: 'mod-1',
             content: 'Summary',
+            id: 'mod-1',
             roundNumber: 0,
           }),
         ],
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       // Render hook - internal refs should prevent re-entry
@@ -1006,8 +1006,8 @@ describe('effect Dependency Optimization - Refs vs State for Guards', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
         screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
       });
 
       const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -1021,7 +1021,7 @@ describe('effect Dependency Optimization - Refs vs State for Guards', () => {
 
       // Refs should be reset synchronously
       // State reset via startTransition is deferred
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
 
       // Toggle back - should work (refs were reset)
       act(() => {
@@ -1030,7 +1030,7 @@ describe('effect Dependency Optimization - Refs vs State for Guards', () => {
 
       rerender();
 
-      expect(store.getState().showInitialUI).toBe(false);
+      expect(store.getState().showInitialUI).toBeFalsy();
     });
   });
 
@@ -1040,24 +1040,24 @@ describe('effect Dependency Optimization - Refs vs State for Guards', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        thread: {
-          id: 'thread-123',
-          slug: 'test-slug',
-          title: 'Test Thread',
-          isAiGeneratedTitle: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastMessageAt: null,
-          userId: 'user-1',
-        },
         messages: [
           createTestModeratorMessage({
-            id: 'mod-1',
             content: 'Summary',
+            id: 'mod-1',
             roundNumber: 0,
           }),
         ],
         screenMode: ScreenModes.OVERVIEW,
+        thread: {
+          createdAt: new Date(),
+          id: 'thread-123',
+          isAiGeneratedTitle: true,
+          lastMessageAt: null,
+          slug: 'test-slug',
+          title: 'Test Thread',
+          updatedAt: new Date(),
+          userId: 'user-1',
+        },
       });
 
       renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
@@ -1088,17 +1088,17 @@ describe('effect Dependency Optimization - Effect Cleanup', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
         thread: {
+          createdAt: new Date(),
           id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
           slug: 'initial-slug',
           title: 'Initial Title',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
           updatedAt: new Date(),
-          lastMessageAt: null,
           userId: 'user-1',
         },
       });
@@ -1119,17 +1119,17 @@ describe('effect Dependency Optimization - Effect Cleanup', () => {
       const wrapper = createStoreWrapper(store);
 
       store.setState({
-        showInitialUI: false,
-        screenMode: ScreenModes.OVERVIEW,
         createdThreadId: 'thread-123',
+        screenMode: ScreenModes.OVERVIEW,
+        showInitialUI: false,
         thread: {
+          createdAt: new Date(),
           id: 'thread-123',
+          isAiGeneratedTitle: false,
+          lastMessageAt: null,
           slug: 'test-slug',
           title: 'Test Thread',
-          isAiGeneratedTitle: false,
-          createdAt: new Date(),
           updatedAt: new Date(),
-          lastMessageAt: null,
           userId: 'user-1',
         },
       });
@@ -1157,7 +1157,7 @@ describe('effect Dependency Optimization - Effect Cleanup', () => {
 
       store.setState({
         isStreaming: true,
-        messages: [createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 })],
+        messages: [createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 })],
         screenMode: ScreenModes.OVERVIEW,
       });
 
@@ -1222,9 +1222,9 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     const wrapper = createStoreWrapper(store);
 
     store.setState({
-      showInitialUI: false,
       isStreaming: false,
       screenMode: ScreenModes.OVERVIEW,
+      showInitialUI: false,
     });
 
     const { rerender } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -1240,7 +1240,7 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     rerender();
 
     // Should stabilize without infinite loop
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should handle state updates during unmount gracefully', () => {
@@ -1248,8 +1248,8 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     const wrapper = createStoreWrapper(store);
 
     store.setState({
-      showInitialUI: false,
       screenMode: ScreenModes.OVERVIEW,
+      showInitialUI: false,
     });
 
     const { unmount } = renderHook(() => useFlowController({ enabled: true }), { wrapper });
@@ -1261,7 +1261,7 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     });
 
     // No error expected
-    expect(store.getState().showInitialUI).toBe(true);
+    expect(store.getState().showInitialUI).toBeTruthy();
   });
 
   it('should handle concurrent effect executions', async () => {
@@ -1269,34 +1269,34 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     const wrapper = createStoreWrapper(store);
 
     store.setState({
-      thread: {
-        id: 'thread-123',
-        slug: 'test-slug',
-        title: 'Test Thread',
-        isAiGeneratedTitle: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastMessageAt: null,
-        userId: 'user-1',
-      },
       createdThreadId: 'thread-123',
+      isStreaming: false,
       messages: [],
       participants: [
         {
-          id: 'p1',
+          createdAt: new Date(),
           displayOrder: 0,
+          id: 'p1',
           isEnabled: true,
+          maxTokens: 1000,
+          modelId: 'gpt-4',
           participantRole: null,
           providerId: 'openai',
-          modelId: 'gpt-4',
           temperature: 0.7,
-          maxTokens: 1000,
-          createdAt: new Date(),
           updatedAt: new Date(),
         },
       ],
-      isStreaming: false,
       screenMode: ScreenModes.OVERVIEW,
+      thread: {
+        createdAt: new Date(),
+        id: 'thread-123',
+        isAiGeneratedTitle: false,
+        lastMessageAt: null,
+        slug: 'test-slug',
+        title: 'Test Thread',
+        updatedAt: new Date(),
+        userId: 'user-1',
+      },
     });
 
     const { rerender } = renderHook(() => useFlowStateMachine({ mode: ScreenModes.OVERVIEW }), { wrapper });
@@ -1305,18 +1305,18 @@ describe('effect Dependency Optimization - Edge Cases', () => {
     await act(async () => {
       store.setState({
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
         ],
       });
       store.setState({
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Hello', roundNumber: 0 }),
+          createTestUserMessage({ content: 'Hello', id: 'user-1', roundNumber: 0 }),
           createTestAssistantMessage({
-            id: 'assist-1',
             content: 'Response',
-            roundNumber: 0,
+            id: 'assist-1',
             participantId: 'p1',
             participantIndex: 0,
+            roundNumber: 0,
           }),
         ],
       });

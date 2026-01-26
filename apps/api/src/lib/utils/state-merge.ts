@@ -100,8 +100,8 @@ export function mergeServerClientState<T, K extends string | number>(
   );
 
   return {
-    mergedItems,
     hasChanges: true, // Always return true - caller will do shallow comparison
+    mergedItems,
   };
 }
 

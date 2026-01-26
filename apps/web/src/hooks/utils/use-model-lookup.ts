@@ -91,8 +91,8 @@ export function useModelLookup(options?: UseModelLookupOptions): UseModelLookupR
 
   return {
     allModels,
-    findModel,
     defaultModelId,
+    findModel,
     isLoading,
   };
 }

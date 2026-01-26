@@ -32,23 +32,23 @@ export type UseScreenInitializationOptions = {
 
 export function useScreenInitialization(options: UseScreenInitializationOptions) {
   const {
-    mode,
-    thread,
-    participants = [],
-    initialMessages,
     enableOrchestrator = true,
-    streamResumptionState,
+    initialMessages,
     initialPreSearches,
+    mode,
+    participants = [],
+    streamResumptionState,
+    thread,
   } = options;
 
   const storeApi = useChatStoreApi();
 
   const streamingStateSet = useChatStore(useShallow(s => ({
+    configChangeRoundNumber: s.configChangeRoundNumber,
+    isPatchInProgress: s.isPatchInProgress,
+    isWaitingForChangelog: s.isWaitingForChangelog,
     pendingMessage: s.pendingMessage,
     streamResumptionPrefilled: s.streamResumptionPrefilled,
-    configChangeRoundNumber: s.configChangeRoundNumber,
-    isWaitingForChangelog: s.isWaitingForChangelog,
-    isPatchInProgress: s.isPatchInProgress,
   })));
 
   const initializedThreadIdRef = useRef<string | null>(null);
@@ -191,8 +191,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     && enableOrchestrator
     && !hasServerHydratedPreSearches;
   getPreSearchOrchestrator({
-    threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,
+    threadId: thread?.id || '',
   });
 
   const { isStreaming } = useChatStore(useShallow(s => ({
@@ -200,7 +200,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   })));
 
   useIncompleteRoundResumption({
-    threadId: thread?.id || '',
     enabled: mode === ScreenModes.THREAD && Boolean(thread?.id) && !isStreaming && enableOrchestrator,
+    threadId: thread?.id || '',
   });
 }

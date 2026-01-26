@@ -37,7 +37,7 @@ type ParticipantInfo = {
 type MessageGroup
   = | {
     type: 'user-group';
-    messages: Array<{ message: UIMessage; index: number }>;
+    messages: { message: UIMessage; index: number }[];
     headerInfo: {
       avatarSrc: string;
       avatarName: string;
@@ -47,11 +47,11 @@ type MessageGroup
   | {
     type: 'assistant-group';
     participantKey: string;
-    messages: Array<{
+    messages: {
       message: UIMessage;
       index: number;
       participantInfo: ParticipantInfo;
-    }>;
+    }[];
     headerInfo: {
       avatarSrc: string;
       avatarName: string;
@@ -93,26 +93,26 @@ type ParticipantMessageWrapperProps = {
 };
 
 const ParticipantMessageWrapper = memo(({
-  participant,
-  participantIndex,
-  model,
-  status,
-  parts,
+  avatarName: avatarNameOverride,
+  avatarSrc: avatarSrcOverride,
+  displayName: displayNameOverride,
+  groupAvailableSources,
+  hideActions = false,
   isAccessible,
-  messageId,
-  metadata,
   loadingText,
   maxContentHeight,
-  avatarSrc: avatarSrcOverride,
-  avatarName: avatarNameOverride,
-  displayName: displayNameOverride,
-  hideActions = false,
-  groupAvailableSources,
+  messageId,
+  metadata,
+  model,
+  participant,
+  participantIndex,
+  parts,
   skipTransitions = false,
+  status,
 }: ParticipantMessageWrapperProps) => {
   const defaultAvatarProps = participant
     ? getAvatarPropsFromModelId(MessageRoles.ASSISTANT, participant.modelId, null, 'AI')
-    : { src: '', name: 'AI' };
+    : { name: 'AI', src: '' };
 
   const avatarSrc = avatarSrcOverride ?? defaultAvatarProps.src;
   const avatarName = avatarNameOverride ?? defaultAvatarProps.name;
@@ -159,17 +159,17 @@ const ParticipantMessageWrapper = memo(({
 });
 
 function AssistantGroupCard({
+  demoMode,
+  findModel,
   group,
   groupIndex: _groupIndex,
-  findModel,
-  demoMode,
   hideMetadata,
-  t,
+  isReadOnly = false,
   keyForMessage,
   maxContentHeight,
   roundAvailableSources,
   skipTransitions = false,
-  isReadOnly = false,
+  t,
 }: {
   group: Extract<MessageGroup, { type: 'assistant-group' }>;
   groupIndex: number;
@@ -224,7 +224,7 @@ function AssistantGroupCard({
         />
         {/* Message content */}
         <div className="space-y-4">
-          {group.messages.map(({ message, index, participantInfo }) => {
+          {group.messages.map(({ index, message, participantInfo }) => {
             const messageKey = keyForMessage(message, index);
             const metadata = getMessageMetadata(message.metadata);
             const model = findModel(participantInfo.modelId);
@@ -237,9 +237,9 @@ function AssistantGroupCard({
             const hasAnyContent = hasTextContent || hasToolCalls;
 
             const messageStatus: MessageStatus = getMessageStatus({
-              message,
-              isStreaming: participantInfo.isStreaming,
               hasAnyContent,
+              isStreaming: participantInfo.isStreaming,
+              message,
             });
 
             /**
@@ -328,14 +328,14 @@ function AssistantGroupCard({
 }
 
 function getParticipantInfoForMessage({
+  currentParticipantIndex,
+  currentStreamingParticipant,
+  isGlobalStreaming,
+  isModeratorStreaming = false,
   message,
   messageIndex,
-  totalMessages,
-  isGlobalStreaming,
-  currentParticipantIndex,
   participants,
-  currentStreamingParticipant,
-  isModeratorStreaming = false,
+  totalMessages,
 }: {
   message: UIMessage;
   messageIndex: number;
@@ -368,10 +368,10 @@ function getParticipantInfoForMessage({
     const finishReason = assistantMetadata?.finishReason;
     const hasActuallyFinished = isCompletionFinishReason(finishReason);
     return {
-      participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
-      modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
-      role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
       isStreaming: !hasActuallyFinished,
+      modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
+      participantIndex: assistantMetadata?.participantIndex ?? currentParticipantIndex,
+      role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
     };
   }
 
@@ -381,19 +381,19 @@ function getParticipantInfoForMessage({
   if (isThisMessageStreaming) {
     const participant = participants[currentParticipantIndex] || currentStreamingParticipant;
     return {
-      participantIndex: currentParticipantIndex,
-      modelId: participant?.modelId || assistantMetadata?.model,
-      role: participant?.role || assistantMetadata?.participantRole || null,
       isStreaming: true,
+      modelId: participant?.modelId || assistantMetadata?.model,
+      participantIndex: currentParticipantIndex,
+      role: participant?.role || assistantMetadata?.participantRole || null,
     };
   }
 
   if (isModerator && isModeratorStreaming && !hasVisibleContent) {
     return {
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
-      modelId: assistantMetadata?.model,
-      role: null,
       isStreaming: true,
+      modelId: assistantMetadata?.model,
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
+      role: null,
     };
   }
 
@@ -401,10 +401,10 @@ function getParticipantInfoForMessage({
   const fallbackParticipant = participants[fallbackParticipantIndex];
 
   return {
-    participantIndex: fallbackParticipantIndex,
-    modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
-    role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
     isStreaming: false,
+    modelId: assistantMetadata?.model || fallbackParticipant?.modelId,
+    participantIndex: fallbackParticipantIndex,
+    role: assistantMetadata?.participantRole || fallbackParticipant?.role || null,
   };
 }
 
@@ -457,7 +457,7 @@ type ChatMessageListProps = {
   /**
    * Memory events by round for inline display under user messages
    */
-  memoryEventsByRound?: Map<number, Array<{ id: string; summary: string; content: string }>>;
+  memoryEventsByRound?: Map<number, { id: string; summary: string; content: string }[]>;
   /**
    * Callback to delete a memory
    */
@@ -465,32 +465,32 @@ type ChatMessageListProps = {
 };
 export const ChatMessageList = memo(
   ({
-    messages,
-    user = null,
-    participants = EMPTY_PARTICIPANTS,
+    completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
+    currentParticipantIndex = 0,
+    currentStreamingParticipant = null,
+    demoMode = false,
+    demoPreSearchOpen,
     hideMetadata = false,
     isLoading: _isLoading = false,
-    isStreaming = false,
-    currentStreamingParticipant = null,
-    currentParticipantIndex = 0,
-    userAvatar,
-    threadId: _threadId,
-    preSearches: _preSearches = EMPTY_PRE_SEARCHES,
-    streamingRoundNumber: _streamingRoundNumber = null,
-    demoPreSearchOpen,
-    maxContentHeight,
-    skipEntranceAnimations = false,
-    completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
     isModeratorStreaming = false,
-    roundNumber: _roundNumber,
-    demoMode = false,
     isReadOnly = false,
+    isStreaming = false,
+    maxContentHeight,
     memoryEventsByRound,
+    messages,
     onDeleteMemory,
+    participants = EMPTY_PARTICIPANTS,
+    preSearches: _preSearches = EMPTY_PRE_SEARCHES,
+    roundNumber: _roundNumber,
+    skipEntranceAnimations = false,
+    streamingRoundNumber: _streamingRoundNumber = null,
+    threadId: _threadId,
+    user = null,
+    userAvatar,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const { findModel } = useModelLookup({ enabled: !isReadOnly });
-    const userInfo = useMemo(() => user || { name: 'User', image: null }, [user]);
+    const userInfo = useMemo(() => user || { image: null, name: 'User' }, [user]);
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
@@ -696,7 +696,7 @@ export const ChatMessageList = memo(
     const messagesWithParticipantInfo = useMemo(() => {
       return deduplicatedMessages.map((message, index) => {
         if (message.role === MessageRoles.USER) {
-          return { message, index, participantInfo: null };
+          return { index, message, participantInfo: null };
         }
 
         if (isModeratorMessage(message)) {
@@ -705,13 +705,13 @@ export const ChatMessageList = memo(
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
           const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta ? (moderatorMeta as { model?: string }).model : undefined;
           return {
-            message,
             index,
+            message,
             participantInfo: {
-              participantIndex: MODERATOR_PARTICIPANT_INDEX, // -99 for sort order
-              modelId, // Uses its own model ID from metadata
-              role: null, // No role badge displayed for moderator
               isStreaming: !hasActuallyFinished,
+              modelId, // Uses its own model ID from metadata
+              participantIndex: MODERATOR_PARTICIPANT_INDEX, // -99 for sort order
+              role: null, // No role badge displayed for moderator
             },
           };
         }
@@ -724,29 +724,29 @@ export const ChatMessageList = memo(
 
         if (isComplete && assistantMetadata) {
           return {
-            message,
             index,
+            message,
             participantInfo: {
-              participantIndex: assistantMetadata.participantIndex,
-              modelId: assistantMetadata.model,
-              role: assistantMetadata.participantRole,
               isStreaming: false,
+              modelId: assistantMetadata.model,
+              participantIndex: assistantMetadata.participantIndex,
+              role: assistantMetadata.participantRole,
             },
           };
         }
 
         const participantInfo = getParticipantInfoForMessage({
+          currentParticipantIndex,
+          currentStreamingParticipant,
+          isGlobalStreaming: isStreaming,
+          isModeratorStreaming,
           message,
           messageIndex: index,
-          totalMessages: deduplicatedMessages.length,
-          isGlobalStreaming: isStreaming,
-          currentParticipantIndex,
           participants,
-          currentStreamingParticipant,
-          isModeratorStreaming,
+          totalMessages: deduplicatedMessages.length,
         });
 
-        return { message, index, participantInfo };
+        return { index, message, participantInfo };
       });
     }, [deduplicatedMessages, isStreaming, currentParticipantIndex, participants, currentStreamingParticipant, isModeratorStreaming]);
 
@@ -757,8 +757,9 @@ export const ChatMessageList = memo(
 
       // Get assistant messages for the streaming round
       const streamingRoundMessages = deduplicatedMessages.filter((m) => {
-        if (m.role === MessageRoles.USER)
+        if (m.role === MessageRoles.USER) {
           return false;
+        }
         const roundNum = getRoundNumber(m.metadata);
         return roundNum === _streamingRoundNumber;
       });
@@ -774,7 +775,7 @@ export const ChatMessageList = memo(
       let currentAssistantGroup: Extract<MessageGroup, { type: 'assistant-group' }> | null = null;
       let currentUserGroup: Extract<MessageGroup, { type: 'user-group' }> | null = null;
 
-      for (const { message, index, participantInfo } of messagesWithParticipantInfo) {
+      for (const { index, message, participantInfo } of messagesWithParticipantInfo) {
         const isPreSearch = isPreSearchMessage(message.metadata);
         if (isPreSearch) {
           continue;
@@ -788,16 +789,16 @@ export const ChatMessageList = memo(
 
           if (!currentUserGroup) {
             currentUserGroup = {
-              type: 'user-group',
-              messages: [{ message, index }],
               headerInfo: {
-                avatarSrc: userAvatarSrc,
                 avatarName: userAvatarName,
+                avatarSrc: userAvatarSrc,
                 displayName: userAvatarName,
               },
+              messages: [{ index, message }],
+              type: 'user-group',
             };
           } else {
-            currentUserGroup.messages.push({ message, index });
+            currentUserGroup.messages.push({ index, message });
           }
           continue;
         }
@@ -865,8 +866,8 @@ export const ChatMessageList = memo(
         ) {
           // Same participant, add to current group
           currentAssistantGroup.messages.push({
-            message,
             index,
+            message,
             participantInfo,
           });
         } else {
@@ -876,17 +877,17 @@ export const ChatMessageList = memo(
           }
 
           currentAssistantGroup = {
-            type: 'assistant-group',
-            participantKey,
-            messages: [{ message, index, participantInfo }],
             headerInfo: {
-              avatarSrc,
               avatarName,
+              avatarSrc,
               displayName,
-              role: participantInfo.role ?? null,
-              requiredTierName,
               isAccessible,
+              requiredTierName,
+              role: participantInfo.role ?? null,
             },
+            messages: [{ index, message, participantInfo }],
+            participantKey,
+            type: 'assistant-group',
           };
         }
       }
@@ -946,19 +947,28 @@ export const ChatMessageList = memo(
               <div key={`user-group-wrapper-${group.messages[0]?.index}`}>
                 {/* User messages - right-aligned bubbles, no avatar/name */}
                 <div className="flex flex-col items-end gap-2">
-                  {group.messages.map(({ message, index }) => {
+                  {group.messages.map(({ index, message }) => {
                     const messageKey = keyForMessage(message, index);
 
                     // Extract file attachments and text parts separately
                     // ✅ TYPE-SAFE: Use isFilePart type guard for proper narrowing
                     const fileAttachments: MessageAttachment[] = message.parts
                       .filter((part): part is FilePart => isFilePart(part))
-                      .map(filePart => ({
-                        url: filePart.url,
-                        filename: filePart.filename,
-                        mediaType: filePart.mediaType,
-                        uploadId: getUploadIdFromFilePart(filePart) ?? undefined,
-                      }));
+                      .map((filePart) => {
+                        // Conditionally build object to satisfy exactOptionalPropertyTypes
+                        const attachment: MessageAttachment = { url: filePart.url };
+                        if (filePart.filename !== undefined) {
+                          attachment.filename = filePart.filename;
+                        }
+                        if (filePart.mediaType !== undefined) {
+                          attachment.mediaType = filePart.mediaType;
+                        }
+                        const uploadId = getUploadIdFromFilePart(filePart);
+                        if (uploadId !== null) {
+                          attachment.uploadId = uploadId;
+                        }
+                        return attachment;
+                      });
 
                     const textParts = message.parts.filter(
                       part => part.type === MessagePartTypes.TEXT,
@@ -1027,8 +1037,9 @@ export const ChatMessageList = memo(
                 {/* Memory events indicator - shows inline under user messages */}
                 {(() => {
                   const memories = memoryEventsByRound?.get(roundNumber);
-                  if (!memories || memories.length === 0)
+                  if (!memories || memories.length === 0) {
                     return null;
+                  }
 
                   return (
                     <div className="flex justify-end mt-2">
@@ -1040,7 +1051,7 @@ export const ChatMessageList = memo(
                               ? (memoryId: string) => onDeleteMemory(memoryId, roundNumber)
                               : undefined
                           }
-                          defaultOpen={true}
+                          defaultOpen
                         />
                       </div>
                     </div>
@@ -1111,8 +1122,9 @@ export const ChatMessageList = memo(
 
                   // Get assistant messages for this round and build participant message maps
                   const assistantMessagesForRound = messages.filter((m) => {
-                    if (m.role === MessageRoles.USER)
+                    if (m.role === MessageRoles.USER) {
                       return false;
+                    }
                     const msgRound = getRoundNumber(m.metadata);
                     return msgRound === roundNumber;
                   });
@@ -1337,8 +1349,9 @@ export const ChatMessageList = memo(
                   // Moderator needs access to sources from participants for citation display
                   // Uses getAvailableSources() which extracts sources even when full schema validation fails
                   const assistantMessagesForRound = messages.filter((m) => {
-                    if (m.role === MessageRoles.USER)
+                    if (m.role === MessageRoles.USER) {
                       return false;
+                    }
                     const msgRound = getRoundNumber(m.metadata);
                     return msgRound === roundNumber;
                   });
@@ -1427,7 +1440,7 @@ export const ChatMessageList = memo(
                           model={undefined}
                           status={moderatorStatus}
                           parts={moderatorParts}
-                          isAccessible={true}
+                          isAccessible
                           messageId={moderatorMessage?.id}
                           loadingText={moderatorLoadingText}
                           maxContentHeight={maxContentHeight}
@@ -1473,11 +1486,13 @@ export const ChatMessageList = memo(
             // We collect from all assistant messages in the same round to provide as fallback
             const roundSourcesMap = new Map<string, AvailableSource>();
             for (const msg of messages) {
-              if (msg.role !== MessageRoles.ASSISTANT)
+              if (msg.role !== MessageRoles.ASSISTANT) {
                 continue;
+              }
               const msgRound = getRoundNumber(msg.metadata);
-              if (msgRound !== groupRoundNumber)
+              if (msgRound !== groupRoundNumber) {
                 continue;
+              }
               const meta = getMessageMetadata(msg.metadata);
               const assistantMeta = meta && isAssistantMessageMetadata(meta) ? meta : null;
               if (assistantMeta?.availableSources) {
@@ -1542,8 +1557,9 @@ export const ChatMessageList = memo(
             const round = getRoundNumber(m.metadata);
             const isMod = m.metadata && typeof m.metadata === 'object'
               && 'isModerator' in m.metadata && m.metadata.isModerator === true;
-            if (!isMod || round !== latestRound)
+            if (!isMod || round !== latestRound) {
               return false;
+            }
             // Check if moderator has actual text content (not just step-start)
             const hasContent = m.parts?.some(p =>
               p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
@@ -1621,7 +1637,7 @@ export const ChatMessageList = memo(
                   model={undefined}
                   status={MessageStatuses.PENDING}
                   parts={[]}
-                  isAccessible={true}
+                  isAccessible
                   loadingText={t('chat.participant.moderatorObserving')}
                   maxContentHeight={maxContentHeight}
                   avatarSrc={BRAND.logos.main}

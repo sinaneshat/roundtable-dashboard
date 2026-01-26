@@ -23,17 +23,17 @@ export type CancelSubscriptionDialogProps = {
 };
 
 export function CancelSubscriptionDialog({
-  open,
-  onOpenChange,
-  onConfirm,
-  subscriptionTier,
   currentPeriodEnd,
   isProcessing = false,
+  onConfirm,
+  onOpenChange,
+  open,
+  subscriptionTier,
 }: CancelSubscriptionDialogProps) {
   const t = useTranslations();
   const endDate = currentPeriodEnd ? new Date(currentPeriodEnd) : null;
   const formattedEndDate = endDate
-    ? formatDate(endDate, { year: 'numeric', month: 'long', day: 'numeric' })
+    ? formatDate(endDate, { day: 'numeric', month: 'long', year: 'numeric' })
     : null;
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>

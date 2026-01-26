@@ -40,10 +40,6 @@ import {
  * @auth API Key (x-api-key header)
  */
 export const mcpJsonRpcRoute = createRoute({
-  method: 'post',
-  path: '/mcp',
-  tags: ['mcp'],
-  summary: 'MCP JSON-RPC endpoint',
   description: `
 Main Model Context Protocol endpoint using JSON-RPC 2.0 transport.
 
@@ -63,7 +59,8 @@ Main Model Context Protocol endpoint using JSON-RPC 2.0 transport.
 }
 \`\`\`
   `,
-  security: [{ ApiKeyAuth: [] }],
+  method: 'post',
+  path: '/mcp',
   request: {
     body: {
       content: {
@@ -75,15 +72,18 @@ Main Model Context Protocol endpoint using JSON-RPC 2.0 transport.
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'JSON-RPC response',
       content: {
         'application/json': {
           schema: JsonRpcResponseSchema,
         },
       },
+      description: 'JSON-RPC response',
     },
     ...StandardApiResponses.UNAUTHORIZED,
   },
+  security: [{ ApiKeyAuth: [] }],
+  summary: 'MCP JSON-RPC endpoint',
+  tags: ['mcp'],
 });
 
 // ============================================================================
@@ -95,23 +95,23 @@ Main Model Context Protocol endpoint using JSON-RPC 2.0 transport.
  * Convenience endpoint for listing tools without JSON-RPC
  */
 export const listToolsRoute = createRoute({
+  description: 'Returns all available tools in MCP format. OpenAI function calling compatible.',
   method: 'get',
   path: '/mcp/tools',
-  tags: ['mcp'],
-  summary: 'List MCP tools',
-  description: 'Returns all available tools in MCP format. OpenAI function calling compatible.',
-  security: [{ ApiKeyAuth: [] }],
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Tools list with server info',
       content: {
         'application/json': {
           schema: MCPToolsListResponseSchema,
         },
       },
+      description: 'Tools list with server info',
     },
     ...StandardApiResponses.UNAUTHORIZED,
   },
+  security: [{ ApiKeyAuth: [] }],
+  summary: 'List MCP tools',
+  tags: ['mcp'],
 });
 
 /**
@@ -119,23 +119,23 @@ export const listToolsRoute = createRoute({
  * Convenience endpoint for listing resources
  */
 export const listResourcesRoute = createRoute({
+  description: 'Returns user resources (chat threads) accessible via MCP.',
   method: 'get',
   path: '/mcp/resources',
-  tags: ['mcp'],
-  summary: 'List MCP resources',
-  description: 'Returns user resources (chat threads) accessible via MCP.',
-  security: [{ ApiKeyAuth: [] }],
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Resources list',
       content: {
         'application/json': {
           schema: MCPResourcesListResponseSchema,
         },
       },
+      description: 'Resources list',
     },
     ...StandardApiResponses.UNAUTHORIZED,
   },
+  security: [{ ApiKeyAuth: [] }],
+  summary: 'List MCP resources',
+  tags: ['mcp'],
 });
 
 /**
@@ -143,10 +143,6 @@ export const listResourcesRoute = createRoute({
  * Convenience endpoint for tool execution via HTTP POST
  */
 export const callToolRoute = createRoute({
-  method: 'post',
-  path: '/mcp/tools/call',
-  tags: ['mcp', 'tools'],
-  summary: 'Execute MCP tool',
   description: `
 Execute a tool by name with arguments. Returns MCP-compliant response.
 
@@ -178,7 +174,8 @@ Execute a tool by name with arguments. Returns MCP-compliant response.
 }
 \`\`\`
   `,
-  security: [{ ApiKeyAuth: [] }],
+  method: 'post',
+  path: '/mcp/tools/call',
   request: {
     body: {
       content: {
@@ -190,16 +187,19 @@ Execute a tool by name with arguments. Returns MCP-compliant response.
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Tool execution result (MCP format)',
       content: {
         'application/json': {
           schema: MCPToolCallResponseSchema,
         },
       },
+      description: 'Tool execution result (MCP format)',
     },
     ...StandardApiResponses.BAD_REQUEST,
     ...StandardApiResponses.UNAUTHORIZED,
   },
+  security: [{ ApiKeyAuth: [] }],
+  summary: 'Execute MCP tool',
+  tags: ['mcp', 'tools'],
 });
 
 /**
@@ -207,23 +207,23 @@ Execute a tool by name with arguments. Returns MCP-compliant response.
  * Returns tools in OpenAI function calling format
  */
 export const openAIFunctionsRoute = createRoute({
+  description: 'Returns tools formatted for OpenAI function calling API. Use for n8n AI Agent nodes.',
   method: 'get',
   path: '/mcp/openai/functions',
-  tags: ['mcp'],
-  summary: 'Get tools in OpenAI format',
-  description: 'Returns tools formatted for OpenAI function calling API. Use for n8n AI Agent nodes.',
-  security: [{ ApiKeyAuth: [] }],
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'OpenAI functions array',
       content: {
         'application/json': {
           schema: OpenAIFunctionsResponseSchema,
         },
       },
+      description: 'OpenAI functions array',
     },
     ...StandardApiResponses.UNAUTHORIZED,
   },
+  security: [{ ApiKeyAuth: [] }],
+  summary: 'Get tools in OpenAI format',
+  tags: ['mcp'],
 });
 
 // ============================================================================

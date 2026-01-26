@@ -29,14 +29,14 @@ import { describe, expect, it } from 'vitest';
  */
 function createFrozenMessage(roundNumber: number, text: string): UIMessage {
   const message: UIMessage = {
+    createdAt: new Date(),
     id: `thread-1_r${roundNumber}_user`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
-    createdAt: new Date(),
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.USER,
   };
 
   // Freeze the message and its nested parts (like Immer does)
@@ -73,8 +73,8 @@ function simulateAiSdkStreamingPush(message: UIMessage): boolean {
   try {
     // AI SDK tries to push new streaming parts
     message.parts.push({
-      type: MessagePartTypes.TEXT,
       text: 'Streaming chunk...',
+      type: MessagePartTypes.TEXT,
     });
     return true;
   } catch {
@@ -94,17 +94,17 @@ describe('round Regeneration - Frozen Array Detection', () => {
     const isFrozen = Object.isFrozen(frozenMessage);
     const arePartsFrozen = Object.isFrozen(frozenMessage.parts);
 
-    expect(isFrozen).toBe(true);
-    expect(arePartsFrozen).toBe(true);
+    expect(isFrozen).toBeTruthy();
+    expect(arePartsFrozen).toBeTruthy();
   });
 
   it('should detect sealed message arrays', () => {
     const message: UIMessage = {
-      id: 'test',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-      metadata: { role: MessageRoles.USER, roundNumber: 0 },
       createdAt: new Date(),
+      id: 'test',
+      metadata: { role: MessageRoles.USER, roundNumber: 0 },
+      parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     };
 
     Object.seal(message);
@@ -113,8 +113,8 @@ describe('round Regeneration - Frozen Array Detection', () => {
     const isSealed = Object.isSealed(message);
     const arePartsSealed = Object.isSealed(message.parts);
 
-    expect(isSealed).toBe(true);
-    expect(arePartsSealed).toBe(true);
+    expect(isSealed).toBeTruthy();
+    expect(arePartsSealed).toBeTruthy();
   });
 
   it('should detect when message arrays are NOT extensible', () => {
@@ -122,7 +122,7 @@ describe('round Regeneration - Frozen Array Detection', () => {
 
     const canExtend = Object.isExtensible(frozenMessage.parts);
 
-    expect(canExtend).toBe(false);
+    expect(canExtend).toBeFalsy();
   });
 });
 
@@ -135,26 +135,26 @@ describe('round Regeneration - structuredClone Behavior', () => {
     const frozenMessage = createFrozenMessage(0, 'Test');
 
     // Verify original is frozen
-    expect(Object.isFrozen(frozenMessage)).toBe(true);
-    expect(Object.isFrozen(frozenMessage.parts)).toBe(true);
+    expect(Object.isFrozen(frozenMessage)).toBeTruthy();
+    expect(Object.isFrozen(frozenMessage.parts)).toBeTruthy();
 
     // Clone the message
     const clonedMessage = structuredClone(frozenMessage);
 
     // Cloned message should NOT be frozen
-    expect(Object.isFrozen(clonedMessage)).toBe(false);
-    expect(Object.isFrozen(clonedMessage.parts)).toBe(false);
+    expect(Object.isFrozen(clonedMessage)).toBeFalsy();
+    expect(Object.isFrozen(clonedMessage.parts)).toBeFalsy();
   });
 
   it('should create extensible arrays after cloning', () => {
     const frozenMessage = createFrozenMessage(0, 'Test');
 
     // Original is not extensible
-    expect(Object.isExtensible(frozenMessage.parts)).toBe(false);
+    expect(Object.isExtensible(frozenMessage.parts)).toBeFalsy();
 
     // Clone and verify extensibility
     const clonedMessage = structuredClone(frozenMessage);
-    expect(Object.isExtensible(clonedMessage.parts)).toBe(true);
+    expect(Object.isExtensible(clonedMessage.parts)).toBeTruthy();
   });
 
   it('should allow mutations on cloned message parts', () => {
@@ -164,8 +164,8 @@ describe('round Regeneration - structuredClone Behavior', () => {
     // Should be able to push new parts
     expect(() => {
       clonedMessage.parts.push({
-        type: MessagePartTypes.TEXT,
         text: 'New content',
+        type: MessagePartTypes.TEXT,
       });
     }).not.toThrow();
 
@@ -189,8 +189,8 @@ describe('round Regeneration - structuredClone Behavior', () => {
 
     // Modifying clone should not affect original
     clonedMessage.parts.push({
-      type: MessagePartTypes.TEXT,
       text: 'New part',
+      type: MessagePartTypes.TEXT,
     });
 
     expect(frozenMessage.parts).toHaveLength(1);
@@ -208,7 +208,7 @@ describe('round Regeneration - AI SDK Streaming Compatibility', () => {
 
     const canPush = simulateAiSdkStreamingPush(frozenMessage);
 
-    expect(canPush).toBe(false);
+    expect(canPush).toBeFalsy();
   });
 
   it('should SUCCEED pushing streaming parts to cloned messages', () => {
@@ -217,7 +217,7 @@ describe('round Regeneration - AI SDK Streaming Compatibility', () => {
 
     const canPush = simulateAiSdkStreamingPush(clonedMessage);
 
-    expect(canPush).toBe(true);
+    expect(canPush).toBeTruthy();
   });
 
   it('should allow AI SDK to add multiple streaming chunks', () => {
@@ -226,16 +226,16 @@ describe('round Regeneration - AI SDK Streaming Compatibility', () => {
 
     // Simulate multiple streaming chunks
     clonedMessage.parts.push({
-      type: MessagePartTypes.TEXT,
       text: 'Chunk 1',
+      type: MessagePartTypes.TEXT,
     });
     clonedMessage.parts.push({
-      type: MessagePartTypes.TEXT,
       text: 'Chunk 2',
+      type: MessagePartTypes.TEXT,
     });
     clonedMessage.parts.push({
-      type: MessagePartTypes.TEXT,
       text: 'Chunk 3',
+      type: MessagePartTypes.TEXT,
     });
 
     expect(clonedMessage.parts).toHaveLength(4); // Original + 3 chunks
@@ -251,11 +251,11 @@ describe('round Regeneration - Retry with structuredClone', () => {
     const messages: UIMessage[] = [
       createFrozenMessage(0, 'Question'),
       {
-        id: 'assistant-0',
-        role: UIMessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Response' }],
-        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
         createdAt: new Date(),
+        id: 'assistant-0',
+        metadata: { role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response', type: MessagePartTypes.TEXT }],
+        role: UIMessageRoles.ASSISTANT,
       },
     ];
 
@@ -272,8 +272,8 @@ describe('round Regeneration - Retry with structuredClone', () => {
     const clonedMessages = structuredClone(filteredMessages);
 
     // Cloned messages should be mutable
-    expect(Object.isFrozen(clonedMessages[0])).toBe(false);
-    expect(Object.isFrozen(clonedMessages[0]?.parts)).toBe(false);
+    expect(Object.isFrozen(clonedMessages[0])).toBeFalsy();
+    expect(Object.isFrozen(clonedMessages[0]?.parts)).toBeFalsy();
   });
 
   it('should handle retry with multiple frozen messages', () => {
@@ -291,8 +291,8 @@ describe('round Regeneration - Retry with structuredClone', () => {
 
     // All should be mutable
     clonedMessages.forEach((msg) => {
-      expect(Object.isFrozen(msg)).toBe(false);
-      expect(Object.isFrozen(msg.parts)).toBe(false);
+      expect(Object.isFrozen(msg)).toBeFalsy();
+      expect(Object.isFrozen(msg.parts)).toBeFalsy();
     });
   });
 
@@ -312,29 +312,29 @@ describe('round Regeneration - Retry with structuredClone', () => {
 
   it('should handle clone with complex nested metadata', () => {
     const complexMessage: UIMessage = {
+      createdAt: new Date(),
       id: 'complex',
-      role: UIMessageRoles.ASSISTANT,
-      parts: [
-        { type: MessagePartTypes.TEXT, text: 'Text' },
-        {
-          type: MessagePartTypes.FILE,
-          file: {
-            name: 'test.pdf',
-            url: 'https://example.com/test.pdf',
-            contentType: 'application/pdf',
-            size: 1024,
-          },
-        },
-      ],
       metadata: {
+        model: 'gpt-4',
+        participantId: 'participant-0',
+        participantIndex: 0,
         role: MessageRoles.ASSISTANT,
         roundNumber: 0,
-        participantIndex: 0,
-        participantId: 'participant-0',
-        model: 'gpt-4',
-        usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
+        usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
       },
-      createdAt: new Date(),
+      parts: [
+        { text: 'Text', type: MessagePartTypes.TEXT },
+        {
+          file: {
+            contentType: 'application/pdf',
+            name: 'test.pdf',
+            size: 1024,
+            url: 'https://example.com/test.pdf',
+          },
+          type: MessagePartTypes.FILE,
+        },
+      ],
+      role: UIMessageRoles.ASSISTANT,
     };
 
     Object.freeze(complexMessage);
@@ -344,8 +344,8 @@ describe('round Regeneration - Retry with structuredClone', () => {
     const clonedMessage = structuredClone(complexMessage);
 
     // Should be mutable
-    expect(Object.isFrozen(clonedMessage)).toBe(false);
-    expect(Object.isFrozen(clonedMessage.parts)).toBe(false);
+    expect(Object.isFrozen(clonedMessage)).toBeFalsy();
+    expect(Object.isFrozen(clonedMessage.parts)).toBeFalsy();
 
     // Content should be preserved
     expect(clonedMessage.parts).toHaveLength(2);
@@ -363,8 +363,8 @@ describe('round Regeneration - Errors Without structuredClone', () => {
 
     expect(() => {
       frozenMessage.parts.push({
-        type: MessagePartTypes.TEXT,
         text: 'New part',
+        type: MessagePartTypes.TEXT,
       });
     }).toThrow();
   });
@@ -375,8 +375,8 @@ describe('round Regeneration - Errors Without structuredClone', () => {
     // Verify the error message matches the expected pattern
     expect(() => {
       frozenMessage.parts.push({
-        type: MessagePartTypes.TEXT,
         text: 'New part',
+        type: MessagePartTypes.TEXT,
       });
     }).toThrow(/not extensible|Cannot add property/);
   });
@@ -390,21 +390,23 @@ describe('round Regeneration - Errors Without structuredClone', () => {
     const filteredMessagesNoClone = filterMessagesForRetry(messages, 0);
 
     // These are still frozen references
-    expect(Object.isFrozen(filteredMessagesNoClone[0])).toBe(true);
+    expect(Object.isFrozen(filteredMessagesNoClone[0])).toBeTruthy();
     const noCloneMsg = filteredMessagesNoClone[0];
-    if (!noCloneMsg)
+    if (!noCloneMsg) {
       throw new Error('expected noCloneMsg');
-    expect(simulateAiSdkStreamingPush(noCloneMsg)).toBe(false);
+    }
+    expect(simulateAiSdkStreamingPush(noCloneMsg)).toBeFalsy();
 
     // WITH structuredClone (correct approach)
     const filteredMessagesWithClone = structuredClone(filterMessagesForRetry(messages, 0));
 
     // These are now mutable
-    expect(Object.isFrozen(filteredMessagesWithClone[0])).toBe(false);
+    expect(Object.isFrozen(filteredMessagesWithClone[0])).toBeFalsy();
     const cloneMsg = filteredMessagesWithClone[0];
-    if (!cloneMsg)
+    if (!cloneMsg) {
       throw new Error('expected cloneMsg');
-    expect(simulateAiSdkStreamingPush(cloneMsg)).toBe(true);
+    }
+    expect(simulateAiSdkStreamingPush(cloneMsg)).toBeTruthy();
   });
 });
 
@@ -420,7 +422,7 @@ describe('round Regeneration - structuredClone Edge Cases', () => {
     const clonedMessages = structuredClone(emptyMessages);
 
     expect(clonedMessages).toHaveLength(0);
-    expect(Object.isFrozen(clonedMessages)).toBe(false);
+    expect(Object.isFrozen(clonedMessages)).toBeFalsy();
   });
 
   it('should handle cloning single frozen message', () => {
@@ -429,17 +431,17 @@ describe('round Regeneration - structuredClone Edge Cases', () => {
     const clonedMessages = structuredClone(singleMessage);
 
     expect(clonedMessages).toHaveLength(1);
-    expect(Object.isFrozen(clonedMessages[0])).toBe(false);
+    expect(Object.isFrozen(clonedMessages[0])).toBeFalsy();
   });
 
   it('should handle cloning messages with Date objects', () => {
     const now = new Date();
     const messageWithDate: UIMessage = {
-      id: 'test',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-      metadata: { role: MessageRoles.USER, roundNumber: 0 },
       createdAt: now,
+      id: 'test',
+      metadata: { role: MessageRoles.USER, roundNumber: 0 },
+      parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
     };
 
     Object.freeze(messageWithDate);
@@ -453,11 +455,11 @@ describe('round Regeneration - structuredClone Edge Cases', () => {
 
   it('should handle cloning messages with null/undefined fields', () => {
     const messageWithNulls: UIMessage = {
-      id: 'test',
-      role: UIMessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-      metadata: { role: MessageRoles.USER, roundNumber: 0 },
       createdAt: new Date(),
+      id: 'test',
+      metadata: { role: MessageRoles.USER, roundNumber: 0 },
+      parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+      role: UIMessageRoles.USER,
       // Optional fields that might be undefined
     };
 
@@ -465,6 +467,6 @@ describe('round Regeneration - structuredClone Edge Cases', () => {
 
     const clonedMessage = structuredClone(messageWithNulls);
 
-    expect(Object.isFrozen(clonedMessage)).toBe(false);
+    expect(Object.isFrozen(clonedMessage)).toBeFalsy();
   });
 });

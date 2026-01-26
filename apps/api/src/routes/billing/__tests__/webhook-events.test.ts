@@ -147,8 +147,8 @@ describe('theo Philosophy: Webhook Processing', () => {
   it('describes the single sync function pattern', () => {
     // This is a documentation test - ensures we follow Theo's pattern
     const pattern = {
-      principle: 'Single sync function for all webhooks',
       implementation: 'processWebhookEvent extracts customerId and calls syncStripeDataFromStripe',
+      principle: 'Single sync function for all webhooks',
       rationale: 'Prevents split-brain by always fetching fresh data from Stripe API',
     };
 
@@ -160,8 +160,8 @@ describe('theo Philosophy: Webhook Processing', () => {
   it('describes the customer ID extraction pattern', () => {
     const pattern = {
       principle: 'Extract customerId from webhook, nothing else',
-      validation: 'Type-check customerId is string (throw if not)',
       reason: 'Webhook payloads can be stale or incomplete - only use customerId',
+      validation: 'Type-check customerId is string (throw if not)',
     };
 
     expect(pattern.validation).toContain('Type-check');
@@ -170,8 +170,8 @@ describe('theo Philosophy: Webhook Processing', () => {
 
   it('describes the immediate 200 response pattern', () => {
     const pattern = {
-      principle: 'Return 200 immediately, process async',
       implementation: 'Use waitUntil() for background processing',
+      principle: 'Return 200 immediately, process async',
       rationale: 'Prevents Stripe retry storms on slow processing',
     };
 

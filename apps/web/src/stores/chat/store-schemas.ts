@@ -33,6 +33,7 @@ import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 import { ModeratorPayloadSchema } from '@/services/api';
+import type { EventPayload } from '@/stores/chat/machine/transitions';
 
 import type {
   AddAttachments,
@@ -170,29 +171,29 @@ const OnCompleteFnSchema = z.custom<OnComplete>();
 // ============================================================================
 
 export const FormStateSchema = z.object({
+  animatedMessageIds: z.set(z.string()),
+  animationStartIndex: z.number(),
+  autoMode: z.boolean(),
+  enableWebSearch: z.boolean(),
   inputValue: z.string(),
+  modelOrder: z.array(z.string()),
   selectedMode: ChatModeSchema.nullable(),
   selectedParticipants: z.array(ParticipantConfigSchema),
-  enableWebSearch: z.boolean(),
-  modelOrder: z.array(z.string()),
-  autoMode: z.boolean(),
-  animationStartIndex: z.number(),
   shouldSkipAnimation: z.boolean(),
-  animatedMessageIds: z.set(z.string()),
 });
 
 export const FormActionsSchema = z.object({
-  setInputValue: z.custom<SetInputValue>(),
-  setSelectedMode: z.custom<SetSelectedMode>(),
-  setSelectedParticipants: z.custom<SetSelectedParticipants>(),
-  setEnableWebSearch: z.custom<SetEnableWebSearch>(),
-  setModelOrder: z.custom<SetModelOrder>(),
-  setAutoMode: z.custom<SetAutoMode>(),
   addParticipant: z.custom<AddParticipant>(),
   removeParticipant: z.custom<RemoveParticipant>(),
-  updateParticipant: z.custom<UpdateParticipant>(),
   reorderParticipants: z.custom<ReorderParticipants>(),
   resetForm: z.custom<ResetForm>(),
+  setAutoMode: z.custom<SetAutoMode>(),
+  setEnableWebSearch: z.custom<SetEnableWebSearch>(),
+  setInputValue: z.custom<SetInputValue>(),
+  setModelOrder: z.custom<SetModelOrder>(),
+  setSelectedMode: z.custom<SetSelectedMode>(),
+  setSelectedParticipants: z.custom<SetSelectedParticipants>(),
+  updateParticipant: z.custom<UpdateParticipant>(),
 });
 
 export const FormSliceSchema = z.intersection(FormStateSchema, FormActionsSchema);
@@ -203,17 +204,17 @@ export const FormSliceSchema = z.intersection(FormStateSchema, FormActionsSchema
 
 export const FeedbackStateSchema = z.object({
   feedbackByRound: z.custom<Map<number, FeedbackType | null>>(),
+  hasLoadedFeedback: z.boolean(),
   pendingFeedback: z.object({
     roundNumber: z.number(),
     type: FeedbackTypeSchema,
   }).nullable(),
-  hasLoadedFeedback: z.boolean(),
 });
 
 export const FeedbackActionsSchema = z.object({
+  loadFeedbackFromServer: z.custom<LoadFeedbackFromServer>(),
   setFeedback: z.custom<SetFeedback>(),
   setPendingFeedback: z.custom<SetPendingFeedback>(),
-  loadFeedbackFromServer: z.custom<LoadFeedbackFromServer>(),
 });
 
 export const FeedbackSliceSchema = z.intersection(FeedbackStateSchema, FeedbackActionsSchema);
@@ -223,23 +224,23 @@ export const FeedbackSliceSchema = z.intersection(FeedbackStateSchema, FeedbackA
 // ============================================================================
 
 export const UIStateSchema = z.object({
-  showInitialUI: z.boolean(),
-  waitingToStartStreaming: z.boolean(),
-  isCreatingThread: z.boolean(),
   createdThreadId: z.string().nullable(),
   /** Project ID for the created thread - used for project-specific cache updates */
   createdThreadProjectId: z.string().nullable(),
   isAnalyzingPrompt: z.boolean(),
+  isCreatingThread: z.boolean(),
+  showInitialUI: z.boolean(),
+  waitingToStartStreaming: z.boolean(),
 });
 
 export const UIActionsSchema = z.object({
-  setShowInitialUI: z.custom<SetShowInitialUI>(),
-  setWaitingToStartStreaming: z.custom<SetWaitingToStartStreaming>(),
-  setIsCreatingThread: z.custom<SetIsCreatingThread>(),
+  resetUI: z.custom<ResetUI>(),
   setCreatedThreadId: z.custom<SetCreatedThreadId>(),
   setCreatedThreadProjectId: z.custom<SetCreatedThreadProjectId>(),
   setIsAnalyzingPrompt: z.custom<SetIsAnalyzingPrompt>(),
-  resetUI: z.custom<ResetUI>(),
+  setIsCreatingThread: z.custom<SetIsCreatingThread>(),
+  setShowInitialUI: z.custom<SetShowInitialUI>(),
+  setWaitingToStartStreaming: z.custom<SetWaitingToStartStreaming>(),
 });
 
 export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
@@ -249,22 +250,22 @@ export const UISliceSchema = z.intersection(UIStateSchema, UIActionsSchema);
 // ============================================================================
 
 export const PreSearchStateSchema = z.object({
-  preSearches: z.custom<Array<StoredPreSearch>>(),
   preSearchActivityTimes: z.custom<Map<number, number>>(),
+  preSearches: z.custom<StoredPreSearch[]>(),
 });
 
 export const PreSearchActionsSchema = z.object({
-  setPreSearches: z.custom<SetPreSearches>(),
   addPreSearch: z.custom<AddPreSearch>(),
-  updatePreSearchData: z.custom<UpdatePreSearchData>(),
-  updatePartialPreSearchData: z.custom<UpdatePartialPreSearchData>(),
-  updatePreSearchStatus: z.custom<UpdatePreSearchStatus>(),
-  removePreSearch: z.custom<RemovePreSearch>(),
-  clearAllPreSearches: z.custom<ClearAllPreSearches>(),
   checkStuckPreSearches: z.custom<CheckStuckPreSearches>(),
-  updatePreSearchActivity: z.custom<UpdatePreSearchActivity>(),
-  getPreSearchActivityTime: z.custom<GetPreSearchActivityTime>(),
+  clearAllPreSearches: z.custom<ClearAllPreSearches>(),
   clearPreSearchActivity: z.custom<ClearPreSearchActivity>(),
+  getPreSearchActivityTime: z.custom<GetPreSearchActivityTime>(),
+  removePreSearch: z.custom<RemovePreSearch>(),
+  setPreSearches: z.custom<SetPreSearches>(),
+  updatePartialPreSearchData: z.custom<UpdatePartialPreSearchData>(),
+  updatePreSearchActivity: z.custom<UpdatePreSearchActivity>(),
+  updatePreSearchData: z.custom<UpdatePreSearchData>(),
+  updatePreSearchStatus: z.custom<UpdatePreSearchStatus>(),
 });
 
 export const PreSearchSliceSchema = z.intersection(PreSearchStateSchema, PreSearchActionsSchema);
@@ -278,8 +279,8 @@ export const ChangelogStateSchema = z.object({
 });
 
 export const ChangelogActionsSchema = z.object({
-  setChangelogItems: z.custom<(items: ApiChangelog[]) => void>(),
   addChangelogItems: z.custom<(items: ApiChangelog[]) => void>(),
+  setChangelogItems: z.custom<(items: ApiChangelog[]) => void>(),
 });
 
 export const ChangelogSliceSchema = z.intersection(ChangelogStateSchema, ChangelogActionsSchema);
@@ -293,18 +294,18 @@ export const ChangelogSliceSchema = z.intersection(ChangelogStateSchema, Changel
  * Used for tracking moderator execution across rounds
  */
 export const StoredModeratorDataSchema = z.object({
-  id: z.string(),
-  threadId: z.string().optional(),
-  roundNumber: z.number(),
-  mode: z.string().optional(),
-  userQuestion: z.string().optional(),
-  status: MessageStatusSchema,
-  moderatorData: ModeratorPayloadSchema.nullable(),
-  participantMessageIds: z.array(z.string()).optional(),
+  completedAt: z.string().nullable(),
   // Date fields use string (JSON serialization converts Date to string)
   createdAt: z.string(),
-  completedAt: z.string().nullable(),
   errorMessage: z.string().nullable(),
+  id: z.string(),
+  mode: z.string().optional(),
+  moderatorData: ModeratorPayloadSchema.nullable(),
+  participantMessageIds: z.array(z.string()).optional(),
+  roundNumber: z.number(),
+  status: MessageStatusSchema,
+  threadId: z.string().optional(),
+  userQuestion: z.string().optional(),
 });
 
 export type StoredModeratorData = z.infer<typeof StoredModeratorDataSchema>;
@@ -324,17 +325,16 @@ export type StoredModeratorSummary = z.infer<typeof StoredModeratorSummarySchema
 // ============================================================================
 
 export const ThreadStateSchema = z.object({
-  thread: z.custom<ChatThread | null>(),
-  participants: z.array(ChatParticipantSchema),
-  messages: z.array(z.custom<UIMessage>()),
-  isStreaming: z.boolean(),
-  currentParticipantIndex: z.number(),
-  error: z.custom<Error | null>(),
-  sendMessage: z.custom<((content: string) => Promise<void>) | undefined>().optional(),
-  startRound: z.custom<(() => Promise<void>) | undefined>().optional(),
   chatSetMessages: ChatSetMessagesFnSchema.optional(),
   // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming on route change
   chatStop: z.custom<(() => void) | undefined>().optional(),
+  currentParticipantIndex: z.number(),
+  error: z.custom<Error | null>(),
+  isStreaming: z.boolean(),
+  messages: z.array(z.custom<UIMessage>()),
+  participants: z.array(ChatParticipantSchema),
+  sendMessage: z.custom<((content: string) => Promise<void>) | undefined>().optional(),
+  startRound: z.custom<(() => Promise<void>) | undefined>().optional(),
   /**
    * ✅ RACE CONDITION FIX: Explicit completion signal
    * Set to true by AI SDK's onFinish callback AFTER message state is finalized.
@@ -342,35 +342,36 @@ export const ThreadStateSchema = z.object({
    * Reset to false when new streaming starts.
    */
   streamFinishAcknowledged: z.boolean(),
+  thread: z.custom<ChatThread | null>(),
 });
 
 export const ThreadActionsSchema = z.object({
-  setThread: z.custom<SetThread>(),
-  setParticipants: z.custom<SetParticipants>(),
-  setMessages: z.custom<SetMessages>(),
-  setIsStreaming: z.custom<SetIsStreaming>(),
-  setCurrentParticipantIndex: z.custom<SetCurrentParticipantIndex>(),
-  setError: z.custom<SetError>(),
-  setSendMessage: z.custom<SetSendMessage>(),
-  setStartRound: z.custom<SetStartRound>(),
-  setChatSetMessages: z.custom<SetChatSetMessages>(),
-  // ✅ NAVIGATION CLEANUP: Action to set the AI SDK stop function
-  setChatStop: z.custom<(fn?: () => void) => void>(),
-  checkStuckStreams: z.custom<CheckStuckStreams>(),
-  // Streaming message actions (direct store updates for AI SDK callbacks)
-  upsertStreamingMessage: z.custom<UpsertStreamingMessage>(),
-  finalizeMessageId: z.custom<FinalizeMessageId>(),
-  deduplicateMessages: z.custom<DeduplicateMessages>(),
   /**
    * ✅ RACE CONDITION FIX: Acknowledge stream finish from onFinish callback
    * Called by AI SDK onFinish to signal that message state is finalized.
    * Replaces timeout-based stream settling detection.
    */
   acknowledgeStreamFinish: z.custom<() => void>(),
+  checkStuckStreams: z.custom<CheckStuckStreams>(),
+  deduplicateMessages: z.custom<DeduplicateMessages>(),
+  finalizeMessageId: z.custom<FinalizeMessageId>(),
   /**
    * ✅ RACE CONDITION FIX: Reset stream finish acknowledgment when starting new stream
    */
   resetStreamFinishAcknowledgment: z.custom<() => void>(),
+  setChatSetMessages: z.custom<SetChatSetMessages>(),
+  // ✅ NAVIGATION CLEANUP: Action to set the AI SDK stop function
+  setChatStop: z.custom<(fn?: () => void) => void>(),
+  setCurrentParticipantIndex: z.custom<SetCurrentParticipantIndex>(),
+  setError: z.custom<SetError>(),
+  setIsStreaming: z.custom<SetIsStreaming>(),
+  setMessages: z.custom<SetMessages>(),
+  setParticipants: z.custom<SetParticipants>(),
+  setSendMessage: z.custom<SetSendMessage>(),
+  setStartRound: z.custom<SetStartRound>(),
+  setThread: z.custom<SetThread>(),
+  // Streaming message actions (direct store updates for AI SDK callbacks)
+  upsertStreamingMessage: z.custom<UpsertStreamingMessage>(),
 });
 
 export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActionsSchema);
@@ -381,12 +382,12 @@ export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActions
 
 export const FlagsStateSchema = z.object({
   hasInitiallyLoaded: z.boolean(),
-  isRegenerating: z.boolean(),
-  isModeratorStreaming: z.boolean(),
-  isWaitingForChangelog: z.boolean(),
   hasPendingConfigChanges: z.boolean(),
+  isModeratorStreaming: z.boolean(),
   /** ✅ PATCH BLOCKING: True while thread PATCH is in progress - prevents streaming race */
   isPatchInProgress: z.boolean(),
+  isRegenerating: z.boolean(),
+  isWaitingForChangelog: z.boolean(),
   /** ✅ HANDOFF FIX: True during P0→P1 participant transition to prevent 10s cleanup */
   participantHandoffInProgress: z.boolean(),
 });
@@ -397,22 +398,14 @@ export const FlagsStateSchema = z.object({
  */
 export const ConfigChangeStateSchema = z.object({
   configChangeRoundNumber: z.number().nullable(),
-  isWaitingForChangelog: z.boolean(),
-  isPatchInProgress: z.boolean(),
   hasPendingConfigChanges: z.boolean(),
+  isPatchInProgress: z.boolean(),
+  isWaitingForChangelog: z.boolean(),
 });
 
 export type ConfigChangeState = z.infer<typeof ConfigChangeStateSchema>;
 
 export const FlagsActionsSchema = z.object({
-  setHasInitiallyLoaded: z.custom<SetHasInitiallyLoaded>(),
-  setIsRegenerating: z.custom<SetIsRegenerating>(),
-  setIsModeratorStreaming: z.custom<SetIsModeratorStreaming>(),
-  completeModeratorStream: z.custom<CompleteModeratorStream>(),
-  setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
-  setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
-  setIsPatchInProgress: z.custom<SetIsPatchInProgress>(),
-  setParticipantHandoffInProgress: z.custom<SetParticipantHandoffInProgress>(),
   /**
    * ✅ RACE CONDITION FIX: Atomically update all config change flags
    * Prevents race condition where flags are updated individually and effects
@@ -424,6 +417,14 @@ export const FlagsActionsSchema = z.object({
    * Called when config change flow completes (after changelog fetched)
    */
   clearConfigChangeState: z.custom<() => void>(),
+  completeModeratorStream: z.custom<CompleteModeratorStream>(),
+  setHasInitiallyLoaded: z.custom<SetHasInitiallyLoaded>(),
+  setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
+  setIsModeratorStreaming: z.custom<SetIsModeratorStreaming>(),
+  setIsPatchInProgress: z.custom<SetIsPatchInProgress>(),
+  setIsRegenerating: z.custom<SetIsRegenerating>(),
+  setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
+  setParticipantHandoffInProgress: z.custom<SetParticipantHandoffInProgress>(),
 });
 
 export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSchema);
@@ -433,15 +434,14 @@ export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSch
 // ============================================================================
 
 export const DataStateSchema = z.object({
-  regeneratingRoundNumber: z.number().nullable(),
-  pendingMessage: z.string().nullable(),
-  pendingAttachmentIds: z.array(z.string()).nullable(),
-  pendingFileParts: z.array(ExtendedFilePartSchema).nullable(),
-  expectedParticipantIds: z.array(z.string()).nullable(),
-  streamingRoundNumber: z.number().nullable(),
-  currentRoundNumber: z.number().nullable(),
   /** Round number when config changes were submitted (for incremental changelog fetch) */
   configChangeRoundNumber: z.number().nullable(),
+  currentRoundNumber: z.number().nullable(),
+  expectedParticipantIds: z.array(z.string()).nullable(),
+  pendingAttachmentIds: z.array(z.string()).nullable(),
+  pendingFileParts: z.array(ExtendedFilePartSchema).nullable(),
+  pendingMessage: z.string().nullable(),
+  regeneratingRoundNumber: z.number().nullable(),
   /**
    * ✅ RACE CONDITION FIX: Round epoch counter
    * Increments each time a new round starts (user submits message).
@@ -451,18 +451,21 @@ export const DataStateSchema = z.object({
    * - Stale effects triggering wrong participants
    */
   roundEpoch: z.number(),
+  streamingRoundNumber: z.number().nullable(),
 });
 
 export const DataActionsSchema = z.object({
-  setRegeneratingRoundNumber: z.custom<SetRegeneratingRoundNumber>(),
-  setPendingMessage: z.custom<SetPendingMessage>(),
+  batchUpdatePendingState: z.custom<(pendingMessage: string | null, expectedParticipantIds: string[] | null) => void>(),
+  /** Get current round epoch for stale detection */
+  getRoundEpoch: z.custom<() => number>(),
+  setConfigChangeRoundNumber: z.custom<SetConfigChangeRoundNumber>(),
+  setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
+  setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
   setPendingAttachmentIds: z.custom<SetPendingAttachmentIds>(),
   setPendingFileParts: z.custom<SetPendingFileParts>(),
-  setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
-  batchUpdatePendingState: z.custom<(pendingMessage: string | null, expectedParticipantIds: string[] | null) => void>(),
+  setPendingMessage: z.custom<SetPendingMessage>(),
+  setRegeneratingRoundNumber: z.custom<SetRegeneratingRoundNumber>(),
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
-  setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
-  setConfigChangeRoundNumber: z.custom<SetConfigChangeRoundNumber>(),
   /**
    * ✅ RACE CONDITION FIX: Atomically start a new round
    * - Increments roundEpoch
@@ -471,8 +474,6 @@ export const DataActionsSchema = z.object({
    * This ensures all related state updates happen in one set() call
    */
   startNewRound: z.custom<(roundNumber: number) => number>(),
-  /** Get current round epoch for stale detection */
-  getRoundEpoch: z.custom<() => number>(),
 });
 
 export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema);
@@ -482,29 +483,29 @@ export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema
 // ============================================================================
 
 export const TrackingStateSchema = z.object({
-  hasSentPendingMessage: z.boolean(),
   createdModeratorRounds: z.custom<Set<number>>(),
-  triggeredPreSearchRounds: z.custom<Set<number>>(),
-  triggeredModeratorRounds: z.custom<Set<number>>(),
-  triggeredModeratorIds: z.custom<Set<string>>(),
   hasEarlyOptimisticMessage: z.boolean(),
+  hasSentPendingMessage: z.boolean(),
+  triggeredModeratorIds: z.custom<Set<string>>(),
+  triggeredModeratorRounds: z.custom<Set<number>>(),
+  triggeredPreSearchRounds: z.custom<Set<number>>(),
 });
 
 export const TrackingActionsSchema = z.object({
-  setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
-  markModeratorCreated: z.custom<MarkModeratorCreated>(),
-  hasModeratorBeenCreated: z.custom<HasModeratorBeenCreated>(),
-  tryMarkModeratorCreated: z.custom<TryMarkModeratorCreated>(),
-  clearModeratorTracking: z.custom<ClearModeratorTracking>(),
-  markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
-  hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
-  tryMarkPreSearchTriggered: z.custom<TryMarkPreSearchTriggered>(),
-  clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
   clearAllPreSearchTracking: z.custom<ClearAllPreSearchTracking>(),
-  markModeratorStreamTriggered: z.custom<MarkModeratorStreamTriggered>(),
-  hasModeratorStreamBeenTriggered: z.custom<HasModeratorStreamBeenTriggered>(),
   clearModeratorStreamTracking: z.custom<ClearModeratorStreamTracking>(),
+  clearModeratorTracking: z.custom<ClearModeratorTracking>(),
+  clearPreSearchTracking: z.custom<ClearPreSearchTracking>(),
+  hasModeratorBeenCreated: z.custom<HasModeratorBeenCreated>(),
+  hasModeratorStreamBeenTriggered: z.custom<HasModeratorStreamBeenTriggered>(),
+  hasPreSearchBeenTriggered: z.custom<HasPreSearchBeenTriggered>(),
+  markModeratorCreated: z.custom<MarkModeratorCreated>(),
+  markModeratorStreamTriggered: z.custom<MarkModeratorStreamTriggered>(),
+  markPreSearchTriggered: z.custom<MarkPreSearchTriggered>(),
   setHasEarlyOptimisticMessage: z.custom<SetHasEarlyOptimisticMessage>(),
+  setHasSentPendingMessage: z.custom<SetHasSentPendingMessage>(),
+  tryMarkModeratorCreated: z.custom<TryMarkModeratorCreated>(),
+  tryMarkPreSearchTriggered: z.custom<TryMarkPreSearchTriggered>(),
 });
 
 export const TrackingSliceSchema = z.intersection(TrackingStateSchema, TrackingActionsSchema);
@@ -528,13 +529,13 @@ export const CallbacksSliceSchema = z.intersection(CallbacksStateSchema, Callbac
 // ============================================================================
 
 export const ScreenStateSchema = z.object({
-  screenMode: ScreenModeSchema.nullable(),
   isReadOnly: z.boolean(),
+  screenMode: ScreenModeSchema.nullable(),
 });
 
 export const ScreenActionsSchema = z.object({
-  setScreenMode: z.custom<SetScreenMode>(),
   resetScreenMode: z.custom<ResetScreenMode>(),
+  setScreenMode: z.custom<SetScreenMode>(),
 });
 
 export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActionsSchema);
@@ -548,13 +549,13 @@ export const ScreenSliceSchema = z.intersection(ScreenStateSchema, ScreenActions
  * Uses StreamStatusSchema from enums for type safety
  */
 export const StreamResumptionStateEntitySchema = z.object({
-  streamId: z.string().min(1),
-  threadId: z.string().min(1),
-  roundNumber: z.number().int().nonnegative(),
-  participantIndex: z.number().int().nonnegative(),
-  state: StreamStatusSchema,
   // Date fields use string (JSON serialization converts Date to string)
   createdAt: z.string(),
+  participantIndex: z.number().int().nonnegative(),
+  roundNumber: z.number().int().nonnegative(),
+  state: StreamStatusSchema,
+  streamId: z.string().min(1),
+  threadId: z.string().min(1),
   updatedAt: z.string().optional(),
 });
 
@@ -569,9 +570,9 @@ export type StreamResumptionState = z.infer<typeof StreamResumptionStateEntitySc
  */
 export const PreSearchResumptionStateSchema = z.object({
   enabled: z.boolean(),
+  preSearchId: z.string().nullable(),
   status: MessageStatusSchema.nullable(),
   streamId: z.string().nullable(),
-  preSearchId: z.string().nullable(),
 });
 
 export type PreSearchResumptionState = z.infer<typeof PreSearchResumptionStateSchema>;
@@ -581,9 +582,9 @@ export type PreSearchResumptionState = z.infer<typeof PreSearchResumptionStateSc
  * Uses MessageStatusSchema for consistency with message lifecycle
  */
 export const ModeratorResumptionStateSchema = z.object({
+  moderatorMessageId: z.string().nullable(),
   status: MessageStatusSchema.nullable(),
   streamId: z.string().nullable(),
-  moderatorMessageId: z.string().nullable(),
 });
 
 export type ModeratorResumptionState = z.infer<typeof ModeratorResumptionStateSchema>;
@@ -606,57 +607,57 @@ export const NextParticipantToTriggerSchema = z.union([
 export type NextParticipantToTrigger = z.infer<typeof NextParticipantToTriggerSchema>;
 
 export const StreamResumptionSliceStateSchema = z.object({
-  streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
-  resumptionAttempts: z.custom<Set<string>>(),
-  nextParticipantToTrigger: NextParticipantToTriggerSchema.nullable(),
-  streamResumptionPrefilled: z.boolean(),
-  prefilledForThreadId: z.string().nullable(),
   currentResumptionPhase: RoundPhaseSchema.nullable(),
-  preSearchResumption: PreSearchResumptionStateSchema.nullable(),
   moderatorResumption: ModeratorResumptionStateSchema.nullable(),
+  nextParticipantToTrigger: NextParticipantToTriggerSchema.nullable(),
+  prefilledForThreadId: z.string().nullable(),
+  preSearchResumption: PreSearchResumptionStateSchema.nullable(),
+  resumptionAttempts: z.custom<Set<string>>(),
   resumptionRoundNumber: z.number().nullable(),
   /** ✅ SCOPE VERSIONING: Thread ID for current resumption scope */
   resumptionScopeThreadId: z.string().nullable(),
   /** ✅ SCOPE VERSIONING: Version counter - increments on each navigation to invalidate stale effects */
   resumptionScopeVersion: z.number(),
+  streamResumptionPrefilled: z.boolean(),
+  streamResumptionState: StreamResumptionStateEntitySchema.nullable(),
 });
 
 /**
  * Schema for stream resumption prefill update - Zod-first pattern
  */
 export const StreamResumptionPrefillUpdateSchema = z.object({
-  streamResumptionPrefilled: z.boolean(),
-  prefilledForThreadId: z.string(),
   currentResumptionPhase: RoundPhaseSchema,
-  resumptionRoundNumber: z.number().nullable(),
-  preSearchResumption: PreSearchResumptionStateSchema.nullable().optional(),
+  isModeratorStreaming: z.boolean().optional(),
   moderatorResumption: ModeratorResumptionStateSchema.nullable().optional(),
   nextParticipantToTrigger: NextParticipantToTriggerSchema.nullable().optional(),
+  prefilledForThreadId: z.string(),
+  preSearchResumption: PreSearchResumptionStateSchema.nullable().optional(),
+  resumptionRoundNumber: z.number().nullable(),
+  streamResumptionPrefilled: z.boolean(),
   waitingToStartStreaming: z.boolean().optional(),
-  isModeratorStreaming: z.boolean().optional(),
 });
 
 export type StreamResumptionPrefillUpdate = z.infer<typeof StreamResumptionPrefillUpdateSchema>;
 
 export const StreamResumptionActionsSchema = z.object({
-  setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),
-  needsStreamResumption: z.custom<NeedsStreamResumption>(),
-  isStreamResumptionStale: z.custom<IsStreamResumptionStale>(),
-  isStreamResumptionValid: z.custom<IsStreamResumptionValid>(),
+  clearStreamResumption: z.custom<ClearStreamResumption>(),
   handleResumedStreamComplete: z.custom<HandleResumedStreamComplete>(),
   handleStreamResumptionFailure: z.custom<HandleStreamResumptionFailure>(),
-  setNextParticipantToTrigger: z.custom<SetNextParticipantToTrigger>(),
+  isStreamResumptionStale: z.custom<IsStreamResumptionStale>(),
+  isStreamResumptionValid: z.custom<IsStreamResumptionValid>(),
   markResumptionAttempted: z.custom<MarkResumptionAttempted>(),
   needsMessageSync: z.custom<NeedsMessageSync>(),
-  clearStreamResumption: z.custom<ClearStreamResumption>(),
+  needsStreamResumption: z.custom<NeedsStreamResumption>(),
   prefillStreamResumptionState: z.custom<PrefillStreamResumptionState>(),
-  transitionToParticipantsPhase: z.custom<() => void>(),
-  transitionToModeratorPhase: z.custom<(roundNumber?: number) => void>(),
-  setCurrentResumptionPhase: z.custom<(phase: RoundPhase) => void>(),
-  /** ✅ SCOPE VERSIONING: Set thread scope for resumption validation */
-  setResumptionScope: z.custom<SetResumptionScope>(),
   /** ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream */
   reconcileWithActiveStream: z.custom<ReconcileWithActiveStream>(),
+  setCurrentResumptionPhase: z.custom<(phase: RoundPhase) => void>(),
+  setNextParticipantToTrigger: z.custom<SetNextParticipantToTrigger>(),
+  /** ✅ SCOPE VERSIONING: Set thread scope for resumption validation */
+  setResumptionScope: z.custom<SetResumptionScope>(),
+  setStreamResumptionState: z.custom<(state: StreamResumptionState | null) => void>(),
+  transitionToModeratorPhase: z.custom<(roundNumber?: number) => void>(),
+  transitionToParticipantsPhase: z.custom<() => void>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
@@ -670,10 +671,10 @@ export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceS
  * ✅ PATTERN: Schema-first → Infer types
  */
 export const ParticipantInfoSchema = z.object({
-  id: z.string(),
-  index: z.number().int().nonnegative(),
   enabled: z.boolean(),
   hasMessage: z.boolean(),
+  id: z.string(),
+  index: z.number().int().nonnegative(),
 });
 
 export type ParticipantInfo = z.infer<typeof ParticipantInfoSchema>;
@@ -703,12 +704,12 @@ export type ModeratorInfo = z.infer<typeof ModeratorInfoSchema>;
  * Resumption state from server prefill - Zod schema
  */
 export const ResumptionInfoSchema = z.object({
-  phase: RoundPhaseSchema.nullable(),
-  participantIndex: z.number().int().nonnegative().nullable(),
-  roundNumber: z.number().int().nonnegative().nullable(),
-  preSearchStreamId: z.string().nullable(),
-  moderatorStreamId: z.string().nullable(),
   isPrefilled: z.boolean(),
+  moderatorStreamId: z.string().nullable(),
+  participantIndex: z.number().int().nonnegative().nullable(),
+  phase: RoundPhaseSchema.nullable(),
+  preSearchStreamId: z.string().nullable(),
+  roundNumber: z.number().int().nonnegative().nullable(),
 });
 
 export type ResumptionInfo = z.infer<typeof ResumptionInfoSchema>;
@@ -718,40 +719,40 @@ export type ResumptionInfo = z.infer<typeof ResumptionInfoSchema>;
  * Context is built from store state at dispatch time.
  */
 export const RoundContextSchema = z.object({
-  // Thread identity
-  threadId: z.string().nullable(),
-  createdThreadId: z.string().nullable(),
-
-  // Round tracking
-  roundNumber: z.number().int().nonnegative().nullable(),
-  streamingRoundNumber: z.number().int().nonnegative().nullable(),
-
-  // Web search
-  webSearchEnabled: z.boolean(),
-  preSearch: PreSearchInfoSchema,
-
-  // Participants
-  participants: z.array(ParticipantInfoSchema),
-  participantCount: z.number().int().nonnegative(),
-  enabledParticipantCount: z.number().int().nonnegative(),
-  currentParticipantIndex: z.number().int().nonnegative(),
-
   // Completion tracking
   allParticipantsComplete: z.boolean(),
   completedParticipantCount: z.number().int().nonnegative(),
 
+  createdThreadId: z.string().nullable(),
+  currentParticipantIndex: z.number().int().nonnegative(),
+
+  enabledParticipantCount: z.number().int().nonnegative(),
+  isAiSdkReady: z.boolean(),
+
+  // AI SDK state
+  isAiSdkStreaming: z.boolean(),
+  // Error state
+  lastError: z.custom<Error | null>(),
   // Moderator
   moderator: ModeratorInfoSchema,
+  participantCount: z.number().int().nonnegative(),
+
+  // Participants
+  participants: z.array(ParticipantInfoSchema),
+  preSearch: PreSearchInfoSchema,
 
   // Resumption (from server prefill)
   resumption: ResumptionInfoSchema,
 
-  // Error state
-  lastError: z.custom<Error | null>(),
+  // Round tracking
+  roundNumber: z.number().int().nonnegative().nullable(),
 
-  // AI SDK state
-  isAiSdkStreaming: z.boolean(),
-  isAiSdkReady: z.boolean(),
+  streamingRoundNumber: z.number().int().nonnegative().nullable(),
+
+  // Thread identity
+  threadId: z.string().nullable(),
+  // Web search
+  webSearchEnabled: z.boolean(),
 });
 
 export type RoundContext = z.infer<typeof RoundContextSchema>;
@@ -761,53 +762,53 @@ export type RoundContext = z.infer<typeof RoundContextSchema>;
  * These match the Zustand store structure
  */
 export const StoreSnapshotSchema = z.object({
-  // Thread state
-  thread: z.object({ id: z.string() }).nullable(),
   createdThreadId: z.string().nullable(),
+  currentParticipantIndex: z.number(),
 
+  currentResumptionPhase: RoundPhaseSchema.nullable(),
   // Round state
   currentRoundNumber: z.number().nullable(),
-  streamingRoundNumber: z.number().nullable(),
 
   // Form state
   enableWebSearch: z.boolean(),
 
-  // Participants
-  participants: z.array(z.object({
-    id: z.string(),
-    participantIndex: z.number(),
-    enabled: z.boolean().optional(),
-  })),
-  currentParticipantIndex: z.number(),
-
+  // Error
+  error: z.custom<Error | null>(),
   // Messages (for completion detection)
   messages: z.array(z.object({
     id: z.string(),
-    role: z.string(),
     metadata: z.object({
-      roundNumber: z.number().optional(),
-      participantIndex: z.number().optional(),
       isModerator: z.boolean().optional(),
+      participantIndex: z.number().optional(),
+      roundNumber: z.number().optional(),
     }).optional(),
+    role: z.string(),
   })),
 
-  // Pre-search state
-  preSearches: z.array(z.object({
-    roundNumber: z.number(),
-    status: z.string(),
-    id: z.string().optional(),
-  })),
-
-  // Stream resumption state
-  streamResumptionPrefilled: z.boolean(),
-  currentResumptionPhase: RoundPhaseSchema.nullable(),
-  resumptionRoundNumber: z.number().nullable(),
-  nextParticipantToTrigger: z.tuple([z.number(), z.number()]).nullable(),
-  preSearchResumption: z.object({ streamId: z.string() }).nullable(),
   moderatorResumption: z.object({ streamId: z.string() }).nullable(),
 
-  // Error
-  error: z.custom<Error | null>(),
+  nextParticipantToTrigger: z.tuple([z.number(), z.number()]).nullable(),
+
+  // Participants
+  participants: z.array(z.object({
+    enabled: z.boolean().optional(),
+    id: z.string(),
+    participantIndex: z.number(),
+  })),
+  // Pre-search state
+  preSearches: z.array(z.object({
+    id: z.string().optional(),
+    roundNumber: z.number(),
+    status: z.string(),
+  })),
+  preSearchResumption: z.object({ streamId: z.string() }).nullable(),
+  resumptionRoundNumber: z.number().nullable(),
+  streamingRoundNumber: z.number().nullable(),
+  // Stream resumption state
+  streamResumptionPrefilled: z.boolean(),
+
+  // Thread state
+  thread: z.object({ id: z.string() }).nullable(),
 });
 
 export type StoreSnapshot = z.infer<typeof StoreSnapshotSchema>;
@@ -816,8 +817,8 @@ export type StoreSnapshot = z.infer<typeof StoreSnapshotSchema>;
  * AI SDK state snapshot - Zod schema
  */
 export const AiSdkSnapshotSchema = z.object({
-  isStreaming: z.boolean(),
   isReady: z.boolean(),
+  isStreaming: z.boolean(),
 });
 
 export type AiSdkSnapshot = z.infer<typeof AiSdkSnapshotSchema>;
@@ -831,27 +832,27 @@ export type AiSdkSnapshot = z.infer<typeof AiSdkSnapshotSchema>;
  * Replaces multiple boolean flags with explicit state machine states
  */
 export const RoundFlowStateSliceSchema = z.object({
-  /** Current FSM state - THE source of truth for round lifecycle */
-  flowState: RoundFlowStateSchema,
-  /** Round number being orchestrated */
-  flowRoundNumber: z.number().nullable(),
-  /** Participant index within current round */
-  flowParticipantIndex: z.number(),
-  /** Total enabled participants for current round */
-  flowParticipantCount: z.number(),
-  /** Last error that occurred during round flow */
-  flowLastError: z.custom<Error | null>(),
   /** Event history for debugging (dev mode only) */
   flowEventHistory: z.array(z.object({
     event: RoundFlowEventSchema,
     fromState: RoundFlowStateSchema,
-    toState: RoundFlowStateSchema,
     timestamp: z.number(),
+    toState: RoundFlowStateSchema,
   })),
+  /** Last error that occurred during round flow */
+  flowLastError: z.custom<Error | null>(),
+  /** Total enabled participants for current round */
+  flowParticipantCount: z.number(),
+  /** Participant index within current round */
+  flowParticipantIndex: z.number(),
+  /** Round number being orchestrated */
+  flowRoundNumber: z.number().nullable(),
+  /** Current FSM state - THE source of truth for round lifecycle */
+  flowState: RoundFlowStateSchema,
 });
 
-/** Type for FSM dispatch function */
-export type DispatchFlowEvent = (event: RoundFlowEvent, payload?: Record<string, unknown>) => void;
+/** Type for FSM dispatch function - uses EventPayload discriminated union */
+export type DispatchFlowEvent = (event: RoundFlowEvent, payload?: EventPayload) => void;
 
 /** Type for FSM state setter - uses the FSM state enum type from shared */
 export type SetFlowState = (state: z.infer<typeof RoundFlowStateSchema>) => void;
@@ -862,18 +863,18 @@ export type ResetFlowState = () => void;
 export const RoundFlowActionsSchema = z.object({
   /** Dispatch an FSM event - triggers state transition */
   dispatchFlowEvent: z.custom<DispatchFlowEvent>(),
-  /** Directly set FSM state (for internal use) */
-  setFlowState: z.custom<SetFlowState>(),
   /** Reset flow state to IDLE */
   resetFlowState: z.custom<ResetFlowState>(),
-  /** Set participant index for current round */
-  setFlowParticipantIndex: z.custom<(index: number) => void>(),
-  /** Set participant count for current round */
-  setFlowParticipantCount: z.custom<(count: number) => void>(),
-  /** Set round number for flow tracking */
-  setFlowRoundNumber: z.custom<(roundNumber: number | null) => void>(),
   /** Record flow error */
   setFlowError: z.custom<(error: Error | null) => void>(),
+  /** Set participant count for current round */
+  setFlowParticipantCount: z.custom<(count: number) => void>(),
+  /** Set participant index for current round */
+  setFlowParticipantIndex: z.custom<(index: number) => void>(),
+  /** Set round number for flow tracking */
+  setFlowRoundNumber: z.custom<(roundNumber: number | null) => void>(),
+  /** Directly set FSM state (for internal use) */
+  setFlowState: z.custom<SetFlowState>(),
 });
 
 export const RoundFlowSliceSchema = z.intersection(RoundFlowStateSliceSchema, RoundFlowActionsSchema);
@@ -883,16 +884,16 @@ export const RoundFlowSliceSchema = z.intersection(RoundFlowStateSliceSchema, Ro
 // ============================================================================
 
 export const AnimationStateSchema = z.object({
-  pendingAnimations: z.custom<Set<number>>(),
   animationResolvers: z.custom<Map<number, AnimationResolver>>(),
+  pendingAnimations: z.custom<Set<number>>(),
 });
 
 export const AnimationActionsSchema = z.object({
-  registerAnimation: z.custom<RegisterAnimation>(),
-  completeAnimation: z.custom<CompleteAnimation>(),
-  waitForAnimation: z.custom<WaitForAnimation>(),
-  waitForAllAnimations: z.custom<() => Promise<void>>(),
   clearAnimations: z.custom<ClearAnimations>(),
+  completeAnimation: z.custom<CompleteAnimation>(),
+  registerAnimation: z.custom<RegisterAnimation>(),
+  waitForAllAnimations: z.custom<() => Promise<void>>(),
+  waitForAnimation: z.custom<WaitForAnimation>(),
 });
 
 export const AnimationSliceSchema = z.intersection(AnimationStateSchema, AnimationActionsSchema);
@@ -908,12 +909,12 @@ export const AttachmentsStateSchema = z.object({
 
 export const AttachmentsActionsSchema = z.object({
   addAttachments: z.custom<AddAttachments>(),
-  removeAttachment: z.custom<RemoveAttachment>(),
   clearAttachments: z.custom<ClearAttachments>(),
-  updateAttachmentUpload: z.custom<UpdateAttachmentUpload>(),
-  updateAttachmentPreview: z.custom<UpdateAttachmentPreview>(),
   getAttachments: z.custom<GetAttachments>(),
   hasAttachments: z.custom<HasAttachments>(),
+  removeAttachment: z.custom<RemoveAttachment>(),
+  updateAttachmentPreview: z.custom<UpdateAttachmentPreview>(),
+  updateAttachmentUpload: z.custom<UpdateAttachmentUpload>(),
 });
 
 export const AttachmentsSliceSchema = z.intersection(AttachmentsStateSchema, AttachmentsActionsSchema);
@@ -928,16 +929,16 @@ export type TitleAnimationPhase = z.infer<typeof TitleAnimationPhaseSchema>;
 export const SidebarAnimationStateSchema = z.object({
   animatingThreadId: z.string().nullable(),
   animationPhase: TitleAnimationPhaseSchema,
-  oldTitle: z.string().nullable(),
-  newTitle: z.string().nullable(),
   displayedTitle: z.string().nullable(),
+  newTitle: z.string().nullable(),
+  oldTitle: z.string().nullable(),
 });
 
 export const SidebarAnimationActionsSchema = z.object({
+  completeTitleAnimation: z.custom<CompleteTitleAnimation>(),
+  setAnimationPhase: z.custom<SetAnimationPhase>(),
   startTitleAnimation: z.custom<StartTitleAnimation>(),
   updateDisplayedTitle: z.custom<UpdateDisplayedTitle>(),
-  setAnimationPhase: z.custom<SetAnimationPhase>(),
-  completeTitleAnimation: z.custom<CompleteTitleAnimation>(),
 });
 
 export const SidebarAnimationSliceSchema = z.intersection(SidebarAnimationStateSchema, SidebarAnimationActionsSchema);
@@ -952,16 +953,16 @@ export const NavigationStateSchema = z.object({
 });
 
 export const NavigationActionsSchema = z.object({
-  /** Set pending navigation target when navigating between threads */
-  setPendingNavigationTarget: z.custom<(slug: string | null) => void>(),
-  /** Clear pending navigation target */
-  clearPendingNavigationTarget: z.custom<() => void>(),
   /** ✅ ATOMIC SWITCH: Atomically reset + initialize when navigation completes */
   atomicThreadSwitch: z.custom<(
     newThread: ChatThread,
     newParticipants: ChatParticipant[],
     newMessages: UIMessage[],
   ) => void>(),
+  /** Clear pending navigation target */
+  clearPendingNavigationTarget: z.custom<() => void>(),
+  /** Set pending navigation target when navigating between threads */
+  setPendingNavigationTarget: z.custom<(slug: string | null) => void>(),
 });
 
 export const NavigationSliceSchema = z.intersection(NavigationStateSchema, NavigationActionsSchema);
@@ -971,16 +972,16 @@ export const NavigationSliceSchema = z.intersection(NavigationStateSchema, Navig
 // ============================================================================
 
 export const OperationsActionsSchema = z.object({
-  resetThreadState: z.custom<ResetThreadState>(),
-  resetForThreadNavigation: z.custom<ResetForThreadNavigation>(),
-  resetToOverview: z.custom<ResetToOverview>(),
-  resetToNewChat: z.custom<ResetToNewChat>(),
-  initializeThread: z.custom<InitializeThread>(),
-  updateParticipants: z.custom<UpdateParticipants>(),
-  prepareForNewMessage: z.custom<PrepareForNewMessage>(),
-  completeStreaming: z.custom<CompleteStreaming>(),
-  startRegeneration: z.custom<StartRegeneration>(),
   completeRegeneration: z.custom<CompleteRegeneration>(),
+  completeStreaming: z.custom<CompleteStreaming>(),
+  initializeThread: z.custom<InitializeThread>(),
+  prepareForNewMessage: z.custom<PrepareForNewMessage>(),
+  resetForThreadNavigation: z.custom<ResetForThreadNavigation>(),
+  resetThreadState: z.custom<ResetThreadState>(),
+  resetToNewChat: z.custom<ResetToNewChat>(),
+  resetToOverview: z.custom<ResetToOverview>(),
+  startRegeneration: z.custom<StartRegeneration>(),
+  updateParticipants: z.custom<UpdateParticipants>(),
 });
 
 // ============================================================================

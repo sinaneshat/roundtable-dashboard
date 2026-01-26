@@ -42,8 +42,9 @@ import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
  */
 export function isPrerender(): boolean {
   // Client-side: never prerender
-  if (typeof window !== 'undefined')
+  if (typeof window !== 'undefined') {
     return false;
+  }
 
   // SSR during prerender: check if we're in a build context
   // Cloudflare Workers have globalThis.caches, Node.js build context doesn't
@@ -82,7 +83,7 @@ export function getWebappEnv(): WebAppEnv {
   }
 
   // Check process.env (server-side fallback)
-  const processEnvResult = WebAppEnvSchema.safeParse(process.env.VITE_WEBAPP_ENV);
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env['VITE_WEBAPP_ENV']);
   if (processEnvResult.success) {
     return processEnvResult.data;
   }

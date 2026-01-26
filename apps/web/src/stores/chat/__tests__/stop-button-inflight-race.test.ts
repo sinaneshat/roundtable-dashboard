@@ -27,14 +27,14 @@ import { createChatStore } from '../store';
 // Test helper: Create mock participant
 function createMockParticipant(id: string, modelId: string, priority: number): ChatParticipant {
   return {
+    createdAt: new Date(),
+    customRoleId: null,
+    enabled: true,
     id,
     modelId,
     priority,
-    enabled: true,
     role: null,
-    customRoleId: null,
     threadId: 'thread-1',
-    createdAt: new Date(),
     updatedAt: new Date(),
   };
 }
@@ -53,16 +53,16 @@ describe('stop Button In-Flight Race Conditions', () => {
       // T0: P0 completes
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete response' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'P0 complete response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -71,35 +71,35 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().completeStreaming();
 
       const stateAfterStop = store.getState();
-      expect(stateAfterStop.isStreaming).toBe(false);
-      expect(stateAfterStop.waitingToStartStreaming).toBe(false);
+      expect(stateAfterStop.isStreaming).toBeFalsy();
+      expect(stateAfterStop.waitingToStartStreaming).toBeFalsy();
       expect(stateAfterStop.streamingRoundNumber).toBeNull();
 
       // T3-T4: P1 message arrives in-flight (backend already sent it)
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 complete response' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'P0 complete response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
         {
-          id: 'thread-1_r0_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 should be ignored' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 1,
-            participantId: 'p1',
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p1',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantId: 'p1',
+            participantIndex: 1,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'P1 should be ignored', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -110,7 +110,7 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Critical: Streaming state stays reset
       const finalState = store.getState();
-      expect(finalState.isStreaming).toBe(false);
+      expect(finalState.isStreaming).toBeFalsy();
       expect(finalState.currentParticipantIndex).toBe(0);
       expect(finalState.streamingRoundNumber).toBeNull();
     });
@@ -128,15 +128,15 @@ describe('stop Button In-Flight Race Conditions', () => {
       // P0 completes
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            finishReason: FinishReasons.STOP,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            finishReason: FinishReasons.STOP,
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -147,31 +147,31 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Both P1 and P2 arrive after stop
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: { roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
-          createdAt: new Date(),
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p1',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 1, roundNumber: 0 },
+          parts: [{ text: 'P1 in-flight', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 in-flight' }],
-          metadata: { roundNumber: 0, participantIndex: 1, finishReason: FinishReasons.STOP },
-          createdAt: new Date(),
         },
         {
-          id: 'thread-1_r0_p2',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P2 in-flight' }],
-          metadata: { roundNumber: 0, participantIndex: 2, finishReason: FinishReasons.STOP },
           createdAt: new Date(),
+          id: 'thread-1_r0_p2',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 2, roundNumber: 0 },
+          parts: [{ text: 'P2 in-flight', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
       // Streaming state stays reset
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
     });
   });
@@ -193,9 +193,9 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Both flags should reset atomically
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.currentParticipantIndex).toBe(0); // Reset to 0
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
     });
 
@@ -204,12 +204,12 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Setup: Full streaming state
       store.setState({
-        isStreaming: true,
         currentParticipantIndex: 2,
-        waitingToStartStreaming: true,
-        streamingRoundNumber: 5,
         isModeratorStreaming: false,
+        isStreaming: true,
         nextParticipantToTrigger: 3,
+        streamingRoundNumber: 5,
+        waitingToStartStreaming: true,
       });
 
       // Stop streaming
@@ -217,28 +217,28 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // All streaming state should reset atomically
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       // ✅ FIX: completeStreaming now resets nextParticipantToTrigger via STREAM_RESUMPTION_STATE_RESET
       expect(state.nextParticipantToTrigger).toBeNull();
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
     });
 
     it('should preserve thread and participants during stop', () => {
       const store = createChatStore();
 
       const thread = {
-        id: 'thread-1',
-        slug: 'thread-1',
-        userId: 'user-1',
-        mode: 'debating',
-        enableWebSearch: true,
-        title: 'Test Thread',
-        isAiGeneratedTitle: false,
         createdAt: new Date(),
+        enableWebSearch: true,
+        id: 'thread-1',
+        isAiGeneratedTitle: false,
+        mode: 'debating',
+        slug: 'thread-1',
+        title: 'Test Thread',
         updatedAt: new Date(),
+        userId: 'user-1',
       } as const;
       const participants = [
         createMockParticipant('p0', 'gpt-4o', 0),
@@ -266,16 +266,16 @@ describe('stop Button In-Flight Race Conditions', () => {
       // P0 streaming partial content
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'This is a partial message that was int' }],
           metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
             participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 0,
             // No finishReason - streaming was interrupted
           },
-          createdAt: new Date(),
+          parts: [{ text: 'This is a partial message that was int', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -289,8 +289,8 @@ describe('stop Button In-Flight Race Conditions', () => {
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
       expect(messages[0]?.parts?.[0]).toMatchObject({
-        type: MessagePartTypes.TEXT,
         text: 'This is a partial message that was int',
+        type: MessagePartTypes.TEXT,
       });
     });
 
@@ -300,19 +300,19 @@ describe('stop Button In-Flight Race Conditions', () => {
       // o1 model streaming with reasoning
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [
-            { type: MessagePartTypes.REASONING, text: 'Let me think about this problem...' },
-            { type: MessagePartTypes.TEXT, text: 'The answer is' },
-          ],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
-            model: 'o1-preview',
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            model: 'o1-preview',
+            participantId: 'p0',
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [
+            { text: 'Let me think about this problem...', type: MessagePartTypes.REASONING },
+            { text: 'The answer is', type: MessagePartTypes.TEXT },
+          ],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -333,17 +333,17 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Message with file attachment
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [
-            { type: MessagePartTypes.FILE, url: 'https://example.com/file.pdf', mimeType: 'application/pdf' },
-            { type: MessagePartTypes.TEXT, text: 'Here is the analysis of the PDF' },
-          ],
-          metadata: {
-            roundNumber: 0,
-            participantIndex: 0,
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: {
+            participantIndex: 0,
+            roundNumber: 0,
+          },
+          parts: [
+            { mimeType: 'application/pdf', type: MessagePartTypes.FILE, url: 'https://example.com/file.pdf' },
+            { text: 'Here is the analysis of the PDF', type: MessagePartTypes.TEXT },
+          ],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -365,29 +365,29 @@ describe('stop Button In-Flight Race Conditions', () => {
       // All participants complete, moderator streaming
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: { roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
-          createdAt: new Date(),
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p1',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 1, roundNumber: 0 },
+          parts: [{ text: 'P1 response', type: MessagePartTypes.TEXT }],
           role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 response' }],
-          metadata: { roundNumber: 0, participantIndex: 1, finishReason: FinishReasons.STOP },
-          createdAt: new Date(),
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_moderator',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Summary: Based on the discussion ab' }],
           metadata: {
-            roundNumber: 0,
             isModerator: true,
+            roundNumber: 0,
             // Streaming - no finishReason
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Summary: Based on the discussion ab', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -398,8 +398,8 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Moderator streaming flag should clear
       const state = store.getState();
-      expect(state.isModeratorStreaming).toBe(false);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
 
     it('should preserve partial moderator message when stopped', () => {
@@ -407,14 +407,14 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Partial moderator message
       const partialModeratorMessage = {
-        id: 'thread-1_r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Partial summary that was' }],
-        metadata: {
-          roundNumber: 0,
-          isModerator: true,
-        },
         createdAt: new Date(),
+        id: 'thread-1_r0_moderator',
+        metadata: {
+          isModerator: true,
+          roundNumber: 0,
+        },
+        parts: [{ text: 'Partial summary that was', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.ASSISTANT,
       };
 
       store.getState().setMessages([partialModeratorMessage]);
@@ -427,8 +427,8 @@ describe('stop Button In-Flight Race Conditions', () => {
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
       expect(messages[0]?.parts?.[0]).toMatchObject({
-        type: MessagePartTypes.TEXT,
         text: 'Partial summary that was',
+        type: MessagePartTypes.TEXT,
       });
     });
 
@@ -438,11 +438,11 @@ describe('stop Button In-Flight Race Conditions', () => {
       // All participants complete
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: { roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -454,8 +454,8 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Moderator should NOT be created
       const state = store.getState();
-      expect(state.isModeratorStreaming).toBe(false);
-      expect(state.messages.some(m => m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata)).toBe(false);
+      expect(state.isModeratorStreaming).toBeFalsy();
+      expect(state.messages.some(m => m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata)).toBeFalsy();
     });
   });
 
@@ -481,7 +481,7 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // State should be clean
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       expect(state.currentParticipantIndex).toBe(0);
     });
@@ -491,7 +491,7 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // First cycle: Mark moderator created for round 0
       store.getState().markModeratorCreated(0);
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
 
       // Stop and clear
       store.getState().completeStreaming();
@@ -501,8 +501,8 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().setStreamingRoundNumber(1);
 
       // Moderator tracking for round 0 should persist (not cleared by completeStreaming)
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
     });
 
     it('should handle stop during participant transition without double-triggering', () => {
@@ -516,11 +516,11 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P0 response' }],
-          metadata: { roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'P0 response', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -534,8 +534,8 @@ describe('stop Button In-Flight Race Conditions', () => {
       const state = store.getState();
       // ✅ completeStreaming does NOT clear nextParticipantToTrigger - need explicit clearStreamResumption()
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.isStreaming).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
     });
   });
 
@@ -545,15 +545,15 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Streaming active
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       // Stop clicked
       store.getState().setIsStreaming(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Stop button should be disabled (no streaming)
       const canStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canStop).toBe(false);
+      expect(canStop).toBeFalsy();
     });
 
     it('should enable stop button during participant streaming', () => {
@@ -562,7 +562,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().setIsStreaming(true);
 
       const canStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canStop).toBe(true);
+      expect(canStop).toBeTruthy();
     });
 
     it('should enable stop button during moderator streaming', () => {
@@ -571,7 +571,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().setIsModeratorStreaming(true);
 
       const canStop = store.getState().isStreaming || store.getState().isModeratorStreaming;
-      expect(canStop).toBe(true);
+      expect(canStop).toBeTruthy();
     });
 
     it('should disable stop button after completeStreaming', () => {
@@ -586,7 +586,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Both flags should be false
       const state = store.getState();
       const canStop = state.isStreaming || state.isModeratorStreaming;
-      expect(canStop).toBe(false);
+      expect(canStop).toBeFalsy();
     });
   });
 
@@ -612,11 +612,11 @@ describe('stop Button In-Flight Race Conditions', () => {
       // In-flight P1 message arrives
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'P1 in-flight' }],
-          metadata: { roundNumber: 0, participantIndex: 1 },
           createdAt: new Date(),
+          id: 'thread-1_r0_p1',
+          metadata: { participantIndex: 1, roundNumber: 0 },
+          parts: [{ text: 'P1 in-flight', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -631,22 +631,22 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().setIsStreaming(false);
       store.getState().completeStreaming();
 
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
       // Message arrives
       store.getState().setMessages([
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Late arrival' }],
-          metadata: { roundNumber: 0, participantIndex: 0, finishReason: FinishReasons.STOP },
           createdAt: new Date(),
+          id: 'thread-1_r0_p0',
+          metadata: { finishReason: FinishReasons.STOP, participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Late arrival', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
       // Should not trigger streaming
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should not increment streamingRoundNumber if message arrives after stop', () => {
@@ -661,11 +661,11 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Message for round 2 arrives late
       store.getState().setMessages([
         {
-          id: 'thread-1_r2_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 2 late' }],
-          metadata: { roundNumber: 2, participantIndex: 0 },
           createdAt: new Date(),
+          id: 'thread-1_r2_p0',
+          metadata: { participantIndex: 0, roundNumber: 2 },
+          parts: [{ text: 'Round 2 late', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
@@ -683,22 +683,22 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Incomplete message arrives (no finishReason)
       store.getState().setMessages([
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Incomplete' }],
           metadata: {
-            roundNumber: 0,
             participantIndex: 0,
+            roundNumber: 0,
             // No finishReason - message was stopped mid-stream
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Incomplete', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT,
         },
       ]);
 
       // Message should be stored but not trigger streaming
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -715,7 +715,7 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // ✅ completeStreaming does NOT clear error - error must be cleared explicitly with setError(null)
       expect(store.getState().error).toBe(error);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should allow restart after error and stop', () => {
@@ -738,7 +738,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().setStreamingRoundNumber(1);
 
       const state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.error).toBeNull();
       expect(state.streamingRoundNumber).toBe(1);
     });
@@ -750,11 +750,11 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Pre-search streaming
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'presearch-1',
-        threadId: 'thread-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(),
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -767,7 +767,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Pre-search should remain but streaming state cleared
       const preSearches = store.getState().preSearches;
       expect(preSearches).toHaveLength(1);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should not trigger participants if pre-search stopped', () => {
@@ -776,11 +776,11 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Pre-search started
       store.getState().markPreSearchTriggered(0);
       store.getState().addPreSearch({
+        createdAt: new Date(),
         id: 'presearch-1',
-        threadId: 'thread-1',
         roundNumber: 0,
         status: MessageStatuses.STREAMING,
-        createdAt: new Date(),
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -788,7 +788,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       store.getState().completeStreaming();
 
       // Participants should not start
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
       expect(store.getState().nextParticipantToTrigger).toBeNull();
     });
   });
@@ -799,11 +799,11 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Setup resumption state with phase
       store.getState().setStreamResumptionState({
-        threadId: 'thread-1',
-        roundNumber: 0,
-        participantIndex: 1,
-        state: 'active',
         createdAt: new Date(),
+        participantIndex: 1,
+        roundNumber: 0,
+        state: 'active',
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
 
@@ -815,7 +815,7 @@ describe('stop Button In-Flight Race Conditions', () => {
       expect(store.getState().currentResumptionPhase).toBeNull();
       expect(store.getState().nextParticipantToTrigger).toBeNull();
       expect(store.getState().resumptionRoundNumber).toBeNull();
-      expect(store.getState().streamResumptionPrefilled).toBe(false);
+      expect(store.getState().streamResumptionPrefilled).toBeFalsy();
     });
 
     it('should not clear resumption attempts on completeStreaming', () => {
@@ -823,7 +823,7 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Mark resumption attempted
       const marked = store.getState().markResumptionAttempted(0, 1);
-      expect(marked).toBe(true);
+      expect(marked).toBeTruthy();
 
       // Stop
       store.getState().completeStreaming();
@@ -838,11 +838,11 @@ describe('stop Button In-Flight Race Conditions', () => {
 
       // Setup full resumption state
       store.getState().setStreamResumptionState({
-        threadId: 'thread-1',
-        roundNumber: 0,
-        participantIndex: 1,
-        state: 'active',
         createdAt: new Date(),
+        participantIndex: 1,
+        roundNumber: 0,
+        state: 'active',
+        threadId: 'thread-1',
         updatedAt: new Date(),
       });
       store.getState().markResumptionAttempted(0, 1);

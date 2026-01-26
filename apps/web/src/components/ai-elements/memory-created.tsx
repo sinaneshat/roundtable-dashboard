@@ -38,10 +38,10 @@ type MemoryCreatedIndicatorProps = {
  * - Inline delete button for removing memories
  */
 export function MemoryCreatedIndicator({
+  className,
+  defaultOpen = false,
   memories,
   onDelete,
-  defaultOpen = false,
-  className,
 }: MemoryCreatedIndicatorProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set());
@@ -51,8 +51,9 @@ export function MemoryCreatedIndicator({
   }
 
   const handleDelete = async (memoryId: string) => {
-    if (!onDelete)
+    if (!onDelete) {
       return;
+    }
 
     setDeletingIds(prev => new Set(prev).add(memoryId));
     try {

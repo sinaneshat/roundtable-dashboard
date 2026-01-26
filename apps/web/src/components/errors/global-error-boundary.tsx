@@ -11,8 +11,9 @@ import { getWebappEnv } from '@/lib/config/base-urls';
  * Check if PostHog is available for tracking
  */
 function isPostHogAvailable(): boolean {
-  if (typeof window === 'undefined')
+  if (typeof window === 'undefined') {
     return false;
+  }
   return getWebappEnv() !== WebAppEnvs.LOCAL;
 }
 
@@ -20,15 +21,16 @@ function isPostHogAvailable(): boolean {
  * Track error to PostHog - dynamically imports to avoid loading 55KB on every page
  */
 async function trackErrorToPostHog(error: Error, componentStack?: string) {
-  if (!isPostHogAvailable())
+  if (!isPostHogAvailable()) {
     return;
+  }
 
   const posthog = (await import('posthog-js')).default;
   posthog.capture('$exception', {
     $exception_message: error.message,
+    $exception_source: 'global_error_boundary',
     $exception_stack_trace_raw: error.stack,
     $exception_type: error.name,
-    $exception_source: 'global_error_boundary',
     componentStack,
     url: typeof window !== 'undefined' ? window.location.href : '',
   });
@@ -54,14 +56,14 @@ type State = {
 export class GlobalErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null };
+    this.state = { error: null, errorInfo: null, hasError: false };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
-    return { hasError: true, error };
+    return { error, hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ error, errorInfo });
 
     // Track error to PostHog (async, lazy-loaded)
@@ -69,13 +71,13 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    this.setState({ error: null, errorInfo: null, hasError: false });
     if (typeof window !== 'undefined') {
       window.location.reload();
     }
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;

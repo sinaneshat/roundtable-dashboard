@@ -37,10 +37,10 @@ import { getThreadActiveStream } from '../streaming';
  * RUNNING maps to ACTIVE from core enum for semantic consistency
  */
 export const RoundPreSearchStatuses = {
-  PENDING: ParticipantStreamStatuses.PENDING,
-  RUNNING: ParticipantStreamStatuses.ACTIVE,
   COMPLETED: ParticipantStreamStatuses.COMPLETED,
   FAILED: ParticipantStreamStatuses.FAILED,
+  PENDING: ParticipantStreamStatuses.PENDING,
+  RUNNING: ParticipantStreamStatuses.ACTIVE,
   SKIPPED: 'skipped' as const,
 } as const;
 
@@ -50,23 +50,24 @@ export type RoundPreSearchStatus = typeof RoundPreSearchStatuses[keyof typeof Ro
 const DEFAULT_MAX_RECOVERY_ATTEMPTS = 3;
 
 export const RoundExecutionStateSchema = z.object({
-  threadId: z.string().min(1),
-  roundNumber: z.number().int().nonnegative(),
-  status: z.nativeEnum(RoundExecutionStatuses),
-  phase: z.nativeEnum(RoundExecutionPhases),
-  totalParticipants: z.number().int().nonnegative(),
-  completedParticipants: z.number().int().nonnegative(),
-  failedParticipants: z.number().int().nonnegative(),
-  participantStatuses: z.record(z.string(), z.nativeEnum(ParticipantStreamStatuses)),
-  moderatorStatus: z.nativeEnum(ParticipantStreamStatuses).nullable(),
-  startedAt: z.string(),
-  completedAt: z.string().nullable(),
-  error: z.string().nullable(),
-  // Track which participants have been triggered (for resumption)
-  triggeredParticipants: z.array(z.number()),
   // Attachment IDs shared across all participants
   attachmentIds: z.array(z.string()).optional(),
-
+  completedAt: z.string().nullable(),
+  completedParticipants: z.number().int().nonnegative(),
+  error: z.string().nullable(),
+  failedParticipants: z.number().int().nonnegative(),
+  // =========================================================================
+  // NEW: Activity tracking for staleness detection
+  // =========================================================================
+  /** ISO timestamp of last meaningful activity (chunk received, status update, etc.) */
+  lastActivityAt: z.string().optional(),
+  /** Maximum recovery attempts allowed (default: 3) */
+  maxRecoveryAttempts: z.number().int().positive().default(DEFAULT_MAX_RECOVERY_ATTEMPTS),
+  moderatorStatus: z.nativeEnum(ParticipantStreamStatuses).nullable(),
+  participantStatuses: z.record(z.string(), z.nativeEnum(ParticipantStreamStatuses)),
+  phase: z.nativeEnum(RoundExecutionPhases),
+  /** Pre-search database record ID (if created) */
+  preSearchId: z.string().nullable().optional(),
   // =========================================================================
   // NEW: Pre-search tracking for web search enabled threads
   // =========================================================================
@@ -78,48 +79,47 @@ export const RoundExecutionStateSchema = z.object({
     RoundPreSearchStatuses.FAILED,
     RoundPreSearchStatuses.SKIPPED,
   ]).nullable().optional(),
-  /** Pre-search database record ID (if created) */
-  preSearchId: z.string().nullable().optional(),
-
-  // =========================================================================
-  // NEW: Activity tracking for staleness detection
-  // =========================================================================
-  /** ISO timestamp of last meaningful activity (chunk received, status update, etc.) */
-  lastActivityAt: z.string().optional(),
-
   // =========================================================================
   // NEW: Recovery tracking to prevent infinite loops
   // =========================================================================
   /** Number of recovery attempts made for this round */
   recoveryAttempts: z.number().int().nonnegative().default(0),
-  /** Maximum recovery attempts allowed (default: 3) */
-  maxRecoveryAttempts: z.number().int().positive().default(DEFAULT_MAX_RECOVERY_ATTEMPTS),
+  roundNumber: z.number().int().nonnegative(),
+
+  startedAt: z.string(),
+  status: z.nativeEnum(RoundExecutionStatuses),
+
+  threadId: z.string().min(1),
+
+  totalParticipants: z.number().int().nonnegative(),
+  // Track which participants have been triggered (for resumption)
+  triggeredParticipants: z.array(z.number()),
 }).strict();
 
 export type RoundExecutionState = z.infer<typeof RoundExecutionStateSchema>;
 
 export const StartRoundExecutionParamsSchema = z.object({
-  threadId: z.string().min(1),
-  roundNumber: z.number().int().nonnegative(),
-  userId: z.string().min(1),
-  participants: z.array(z.custom<ChatParticipant>()),
-  thread: z.custom<ChatThread>(),
-  userMessage: z.custom<ChatMessage>(),
   attachmentIds: z.array(z.string()).optional(),
-  env: z.custom<ApiEnv['Bindings']>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
-  logger: z.custom<TypedLogger>().optional(),
+  env: z.custom<ApiEnv['Bindings']>(),
   executionCtx: z.custom<ExecutionContext>().optional(),
+  logger: z.custom<TypedLogger>().optional(),
+  participants: z.array(z.custom<ChatParticipant>()),
+  roundNumber: z.number().int().nonnegative(),
+  thread: z.custom<ChatThread>(),
+  threadId: z.string().min(1),
+  userId: z.string().min(1),
+  userMessage: z.custom<ChatMessage>(),
 });
 
 export type StartRoundExecutionParams = z.infer<typeof StartRoundExecutionParamsSchema>;
 
 export const GetRoundStatusParamsSchema = z.object({
-  threadId: z.string().min(1),
-  roundNumber: z.number().int().nonnegative(),
-  env: z.custom<ApiEnv['Bindings']>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  env: z.custom<ApiEnv['Bindings']>(),
   logger: z.custom<TypedLogger>().optional(),
+  roundNumber: z.number().int().nonnegative(),
+  threadId: z.string().min(1),
 });
 
 export type GetRoundStatusParams = z.infer<typeof GetRoundStatusParamsSchema>;
@@ -157,28 +157,28 @@ export async function initializeRoundExecution(
 ): Promise<RoundExecutionState> {
   const now = new Date().toISOString();
   const state: RoundExecutionState = {
-    threadId,
-    roundNumber,
-    status: RoundExecutionStatuses.RUNNING,
-    phase: RoundExecutionPhases.PARTICIPANTS,
-    totalParticipants,
-    completedParticipants: 0,
-    failedParticipants: 0,
-    participantStatuses: {},
-    moderatorStatus: null,
-    startedAt: now,
-    completedAt: null,
-    error: null,
-    triggeredParticipants: [],
     attachmentIds,
-    // NEW: Pre-search tracking
-    preSearchStatus: options?.enableWebSearch ? RoundPreSearchStatuses.PENDING : null,
-    preSearchId: options?.preSearchId ?? null,
+    completedAt: null,
+    completedParticipants: 0,
+    error: null,
+    failedParticipants: 0,
     // NEW: Activity tracking
     lastActivityAt: now,
+    maxRecoveryAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS,
+    moderatorStatus: null,
+    participantStatuses: {},
+    phase: RoundExecutionPhases.PARTICIPANTS,
+    preSearchId: options?.preSearchId ?? null,
+    // NEW: Pre-search tracking
+    preSearchStatus: options?.enableWebSearch ? RoundPreSearchStatuses.PENDING : null,
     // NEW: Recovery tracking
     recoveryAttempts: 0,
-    maxRecoveryAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS,
+    roundNumber,
+    startedAt: now,
+    status: RoundExecutionStatuses.RUNNING,
+    threadId,
+    totalParticipants,
+    triggeredParticipants: [],
   };
 
   if (env?.KV) {
@@ -190,8 +190,8 @@ export async function initializeRoundExecution(
 
     logger?.info('Initialized round execution state', LogHelpers.operation({
       operationName: 'initializeRoundExecution',
-      threadId,
       roundNumber,
+      threadId,
       totalParticipants,
     }));
   }
@@ -221,10 +221,10 @@ export async function getRoundExecutionState(
     const parsed = RoundExecutionStateSchema.safeParse(raw);
     if (!parsed.success) {
       logger?.warn('Invalid round execution state in KV', LogHelpers.operation({
-        operationName: 'getRoundExecutionState',
-        threadId,
-        roundNumber,
         error: parsed.error.message,
+        operationName: 'getRoundExecutionState',
+        roundNumber,
+        threadId,
       }));
       return null;
     }
@@ -232,10 +232,10 @@ export async function getRoundExecutionState(
     return parsed.data;
   } catch (error) {
     logger?.error('Failed to get round execution state', LogHelpers.operation({
-      operationName: 'getRoundExecutionState',
-      threadId,
-      roundNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'getRoundExecutionState',
+      roundNumber,
+      threadId,
     }));
     return null;
   }
@@ -260,8 +260,8 @@ export async function updateRoundExecutionState(
     if (!existing) {
       logger?.warn('No existing round execution state to update', LogHelpers.operation({
         operationName: 'updateRoundExecutionState',
-        threadId,
         roundNumber,
+        threadId,
       }));
       return null;
     }
@@ -296,9 +296,9 @@ export async function updateRoundExecutionState(
     const updated: RoundExecutionState = {
       ...existing,
       ...updates,
-      participantStatuses: mergedParticipantStatuses,
       completedParticipants,
       failedParticipants,
+      participantStatuses: mergedParticipantStatuses,
       // Use computed phase if we're in PARTICIPANTS phase and updating participant statuses
       // Otherwise respect the explicit phase update (e.g., COMPLETE from moderator)
       phase: updates.phase === RoundExecutionPhases.COMPLETE
@@ -315,10 +315,10 @@ export async function updateRoundExecutionState(
     return updated;
   } catch (error) {
     logger?.error('Failed to update round execution state', LogHelpers.operation({
-      operationName: 'updateRoundExecutionState',
-      threadId,
-      roundNumber,
       error: error instanceof Error ? error.message : 'Unknown error',
+      operationName: 'updateRoundExecutionState',
+      roundNumber,
+      threadId,
     }));
     return null;
   }
@@ -335,8 +335,9 @@ export async function markParticipantStarted(
   logger?: TypedLogger,
 ): Promise<void> {
   const state = await getRoundExecutionState(threadId, roundNumber, env);
-  if (!state)
+  if (!state) {
     return;
+  }
 
   const participantStatuses = { ...state.participantStatuses };
   participantStatuses[participantIndex] = ParticipantStreamStatuses.ACTIVE;
@@ -363,8 +364,9 @@ export async function markParticipantCompleted(
   logger?: TypedLogger,
 ): Promise<{ allParticipantsComplete: boolean }> {
   const state = await getRoundExecutionState(threadId, roundNumber, env);
-  if (!state)
+  if (!state) {
     return { allParticipantsComplete: false };
+  }
 
   const participantStatuses = { ...state.participantStatuses };
   participantStatuses[participantIndex] = ParticipantStreamStatuses.COMPLETED;
@@ -380,20 +382,20 @@ export async function markParticipantCompleted(
   const allParticipantsComplete = (completedParticipants + failedParticipants) >= state.totalParticipants;
 
   await updateRoundExecutionState(threadId, roundNumber, {
-    participantStatuses,
     completedParticipants,
     failedParticipants,
+    participantStatuses,
     phase: allParticipantsComplete ? RoundExecutionPhases.MODERATOR : RoundExecutionPhases.PARTICIPANTS,
   }, env, logger);
 
   logger?.info('Marked participant completed', LogHelpers.operation({
-    operationName: 'markParticipantCompleted',
-    threadId,
-    roundNumber,
-    participantIndex,
-    completedParticipants,
-    totalParticipants: state.totalParticipants,
     allParticipantsComplete,
+    completedParticipants,
+    operationName: 'markParticipantCompleted',
+    participantIndex,
+    roundNumber,
+    threadId,
+    totalParticipants: state.totalParticipants,
   }));
 
   return { allParticipantsComplete };
@@ -411,8 +413,9 @@ export async function markParticipantFailed(
   logger?: TypedLogger,
 ): Promise<{ allParticipantsComplete: boolean }> {
   const state = await getRoundExecutionState(threadId, roundNumber, env);
-  if (!state)
+  if (!state) {
     return { allParticipantsComplete: false };
+  }
 
   const participantStatuses = { ...state.participantStatuses };
   participantStatuses[participantIndex] = ParticipantStreamStatuses.FAILED;
@@ -428,21 +431,21 @@ export async function markParticipantFailed(
   const allParticipantsComplete = (completedParticipants + failedParticipants) >= state.totalParticipants;
 
   await updateRoundExecutionState(threadId, roundNumber, {
-    participantStatuses,
     completedParticipants,
-    failedParticipants,
-    phase: allParticipantsComplete ? RoundExecutionPhases.MODERATOR : RoundExecutionPhases.PARTICIPANTS,
     // Only set error if all failed or this is a critical error
     error: failedParticipants >= state.totalParticipants ? error : state.error,
+    failedParticipants,
+    participantStatuses,
+    phase: allParticipantsComplete ? RoundExecutionPhases.MODERATOR : RoundExecutionPhases.PARTICIPANTS,
   }, env, logger);
 
   logger?.warn('Marked participant failed', LogHelpers.operation({
-    operationName: 'markParticipantFailed',
-    threadId,
-    roundNumber,
-    participantIndex,
     error,
     failedParticipants,
+    operationName: 'markParticipantFailed',
+    participantIndex,
+    roundNumber,
+    threadId,
     totalParticipants: state.totalParticipants,
   }));
 
@@ -459,16 +462,16 @@ export async function markModeratorCompleted(
   logger?: TypedLogger,
 ): Promise<void> {
   await updateRoundExecutionState(threadId, roundNumber, {
+    completedAt: new Date().toISOString(),
     moderatorStatus: ParticipantStreamStatuses.COMPLETED,
     phase: RoundExecutionPhases.COMPLETE,
     status: RoundExecutionStatuses.COMPLETED,
-    completedAt: new Date().toISOString(),
   }, env, logger);
 
   logger?.info('Marked moderator completed - round execution complete', LogHelpers.operation({
     operationName: 'markModeratorCompleted',
-    threadId,
     roundNumber,
+    threadId,
   }));
 }
 
@@ -483,18 +486,18 @@ export async function markModeratorFailed(
   logger?: TypedLogger,
 ): Promise<void> {
   await updateRoundExecutionState(threadId, roundNumber, {
+    completedAt: new Date().toISOString(),
+    error,
     moderatorStatus: ParticipantStreamStatuses.FAILED,
     phase: RoundExecutionPhases.COMPLETE,
     status: RoundExecutionStatuses.COMPLETED, // Still complete, just with moderator failure
-    completedAt: new Date().toISOString(),
-    error,
   }, env, logger);
 
   logger?.warn('Marked moderator failed', LogHelpers.operation({
-    operationName: 'markModeratorFailed',
-    threadId,
-    roundNumber,
     error,
+    operationName: 'markModeratorFailed',
+    roundNumber,
+    threadId,
   }));
 }
 
@@ -509,16 +512,16 @@ export async function markRoundFailed(
   logger?: TypedLogger,
 ): Promise<void> {
   await updateRoundExecutionState(threadId, roundNumber, {
-    status: RoundExecutionStatuses.FAILED,
     completedAt: new Date().toISOString(),
     error,
+    status: RoundExecutionStatuses.FAILED,
   }, env, logger);
 
   logger?.error('Marked round execution as failed', LogHelpers.operation({
-    operationName: 'markRoundFailed',
-    threadId,
-    roundNumber,
     error,
+    operationName: 'markRoundFailed',
+    roundNumber,
+    threadId,
   }));
 }
 
@@ -544,34 +547,34 @@ export async function computeRoundStatus(
   isComplete: boolean;
   error: string | null;
 }> {
-  const { threadId, roundNumber, env, db, logger } = params;
+  const { db, env, logger, roundNumber, threadId } = params;
 
   // Check KV state first
   const kvState = await getRoundExecutionState(threadId, roundNumber, env, logger);
 
   // Get participant count from DB
   const participants = await db.query.chatParticipant.findMany({
+    columns: { id: true },
     where: and(
       eq(tables.chatParticipant.threadId, threadId),
       eq(tables.chatParticipant.isEnabled, true),
     ),
-    columns: { id: true },
   });
 
   const totalParticipants = participants.length;
 
   // Get messages for this round from DB
   const roundMessages = await db.query.chatMessage.findMany({
+    columns: {
+      id: true,
+      metadata: true,
+      participantId: true,
+    },
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    columns: {
-      id: true,
-      participantId: true,
-      metadata: true,
-    },
   });
 
   // Count completed participants (messages with participantId)
@@ -647,16 +650,16 @@ export async function computeRoundStatus(
   ).length;
 
   return {
-    status,
-    phase,
-    totalParticipants,
     completedParticipants,
+    error: kvState?.error || null,
     failedParticipants,
-    participantStatuses,
-    moderatorStatus,
     hasModeratorMessage,
     isComplete,
-    error: kvState?.error || null,
+    moderatorStatus,
+    participantStatuses,
+    phase,
+    status,
+    totalParticipants,
   };
 }
 
@@ -702,15 +705,15 @@ export async function getIncompleteParticipants(
 ): Promise<number[]> {
   // Get completed participant indices from DB
   const roundMessages = await db.query.chatMessage.findMany({
+    columns: {
+      id: true,
+      participantId: true,
+    },
     where: and(
       eq(tables.chatMessage.threadId, threadId),
       eq(tables.chatMessage.roundNumber, roundNumber),
       eq(tables.chatMessage.role, MessageRoles.ASSISTANT),
     ),
-    columns: {
-      id: true,
-      participantId: true,
-    },
   });
 
   const completedIndices = new Set<number>();
@@ -746,13 +749,13 @@ export async function getIncompleteParticipants(
   }
 
   logger?.info('Found incomplete participants', LogHelpers.operation({
-    operationName: 'getIncompleteParticipants',
-    threadId,
-    roundNumber,
-    totalParticipants,
-    completedIndices: Array.from(completedIndices),
     activeIndices: Array.from(activeIndices),
+    completedIndices: Array.from(completedIndices),
     incompleteIndices: incomplete,
+    operationName: 'getIncompleteParticipants',
+    roundNumber,
+    threadId,
+    totalParticipants,
   }));
 
   return incomplete;
@@ -790,7 +793,7 @@ export async function incrementRecoveryAttempts(
   const state = await getRoundExecutionState(threadId, roundNumber, env, logger);
 
   if (!state) {
-    return { canRecover: false, attempts: 0, maxAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS };
+    return { attempts: 0, canRecover: false, maxAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS };
   }
 
   const newAttempts = (state.recoveryAttempts ?? 0) + 1;
@@ -799,18 +802,18 @@ export async function incrementRecoveryAttempts(
 
   if (canRecover) {
     await updateRoundExecutionState(threadId, roundNumber, {
-      recoveryAttempts: newAttempts,
       lastActivityAt: new Date().toISOString(),
+      recoveryAttempts: newAttempts,
     }, env, logger);
   }
 
   logger?.info(`Recovery attempts: ${newAttempts}/${maxAttempts}, canRecover: ${canRecover}`, LogHelpers.operation({
     operationName: 'incrementRecoveryAttempts',
-    threadId,
     roundNumber,
+    threadId,
   }));
 
-  return { canRecover, attempts: newAttempts, maxAttempts };
+  return { attempts: newAttempts, canRecover, maxAttempts };
 }
 
 /**
@@ -825,15 +828,15 @@ export async function updatePreSearchStatus(
   logger?: TypedLogger,
 ): Promise<void> {
   await updateRoundExecutionState(threadId, roundNumber, {
-    preSearchStatus: status,
-    preSearchId,
     lastActivityAt: new Date().toISOString(),
+    preSearchId,
+    preSearchStatus: status,
   }, env, logger);
 
   logger?.info(`Pre-search status: ${status}${preSearchId ? `, id: ${preSearchId}` : ''}`, LogHelpers.operation({
     operationName: 'updatePreSearchStatus',
-    threadId,
     roundNumber,
+    threadId,
   }));
 }
 
@@ -842,7 +845,7 @@ export async function updatePreSearchStatus(
  */
 export function isRoundStale(
   state: RoundExecutionState,
-  staleThresholdMs: number = 30_000,
+  staleThresholdMs = 30_000,
 ): boolean {
   if (!state.lastActivityAt) {
     // No activity timestamp - check startedAt

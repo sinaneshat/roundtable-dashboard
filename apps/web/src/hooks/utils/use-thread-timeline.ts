@@ -96,8 +96,8 @@ export type UseThreadTimelineOptions = {
  * ```
  */
 export function useThreadTimeline({
-  messages,
   changelog,
+  messages,
   preSearches = [],
 }: UseThreadTimelineOptions): TimelineItem[] {
   return useMemo(() => {
@@ -122,10 +122,12 @@ export function useThreadTimeline({
     messagesByRound.forEach((roundMessages, _roundNumber) => {
       roundMessages.sort((a, b) => {
         // User messages come first
-        if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+        if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
           return -1;
-        if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+        }
+        if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
           return 1;
+        }
 
         // For assistant messages, sort by participantIndex
         // Moderator (isModerator: true, no participantIndex) comes LAST
@@ -134,10 +136,12 @@ export function useThreadTimeline({
           const bIsModerator = isModeratorMessage(b);
 
           // Moderator always comes after participants
-          if (aIsModerator && !bIsModerator)
+          if (aIsModerator && !bIsModerator) {
             return 1;
-          if (!aIsModerator && bIsModerator)
+          }
+          if (!aIsModerator && bIsModerator) {
             return -1;
+          }
 
           // Neither is moderator - sort by participantIndex
           const indexA = getParticipantIndex(a.metadata) ?? 0;
@@ -205,10 +209,10 @@ export function useThreadTimeline({
       // Only renders when round has messages or pre-search
       if (hasChangelog) {
         timeline.push({
-          type: 'changelog',
           data: roundChangelog,
           key: `round-${roundNumber}-changelog`,
           roundNumber,
+          type: 'changelog',
         });
       }
 
@@ -220,10 +224,10 @@ export function useThreadTimeline({
       // Flow without messages (orphaned): changelog → pre-search (standalone timeline item)
       if (hasPreSearch && !hasMessages) {
         timeline.push({
-          type: 'pre-search',
           data: roundPreSearch,
           key: `round-${roundNumber}-pre-search`,
           roundNumber,
+          type: 'pre-search',
         });
       }
 
@@ -232,10 +236,10 @@ export function useThreadTimeline({
       // ChatMessageList handles rendering and pre-search card insertion
       if (hasMessages) {
         timeline.push({
-          type: 'messages',
           data: roundMessages,
           key: `round-${roundNumber}-messages`,
           roundNumber,
+          type: 'messages',
         });
       }
     });

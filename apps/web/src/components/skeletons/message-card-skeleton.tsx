@@ -18,8 +18,8 @@ type MessageCardSkeletonProps = {
  * @param props.className - Optional CSS class names
  */
 export function MessageCardSkeleton({
-  variant = 'assistant',
   className,
+  variant = 'assistant',
   ...props
 }: MessageCardSkeletonProps) {
   if (variant === 'user') {

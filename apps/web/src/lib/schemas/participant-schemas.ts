@@ -156,16 +156,16 @@ export function formatParticipantIndex(
  * ```
  */
 export const ChatParticipantSchema = z.object({
-  id: z.string(),
-  threadId: z.string(),
-  modelId: z.string(),
-  customRoleId: z.string().nullable(),
-  role: z.string().nullable(),
-  priority: z.number().int().nonnegative(),
-  isEnabled: z.boolean(),
-  settings: ParticipantSettingsSchema,
   // Date fields use string (JSON serialization converts Date to string)
   createdAt: z.string(),
+  customRoleId: z.string().nullable(),
+  id: z.string(),
+  isEnabled: z.boolean(),
+  modelId: z.string(),
+  priority: z.number().int().nonnegative(),
+  role: z.string().nullable(),
+  settings: ParticipantSettingsSchema,
+  threadId: z.string(),
   updatedAt: z.string(),
 });
 
@@ -326,8 +326,8 @@ export function isMinimalParticipant(
 const BaseParticipantConfigSchema = z.object({
   id: z.string(),
   modelId: z.string().min(1, 'Model ID is required'),
-  role: z.string().nullable().optional(),
   priority: z.number().int().nonnegative(),
+  role: z.string().nullable().optional(),
 });
 
 /**
@@ -366,9 +366,9 @@ export const ParticipantConfigSchema = BaseParticipantConfigSchema.extend({
   customRoleId: z.string().nullable().optional(),
   settings: z
     .object({
-      temperature: z.number().min(0).max(2).optional(),
       maxTokens: z.number().int().positive().optional(),
       systemPrompt: z.string().optional(),
+      temperature: z.number().min(0).max(2).optional(),
     })
     .optional(),
 });

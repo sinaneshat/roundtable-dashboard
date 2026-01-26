@@ -38,11 +38,11 @@ type UseMemoryEventsPollingOptions = {
  * @param options.onMemoriesFound - Callback when memories are found
  */
 export function useMemoryEventsPolling({
-  threadId,
-  roundNumber,
-  projectId,
   enabled = true,
   onMemoriesFound,
+  projectId,
+  roundNumber,
+  threadId,
 }: UseMemoryEventsPollingOptions) {
   const { isAuthenticated } = useAuthCheck();
   const queryClient = useQueryClient();
@@ -59,8 +59,9 @@ export function useMemoryEventsPolling({
     && pollCount < MAX_POLLS
     && !foundRef.current;
 
-  const { data, isFetching, error, isError } = useQuery({
-    queryKey: queryKeys.threads.memoryEvents(threadId, roundNumber),
+  const { data, error, isError, isFetching } = useQuery({
+    enabled: shouldPoll,
+    gcTime: 60_000,
     queryFn: async () => {
       setPollCount(prev => prev + 1);
       return getThreadMemoryEventsService({
@@ -68,22 +69,23 @@ export function useMemoryEventsPolling({
         query: { roundNumber },
       });
     },
-    staleTime: 0,
-    gcTime: 60_000,
-    enabled: shouldPoll,
+    queryKey: queryKeys.threads.memoryEvents(threadId, roundNumber),
     refetchInterval: shouldPoll ? POLL_INTERVAL : false,
     retry: false,
+    staleTime: 0,
     throwOnError: false,
   });
 
   // Handle found memories
   useEffect(() => {
-    if (!data || foundRef.current)
+    if (!data || foundRef.current) {
       return;
+    }
 
     const eventData = data;
-    if (!eventData.memories || eventData.memories.length === 0)
+    if (!eventData.memories || eventData.memories.length === 0) {
       return;
+    }
 
     foundRef.current = true;
 
@@ -108,11 +110,11 @@ export function useMemoryEventsPolling({
   return {
     data,
     error,
+    found: foundRef.current,
     isError,
     isPolling: shouldPoll && isFetching,
-    pollCount,
     maxPolls: MAX_POLLS,
-    found: foundRef.current,
+    pollCount,
   };
 }
 
@@ -127,15 +129,15 @@ export function useMemoryEventsQuery(
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.threads.memoryEvents(threadId, roundNumber),
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId && roundNumber > 0),
+    gcTime: 60_000,
     queryFn: () => getThreadMemoryEventsService({
       param: { threadId },
       query: { roundNumber },
     }),
-    staleTime: 30_000,
-    gcTime: 60_000,
-    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId && roundNumber > 0),
+    queryKey: queryKeys.threads.memoryEvents(threadId, roundNumber),
     retry: false,
+    staleTime: 30_000,
     throwOnError: false,
   });
 }

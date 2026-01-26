@@ -19,20 +19,20 @@ import type { ApiEnv } from '@/types';
 
 // Zod schemas for performance tracking (SINGLE SOURCE OF TRUTH)
 export const DbQueryTimingSchema = z.object({
-  query: z.string(),
   duration: z.number(),
+  query: z.string(),
   timestamp: z.number(),
 });
 
 export const PerformanceMetricsSchema = z.object({
-  requestStartTime: z.number(),
-  totalDuration: z.number().optional(),
-  dbQueryCount: z.number(),
-  dbTotalTime: z.number(),
-  dbQueries: z.array(DbQueryTimingSchema),
-  workerInitTime: z.number().optional(),
   cfPlacement: z.string().optional(),
   cfRay: z.string().optional(),
+  dbQueries: z.array(DbQueryTimingSchema),
+  dbQueryCount: z.number(),
+  dbTotalTime: z.number(),
+  requestStartTime: z.number(),
+  totalDuration: z.number().optional(),
+  workerInitTime: z.number().optional(),
 });
 
 // Type inference from Zod schemas
@@ -65,12 +65,12 @@ export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
 
   // Initialize metrics in context (request-scoped, not global)
   const metrics: PerformanceMetrics = {
-    requestStartTime: startTime,
+    cfPlacement: c.req.header('cf-placement') || undefined,
+    cfRay: c.req.header('cf-ray') || undefined,
+    dbQueries: [],
     dbQueryCount: 0,
     dbTotalTime: 0,
-    dbQueries: [],
-    cfRay: c.req.header('cf-ray') || undefined,
-    cfPlacement: c.req.header('cf-placement') || undefined,
+    requestStartTime: startTime,
   };
 
   // Store in context immediately so it's available during request processing
@@ -95,9 +95,9 @@ export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
     }
 
     c.res = new Response(c.res.body, {
+      headers,
       status: c.res.status,
       statusText: c.res.statusText,
-      headers,
     });
   }
 });
@@ -106,21 +106,21 @@ export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
  * Performance response format for API responses
  */
 export const PerformanceResponseFormatSchema = z.object({
-  timing: z.object({
-    total: z.number(),
-    db: z.object({
-      queryCount: z.number(),
-      totalTime: z.number(),
-      avgTime: z.number(),
-      queries: z.array(z.object({
-        query: z.string(),
-        duration: z.number(),
-      })),
-    }),
-  }),
   cloudflare: z.object({
     placement: z.string(),
     ray: z.string(),
+  }),
+  timing: z.object({
+    db: z.object({
+      avgTime: z.number(),
+      queries: z.array(z.object({
+        duration: z.number(),
+        query: z.string(),
+      })),
+      queryCount: z.number(),
+      totalTime: z.number(),
+    }),
+    total: z.number(),
   }),
 });
 
@@ -150,23 +150,23 @@ export function formatPerformanceForResponse(c?: { get: (key: string) => unknown
   const now = Date.now();
 
   return {
+    cloudflare: {
+      placement: metrics.cfPlacement || 'unknown',
+      ray: metrics.cfRay || 'unknown',
+    },
     timing: {
-      total: now - metrics.requestStartTime,
       db: {
-        queryCount: metrics.dbQueryCount,
-        totalTime: metrics.dbTotalTime,
         avgTime: metrics.dbQueryCount > 0
           ? Math.round(metrics.dbTotalTime / metrics.dbQueryCount)
           : 0,
         queries: metrics.dbQueries.map(q => ({
-          query: q.query,
           duration: q.duration,
+          query: q.query,
         })),
+        queryCount: metrics.dbQueryCount,
+        totalTime: metrics.dbTotalTime,
       },
-    },
-    cloudflare: {
-      placement: metrics.cfPlacement || 'unknown',
-      ray: metrics.cfRay || 'unknown',
+      total: now - metrics.requestStartTime,
     },
   };
 }

@@ -10,10 +10,10 @@ type EmailBodyProps = {
 
 export function EmailBody({ children, style }: EmailBodyProps) {
   const bodyStyle: CSSProperties = {
-    margin: '0 auto',
     backgroundColor: colors.white,
-    padding: spacing[2],
     fontFamily: typography.fontFamily,
+    margin: '0 auto',
+    padding: spacing[2],
     ...style,
   };
 

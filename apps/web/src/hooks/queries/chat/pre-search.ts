@@ -13,14 +13,10 @@ export function useThreadPreSearchesQuery(
   const { isAuthenticated } = useAuthCheck();
 
   const query = useQuery({
-    queryKey: queryKeys.threads.preSearches(threadId),
-    queryFn: () => getThreadPreSearchesService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.preSearch,
-    placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    placeholderData: previousData => previousData,
+    queryFn: () => getThreadPreSearchesService({ param: { id: threadId } }),
+    queryKey: queryKeys.threads.preSearches(threadId),
     refetchInterval: (query) => {
       // ✅ Stop polling on error to prevent infinite error loops
       if (query.state.status === 'error') {
@@ -32,9 +28,13 @@ export function useThreadPreSearchesQuery(
       );
       return hasPendingPreSearch ? POLLING_INTERVALS.preSearchPending : false;
     },
-    retry: false,
-    throwOnError: false,
     refetchIntervalInBackground: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: STALE_TIMES.preSearch,
+    throwOnError: false,
   });
 
   return query;

@@ -28,8 +28,8 @@
  */
 export function calculateExponentialBackoff(
   attempt: number,
-  baseDelaySeconds: number = 30,
-  maxDelaySeconds: number = 3600,
+  baseDelaySeconds = 30,
+  maxDelaySeconds = 3600,
 ): number {
   const delay = baseDelaySeconds * 2 ** attempt;
   return Math.min(delay, maxDelaySeconds);

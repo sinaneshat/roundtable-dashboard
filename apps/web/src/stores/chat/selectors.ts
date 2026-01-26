@@ -205,8 +205,9 @@ export function hasMoreParticipants(state: StoreState): boolean {
  * Get participant progress as fraction (0-1)
  */
 export function getParticipantProgress(state: StoreState): number {
-  if (state.flowParticipantCount === 0)
+  if (state.flowParticipantCount === 0) {
     return 0;
+  }
   return (state.flowParticipantIndex + 1) / state.flowParticipantCount;
 }
 
@@ -319,46 +320,46 @@ export function getRoundPhase(state: StoreState): 'idle' | 'pre_search' | 'parti
  * All selectors exported as a namespace for convenient access
  */
 export const selectors = {
-  // Streaming
-  isStreaming,
-  isModeratorStreaming,
-  isPreSearchStreaming,
-  isParticipantStreaming,
+  canStartNewRound,
+  // Participant progress
+  getCurrentParticipantIndex,
+  // Round
+  getCurrentRoundNumber,
+  // Composite
+  getFlowStateDescription,
 
-  // Waiting
-  isWaitingToStart,
-  isRoundInProgress,
+  getParticipantCount,
+  getParticipantProgress,
+
+  getRoundPhase,
+  hasMoreParticipants,
+  // Idle
+  isIdle,
+
+  isInModeratorPhase,
+  isInParticipantPhase,
+  // Transitions
+  isInParticipantTransition,
 
   // Phases
   isInPreSearchPhase,
-  isInParticipantPhase,
-  isInModeratorPhase,
+  isModeratorStreaming,
 
+  isParticipantStreaming,
+  isPreSearchStreaming,
+  isRoundActive,
   // Completion
   isRoundComplete,
+
   isRoundError,
+  isRoundInProgress,
+
+  // Streaming
+  isStreaming,
   isTerminal,
-
-  // Idle
-  isIdle,
-  canStartNewRound,
-
-  // Participant progress
-  getCurrentParticipantIndex,
-  getParticipantCount,
-  hasMoreParticipants,
-  getParticipantProgress,
-
-  // Round
-  getCurrentRoundNumber,
-  isRoundActive,
-
-  // Transitions
-  isInParticipantTransition,
-  isWaitingForPreSearch,
   isWaitingForModerator,
 
-  // Composite
-  getFlowStateDescription,
-  getRoundPhase,
+  isWaitingForPreSearch,
+  // Waiting
+  isWaitingToStart,
 } as const;

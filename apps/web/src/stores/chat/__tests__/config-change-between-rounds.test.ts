@@ -31,8 +31,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD clear old participant state when adding participants', () => {
       // Round 1: 2 participants
       const round1Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
@@ -44,9 +44,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Add a 3rd participant
       const round2Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
@@ -75,9 +75,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD clear old participant state when removing participants', () => {
       // Round 1: 3 participants
       const round1Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
@@ -89,8 +89,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Remove 1 participant (only 2 left)
       const round2Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
@@ -106,14 +106,14 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       expect(state.expectedParticipantIds).toEqual(['gpt-4', 'claude-3']);
 
       // No stale animation tracking for removed 3rd participant
-      expect(state.pendingAnimations.has(2)).toBe(false);
+      expect(state.pendingAnimations.has(2)).toBeFalsy();
     });
 
     it('sHOULD handle role changes between rounds', () => {
       // Round 1: Participants with roles A and B
       const round1Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ];
 
       store.getState().setSelectedParticipants(round1Participants);
@@ -121,8 +121,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Round 2: Swap roles
       const round2Participants = [
-        { id: 'p1', modelId: 'gpt-4', role: 'analyst', priority: 0 }, // Changed role
-        { id: 'p2', modelId: 'claude-3', role: 'specialist', priority: 1 }, // Changed role
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'analyst' }, // Changed role
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'specialist' }, // Changed role
       ];
 
       store.getState().setSelectedParticipants(round2Participants);
@@ -145,10 +145,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Add placeholder pre-search for round 1
       store.getState().addPreSearch({
         id: 'pre-search-0',
-        threadId: 'thread-1',
         roundNumber: 0,
-        status: 'in-progress',
         searchData: null,
+        status: 'in-progress',
+        threadId: 'thread-1',
         userQuery: 'Query 1',
       });
 
@@ -167,8 +167,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // BUG: triggeredPreSearchRounds might still have round 0
       // BUG: preSearchActivityTimes might have stale entries
 
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
-      expect(store.getState().preSearchActivityTimes.has(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
+      expect(store.getState().preSearchActivityTimes.has(1)).toBeFalsy();
     });
 
     it('sHOULD create fresh pre-search state when enabled between rounds', () => {
@@ -189,7 +189,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // BUG: Previous round's lack of pre-search might cause initialization issues
 
       // Pre-search should be fresh for round 1 (not triggered yet)
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
       expect(store.getState().preSearches).toHaveLength(0); // No pre-search added yet
     });
 
@@ -201,10 +201,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       store.getState().addPreSearch({
         id: 'pre-search-0',
-        threadId: 'thread-1',
         roundNumber: 0,
-        status: 'in-progress',
         searchData: null,
+        status: 'in-progress',
+        threadId: 'thread-1',
         userQuery: 'Query 1',
       });
 
@@ -223,8 +223,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Each round should have isolated pre-search tracking
 
       // Tracking Sets PERSIST across rounds (prevents duplicate triggers)
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true); // Round 0 WAS triggered
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false); // Round 1 NOT triggered yet
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy(); // Round 0 WAS triggered
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy(); // Round 1 NOT triggered yet
 
       // Activity times are CLEARED on completeStreaming (per-session timeout tracking)
       // They are only used during active streaming to detect stuck pre-searches
@@ -232,8 +232,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       const round1Activity = store.getState().getPreSearchActivityTime(1);
 
       // After completeStreaming, activity times are cleared (correct isolation)
-      expect(round0Activity === undefined || round0Activity === 0).toBe(true);
-      expect(round1Activity === undefined || round1Activity === 0).toBe(true);
+      expect(round0Activity === undefined || round0Activity === 0).toBeTruthy();
+      expect(round1Activity === undefined || round1Activity === 0).toBeTruthy();
     });
   });
 
@@ -275,8 +275,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // ❌ EXPECTED FAILURE: Round 1 moderator tracking should NOT affect round 2
       // BUG: createdModeratorRounds might still have round 0, affecting round 1 logic
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true); // Round 0 had moderator
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false); // Round 1 fresh state
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy(); // Round 0 had moderator
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy(); // Round 1 fresh state
     });
   });
 
@@ -285,29 +285,29 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Round 1: 2 participants, no pre-search
       store.getState().setEnableWebSearch(false);
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       const userMessage1: UIMessage = {
         id: 'msg-user-1',
+        metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Message 1', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Message 1' }],
-        metadata: { roundNumber: 0, role: MessageRoles.USER },
       };
 
       const assistantMessage1: UIMessage = {
         id: 'msg-asst-1-p1',
+        metadata: { participantIndex: 0, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response from GPT-4', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response from GPT-4' }],
-        metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantIndex: 0 },
       };
 
       const assistantMessage2: UIMessage = {
         id: 'msg-asst-1-p2',
+        metadata: { participantIndex: 1, role: MessageRoles.ASSISTANT, roundNumber: 0 },
+        parts: [{ text: 'Response from Claude', type: 'text' }],
         role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Response from Claude' }],
-        metadata: { roundNumber: 0, role: MessageRoles.ASSISTANT, participantIndex: 1 },
       };
 
       store.getState().setMessages([userMessage1, assistantMessage1, assistantMessage2]);
@@ -316,9 +316,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Round 2: 3 participants, WITH pre-search
       store.getState().setEnableWebSearch(true);
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ]);
 
       // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
@@ -329,10 +329,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Add pre-search for round 2
       store.getState().addPreSearch({
         id: 'pre-search-1',
-        threadId: 'thread-1',
         roundNumber: 1,
-        status: 'in-progress',
         searchData: null,
+        status: 'in-progress',
+        threadId: 'thread-1',
         userQuery: 'Message 2',
       });
 
@@ -340,11 +340,11 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // Round 1 state (2 participants, no pre-search) should NOT affect round 2
 
       expect(store.getState().expectedParticipantIds).toHaveLength(3);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
       expect(store.getState().preSearches.find(p => p.roundNumber === 1)).toBeDefined();
 
       // Old round's pre-search absence shouldn't affect new round
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('sHOULD handle complete config overhaul between rounds', () => {
@@ -352,8 +352,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       store.getState().setSelectedMode('panel');
       store.getState().setEnableWebSearch(false);
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       store.getState().prepareForNewMessage('Message 1', []);
@@ -370,10 +370,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       store.getState().setSelectedMode('council');
       store.getState().setEnableWebSearch(true);
       store.getState().setSelectedParticipants([
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 0 },
-        { id: 'p4', modelId: 'mistral', role: 'synthesizer', priority: 1 },
-        { id: 'p5', modelId: 'llama-70b', role: 'devil-advocate', priority: 2 },
-        { id: 'p6', modelId: 'command-r', role: 'validator', priority: 3 },
+        { id: 'p3', modelId: 'gemini-pro', priority: 0, role: 'critic' },
+        { id: 'p4', modelId: 'mistral', priority: 1, role: 'synthesizer' },
+        { id: 'p5', modelId: 'llama-70b', priority: 2, role: 'devil-advocate' },
+        { id: 'p6', modelId: 'command-r', priority: 3, role: 'validator' },
       ]);
 
       // NEW: setExpectedParticipantIds must be called explicitly (done by form-actions.ts)
@@ -386,7 +386,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // Config should reflect new settings
       expect(store.getState().selectedMode).toBe('council');
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
       expect(store.getState().expectedParticipantIds).toHaveLength(4);
       expect(store.getState().expectedParticipantIds).toEqual(['gemini-pro', 'mistral', 'llama-70b', 'command-r']);
 
@@ -395,10 +395,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       expect(store.getState().pendingAnimations.size).toBe(0);
 
       // Moderator tracking should be independent
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
 
       // Pre-search tracking should be fresh for round 1
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
   });
 
@@ -406,8 +406,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     it('sHOULD handle config changes during regeneration', () => {
       // Original round 1: 2 participants
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
       ]);
 
       store.getState().prepareForNewMessage('Message 1', []);
@@ -416,9 +416,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       // User changes config BEFORE regenerating
       store.getState().setSelectedParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-        { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-        { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+        { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+        { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+        { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
       ]);
 
       // Start regeneration with NEW config
@@ -428,7 +428,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // BUG: Regeneration might use old 2-participant config instead of new 3-participant config
 
       expect(store.getState().expectedParticipantIds).toHaveLength(3);
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
       expect(store.getState().regeneratingRoundNumber).toBe(0);
     });
   });
@@ -452,12 +452,12 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       // BUG: Round 0 tracking might be cleared when it should persist
 
       // Round 0 tracking should persist (historical record)
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
 
       // Round 1 tracking should be fresh
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('sHOULD allow atomic check-and-mark for new rounds', () => {
@@ -466,10 +466,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       store.getState().setStreamingRoundNumber(0);
 
       const round0Result = store.getState().tryMarkModeratorCreated(0);
-      expect(round0Result).toBe(true); // First time marking
+      expect(round0Result).toBeTruthy(); // First time marking
 
       const round0Duplicate = store.getState().tryMarkModeratorCreated(0);
-      expect(round0Duplicate).toBe(false); // Already marked
+      expect(round0Duplicate).toBeFalsy(); // Already marked
 
       store.getState().completeStreaming();
 
@@ -480,11 +480,11 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       const round1Result = store.getState().tryMarkModeratorCreated(1);
 
       // ❌ EXPECTED FAILURE: Round 1 should be fresh, allowing marking
-      expect(round1Result).toBe(true); // First time marking round 1
+      expect(round1Result).toBeTruthy(); // First time marking round 1
 
       // But round 0 should still be marked
       const round0Check = store.getState().tryMarkModeratorCreated(0);
-      expect(round0Check).toBe(false); // Still marked from before
+      expect(round0Check).toBeFalsy(); // Still marked from before
     });
   });
 
@@ -500,8 +500,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     describe('nextParticipantToTrigger State Management', () => {
       it('should store both index and participantId for validation', () => {
         const participants = [
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ];
         store.getState().setSelectedParticipants(participants);
 
@@ -516,7 +516,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         store.getState().setNextParticipantToTrigger(null);
 
         const state = store.getState();
-        expect(state.nextParticipantToTrigger).toBe(null);
+        expect(state.nextParticipantToTrigger).toBeNull();
       });
 
       it('should support object trigger with index and participantId', () => {
@@ -531,8 +531,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       it('should track participantId to detect config changes', () => {
         // Initial setup: 2 participants
         const initialParticipants = [
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ];
         store.getState().setSelectedParticipants(initialParticipants);
 
@@ -541,8 +541,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
         // Now config changes - participants replaced with different IDs
         const newParticipants = [
-          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 0 },
-          { id: 'p4', modelId: 'mistral', role: 'synthesizer', priority: 1 },
+          { id: 'p3', modelId: 'gemini-pro', priority: 0, role: 'critic' },
+          { id: 'p4', modelId: 'mistral', priority: 1, role: 'synthesizer' },
         ];
         store.getState().setSelectedParticipants(newParticipants);
 
@@ -558,8 +558,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
       it('should preserve matching trigger when participants unchanged', () => {
         const participants = [
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ];
         store.getState().setSelectedParticipants(participants);
         store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
@@ -581,16 +581,16 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       it('should handle participant count increase', () => {
         // Start with 2 participants
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ]);
         store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3']);
 
         // Increase to 3 participants
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+          { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
         ]);
         store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
 
@@ -602,15 +602,15 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       it('should handle participant count decrease', () => {
         // Start with 3 participants
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+          { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
         ]);
         store.getState().setExpectedParticipantIds(['gpt-4', 'claude-3', 'gemini-pro']);
 
         // Decrease to 1 participant
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
         ]);
         store.getState().setExpectedParticipantIds(['gpt-4']);
 
@@ -622,9 +622,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       it('should detect out-of-bounds index after participant decrease', () => {
         // Start with 3 participants
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
-          { id: 'p3', modelId: 'gemini-pro', role: 'critic', priority: 2 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
+          { id: 'p3', modelId: 'gemini-pro', priority: 2, role: 'critic' },
         ]);
 
         // Set trigger for index 2 (valid with 3 participants)
@@ -632,8 +632,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
         // Decrease to 2 participants - index 2 is now out of bounds
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ]);
 
         const state = store.getState();
@@ -643,9 +643,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // Index 2 >= participant count 2 → out of bounds
         expect(triggeredIndex).toBe(2);
         expect(participantCount).toBe(2);
-        if (triggeredIndex === undefined)
+        if (triggeredIndex === undefined) {
           throw new Error('expected triggeredIndex to be defined');
-        expect(triggeredIndex >= participantCount).toBe(true); // Would fail bounds check
+        }
+        expect(triggeredIndex).toBeGreaterThanOrEqual(participantCount); // Would fail bounds check
       });
     });
 
@@ -653,8 +654,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
       it('should detect participant order swap', () => {
         // Initial order: p1, p2
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ]);
 
         // Set trigger for index 0 expecting p1
@@ -662,8 +663,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
         // Swap order: p2, p1
         store.getState().setSelectedParticipants([
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 0 },
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 1 },
+          { id: 'p2', modelId: 'claude-3', priority: 0, role: 'analyst' },
+          { id: 'p1', modelId: 'gpt-4', priority: 1, role: 'specialist' },
         ]);
 
         const state = store.getState();
@@ -680,7 +681,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     describe('edge Cases for Index Validation', () => {
       it('should handle negative index gracefully', () => {
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
         ]);
 
         // Negative index (invalid)
@@ -690,9 +691,10 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         const triggerIndex = state.nextParticipantToTrigger?.index;
         expect(triggerIndex).toBe(-1);
         expect(triggerIndex).toBeDefined();
-        if (triggerIndex === undefined)
+        if (triggerIndex === undefined) {
           throw new Error('expected triggerIndex to be defined');
-        expect(triggerIndex < 0).toBe(true); // Would fail bounds check
+        }
+        expect(triggerIndex).toBeLessThan(0); // Would fail bounds check
       });
 
       it('should handle empty participants array', () => {
@@ -704,14 +706,15 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // Index 0 is out of bounds when participants is empty
         const triggerIndex = state.nextParticipantToTrigger?.index;
         expect(triggerIndex).toBeDefined();
-        if (triggerIndex === undefined)
+        if (triggerIndex === undefined) {
           throw new Error('expected triggerIndex to be defined');
-        expect(triggerIndex >= state.selectedParticipants.length).toBe(true);
+        }
+        expect(triggerIndex).toBeGreaterThanOrEqual(state.selectedParticipants.length);
       });
 
       it('should handle missing participantId (null check)', () => {
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
         ]);
 
         // Set trigger with empty participantId for no-validation case
@@ -726,8 +729,8 @@ describe('config Change Between Rounds - Store State Isolation', () => {
     describe('prepareForNewMessage and Index Reset', () => {
       it('should clear nextParticipantToTrigger in prepareForNewMessage', () => {
         store.getState().setSelectedParticipants([
-          { id: 'p1', modelId: 'gpt-4', role: 'specialist', priority: 0 },
-          { id: 'p2', modelId: 'claude-3', role: 'analyst', priority: 1 },
+          { id: 'p1', modelId: 'gpt-4', priority: 0, role: 'specialist' },
+          { id: 'p2', modelId: 'claude-3', priority: 1, role: 'analyst' },
         ]);
         store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
 
@@ -737,7 +740,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         store.getState().prepareForNewMessage('Test', ['gpt-4', 'claude-3']);
 
         const state = store.getState();
-        expect(state.nextParticipantToTrigger).toBe(null);
+        expect(state.nextParticipantToTrigger).toBeNull();
       });
 
       it('should reset currentParticipantIndex in prepareForNewMessage', () => {
@@ -765,7 +768,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // ✅ FIX: nextParticipantToTrigger IS now reset by STREAM_RESUMPTION_STATE_RESET
         // This prevents infinite round triggering after moderator completes
         expect(state.nextParticipantToTrigger).toBeNull();
-        expect(state.waitingToStartStreaming).toBe(false);
+        expect(state.waitingToStartStreaming).toBeFalsy();
       });
 
       it('should reset currentParticipantIndex on completeStreaming', () => {
@@ -776,7 +779,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
 
         const state = store.getState();
         expect(state.currentParticipantIndex).toBe(0);
-        expect(state.isStreaming).toBe(false);
+        expect(state.isStreaming).toBeFalsy();
       });
 
       it('should clear nextParticipantToTrigger via use-round-resumption cleanup', () => {
@@ -789,7 +792,7 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         // Simulate explicit cleanup (what hooks do)
         store.getState().setNextParticipantToTrigger(null);
 
-        expect(store.getState().nextParticipantToTrigger).toBe(null);
+        expect(store.getState().nextParticipantToTrigger).toBeNull();
       });
     });
   });

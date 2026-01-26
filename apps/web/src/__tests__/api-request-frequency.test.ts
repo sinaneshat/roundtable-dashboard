@@ -41,10 +41,10 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
 
   // Record the fetch call
   fetchCalls.push({
-    url,
-    method,
     body,
+    method,
     timestamp: Date.now(),
+    url,
   });
 
   // Mock responses for different endpoints
@@ -66,35 +66,35 @@ function mockFetchImplementation(input: RequestInfo | URL, init?: RequestInit): 
     // Return mock messages response
     const threadId = url.match(/threads\/([^/]+)/)?.[1] || 'test-thread';
     return Promise.resolve({
-      ok: true,
-      status: 200,
       headers: new Headers({
         'content-type': 'application/json',
       }),
       json: async () => createMockMessagesListResponse(threadId, 0, 2),
+      ok: true,
+      status: 200,
     } as Response);
   }
 
   if (url.includes('/threads/')) {
     // Return mock thread detail response
     return Promise.resolve({
-      ok: true,
-      status: 200,
       headers: new Headers({
         'content-type': 'application/json',
       }),
       json: async () => createMockThreadDetailResponse(),
+      ok: true,
+      status: 200,
     } as Response);
   }
 
   // Default mock response
   return Promise.resolve({
-    ok: true,
-    status: 200,
     headers: new Headers({
       'content-type': 'application/json',
     }),
     json: async () => ({ success: true }),
+    ok: true,
+    status: 200,
   } as Response);
 }
 
@@ -106,7 +106,7 @@ describe('aPI Request Frequency', () => {
   beforeEach(() => {
     fetchCalls = [];
     originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(mockFetchImplementation);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mockFetchImplementation);
   });
 
   afterEach(() => {
@@ -118,8 +118,8 @@ describe('aPI Request Frequency', () => {
     it('should call moderator endpoint exactly once per round', async () => {
       const _queryClient = new QueryClient({
         defaultOptions: {
-          queries: { retry: false },
           mutations: { retry: false },
+          queries: { retry: false },
         },
       });
 
@@ -128,9 +128,9 @@ describe('aPI Request Frequency', () => {
 
       // Simulate moderator trigger
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1', 'msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Verify exactly one call
@@ -149,16 +149,16 @@ describe('aPI Request Frequency', () => {
 
       // First call
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1', 'msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Second call (should be prevented by store logic)
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1', 'msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCalls = fetchCalls.filter(call =>
@@ -176,9 +176,9 @@ describe('aPI Request Frequency', () => {
       const participantMessageIds = ['msg1', 'msg2', 'msg3'];
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCall = fetchCalls.find(call => call.url.includes('/moderator'));
@@ -186,10 +186,12 @@ describe('aPI Request Frequency', () => {
       expect(moderatorCall).toBeDefined();
       expect(moderatorCall?.body).toBeDefined();
 
-      if (!moderatorCall)
+      if (!moderatorCall) {
         throw new Error('expected moderatorCall');
-      if (!moderatorCall.body)
+      }
+      if (!moderatorCall.body) {
         throw new Error('expected moderatorCall.body');
+      }
 
       const body = JSON.parse(moderatorCall.body);
       expect(body.participantMessageIds).toEqual(participantMessageIds);
@@ -202,9 +204,9 @@ describe('aPI Request Frequency', () => {
       const roundNumber = 0;
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userQuery: 'test query' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const preSearchCalls = fetchCalls.filter(call =>
@@ -221,9 +223,9 @@ describe('aPI Request Frequency', () => {
 
       // First call
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userQuery: 'test query' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Verify no duplicate calls
@@ -242,16 +244,16 @@ describe('aPI Request Frequency', () => {
 
       // Pre-search call
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userQuery: 'test query' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Moderator call
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Verify order
@@ -267,16 +269,16 @@ describe('aPI Request Frequency', () => {
 
       // Pre-search
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userQuery: 'test query' }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Moderator
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const streamingCalls = fetchCalls.filter(call =>
@@ -292,8 +294,8 @@ describe('aPI Request Frequency', () => {
     it('should not cause request storms during invalidation', async () => {
       const queryClient = new QueryClient({
         defaultOptions: {
-          queries: { retry: false, staleTime: 0 },
           mutations: { retry: false },
+          queries: { retry: false, staleTime: 0 },
         },
       });
 
@@ -314,8 +316,8 @@ describe('aPI Request Frequency', () => {
     it('should batch concurrent invalidations', async () => {
       const queryClient = new QueryClient({
         defaultOptions: {
-          queries: { retry: false, staleTime: 0 },
           mutations: { retry: false },
+          queries: { retry: false, staleTime: 0 },
         },
       });
 
@@ -343,9 +345,9 @@ describe('aPI Request Frequency', () => {
       // Simulate participant streaming (no API call, done via SSE)
       // Then moderator trigger
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1', 'msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const postCalls = fetchCalls.filter(call => call.method === 'POST');
@@ -360,9 +362,9 @@ describe('aPI Request Frequency', () => {
       const roundNumber = 0;
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Verify no polling GET requests
@@ -380,23 +382,23 @@ describe('aPI Request Frequency', () => {
 
       // Round 0
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/0/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Round 1
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/1/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Round 2
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/2/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg3'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCalls = fetchCalls.filter(call =>
@@ -414,15 +416,15 @@ describe('aPI Request Frequency', () => {
       const threadId = 'thread_123';
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/0/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/1/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg2'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCalls = fetchCalls.filter(call => call.url.includes('/moderator'));
@@ -443,9 +445,9 @@ describe('aPI Request Frequency', () => {
       const roundNumber = 0;
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCalls = fetchCalls.filter(call => call.url.includes('/moderator'));
@@ -460,9 +462,9 @@ describe('aPI Request Frequency', () => {
 
       // Initial call
       const response = await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       // Consume stream
@@ -470,8 +472,9 @@ describe('aPI Request Frequency', () => {
       if (reader) {
         while (true) {
           const { done } = await reader.read();
-          if (done)
+          if (done) {
             break;
+          }
         }
       }
 
@@ -490,9 +493,9 @@ describe('aPI Request Frequency', () => {
       const participantMessageIds = ['msg1', 'msg2', 'msg3'];
 
       await fetch(`/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participantMessageIds }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
       });
 
       const moderatorCall = fetchCalls.find(call => call.url.includes('/moderator'));
@@ -509,8 +512,8 @@ describe('aPI Request Frequency', () => {
       // Make multiple calls in quick succession
       const promises = [
         fetch(`/api/v1/chat/threads/${threadId}/rounds/0/moderator`, {
-          method: 'POST',
           body: JSON.stringify({ participantMessageIds: ['msg1'] }),
+          method: 'POST',
         }),
         fetch(`/api/v1/chat/threads/${threadId}/messages`),
       ];

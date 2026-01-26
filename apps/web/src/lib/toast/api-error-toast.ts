@@ -115,8 +115,8 @@ export function showApiErrorToast(
 
   // Show error toast using toast manager
   return toastManager.error(title, description, {
-    duration: options?.duration || 8000, // Longer duration for errors
     action: options?.action,
+    duration: options?.duration || 8000, // Longer duration for errors
   });
 }
 
@@ -156,8 +156,8 @@ export function showApiSuccessToast(
   },
 ): string {
   return toastManager.success(title, description, {
-    duration: options?.duration || 5000,
     action: options?.action,
+    duration: options?.duration || 5000,
   });
 }
 
@@ -186,8 +186,8 @@ export function showApiWarningToast(
   },
 ): string {
   return toastManager.warning(title, description, {
-    duration: options?.duration || 6000,
     action: options?.action,
+    duration: options?.duration || 6000,
   });
 }
 
@@ -216,8 +216,8 @@ export function showApiInfoToast(
   },
 ): string {
   return toastManager.info(title, description, {
-    duration: options?.duration || 5000,
     action: options?.action,
+    duration: options?.duration || 5000,
   });
 }
 

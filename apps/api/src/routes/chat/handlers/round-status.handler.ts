@@ -49,7 +49,7 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId, roundNumber: roundNumberStr } = c.validated.params;
+    const { roundNumber: roundNumberStr, threadId } = c.validated.params;
     const roundNumber = Number.parseInt(roundNumberStr, 10);
 
     if (Number.isNaN(roundNumber) || roundNumber < 0) {
@@ -60,8 +60,8 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
 
     // Validate thread ownership
     const thread = await db.query.chatThread.findFirst({
+      columns: { enableWebSearch: true, id: true, userId: true },
       where: eq(tables.chatThread.id, threadId),
-      columns: { id: true, userId: true, enableWebSearch: true },
     });
 
     if (!thread) {
@@ -74,28 +74,28 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
 
     // Get participants
     const participants = await db.query.chatParticipant.findMany({
+      columns: { id: true },
       where: and(
         eq(tables.chatParticipant.threadId, threadId),
         eq(tables.chatParticipant.isEnabled, true),
       ),
-      columns: { id: true },
     });
 
     const totalParticipants = participants.length;
 
     // Compute round status using service function
     const roundStatusResult = await computeRoundStatus({
-      threadId,
-      roundNumber,
-      env: c.env,
       db,
+      env: c.env,
+      roundNumber,
+      threadId,
     });
 
     // Get KV state for additional info (attachmentIds, recovery attempts)
     const kvState = await getRoundExecutionState(threadId, roundNumber, c.env);
 
     // Increment recovery attempts and check if can recover
-    const { canRecover, attempts, maxAttempts } = await incrementRecoveryAttempts(
+    const { attempts, canRecover, maxAttempts } = await incrementRecoveryAttempts(
       threadId,
       roundNumber,
       c.env,
@@ -108,11 +108,11 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
     if (thread.enableWebSearch) {
       // Check pre-search record status in chatPreSearch table
       const preSearchRecord = await db.query.chatPreSearch.findFirst({
+        columns: { id: true, status: true },
         where: and(
           eq(tables.chatPreSearch.threadId, threadId),
           eq(tables.chatPreSearch.roundNumber, roundNumber),
         ),
-        columns: { id: true, status: true },
       });
 
       // Also check KV state for pre-search status
@@ -127,13 +127,13 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
       // Get user query from user message if pre-search is needed
       if (needsPreSearch) {
         const userMessage = await db.query.chatMessage.findFirst({
+          columns: { parts: true },
+          orderBy: desc(tables.chatMessage.createdAt),
           where: and(
             eq(tables.chatMessage.threadId, threadId),
             eq(tables.chatMessage.roundNumber, roundNumber),
             eq(tables.chatMessage.role, MessageRoles.USER),
           ),
-          orderBy: desc(tables.chatMessage.createdAt),
-          columns: { parts: true },
         });
         userQuery = extractTextFromParts(userMessage?.parts ?? null);
       }
@@ -168,19 +168,19 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
     }
 
     const response: RoundStatus = {
-      status,
-      phase: roundStatusResult.phase,
-      totalParticipants,
-      completedParticipants: roundStatusResult.completedParticipants,
-      failedParticipants: roundStatusResult.failedParticipants,
-      nextParticipantIndex,
-      needsModerator,
-      needsPreSearch,
-      userQuery,
       attachmentIds: kvState?.attachmentIds,
       canRecover,
-      recoveryAttempts: attempts,
+      completedParticipants: roundStatusResult.completedParticipants,
+      failedParticipants: roundStatusResult.failedParticipants,
       maxRecoveryAttempts: maxAttempts,
+      needsModerator,
+      needsPreSearch,
+      nextParticipantIndex,
+      phase: roundStatusResult.phase,
+      recoveryAttempts: attempts,
+      status,
+      totalParticipants,
+      userQuery,
     };
 
     return Responses.ok(c, response);

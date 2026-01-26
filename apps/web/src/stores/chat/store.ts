@@ -118,18 +118,6 @@ type SliceCreator<S> = StateCreator<
 const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
   ...FORM_DEFAULTS,
 
-  setInputValue: (value: string) =>
-    set({ inputValue: value }, false, 'form/setInputValue'),
-  setSelectedMode: (mode: ChatMode | null) =>
-    set({ selectedMode: mode }, false, 'form/setSelectedMode'),
-  setSelectedParticipants: (participants: ParticipantConfig[]) =>
-    set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
-  setEnableWebSearch: (enabled: boolean) =>
-    set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
-  setModelOrder: (modelIds: string[]) =>
-    set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
-  setAutoMode: (enabled: boolean) =>
-    set({ autoMode: enabled }, false, 'form/setAutoMode'),
   // ✅ IMMER: Direct mutations instead of spread patterns
   addParticipant: (participant: ParticipantConfig) =>
     set((draft) => {
@@ -147,12 +135,6 @@ const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
         });
       }
     }, false, 'form/removeParticipant'),
-  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
-    set((draft) => {
-      const p = draft.selectedParticipants.find(p => p.id === participantId || p.modelId === participantId);
-      if (p)
-        Object.assign(p, updates);
-    }, false, 'form/updateParticipant'),
   reorderParticipants: (fromIndex: number, toIndex: number) =>
     set((draft) => {
       const [removed] = draft.selectedParticipants.splice(fromIndex, 1);
@@ -165,17 +147,30 @@ const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
     }, false, 'form/reorderParticipants'),
   resetForm: () =>
     set(FORM_DEFAULTS, false, 'form/resetForm'),
+  setAutoMode: (enabled: boolean) =>
+    set({ autoMode: enabled }, false, 'form/setAutoMode'),
+  setEnableWebSearch: (enabled: boolean) =>
+    set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
+  setInputValue: (value: string) =>
+    set({ inputValue: value }, false, 'form/setInputValue'),
+  setModelOrder: (modelIds: string[]) =>
+    set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
+  setSelectedMode: (mode: ChatMode | null) =>
+    set({ selectedMode: mode }, false, 'form/setSelectedMode'),
+  setSelectedParticipants: (participants: ParticipantConfig[]) =>
+    set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
+  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
+    set((draft) => {
+      const p = draft.selectedParticipants.find(p => p.id === participantId || p.modelId === participantId);
+      if (p) {
+        Object.assign(p, updates);
+      }
+    }, false, 'form/updateParticipant'),
 });
 
 const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
   ...FEEDBACK_DEFAULTS,
 
-  setFeedback: (roundNumber, type) =>
-    set((draft) => {
-      draft.feedbackByRound.set(roundNumber, type);
-    }, false, 'feedback/setFeedback'),
-  setPendingFeedback: feedback =>
-    set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
   loadFeedbackFromServer: (data) => {
     set({
       feedbackByRound: new Map(data.map((f) => {
@@ -185,33 +180,36 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer');
   },
+  setFeedback: (roundNumber, type) =>
+    set((draft) => {
+      draft.feedbackByRound.set(roundNumber, type);
+    }, false, 'feedback/setFeedback'),
+  setPendingFeedback: feedback =>
+    set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
 });
 
 const createUISlice: SliceCreator<UISlice> = set => ({
   ...UI_DEFAULTS,
 
-  setShowInitialUI: (show: boolean) =>
-    set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
-  setWaitingToStartStreaming: (waiting: boolean) =>
-    set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming'),
-  setIsCreatingThread: (creating: boolean) =>
-    set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
+  resetUI: () =>
+    set(UI_DEFAULTS, false, 'ui/resetUI'),
   setCreatedThreadId: (id: string | null) =>
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
   setCreatedThreadProjectId: (projectId: string | null) =>
     set({ createdThreadProjectId: projectId }, false, 'ui/setCreatedThreadProjectId'),
   setIsAnalyzingPrompt: (analyzing: boolean) =>
     set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
-  resetUI: () =>
-    set(UI_DEFAULTS, false, 'ui/resetUI'),
+  setIsCreatingThread: (creating: boolean) =>
+    set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
+  setShowInitialUI: (show: boolean) =>
+    set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
+  setWaitingToStartStreaming: (waiting: boolean) =>
+    set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming'),
 });
 
 const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
   ...PRESEARCH_DEFAULTS,
 
-  setPreSearches: (preSearches: StoredPreSearch[]) => {
-    set({ preSearches }, false, 'preSearch/setPreSearches');
-  },
   addPreSearch: (preSearch: StoredPreSearch) =>
     set((draft) => {
       const existingIndex = draft.preSearches.findIndex(
@@ -220,8 +218,9 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
 
       if (existingIndex !== -1) {
         const existing = draft.preSearches[existingIndex];
-        if (!existing)
+        if (!existing) {
           return;
+        }
 
         // Race condition fix: STREAMING > PENDING (provider wins over orchestrator)
         if (existing.status === MessageStatuses.PENDING && preSearch.status === MessageStatuses.STREAMING) {
@@ -233,6 +232,81 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
 
       draft.preSearches.push(preSearch);
     }, false, 'preSearch/addPreSearch'),
+  checkStuckPreSearches: () =>
+    set((draft) => {
+      const now = Date.now();
+      draft.preSearches.forEach((ps) => {
+        if (ps.status !== MessageStatuses.STREAMING && ps.status !== MessageStatuses.PENDING) {
+          return;
+        }
+        const lastActivityTime = draft.preSearchActivityTimes.get(ps.roundNumber);
+        if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
+          ps.status = MessageStatuses.COMPLETE;
+        }
+      });
+    }, false, 'preSearch/checkStuckPreSearches'),
+  clearAllPreSearches: () =>
+    set({
+      ...PRESEARCH_DEFAULTS,
+      triggeredPreSearchRounds: new Set<number>(),
+    }, false, 'preSearch/clearAllPreSearches'),
+  clearPreSearchActivity: roundNumber =>
+    set((draft) => {
+      draft.preSearchActivityTimes.delete(roundNumber);
+    }, false, 'preSearch/clearPreSearchActivity'),
+  getPreSearchActivityTime: roundNumber => get().preSearchActivityTimes.get(roundNumber),
+  removePreSearch: roundNumber =>
+    set((draft) => {
+      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
+      if (idx !== -1) {
+        draft.preSearches.splice(idx, 1);
+      }
+    }, false, 'preSearch/removePreSearch'),
+  setPreSearches: (preSearches: StoredPreSearch[]) => {
+    set({ preSearches }, false, 'preSearch/setPreSearches');
+  },
+  updatePartialPreSearchData: (roundNumber, partialData) =>
+    set((draft) => {
+      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+      if (ps) {
+        const existingSummary = ps.searchData?.summary ?? '';
+        const results = partialData.results ?? [];
+        // TYPE BOUNDARY: Build search data with defaults for optional fields
+        ps.searchData = {
+          failureCount: 0,
+          queries: (partialData.queries ?? []).map((q: PreSearchQuery) => ({
+            index: q.index,
+            query: q.query,
+            rationale: q.rationale ?? '',
+            searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
+            total: q.total ?? 1,
+          })),
+          results: results.map((r: PreSearchResult) => ({
+            answer: r.answer ?? null,
+            index: r.index,
+            query: r.query,
+            responseTime: r.responseTime ?? 0,
+            results: r.results.map((item: WebSearchResultItem) => ({
+              content: item.content ?? '',
+              excerpt: item.excerpt,
+              score: 0,
+              title: item.title,
+              url: item.url,
+            })),
+          })),
+          successCount: results.length,
+          summary: partialData.summary ?? existingSummary,
+          totalResults: partialData.totalResults ?? results.length,
+          totalTime: partialData.totalTime ?? 0,
+        } as typeof ps.searchData;
+      }
+    }, false, 'preSearch/updatePartialPreSearchData'),
+
+  updatePreSearchActivity: roundNumber =>
+    set((draft) => {
+      draft.preSearchActivityTimes.set(roundNumber, Date.now());
+    }, false, 'preSearch/updatePreSearchActivity'),
+
   updatePreSearchData: (roundNumber, data) =>
     set((draft) => {
       const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
@@ -243,42 +317,7 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
         ps.completedAt = new Date().toISOString();
       }
     }, false, 'preSearch/updatePreSearchData'),
-  updatePartialPreSearchData: (roundNumber, partialData) =>
-    set((draft) => {
-      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
-      if (ps) {
-        const existingSummary = ps.searchData?.summary ?? '';
-        const results = partialData.results ?? [];
-        // TYPE BOUNDARY: Build search data with defaults for optional fields
-        ps.searchData = {
-          queries: (partialData.queries ?? []).map((q: PreSearchQuery) => ({
-            query: q.query,
-            rationale: q.rationale ?? '',
-            searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
-            index: q.index,
-            total: q.total ?? 1,
-          })),
-          results: results.map((r: PreSearchResult) => ({
-            query: r.query,
-            answer: r.answer ?? null,
-            results: r.results.map((item: WebSearchResultItem) => ({
-              title: item.title,
-              url: item.url,
-              content: item.content ?? '',
-              excerpt: item.excerpt,
-              score: 0,
-            })),
-            responseTime: r.responseTime ?? 0,
-            index: r.index,
-          })),
-          summary: partialData.summary ?? existingSummary,
-          successCount: results.length,
-          failureCount: 0,
-          totalResults: partialData.totalResults ?? results.length,
-          totalTime: partialData.totalTime ?? 0,
-        } as typeof ps.searchData;
-      }
-    }, false, 'preSearch/updatePartialPreSearchData'),
+
   updatePreSearchStatus: (roundNumber, status) =>
     set((draft) => {
       const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
@@ -289,48 +328,10 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
         }
       }
     }, false, 'preSearch/updatePreSearchStatus'),
-  removePreSearch: roundNumber =>
-    set((draft) => {
-      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
-      if (idx !== -1)
-        draft.preSearches.splice(idx, 1);
-    }, false, 'preSearch/removePreSearch'),
-  clearAllPreSearches: () =>
-    set({
-      ...PRESEARCH_DEFAULTS,
-      triggeredPreSearchRounds: new Set<number>(),
-    }, false, 'preSearch/clearAllPreSearches'),
-  checkStuckPreSearches: () =>
-    set((draft) => {
-      const now = Date.now();
-      draft.preSearches.forEach((ps) => {
-        if (ps.status !== MessageStatuses.STREAMING && ps.status !== MessageStatuses.PENDING)
-          return;
-        const lastActivityTime = draft.preSearchActivityTimes.get(ps.roundNumber);
-        if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
-          ps.status = MessageStatuses.COMPLETE;
-        }
-      });
-    }, false, 'preSearch/checkStuckPreSearches'),
-
-  updatePreSearchActivity: roundNumber =>
-    set((draft) => {
-      draft.preSearchActivityTimes.set(roundNumber, Date.now());
-    }, false, 'preSearch/updatePreSearchActivity'),
-
-  getPreSearchActivityTime: roundNumber => get().preSearchActivityTimes.get(roundNumber),
-
-  clearPreSearchActivity: roundNumber =>
-    set((draft) => {
-      draft.preSearchActivityTimes.delete(roundNumber);
-    }, false, 'preSearch/clearPreSearchActivity'),
 });
 
 const createChangelogSlice: SliceCreator<ChangelogSlice> = (set, get) => ({
   ...CHANGELOG_DEFAULTS,
-
-  setChangelogItems: (items: ApiChangelog[]) =>
-    set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
 
   addChangelogItems: (items: ApiChangelog[]) => {
     const existing = get().changelogItems;
@@ -340,30 +341,110 @@ const createChangelogSlice: SliceCreator<ChangelogSlice> = (set, get) => ({
       set({ changelogItems: [...existing, ...newItems] }, false, 'changelog/addChangelogItems');
     }
   },
+
+  setChangelogItems: (items: ApiChangelog[]) =>
+    set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
 });
 
 const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   ...THREAD_DEFAULTS,
 
-  setThread: (thread: ChatThread | null) => {
-    // ✅ UNIFIED FIX: Sync BOTH enableWebSearch AND selectedMode from thread
-    // This ensures form state stays in sync with thread after PATCH responses
-    // But preserve user's form selections if they have pending config changes
-    const currentState = get();
-    const shouldSyncFormValues = thread && !currentState.hasPendingConfigChanges;
+  acknowledgeStreamFinish: () =>
+    set({ streamFinishAcknowledged: true }, false, 'thread/acknowledgeStreamFinish'),
+  checkStuckStreams: () =>
+    set((state) => {
+      if (!state.isStreaming) {
+        return state;
+      }
+      return { isStreaming: false };
+    }, false, 'thread/checkStuckStreams'),
+  deduplicateMessages: () => {
+    set((draft) => {
+      const seen = new Map<string, number>(); // key -> index
+      const toRemove: number[] = [];
 
-    set({
-      thread,
-      ...(shouldSyncFormValues
-        ? {
-            enableWebSearch: thread.enableWebSearch,
-            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+      for (let i = 0; i < draft.messages.length; i++) {
+        const msg = draft.messages[i];
+        if (!msg) {
+          continue;
+        }
+
+        // TYPE-SAFE: Use metadata extraction utilities instead of type casting
+        const roundNum = getRoundNumber(msg.metadata);
+        const pIdx = getParticipantIndex(msg.metadata);
+
+        if (roundNum === null || pIdx === null) {
+          continue;
+        }
+        if (msg.role !== MessageRoles.ASSISTANT) {
+          continue;
+        }
+
+        const key = `r${roundNum}_p${pIdx}`;
+        const existingIdx = seen.get(key);
+
+        if (existingIdx !== undefined) {
+          // Duplicate found - decide which to keep
+          const existing = draft.messages[existingIdx];
+          const existingIsDeterministic = existing?.id.includes('_r') && existing.id.includes('_p');
+          const newIsDeterministic = msg.id.includes('_r') && msg.id.includes('_p');
+
+          if (newIsDeterministic && !existingIsDeterministic) {
+            // Keep new (deterministic), remove existing (temp)
+            toRemove.push(existingIdx);
+            seen.set(key, i);
+          } else {
+            // Keep existing, remove new
+            toRemove.push(i);
           }
-        : {}),
-    }, false, 'thread/setThread');
+        } else {
+          seen.set(key, i);
+        }
+      }
+
+      // Remove in reverse order to preserve indices
+      for (const idx of toRemove.sort((a, b) => b - a)) {
+        draft.messages.splice(idx, 1);
+      }
+    }, false, 'thread/deduplicateMessages');
   },
-  setParticipants: (participants: ChatParticipant[]) =>
-    set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
+  finalizeMessageId: (tempId, deterministicId, finalMessage) => {
+    set((draft) => {
+      const tempIdx = draft.messages.findIndex(m => m.id === tempId);
+      const deterministicIdx = draft.messages.findIndex(m => m.id === deterministicId);
+
+      if (tempIdx !== -1 && deterministicIdx === -1) {
+        // Replace temp message with final message using deterministic ID
+        draft.messages[tempIdx] = castDraft({
+          ...finalMessage,
+          id: deterministicId,
+        });
+      } else if (tempIdx !== -1 && deterministicIdx !== -1) {
+        // Both exist - keep deterministic, remove temp
+        draft.messages.splice(tempIdx, 1);
+      } else if (tempIdx === -1 && deterministicIdx === -1) {
+        // Neither exists - insert final message
+        draft.messages.push(castDraft({
+          ...finalMessage,
+          id: deterministicId,
+        }));
+      }
+      // If only deterministic exists, nothing to do
+    }, false, 'thread/finalizeMessageId');
+  },
+  resetStreamFinishAcknowledgment: () =>
+    set({ streamFinishAcknowledged: false }, false, 'thread/resetStreamFinishAcknowledgment'),
+  setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
+    set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
+  // ✅ NAVIGATION CLEANUP: Store AI SDK's stop function to abort streaming on route change
+  setChatStop: (fn?: () => void) =>
+    set({ chatStop: fn }, false, 'thread/setChatStop'),
+  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
+    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
+  setError: (error: Error | null) =>
+    set({ error }, false, 'thread/setError'),
+  setIsStreaming: (isStreaming: boolean) =>
+    set({ isStreaming }, false, 'thread/setIsStreaming'),
   setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
@@ -373,8 +454,9 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     const prevMessagesById = new Map(prevMessages.map(m => [m.id, m]));
     const mergedMessages = newMessages.map((newMsg) => {
       const existingMsg = prevMessagesById.get(newMsg.id);
-      if (!existingMsg)
+      if (!existingMsg) {
         return newMsg;
+      }
 
       const existingHasContent = existingMsg.parts?.some(
         p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
@@ -396,8 +478,8 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       if (existingIsComplete && !newIsComplete && existingHasContent) {
         return {
           ...newMsg,
-          parts: existingMsg.parts,
           metadata: existingMsg.metadata,
+          parts: existingMsg.parts,
         };
       }
 
@@ -407,31 +489,41 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     // ✅ DEBUG: Log message content changes during streaming
     set({ messages: mergedMessages }, false, 'thread/setMessages');
   },
-  setIsStreaming: (isStreaming: boolean) =>
-    set({ isStreaming }, false, 'thread/setIsStreaming'),
-  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
-    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
-  setError: (error: Error | null) =>
-    set({ error }, false, 'thread/setError'),
-  setSendMessage: (fn?: SendMessage) =>
-    set({ sendMessage: fn }, false, 'thread/setSendMessage'),
-  setStartRound: (fn?: StartRound) =>
-    set({ startRound: fn }, false, 'thread/setStartRound'),
-  setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
-    set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
-  // ✅ NAVIGATION CLEANUP: Store AI SDK's stop function to abort streaming on route change
-  setChatStop: (fn?: () => void) =>
-    set({ chatStop: fn }, false, 'thread/setChatStop'),
-  checkStuckStreams: () =>
-    set((state) => {
-      if (!state.isStreaming)
-        return state;
-      return { isStreaming: false };
-    }, false, 'thread/checkStuckStreams'),
 
   // ============================================================================
   // STREAMING MESSAGE ACTIONS
   // ============================================================================
+
+  setParticipants: (participants: ChatParticipant[]) =>
+    set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
+
+  setSendMessage: (fn?: SendMessage) =>
+    set({ sendMessage: fn }, false, 'thread/setSendMessage'),
+
+  setStartRound: (fn?: StartRound) =>
+    set({ startRound: fn }, false, 'thread/setStartRound'),
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: STREAM FINISH ACKNOWLEDGMENT ACTIONS
+  // ============================================================================
+
+  setThread: (thread: ChatThread | null) => {
+    // ✅ UNIFIED FIX: Sync BOTH enableWebSearch AND selectedMode from thread
+    // This ensures form state stays in sync with thread after PATCH responses
+    // But preserve user's form selections if they have pending config changes
+    const currentState = get();
+    const shouldSyncFormValues = thread && !currentState.hasPendingConfigChanges;
+
+    set({
+      thread,
+      ...(shouldSyncFormValues
+        ? {
+            enableWebSearch: thread.enableWebSearch,
+            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+          }
+        : {}),
+    }, false, 'thread/setThread');
+  },
 
   upsertStreamingMessage: (optionsOrMessage) => {
     // Accepts UIMessage directly or { message, insertOnly } options object
@@ -500,121 +592,10 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       }
     }, false, 'thread/upsertStreamingMessage');
   },
-
-  finalizeMessageId: (tempId, deterministicId, finalMessage) => {
-    set((draft) => {
-      const tempIdx = draft.messages.findIndex(m => m.id === tempId);
-      const deterministicIdx = draft.messages.findIndex(m => m.id === deterministicId);
-
-      if (tempIdx !== -1 && deterministicIdx === -1) {
-        // Replace temp message with final message using deterministic ID
-        draft.messages[tempIdx] = castDraft({
-          ...finalMessage,
-          id: deterministicId,
-        });
-      } else if (tempIdx !== -1 && deterministicIdx !== -1) {
-        // Both exist - keep deterministic, remove temp
-        draft.messages.splice(tempIdx, 1);
-      } else if (tempIdx === -1 && deterministicIdx === -1) {
-        // Neither exists - insert final message
-        draft.messages.push(castDraft({
-          ...finalMessage,
-          id: deterministicId,
-        }));
-      }
-      // If only deterministic exists, nothing to do
-    }, false, 'thread/finalizeMessageId');
-  },
-
-  deduplicateMessages: () => {
-    set((draft) => {
-      const seen = new Map<string, number>(); // key -> index
-      const toRemove: number[] = [];
-
-      for (let i = 0; i < draft.messages.length; i++) {
-        const msg = draft.messages[i];
-        if (!msg)
-          continue;
-
-        // TYPE-SAFE: Use metadata extraction utilities instead of type casting
-        const roundNum = getRoundNumber(msg.metadata);
-        const pIdx = getParticipantIndex(msg.metadata);
-
-        if (roundNum === null || pIdx === null)
-          continue;
-        if (msg.role !== MessageRoles.ASSISTANT)
-          continue;
-
-        const key = `r${roundNum}_p${pIdx}`;
-        const existingIdx = seen.get(key);
-
-        if (existingIdx !== undefined) {
-          // Duplicate found - decide which to keep
-          const existing = draft.messages[existingIdx];
-          const existingIsDeterministic = existing?.id.includes('_r') && existing.id.includes('_p');
-          const newIsDeterministic = msg.id.includes('_r') && msg.id.includes('_p');
-
-          if (newIsDeterministic && !existingIsDeterministic) {
-            // Keep new (deterministic), remove existing (temp)
-            toRemove.push(existingIdx);
-            seen.set(key, i);
-          } else {
-            // Keep existing, remove new
-            toRemove.push(i);
-          }
-        } else {
-          seen.set(key, i);
-        }
-      }
-
-      // Remove in reverse order to preserve indices
-      for (const idx of toRemove.sort((a, b) => b - a)) {
-        draft.messages.splice(idx, 1);
-      }
-    }, false, 'thread/deduplicateMessages');
-  },
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: STREAM FINISH ACKNOWLEDGMENT ACTIONS
-  // ============================================================================
-
-  acknowledgeStreamFinish: () =>
-    set({ streamFinishAcknowledged: true }, false, 'thread/acknowledgeStreamFinish'),
-
-  resetStreamFinishAcknowledgment: () =>
-    set({ streamFinishAcknowledged: false }, false, 'thread/resetStreamFinishAcknowledgment'),
 });
 
 const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
   ...FLAGS_DEFAULTS,
-
-  setHasInitiallyLoaded: (value: boolean) =>
-    set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
-  setIsRegenerating: (value: boolean) =>
-    set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
-  setIsModeratorStreaming: (value: boolean) =>
-    set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
-  // ⚠️ CRITICAL: Only clear isModeratorStreaming here, NOT isWaitingForChangelog!
-  // The changelog blocking flag must ONLY be cleared by use-changelog-sync.ts
-  // after the changelog has been fetched. Clearing it here causes pre-search
-  // to execute before changelog is fetched, breaking the ordering guarantee:
-  // PATCH → changelog → pre-search/streaming
-  completeModeratorStream: () =>
-    set({
-      isModeratorStreaming: false,
-    }, false, 'flags/completeModeratorStream'),
-  setIsWaitingForChangelog: (value: boolean) =>
-    set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
-  setHasPendingConfigChanges: (value: boolean) =>
-    set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
-  setIsPatchInProgress: (value: boolean) =>
-    set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
-  setParticipantHandoffInProgress: (value: boolean) =>
-    set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: ATOMIC CONFIG CHANGE STATE UPDATES
-  // ============================================================================
 
   atomicUpdateConfigChangeState: (update: Partial<ConfigChangeState>) =>
     set(
@@ -627,50 +608,80 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
       false,
       'flags/atomicUpdateConfigChangeState',
     ),
-
   clearConfigChangeState: () =>
     set(
       {
         configChangeRoundNumber: null,
-        isWaitingForChangelog: false,
-        isPatchInProgress: false,
         hasPendingConfigChanges: false,
+        isPatchInProgress: false,
+        isWaitingForChangelog: false,
       },
       false,
       'flags/clearConfigChangeState',
     ),
+  // ⚠️ CRITICAL: Only clear isModeratorStreaming here, NOT isWaitingForChangelog!
+  // The changelog blocking flag must ONLY be cleared by use-changelog-sync.ts
+  // after the changelog has been fetched. Clearing it here causes pre-search
+  // to execute before changelog is fetched, breaking the ordering guarantee:
+  // PATCH → changelog → pre-search/streaming
+  completeModeratorStream: () =>
+    set({
+      isModeratorStreaming: false,
+    }, false, 'flags/completeModeratorStream'),
+  setHasInitiallyLoaded: (value: boolean) =>
+    set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
+  setHasPendingConfigChanges: (value: boolean) =>
+    set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
+  setIsModeratorStreaming: (value: boolean) =>
+    set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
+  setIsPatchInProgress: (value: boolean) =>
+    set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
+  setIsRegenerating: (value: boolean) =>
+    set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: ATOMIC CONFIG CHANGE STATE UPDATES
+  // ============================================================================
+
+  setIsWaitingForChangelog: (value: boolean) =>
+    set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
+
+  setParticipantHandoffInProgress: (value: boolean) =>
+    set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
 });
 
 const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
   ...DATA_DEFAULTS,
 
-  setRegeneratingRoundNumber: (value: number | null) =>
-    set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
-  setPendingMessage: (value: string | null) => {
-    rlog.msg('setPendingMsg', `${value === null ? 'CLEAR' : `SET="${value.slice(0, 20)}..."`}`);
-    set({ pendingMessage: value }, false, 'data/setPendingMessage');
+  // ✅ PERF: Batch update pending state to prevent multiple re-renders
+  batchUpdatePendingState: (pendingMessage: string | null, expectedParticipantIds: string[] | null) => {
+    rlog.msg('batchPending', `msg=${pendingMessage === null ? 'null' : 'set'} expected=${expectedParticipantIds === null ? 'null' : 'set'}`);
+    set({ expectedParticipantIds, pendingMessage }, false, 'data/batchUpdatePendingState');
   },
+  getRoundEpoch: () => get().roundEpoch,
+  setConfigChangeRoundNumber: (value: number | null) =>
+    set({ configChangeRoundNumber: value }, false, 'data/setConfigChangeRoundNumber'),
+  setCurrentRoundNumber: (value: number | null) =>
+    set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
+  setExpectedParticipantIds: (value: string[] | null) =>
+    set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
   setPendingAttachmentIds: (value: string[] | null) =>
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setPendingFileParts: (value: ExtendedFilePart[] | null) =>
     set({ pendingFileParts: value }, false, 'data/setPendingFileParts'),
-  setExpectedParticipantIds: (value: string[] | null) =>
-    set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  // ✅ PERF: Batch update pending state to prevent multiple re-renders
-  batchUpdatePendingState: (pendingMessage: string | null, expectedParticipantIds: string[] | null) => {
-    rlog.msg('batchPending', `msg=${pendingMessage === null ? 'null' : 'set'} expected=${expectedParticipantIds === null ? 'null' : 'set'}`);
-    set({ pendingMessage, expectedParticipantIds }, false, 'data/batchUpdatePendingState');
+  setPendingMessage: (value: string | null) => {
+    rlog.msg('setPendingMsg', `${value === null ? 'CLEAR' : `SET="${value.slice(0, 20)}..."`}`);
+    set({ pendingMessage: value }, false, 'data/setPendingMessage');
   },
-  setStreamingRoundNumber: (value: number | null) =>
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
-  setCurrentRoundNumber: (value: number | null) =>
-    set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
-  setConfigChangeRoundNumber: (value: number | null) =>
-    set({ configChangeRoundNumber: value }, false, 'data/setConfigChangeRoundNumber'),
+  setRegeneratingRoundNumber: (value: number | null) =>
+    set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
 
   // ============================================================================
   // ✅ RACE CONDITION FIX: ROUND EPOCH MANAGEMENT
   // ============================================================================
+
+  setStreamingRoundNumber: (value: number | null) =>
+    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
 
   startNewRound: (roundNumber: number) => {
     let newEpoch = 0;
@@ -678,8 +689,8 @@ const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
       (state) => {
         newEpoch = state.roundEpoch + 1;
         return {
-          streamingRoundNumber: roundNumber,
           roundEpoch: newEpoch,
+          streamingRoundNumber: roundNumber,
         };
       },
       false,
@@ -687,21 +698,57 @@ const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
     );
     return newEpoch;
   },
-
-  getRoundEpoch: () => get().roundEpoch,
 });
 
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
   ...TRACKING_DEFAULTS,
 
-  setHasSentPendingMessage: value =>
-    set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
+  clearAllPreSearchTracking: () =>
+    set((draft) => {
+      draft.triggeredPreSearchRounds = new Set<number>();
+    }, false, 'tracking/clearAllPreSearchTracking'),
+  clearModeratorStreamTracking: roundNumber =>
+    set((draft) => {
+      draft.triggeredModeratorRounds.delete(roundNumber);
+      for (const id of draft.triggeredModeratorIds) {
+        if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
+          draft.triggeredModeratorIds.delete(id);
+        }
+      }
+    }, false, 'tracking/clearModeratorStreamTracking'),
+  clearModeratorTracking: roundNumber =>
+    set((draft) => {
+      draft.createdModeratorRounds.delete(roundNumber);
+    }, false, 'tracking/clearModeratorTracking'),
+  clearPreSearchTracking: roundNumber =>
+    set((draft) => {
+      draft.triggeredPreSearchRounds.delete(roundNumber);
+    }, false, 'tracking/clearPreSearchTracking'),
+  hasModeratorBeenCreated: roundNumber =>
+    get().createdModeratorRounds.has(roundNumber),
+  hasModeratorStreamBeenTriggered: (moderatorMessageId, roundNumber) => {
+    const state = get();
+    return state.triggeredModeratorIds.has(moderatorMessageId) || state.triggeredModeratorRounds.has(roundNumber);
+  },
+  hasPreSearchBeenTriggered: roundNumber =>
+    get().triggeredPreSearchRounds.has(roundNumber),
   markModeratorCreated: roundNumber =>
     set((draft) => {
       draft.createdModeratorRounds.add(roundNumber);
     }, false, 'tracking/markModeratorCreated'),
-  hasModeratorBeenCreated: roundNumber =>
-    get().createdModeratorRounds.has(roundNumber),
+  markModeratorStreamTriggered: (moderatorMessageId, roundNumber) =>
+    set((draft) => {
+      draft.triggeredModeratorIds.add(moderatorMessageId);
+      draft.triggeredModeratorRounds.add(roundNumber);
+    }, false, 'tracking/markModeratorStreamTriggered'),
+  markPreSearchTriggered: roundNumber =>
+    set((draft) => {
+      draft.triggeredPreSearchRounds.add(roundNumber);
+    }, false, 'tracking/markPreSearchTriggered'),
+  setHasEarlyOptimisticMessage: value =>
+    set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
+  setHasSentPendingMessage: value =>
+    set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
   tryMarkModeratorCreated: (roundNumber) => {
     const state = get();
     if (state.createdModeratorRounds.has(roundNumber)) {
@@ -712,16 +759,6 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/tryMarkModeratorCreated');
     return true;
   },
-  clearModeratorTracking: roundNumber =>
-    set((draft) => {
-      draft.createdModeratorRounds.delete(roundNumber);
-    }, false, 'tracking/clearModeratorTracking'),
-  markPreSearchTriggered: roundNumber =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds.add(roundNumber);
-    }, false, 'tracking/markPreSearchTriggered'),
-  hasPreSearchBeenTriggered: roundNumber =>
-    get().triggeredPreSearchRounds.has(roundNumber),
   tryMarkPreSearchTriggered: (roundNumber) => {
     const state = get();
     if (state.triggeredPreSearchRounds.has(roundNumber)) {
@@ -732,34 +769,6 @@ const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
     }, false, 'tracking/tryMarkPreSearchTriggered');
     return true;
   },
-  clearPreSearchTracking: roundNumber =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds.delete(roundNumber);
-    }, false, 'tracking/clearPreSearchTracking'),
-  clearAllPreSearchTracking: () =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds = new Set<number>();
-    }, false, 'tracking/clearAllPreSearchTracking'),
-  markModeratorStreamTriggered: (moderatorMessageId, roundNumber) =>
-    set((draft) => {
-      draft.triggeredModeratorIds.add(moderatorMessageId);
-      draft.triggeredModeratorRounds.add(roundNumber);
-    }, false, 'tracking/markModeratorStreamTriggered'),
-  hasModeratorStreamBeenTriggered: (moderatorMessageId, roundNumber) => {
-    const state = get();
-    return state.triggeredModeratorIds.has(moderatorMessageId) || state.triggeredModeratorRounds.has(roundNumber);
-  },
-  clearModeratorStreamTracking: roundNumber =>
-    set((draft) => {
-      draft.triggeredModeratorRounds.delete(roundNumber);
-      for (const id of draft.triggeredModeratorIds) {
-        if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
-          draft.triggeredModeratorIds.delete(id);
-        }
-      }
-    }, false, 'tracking/clearModeratorStreamTracking'),
-  setHasEarlyOptimisticMessage: value =>
-    set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
 });
 
 const createCallbacksSlice: SliceCreator<CallbacksSlice> = set => ({
@@ -772,79 +781,31 @@ const createCallbacksSlice: SliceCreator<CallbacksSlice> = set => ({
 const createScreenSlice: SliceCreator<ScreenSlice> = set => ({
   ...SCREEN_DEFAULTS,
 
-  setScreenMode: (mode: ScreenMode | null) =>
-    set({
-      screenMode: mode,
-      isReadOnly: mode === ScreenModes.PUBLIC,
-    }, false, 'screen/setScreenMode'),
   resetScreenMode: () =>
     set(SCREEN_DEFAULTS, false, 'screen/resetScreenMode'),
+  setScreenMode: (mode: ScreenMode | null) =>
+    set({
+      isReadOnly: mode === ScreenModes.PUBLIC,
+      screenMode: mode,
+    }, false, 'screen/setScreenMode'),
 });
 
 const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, get) => ({
   ...STREAM_RESUMPTION_DEFAULTS,
 
-  setStreamResumptionState: state =>
-    set({ streamResumptionState: state }, false, 'streamResumption/setStreamResumptionState'),
-
-  needsStreamResumption: () => {
-    const state = get();
-    const resumptionState = state.streamResumptionState;
-
-    // No resumption state
-    if (!resumptionState)
-      return false;
-
-    // Stream must be ACTIVE to need resumption
-    if (resumptionState.state !== StreamStatuses.ACTIVE)
-      return false;
-
-    // Must match current thread
-    const currentThreadId = state.thread?.id || state.createdThreadId;
-    if (!currentThreadId || resumptionState.threadId !== currentThreadId)
-      return false;
-
-    // Check if stale (>1 hour old)
-    if (state.isStreamResumptionStale())
-      return false;
-
-    // Check if valid (participant index in bounds)
-    if (!state.isStreamResumptionValid())
-      return false;
-
-    return true;
-  },
-
-  isStreamResumptionStale: () => {
-    const resumptionState = get().streamResumptionState;
-    if (!resumptionState)
-      return false;
-
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-    // createdAt is always a string (ISO format from JSON serialization)
-    const createdAtTime = new Date(resumptionState.createdAt).getTime();
-    const age = Date.now() - createdAtTime;
-    return age > ONE_HOUR_MS;
-  },
-
-  isStreamResumptionValid: () => {
-    const state = get();
-    const resumptionState = state.streamResumptionState;
-    if (!resumptionState)
-      return false;
-
-    // Check if participant index is valid
-    const participantCount = state.participants.length;
-    if (resumptionState.participantIndex >= participantCount)
-      return false;
-
-    // Check if thread ID matches
-    const currentThreadId = state.thread?.id || state.createdThreadId;
-    if (!currentThreadId || resumptionState.threadId !== currentThreadId)
-      return false;
-
-    return true;
-  },
+  clearStreamResumption: () =>
+    set({
+      // ✅ UNIFIED PHASES: Clear phase-based resumption state
+      currentResumptionPhase: null,
+      moderatorResumption: null,
+      nextParticipantToTrigger: null,
+      prefilledForThreadId: null,
+      preSearchResumption: null,
+      resumptionAttempts: new Set<string>(),
+      resumptionRoundNumber: null,
+      streamResumptionPrefilled: false,
+      streamResumptionState: null,
+    }, false, 'streamResumption/clearStreamResumption'),
 
   handleResumedStreamComplete: (roundNumber, participantIndex) => {
     const state = get();
@@ -856,8 +817,8 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     if (hasMoreParticipants) {
       // More participants to trigger
       set({
-        streamResumptionState: null,
         nextParticipantToTrigger: nextIndex,
+        streamResumptionState: null,
         waitingToStartStreaming: true,
       }, false, 'streamResumption/handleResumedStreamComplete');
     } else {
@@ -865,32 +826,65 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       // This triggers the moderator effect in use-moderator-trigger.ts
       // Previously, we just set nextParticipantToTrigger: null without triggering moderator
       set({
-        streamResumptionState: null,
-        nextParticipantToTrigger: null,
-        waitingToStartStreaming: false,
         // Transition to moderator phase so moderator trigger effect fires
         currentResumptionPhase: RoundPhases.MODERATOR,
         isModeratorStreaming: true,
+        nextParticipantToTrigger: null,
         resumptionRoundNumber: roundNumber,
+        streamResumptionState: null,
+        waitingToStartStreaming: false,
       }, false, 'streamResumption/handleResumedStreamComplete');
     }
   },
 
   handleStreamResumptionFailure: (_error) => {
     set({
-      streamResumptionState: null,
       nextParticipantToTrigger: null,
       resumptionAttempts: new Set<string>(),
+      streamResumptionState: null,
     }, false, 'streamResumption/handleStreamResumptionFailure');
   },
 
-  setNextParticipantToTrigger: value =>
-    set({ nextParticipantToTrigger: value }, false, 'streamResumption/setNextParticipantToTrigger'),
+  isStreamResumptionStale: () => {
+    const resumptionState = get().streamResumptionState;
+    if (!resumptionState) {
+      return false;
+    }
+
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    // createdAt is always a string (ISO format from JSON serialization)
+    const createdAtTime = new Date(resumptionState.createdAt).getTime();
+    const age = Date.now() - createdAtTime;
+    return age > ONE_HOUR_MS;
+  },
+
+  isStreamResumptionValid: () => {
+    const state = get();
+    const resumptionState = state.streamResumptionState;
+    if (!resumptionState) {
+      return false;
+    }
+
+    // Check if participant index is valid
+    const participantCount = state.participants.length;
+    if (resumptionState.participantIndex >= participantCount) {
+      return false;
+    }
+
+    // Check if thread ID matches
+    const currentThreadId = state.thread?.id || state.createdThreadId;
+    if (!currentThreadId || resumptionState.threadId !== currentThreadId) {
+      return false;
+    }
+
+    return true;
+  },
 
   markResumptionAttempted: (roundNumber, participantIndex) => {
     const key = `${roundNumber}_${participantIndex}`;
-    if (get().resumptionAttempts.has(key))
+    if (get().resumptionAttempts.has(key)) {
       return false;
+    }
     set((draft) => {
       draft.resumptionAttempts.add(key);
     }, false, 'streamResumption/markResumptionAttempted');
@@ -899,76 +893,45 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
 
   needsMessageSync: () => {
     const resumptionState = get().streamResumptionState;
-    if (!resumptionState)
+    if (!resumptionState) {
       return false;
+    }
 
     // Need to sync if stream completed but we don't have the message
     return resumptionState.state === StreamStatuses.COMPLETED;
   },
 
-  clearStreamResumption: () =>
-    set({
-      streamResumptionState: null,
-      resumptionAttempts: new Set<string>(),
-      nextParticipantToTrigger: null,
-      streamResumptionPrefilled: false,
-      prefilledForThreadId: null,
-      // ✅ UNIFIED PHASES: Clear phase-based resumption state
-      currentResumptionPhase: null,
-      preSearchResumption: null,
-      moderatorResumption: null,
-      resumptionRoundNumber: null,
-    }, false, 'streamResumption/clearStreamResumption'),
-
-  transitionToParticipantsPhase: () =>
-    set({
-      currentResumptionPhase: RoundPhases.PARTICIPANTS,
-      preSearchResumption: null,
-    }, false, 'streamResumption/transitionToParticipantsPhase'),
-
-  transitionToModeratorPhase: (roundNumber?: number) =>
-    set({
-      currentResumptionPhase: RoundPhases.MODERATOR,
-      isModeratorStreaming: true,
-      ...(roundNumber !== undefined && { resumptionRoundNumber: roundNumber }),
-    }, false, 'streamResumption/transitionToModeratorPhase'),
-
-  // ✅ FIX: Allow setting phase directly for SSR stale abort handling
-  // When moderator resumption aborts due to SSR stale data, we transition to IDLE
-  // while keeping streamResumptionPrefilled=true to block incomplete-round-resumption
-  setCurrentResumptionPhase: phase =>
-    set({
-      currentResumptionPhase: phase,
-    }, false, 'streamResumption/setCurrentResumptionPhase'),
-
-  // ✅ SCOPE VERSIONING: Set thread scope for resumption validation
-  setResumptionScope: threadId =>
-    set({
-      resumptionScopeThreadId: threadId,
-    }, false, 'resumption/setScope'),
-
-  // ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream
-  // Called when AI SDK auto-resumes a valid stream that matches expected state
-  reconcileWithActiveStream: (streamingParticipantIndex) => {
+  needsStreamResumption: () => {
     const state = get();
-    const currentNextP = state.nextParticipantToTrigger;
+    const resumptionState = state.streamResumptionState;
 
-    // Extract index from either object form or raw number
-    const expectedNextIndex = typeof currentNextP === 'object' && currentNextP !== null
-      ? currentNextP.index
-      : currentNextP;
-
-    // If server triggered a later participant than prefilled, update state
-    if (streamingParticipantIndex >= (expectedNextIndex ?? 0)) {
-      rlog.resume('reconcile', `P${streamingParticipantIndex} active, updating nextP from ${expectedNextIndex} to ${streamingParticipantIndex + 1}`);
-      set({
-        // Next AFTER current streaming participant
-        nextParticipantToTrigger: streamingParticipantIndex + 1,
-        currentParticipantIndex: streamingParticipantIndex,
-        // Already streaming - don't need to wait
-        waitingToStartStreaming: false,
-      }, false, 'streamResumption/reconcileWithActiveStream');
+    // No resumption state
+    if (!resumptionState) {
+      return false;
     }
+
+    // Stream must be ACTIVE to need resumption
+    if (resumptionState.state !== StreamStatuses.ACTIVE) {
+      return false;
+    }
+
+    // Must match current thread
+    const currentThreadId = state.thread?.id || state.createdThreadId;
+    if (!currentThreadId || resumptionState.threadId !== currentThreadId) {
+      return false;
+    }
+
+    // Check if stale (>1 hour old)
+    if (state.isStreamResumptionStale()) {
+      return false;
+    }
+
+    // Check if valid (participant index in bounds)
+    if (!state.isStreamResumptionValid()) {
+      return false;
+    }
+
+    return true;
   },
 
   prefillStreamResumptionState: (threadId, serverState) => {
@@ -982,19 +945,19 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
       rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
       set({
-        streamResumptionPrefilled: true,
-        prefilledForThreadId: threadId,
         currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
+        prefilledForThreadId: threadId,
         resumptionRoundNumber: serverState.roundNumber,
+        streamResumptionPrefilled: true,
       }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
     }
 
     const stateUpdate: StreamResumptionPrefillUpdate = {
-      streamResumptionPrefilled: true,
-      prefilledForThreadId: threadId,
       currentResumptionPhase: serverState.currentPhase,
+      prefilledForThreadId: threadId,
       resumptionRoundNumber: serverState.roundNumber,
+      streamResumptionPrefilled: true,
     };
 
     // Handle phase-specific state
@@ -1004,9 +967,9 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         if (serverState.preSearch) {
           stateUpdate.preSearchResumption = {
             enabled: serverState.preSearch.enabled,
+            preSearchId: serverState.preSearch.preSearchId,
             status: serverState.preSearch.status,
             streamId: serverState.preSearch.streamId,
-            preSearchId: serverState.preSearch.preSearchId,
           };
         }
         stateUpdate.waitingToStartStreaming = true;
@@ -1040,9 +1003,9 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       case RoundPhases.MODERATOR:
         if (serverState.moderator) {
           stateUpdate.moderatorResumption = {
+            moderatorMessageId: serverState.moderator.moderatorMessageId,
             status: serverState.moderator.status,
             streamId: serverState.moderator.streamId,
-            moderatorMessageId: serverState.moderator.moderatorMessageId,
           };
         }
         stateUpdate.waitingToStartStreaming = true;
@@ -1052,6 +1015,63 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
 
     set(stateUpdate, false, 'streamResumption/prefillStreamResumptionState');
   },
+
+  // ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream
+  // Called when AI SDK auto-resumes a valid stream that matches expected state
+  reconcileWithActiveStream: (streamingParticipantIndex) => {
+    const state = get();
+    const currentNextP = state.nextParticipantToTrigger;
+
+    // Extract index from either object form or raw number
+    const expectedNextIndex = typeof currentNextP === 'object' && currentNextP !== null
+      ? currentNextP.index
+      : currentNextP;
+
+    // If server triggered a later participant than prefilled, update state
+    if (streamingParticipantIndex >= (expectedNextIndex ?? 0)) {
+      rlog.resume('reconcile', `P${streamingParticipantIndex} active, updating nextP from ${expectedNextIndex} to ${streamingParticipantIndex + 1}`);
+      set({
+        currentParticipantIndex: streamingParticipantIndex,
+        // Next AFTER current streaming participant
+        nextParticipantToTrigger: streamingParticipantIndex + 1,
+        // Already streaming - don't need to wait
+        waitingToStartStreaming: false,
+      }, false, 'streamResumption/reconcileWithActiveStream');
+    }
+  },
+
+  // ✅ FIX: Allow setting phase directly for SSR stale abort handling
+  // When moderator resumption aborts due to SSR stale data, we transition to IDLE
+  // while keeping streamResumptionPrefilled=true to block incomplete-round-resumption
+  setCurrentResumptionPhase: phase =>
+    set({
+      currentResumptionPhase: phase,
+    }, false, 'streamResumption/setCurrentResumptionPhase'),
+
+  setNextParticipantToTrigger: value =>
+    set({ nextParticipantToTrigger: value }, false, 'streamResumption/setNextParticipantToTrigger'),
+
+  // ✅ SCOPE VERSIONING: Set thread scope for resumption validation
+  setResumptionScope: threadId =>
+    set({
+      resumptionScopeThreadId: threadId,
+    }, false, 'resumption/setScope'),
+
+  setStreamResumptionState: state =>
+    set({ streamResumptionState: state }, false, 'streamResumption/setStreamResumptionState'),
+
+  transitionToModeratorPhase: (roundNumber?: number) =>
+    set({
+      currentResumptionPhase: RoundPhases.MODERATOR,
+      isModeratorStreaming: true,
+      ...(roundNumber !== undefined && { resumptionRoundNumber: roundNumber }),
+    }, false, 'streamResumption/transitionToModeratorPhase'),
+
+  transitionToParticipantsPhase: () =>
+    set({
+      currentResumptionPhase: RoundPhases.PARTICIPANTS,
+      preSearchResumption: null,
+    }, false, 'streamResumption/transitionToParticipantsPhase'),
 });
 
 // ============================================================================
@@ -1076,29 +1096,29 @@ const createRoundFlowSlice: SliceCreator<RoundFlowSlice> = (set, get) => ({
       draft.flowEventHistory.push({
         event,
         fromState: currentFlowState,
-        toState: currentFlowState, // Will be updated after transition
         timestamp: Date.now(),
+        toState: currentFlowState, // Will be updated after transition
       });
     }, false, `roundFlow/dispatch_${event}`);
   },
 
-  setFlowState: state =>
-    set({ flowState: state }, false, 'roundFlow/setFlowState'),
-
   resetFlowState: () =>
     set(ROUND_FLOW_DEFAULTS, false, 'roundFlow/resetFlowState'),
 
-  setFlowParticipantIndex: index =>
-    set({ flowParticipantIndex: index }, false, 'roundFlow/setFlowParticipantIndex'),
+  setFlowError: error =>
+    set({ flowLastError: error, flowState: error ? RoundFlowStates.ERROR : get().flowState }, false, 'roundFlow/setFlowError'),
 
   setFlowParticipantCount: count =>
     set({ flowParticipantCount: count }, false, 'roundFlow/setFlowParticipantCount'),
 
+  setFlowParticipantIndex: index =>
+    set({ flowParticipantIndex: index }, false, 'roundFlow/setFlowParticipantIndex'),
+
   setFlowRoundNumber: roundNumber =>
     set({ flowRoundNumber: roundNumber }, false, 'roundFlow/setFlowRoundNumber'),
 
-  setFlowError: error =>
-    set({ flowLastError: error, flowState: error ? RoundFlowStates.ERROR : get().flowState }, false, 'roundFlow/setFlowError'),
+  setFlowState: state =>
+    set({ flowState: state }, false, 'roundFlow/setFlowState'),
 });
 
 /**
@@ -1112,10 +1132,10 @@ function resolveAllPendingAnimations(resolvers: Map<number, () => void>) {
 const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
   ...ANIMATION_DEFAULTS,
 
-  registerAnimation: participantIndex =>
-    set((draft) => {
-      draft.pendingAnimations.add(participantIndex);
-    }, false, 'animation/registerAnimation'),
+  clearAnimations: () => {
+    resolveAllPendingAnimations(get().animationResolvers);
+    set({ ...ANIMATION_DEFAULTS }, false, 'animation/clearAnimations');
+  },
 
   completeAnimation: participantIndex =>
     set((draft) => {
@@ -1127,22 +1147,10 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
       }
     }, false, 'animation/completeAnimation'),
 
-  waitForAnimation: (participantIndex: number) => {
-    const state = get();
-
-    // If animation is not pending, resolve immediately
-    if (!state.pendingAnimations.has(participantIndex)) {
-      return Promise.resolve();
-    }
-
-    return new Promise<void>((resolve) => {
-      set((current) => {
-        const newResolvers = new Map(current.animationResolvers);
-        newResolvers.set(participantIndex, resolve);
-        return { animationResolvers: newResolvers };
-      }, false, 'animation/waitForAnimationPromise');
-    });
-  },
+  registerAnimation: participantIndex =>
+    set((draft) => {
+      draft.pendingAnimations.add(participantIndex);
+    }, false, 'animation/registerAnimation'),
 
   waitForAllAnimations: async () => {
     const state = get();
@@ -1163,9 +1171,21 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
     await Promise.all(animationPromises);
   },
 
-  clearAnimations: () => {
-    resolveAllPendingAnimations(get().animationResolvers);
-    set({ ...ANIMATION_DEFAULTS }, false, 'animation/clearAnimations');
+  waitForAnimation: (participantIndex: number) => {
+    const state = get();
+
+    // If animation is not pending, resolve immediately
+    if (!state.pendingAnimations.has(participantIndex)) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      set((current) => {
+        const newResolvers = new Map(current.animationResolvers);
+        newResolvers.set(participantIndex, resolve);
+        return { animationResolvers: newResolvers };
+      }, false, 'animation/waitForAnimationPromise');
+    });
   },
 });
 
@@ -1176,64 +1196,67 @@ const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
     set((draft) => {
       files.forEach((file) => {
         draft.pendingAttachments.push({
-          id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           file,
+          id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           status: UploadStatuses.PENDING,
         });
       });
     }, false, 'attachments/addAttachments'),
 
-  removeAttachment: (id: string) =>
-    set((draft) => {
-      const idx = draft.pendingAttachments.findIndex(a => a.id === id);
-      if (idx !== -1)
-        draft.pendingAttachments.splice(idx, 1);
-    }, false, 'attachments/removeAttachment'),
-
   clearAttachments: () =>
     set({ pendingAttachments: [] }, false, 'attachments/clearAttachments'),
-
-  updateAttachmentUpload: (id: string, uploadItem: UploadItem) =>
-    set((draft) => {
-      const attachment = draft.pendingAttachments.find(a => a.id === id);
-      if (attachment)
-        attachment.uploadItem = castDraft(uploadItem);
-    }, false, 'attachments/updateAttachmentUpload'),
-
-  updateAttachmentPreview: (id: string, preview: FilePreview) =>
-    set((draft) => {
-      const attachment = draft.pendingAttachments.find(a => a.id === id);
-      if (attachment)
-        attachment.preview = preview;
-    }, false, 'attachments/updateAttachmentPreview'),
 
   getAttachments: () => get().pendingAttachments,
 
   hasAttachments: () => get().pendingAttachments.length > 0,
+
+  removeAttachment: (id: string) =>
+    set((draft) => {
+      const idx = draft.pendingAttachments.findIndex(a => a.id === id);
+      if (idx !== -1) {
+        draft.pendingAttachments.splice(idx, 1);
+      }
+    }, false, 'attachments/removeAttachment'),
+
+  updateAttachmentPreview: (id: string, preview: FilePreview) =>
+    set((draft) => {
+      const attachment = draft.pendingAttachments.find(a => a.id === id);
+      if (attachment) {
+        attachment.preview = preview;
+      }
+    }, false, 'attachments/updateAttachmentPreview'),
+
+  updateAttachmentUpload: (id: string, uploadItem: UploadItem) =>
+    set((draft) => {
+      const attachment = draft.pendingAttachments.find(a => a.id === id);
+      if (attachment) {
+        attachment.uploadItem = castDraft(uploadItem);
+      }
+    }, false, 'attachments/updateAttachmentUpload'),
 });
 
 const createSidebarAnimationSlice: SliceCreator<SidebarAnimationSlice> = set => ({
   ...SIDEBAR_ANIMATION_DEFAULTS,
 
-  startTitleAnimation: (threadId: string, oldTitle: string, newTitle: string) =>
-    set({
-      animatingThreadId: threadId,
-      animationPhase: 'deleting',
-      oldTitle,
-      newTitle,
-      displayedTitle: oldTitle,
-    }, false, 'sidebarAnimation/startTitleAnimation'),
-
-  updateDisplayedTitle: (title: string) =>
-    set({ displayedTitle: title }, false, 'sidebarAnimation/updateDisplayedTitle'),
-
-  setAnimationPhase: (phase: TitleAnimationPhase) =>
-    set({ animationPhase: phase }, false, 'sidebarAnimation/setAnimationPhase'),
-
   completeTitleAnimation: () =>
     set({
       ...SIDEBAR_ANIMATION_DEFAULTS,
     }, false, 'sidebarAnimation/completeTitleAnimation'),
+
+  setAnimationPhase: (phase: TitleAnimationPhase) =>
+    set({ animationPhase: phase }, false, 'sidebarAnimation/setAnimationPhase'),
+
+  startTitleAnimation: (threadId: string, oldTitle: string, newTitle: string) =>
+    set({
+      animatingThreadId: threadId,
+      animationPhase: 'deleting',
+      displayedTitle: oldTitle,
+      newTitle,
+      oldTitle,
+    }, false, 'sidebarAnimation/startTitleAnimation'),
+
+  updateDisplayedTitle: (title: string) =>
+    set({ displayedTitle: title }, false, 'sidebarAnimation/updateDisplayedTitle'),
 });
 
 // ============================================================================
@@ -1242,12 +1265,6 @@ const createSidebarAnimationSlice: SliceCreator<SidebarAnimationSlice> = set => 
 
 const createNavigationSlice: SliceCreator<NavigationSlice> = (set, get) => ({
   ...NAVIGATION_DEFAULTS,
-
-  setPendingNavigationTarget: (slug: string | null) =>
-    set({ pendingNavigationTargetSlug: slug }, false, 'navigation/setPendingTarget'),
-
-  clearPendingNavigationTarget: () =>
-    set({ pendingNavigationTargetSlug: null }, false, 'navigation/clearPendingTarget'),
 
   /**
    * ✅ ATOMIC THREAD SWITCH: Combines reset + initialization in ONE set() call
@@ -1278,85 +1295,81 @@ const createNavigationSlice: SliceCreator<NavigationSlice> = (set, get) => ({
     set({
       // Reset state (from THREAD_NAVIGATION_RESET_STATE)
       ...THREAD_NAVIGATION_RESET_STATE,
+      animationResolvers: new Map(),
       // Fresh Set/Map instances
       createdModeratorRounds: new Set<number>(),
-      triggeredPreSearchRounds: new Set<number>(),
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredModeratorIds: new Set<string>(),
-      preSearchActivityTimes: new Map<number, number>(),
+      // Mark initialized
+      hasInitiallyLoaded: true,
+      messages: newMessages,
+      participants: sortByPriority(newParticipants),
       pendingAnimations: new Set<number>(),
-      animationResolvers: new Map(),
+      // Clear navigation flag
+      pendingNavigationTargetSlug: null,
+      preSearchActivityTimes: new Map<number, number>(),
       resumptionAttempts: new Set<string>(),
       // Scope versioning
       resumptionScopeThreadId: newThread.id,
-      resumptionScopeVersion: newScopeVersion,
 
+      resumptionScopeVersion: newScopeVersion,
+      showInitialUI: false,
       // NEW data immediately - this is the key fix!
       thread: newThread,
-      participants: sortByPriority(newParticipants),
-      messages: newMessages,
 
-      // Clear navigation flag
-      pendingNavigationTargetSlug: null,
+      triggeredModeratorIds: new Set<string>(),
 
-      // Mark initialized
-      hasInitiallyLoaded: true,
-      showInitialUI: false,
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredPreSearchRounds: new Set<number>(),
     }, false, 'operations/atomicThreadSwitch');
   },
+
+  clearPendingNavigationTarget: () =>
+    set({ pendingNavigationTargetSlug: null }, false, 'navigation/clearPendingTarget'),
+
+  setPendingNavigationTarget: (slug: string | null) =>
+    set({ pendingNavigationTargetSlug: slug }, false, 'navigation/setPendingTarget'),
 });
 
 const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
-  resetThreadState: () =>
-    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
+  completeRegeneration: (_roundNumber: number) =>
+    set({
+      ...STREAMING_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      ...REGENERATION_STATE_RESET,
+    }, false, 'operations/completeRegeneration'),
 
-  resetForThreadNavigation: () => {
-    const state = get();
+  completeStreaming: () => {
+    const currentState = get();
+    const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
+    const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
 
-    // 1. ABORT: Stop all active operations
-    state.chatStop?.();
+    // ✅ FIX A1: Resolve animation promises before clearing
+    if (needsNewAnimationResolvers) {
+      resolveAllPendingAnimations(currentState.animationResolvers);
+    }
 
-    // 2. CLEAR: Reset AI SDK messages synchronously
-    state.chatSetMessages?.([]);
-
-    // ✅ FIX A1: Resolve pending animation promises before clearing
-    resolveAllPendingAnimations(state.animationResolvers);
-
-    // 3. INCREMENT: Bump scope version to invalidate ALL in-flight operations
-    // This prevents stale effects from executing after navigation
-    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
+    // ✅ DEBUG: Track when completeStreaming clears pendingMessage
+    rlog.stream('end', `completeStreaming clearing pendingMessage=${currentState.pendingMessage ? 1 : 0}`);
 
     set({
-      ...THREAD_NAVIGATION_RESET_STATE,
-      createdModeratorRounds: new Set<number>(),
-      triggeredPreSearchRounds: new Set<number>(),
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredModeratorIds: new Set<string>(),
-      resumptionAttempts: new Set<string>(),
-      pendingAnimations: new Set<number>(),
-      animationResolvers: new Map(),
+      ...STREAMING_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      ...REGENERATION_STATE_RESET,
+      ...STREAM_RESUMPTION_STATE_RESET,
+      // ✅ IMPORTANT: Do NOT clear tracking Sets here!
+      // triggeredPreSearchRounds, createdModeratorRounds, triggeredModeratorRounds, triggeredModeratorIds
+      // must PERSIST across completeStreaming calls to prevent duplicate triggers for completed rounds.
+      // These are only cleared on thread navigation (resetForThreadNavigation).
+      // ✅ Clear pre-search activity times (these are per-streaming-session, not persistent tracking)
       preSearchActivityTimes: new Map<number, number>(),
-      // ✅ SCOPE VERSIONING: Clear scope thread and increment version
-      resumptionScopeThreadId: null,
-      resumptionScopeVersion: newScopeVersion,
-    }, false, 'operations/resetForThreadNavigation');
-  },
+      ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
+      ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
+    }, false, 'operations/completeStreaming');
 
-  resetToOverview: () => {
-    const state = get();
-    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
-    state.chatStop?.();
-    state.chatSetMessages?.([]);
-
-    set({
-      ...COMPLETE_RESET_STATE,
-      screenMode: ScreenModes.OVERVIEW,
-      createdModeratorRounds: new Set(),
-      triggeredPreSearchRounds: new Set(),
-      triggeredModeratorRounds: new Set(),
-      triggeredModeratorIds: new Set(),
-      preSearchActivityTimes: new Map<number, number>(),
-    }, false, 'operations/resetToOverview');
+    // Clean up any duplicate messages after streaming completes
+    // This ensures the store is always in a consistent state
+    get().deduplicateMessages();
   },
 
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
@@ -1416,10 +1429,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
             const aRound = getRoundNumber(a.metadata) ?? 0;
             const bRound = getRoundNumber(b.metadata) ?? 0;
-            if (aRound !== bRound)
+            if (aRound !== bRound) {
               return aRound - bRound;
-            if (a.role !== b.role)
+            }
+            if (a.role !== b.role) {
               return a.role === MessageRoles.USER ? -1 : 1;
+            }
             const aPIdx = getParticipantIndex(a.metadata) ?? 999;
             const bPIdx = getParticipantIndex(b.metadata) ?? 999;
             return aPIdx - bPIdx;
@@ -1451,10 +1466,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
             messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
               const aRound = getRoundNumber(a.metadata) ?? 0;
               const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound)
+              if (aRound !== bRound) {
                 return aRound - bRound;
-              if (a.role !== b.role)
+              }
+              if (a.role !== b.role) {
                 return a.role === MessageRoles.USER ? -1 : 1;
+              }
               const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
               const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
               return aPIdx - bPIdx;
@@ -1486,10 +1503,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
             messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
               const aRound = getRoundNumber(a.metadata) ?? 0;
               const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound)
+              if (aRound !== bRound) {
                 return aRound - bRound;
-              if (a.role !== b.role)
+              }
+              if (a.role !== b.role) {
                 return a.role === MessageRoles.USER ? -1 : 1;
+              }
               const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
               const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
               return aPIdx - bPIdx;
@@ -1513,11 +1532,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     rlog.init('initThread', `SET msgs=${messagesToSet.length} parts=${sortedParticipants.length} stale=${hasStaleStreamingParts ? 1 : 0}`);
 
     const formParticipants = enabledParticipants.map((p, index) => ({
+      customRoleId: p.customRoleId || undefined,
       id: p.id,
       modelId: p.modelId,
-      role: p.role,
-      customRoleId: p.customRoleId || undefined,
       priority: index,
+      role: p.role,
     }));
 
     // ✅ STALE PREFILL VALIDATION: Check if prefilled round has messages to support it
@@ -1532,8 +1551,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     if (currentState.streamResumptionPrefilled && currentState.resumptionRoundNumber !== null) {
       const resumeRound = currentState.resumptionRoundNumber;
       const hasUserMessageForResumeRound = messagesToSet.some((m) => {
-        if (m.role !== MessageRoles.USER)
+        if (m.role !== MessageRoles.USER) {
           return false;
+        }
         const msgRound = getRoundNumber(m.metadata);
         return msgRound === resumeRound;
       });
@@ -1607,72 +1627,68 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     }
 
     set({
+      animationResolvers: preserveStreamingState ? currentState.animationResolvers : new Map(),
+      configChangeRoundNumber: preserveStreamingState ? currentState.configChangeRoundNumber : null,
+      // ✅ FIX: Preserve tracking sets during active submission to avoid duplicate triggers
+      createdModeratorRounds: preserveStreamingState ? currentState.createdModeratorRounds : new Set<number>(),
+      currentResumptionPhase: validatedResumptionPhase,
+      currentRoundNumber: preserveStreamingState ? currentState.currentRoundNumber : null,
+      // ✅ FIX: Preserve form state if user has pending config changes
+      // Without this, toggling web search and then a query refetch would wipe the user's change
+      // hasPendingConfigChanges is set when user toggles any config (mode, web search, participants)
+      enableWebSearch: currentState.hasPendingConfigChanges ? currentState.enableWebSearch : thread.enableWebSearch,
+      error: null,
+      expectedParticipantIds: preserveStreamingState ? currentState.expectedParticipantIds : null,
+      hasEarlyOptimisticMessage: preserveStreamingState ? currentState.hasEarlyOptimisticMessage : false,
+      hasInitiallyLoaded: true,
+      hasPendingConfigChanges: preserveStreamingState ? currentState.hasPendingConfigChanges : false,
+      hasSentPendingMessage: preserveStreamingState ? currentState.hasSentPendingMessage : false,
+      isModeratorStreaming: preserveStreamingState ? currentState.isModeratorStreaming : false,
+      // These can always be reset
+      isRegenerating: false,
+      isStreaming: false,
+      // ✅ FIX: Also preserve changelog-related flags during active submission
+      isWaitingForChangelog: preserveStreamingState ? currentState.isWaitingForChangelog : false,
+      messages: messagesToSet,
+      nextParticipantToTrigger: preserveStreamingState ? validatedNextParticipantToTrigger : null,
+      participants: sortedParticipants,
+      pendingAnimations: preserveStreamingState ? currentState.pendingAnimations : new Set<number>(),
+      pendingAttachmentIds: preserveStreamingState ? currentState.pendingAttachmentIds : null,
+      pendingFileParts: preserveStreamingState ? currentState.pendingFileParts : null,
+      // ✅ FIX: Preserve pending message state during active submission
+      pendingMessage: preserveStreamingState ? currentState.pendingMessage : null,
+      prefilledForThreadId: validatedResumption ? currentState.prefilledForThreadId : null,
+      preSearchActivityTimes: preserveStreamingState ? currentState.preSearchActivityTimes : new Map<number, number>(),
+      regeneratingRoundNumber: null,
+      resumptionAttempts: preserveStreamingState ? currentState.resumptionAttempts : new Set<string>(),
+      resumptionRoundNumber: validatedResumptionRoundNumber,
+      selectedMode: currentState.hasPendingConfigChanges
+        ? currentState.selectedMode
+        : ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+      selectedParticipants: currentState.hasPendingConfigChanges ? currentState.selectedParticipants : formParticipants,
+      showInitialUI: false,
+      streamingRoundNumber: preserveStreamingState
+        ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
+        : null,
+      // ✅ STALE PREFILL FIX: Apply validated resumption state (cleared if stale)
+      streamResumptionPrefilled: validatedResumption,
+      streamResumptionState: preserveStreamingState ? currentState.streamResumptionState : null,
+      thread,
+      triggeredModeratorIds: preserveStreamingState ? currentState.triggeredModeratorIds : new Set<string>(),
+      triggeredModeratorRounds: preserveStreamingState ? currentState.triggeredModeratorRounds : new Set<number>(),
+      triggeredPreSearchRounds: preserveStreamingState ? currentState.triggeredPreSearchRounds : new Set<number>(),
       // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
       // ✅ FIX v4: For newly created threads, FORCE waitingToStartStreaming=true
       // Even if prepareForNewMessage reset it to false, we need it true to trigger streaming
       waitingToStartStreaming: isNewlyCreatedThread
         ? true
         : (preserveStreamingState ? currentState.waitingToStartStreaming : false),
-      streamingRoundNumber: preserveStreamingState
-        ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
-        : null,
-      nextParticipantToTrigger: preserveStreamingState ? validatedNextParticipantToTrigger : null,
-      isModeratorStreaming: preserveStreamingState ? currentState.isModeratorStreaming : false,
-      // ✅ FIX: Also preserve changelog-related flags during active submission
-      isWaitingForChangelog: preserveStreamingState ? currentState.isWaitingForChangelog : false,
-      configChangeRoundNumber: preserveStreamingState ? currentState.configChangeRoundNumber : null,
-      // These can always be reset
-      isRegenerating: false,
-      hasPendingConfigChanges: preserveStreamingState ? currentState.hasPendingConfigChanges : false,
-      regeneratingRoundNumber: null,
-      // ✅ FIX: Preserve pending message state during active submission
-      pendingMessage: preserveStreamingState ? currentState.pendingMessage : null,
-      pendingAttachmentIds: preserveStreamingState ? currentState.pendingAttachmentIds : null,
-      pendingFileParts: preserveStreamingState ? currentState.pendingFileParts : null,
-      expectedParticipantIds: preserveStreamingState ? currentState.expectedParticipantIds : null,
-      currentRoundNumber: preserveStreamingState ? currentState.currentRoundNumber : null,
-      hasSentPendingMessage: preserveStreamingState ? currentState.hasSentPendingMessage : false,
-      // ✅ FIX: Preserve tracking sets during active submission to avoid duplicate triggers
-      createdModeratorRounds: preserveStreamingState ? currentState.createdModeratorRounds : new Set<number>(),
-      triggeredPreSearchRounds: preserveStreamingState ? currentState.triggeredPreSearchRounds : new Set<number>(),
-      triggeredModeratorRounds: preserveStreamingState ? currentState.triggeredModeratorRounds : new Set<number>(),
-      triggeredModeratorIds: preserveStreamingState ? currentState.triggeredModeratorIds : new Set<string>(),
-      preSearchActivityTimes: preserveStreamingState ? currentState.preSearchActivityTimes : new Map<number, number>(),
-      hasEarlyOptimisticMessage: preserveStreamingState ? currentState.hasEarlyOptimisticMessage : false,
-      streamResumptionState: preserveStreamingState ? currentState.streamResumptionState : null,
-      resumptionAttempts: preserveStreamingState ? currentState.resumptionAttempts : new Set<string>(),
-      // ✅ STALE PREFILL FIX: Apply validated resumption state (cleared if stale)
-      streamResumptionPrefilled: validatedResumption,
-      currentResumptionPhase: validatedResumptionPhase,
-      resumptionRoundNumber: validatedResumptionRoundNumber,
-      prefilledForThreadId: validatedResumption ? currentState.prefilledForThreadId : null,
-      pendingAnimations: preserveStreamingState ? currentState.pendingAnimations : new Set<number>(),
-      animationResolvers: preserveStreamingState ? currentState.animationResolvers : new Map(),
-      thread,
-      participants: sortedParticipants,
-      messages: messagesToSet,
-      error: null,
-      isStreaming: false,
-      // ✅ FIX: Preserve form state if user has pending config changes
-      // Without this, toggling web search and then a query refetch would wipe the user's change
-      // hasPendingConfigChanges is set when user toggles any config (mode, web search, participants)
-      enableWebSearch: currentState.hasPendingConfigChanges ? currentState.enableWebSearch : thread.enableWebSearch,
-      selectedMode: currentState.hasPendingConfigChanges
-        ? currentState.selectedMode
-        : ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
-      selectedParticipants: currentState.hasPendingConfigChanges ? currentState.selectedParticipants : formParticipants,
-      showInitialUI: false,
-      hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
 
     // ✅ DEBUG v7: Log AFTER set() to confirm waitingToStartStreaming value
     const afterState = get();
     rlog.init('postSet', `wait=${afterState.waitingToStartStreaming ? 1 : 0} isNew=${isNewlyCreatedThread ? 1 : 0} preserve=${preserveStreamingState ? 1 : 0}`);
     rlog.flow('init-thread', `DONE t=${thread.id.slice(-8)} wait=${afterState.waitingToStartStreaming ? 1 : 0} pending=${afterState.pendingMessage ? 1 : 0} hasSent=${afterState.hasSentPendingMessage ? 1 : 0} nextP=${afterState.nextParticipantToTrigger !== null ? 1 : 0}`);
-  },
-
-  updateParticipants: (participants: ChatParticipant[]) => {
-    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
   },
 
   prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) => {
@@ -1692,8 +1708,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       const targetRound = draft.streamingRoundNumber ?? nextRoundNumber;
       const hasOptimisticForTargetRound = draft.messages.some(
         (m) => {
-          if (m.role !== MessageRoles.USER)
+          if (m.role !== MessageRoles.USER) {
             return false;
+          }
           const roundNumber = getRoundNumber(m.metadata);
           const isOptimistic = m.metadata && typeof m.metadata === 'object' && 'isOptimistic' in m.metadata
             ? m.metadata.isOptimistic
@@ -1748,80 +1765,55 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForTargetRound) {
         draft.messages.push({
           id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
-          role: MessageRoles.USER,
-          parts: [
-            ...fileParts,
-            { type: MessagePartTypes.TEXT, text: message },
-          ],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: nextRoundNumber,
-            isOptimistic: true,
           },
+          parts: [
+            ...fileParts,
+            { text: message, type: MessagePartTypes.TEXT },
+          ],
+          role: MessageRoles.USER,
         });
       }
     }, false, 'operations/prepareForNewMessage');
   },
 
-  completeStreaming: () => {
-    const currentState = get();
-    const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
-    const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
+  resetForThreadNavigation: () => {
+    const state = get();
 
-    // ✅ FIX A1: Resolve animation promises before clearing
-    if (needsNewAnimationResolvers) {
-      resolveAllPendingAnimations(currentState.animationResolvers);
-    }
+    // 1. ABORT: Stop all active operations
+    state.chatStop?.();
 
-    // ✅ DEBUG: Track when completeStreaming clears pendingMessage
-    rlog.stream('end', `completeStreaming clearing pendingMessage=${currentState.pendingMessage ? 1 : 0}`);
+    // 2. CLEAR: Reset AI SDK messages synchronously
+    state.chatSetMessages?.([]);
+
+    // ✅ FIX A1: Resolve pending animation promises before clearing
+    resolveAllPendingAnimations(state.animationResolvers);
+
+    // 3. INCREMENT: Bump scope version to invalidate ALL in-flight operations
+    // This prevents stale effects from executing after navigation
+    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
 
     set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...REGENERATION_STATE_RESET,
-      ...STREAM_RESUMPTION_STATE_RESET,
-      // ✅ IMPORTANT: Do NOT clear tracking Sets here!
-      // triggeredPreSearchRounds, createdModeratorRounds, triggeredModeratorRounds, triggeredModeratorIds
-      // must PERSIST across completeStreaming calls to prevent duplicate triggers for completed rounds.
-      // These are only cleared on thread navigation (resetForThreadNavigation).
-      // ✅ Clear pre-search activity times (these are per-streaming-session, not persistent tracking)
+      ...THREAD_NAVIGATION_RESET_STATE,
+      animationResolvers: new Map(),
+      createdModeratorRounds: new Set<number>(),
+      pendingAnimations: new Set<number>(),
       preSearchActivityTimes: new Map<number, number>(),
-      ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
-      ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
-    }, false, 'operations/completeStreaming');
-
-    // Clean up any duplicate messages after streaming completes
-    // This ensures the store is always in a consistent state
-    get().deduplicateMessages();
+      resumptionAttempts: new Set<string>(),
+      // ✅ SCOPE VERSIONING: Clear scope thread and increment version
+      resumptionScopeThreadId: null,
+      resumptionScopeVersion: newScopeVersion,
+      triggeredModeratorIds: new Set<string>(),
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredPreSearchRounds: new Set<number>(),
+    }, false, 'operations/resetForThreadNavigation');
   },
 
-  startRegeneration: (roundNumber: number) => {
-    const { clearModeratorTracking, clearPreSearchTracking, clearModeratorStreamTracking, clearPreSearchActivity, selectedParticipants } = get();
-    clearModeratorTracking(roundNumber);
-    clearPreSearchTracking(roundNumber);
-    clearModeratorStreamTracking(roundNumber);
-    clearPreSearchActivity(roundNumber);
-    const participantIds = selectedParticipants.map(p => p.modelId);
-    set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...STREAM_RESUMPTION_DEFAULTS,
-      isRegenerating: true,
-      regeneratingRoundNumber: roundNumber,
-      expectedParticipantIds: participantIds.length > 0 ? participantIds : null,
-    }, false, 'operations/startRegeneration');
-  },
-
-  completeRegeneration: (_roundNumber: number) =>
-    set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...REGENERATION_STATE_RESET,
-    }, false, 'operations/completeRegeneration'),
+  resetThreadState: () =>
+    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
 
   resetToNewChat: (preferences?: ResetFormPreferences) => {
     const state = get();
@@ -1833,8 +1825,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ? preferences.selectedModelIds.map((modelId, index) => ({
           id: modelId,
           modelId,
-          role: null,
           priority: index,
+          role: null,
         }))
       : FORM_DEFAULTS.selectedParticipants;
 
@@ -1846,17 +1838,56 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     set({
       ...COMPLETE_RESET_STATE,
-      selectedParticipants,
-      selectedMode,
+      createdModeratorRounds: new Set(),
       enableWebSearch: preferences?.enableWebSearch ?? FORM_DEFAULTS.enableWebSearch,
       modelOrder: preferences?.modelOrder ?? FORM_DEFAULTS.modelOrder,
-      screenMode: ScreenModes.OVERVIEW,
-      createdModeratorRounds: new Set(),
-      triggeredPreSearchRounds: new Set(),
-      triggeredModeratorRounds: new Set(),
-      triggeredModeratorIds: new Set(),
       preSearchActivityTimes: new Map<number, number>(),
+      screenMode: ScreenModes.OVERVIEW,
+      selectedMode,
+      selectedParticipants,
+      triggeredModeratorIds: new Set(),
+      triggeredModeratorRounds: new Set(),
+      triggeredPreSearchRounds: new Set(),
     }, false, 'operations/resetToNewChat');
+  },
+
+  resetToOverview: () => {
+    const state = get();
+    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
+    state.chatStop?.();
+    state.chatSetMessages?.([]);
+
+    set({
+      ...COMPLETE_RESET_STATE,
+      createdModeratorRounds: new Set(),
+      preSearchActivityTimes: new Map<number, number>(),
+      screenMode: ScreenModes.OVERVIEW,
+      triggeredModeratorIds: new Set(),
+      triggeredModeratorRounds: new Set(),
+      triggeredPreSearchRounds: new Set(),
+    }, false, 'operations/resetToOverview');
+  },
+
+  startRegeneration: (roundNumber: number) => {
+    const { clearModeratorStreamTracking, clearModeratorTracking, clearPreSearchActivity, clearPreSearchTracking, selectedParticipants } = get();
+    clearModeratorTracking(roundNumber);
+    clearPreSearchTracking(roundNumber);
+    clearModeratorStreamTracking(roundNumber);
+    clearPreSearchActivity(roundNumber);
+    const participantIds = selectedParticipants.map(p => p.modelId);
+    set({
+      ...STREAMING_STATE_RESET,
+      ...MODERATOR_STATE_RESET,
+      ...PENDING_MESSAGE_STATE_RESET,
+      ...STREAM_RESUMPTION_DEFAULTS,
+      expectedParticipantIds: participantIds.length > 0 ? participantIds : null,
+      isRegenerating: true,
+      regeneratingRoundNumber: roundNumber,
+    }, false, 'operations/startRegeneration');
+  },
+
+  updateParticipants: (participants: ChatParticipant[]) => {
+    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
   },
 
 });
@@ -1904,9 +1935,9 @@ export function createChatStore() {
         }),
       ),
       {
-        name: 'ChatStore',
-        enabled: import.meta.env.MODE !== 'production',
         anonymousActionType: 'unknown-action',
+        enabled: import.meta.env.MODE !== 'production',
+        name: 'ChatStore',
       },
     ),
   );

@@ -14,16 +14,16 @@ import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
 
 // Mock all services before imports
 vi.mock('@/services/api', () => ({
-  listApiKeysService: vi.fn(),
   getApiKeyService: vi.fn(),
-  getProductsService: vi.fn(),
   getProductService: vi.fn(),
+  getProductsService: vi.fn(),
+  getPublicThreadService: vi.fn(),
   getThreadBySlugService: vi.fn(),
   getThreadService: vi.fn(),
-  listThreadsService: vi.fn(),
-  getPublicThreadService: vi.fn(),
-  listPublicThreadSlugsService: vi.fn(),
   getThreadSlugStatusService: vi.fn(),
+  listApiKeysService: vi.fn(),
+  listPublicThreadSlugsService: vi.fn(),
+  listThreadsService: vi.fn(),
 }));
 
 // Mock server functions
@@ -59,6 +59,7 @@ vi.mock('@/lib/auth/client', () => ({
 // Helper to read file content for static analysis
 function readHookFile(relativePath: string): string {
   const fullPath = resolve(__dirname, '../../..', relativePath);
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- Safe: path built from __dirname, not user input
   return readFileSync(fullPath, 'utf-8');
 }
 

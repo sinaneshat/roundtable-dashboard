@@ -21,18 +21,18 @@ type ChatRenameFormProps = {
 
 export const ChatRenameForm = memo(({
   initialTitle,
-  onSubmit,
-  onCancel,
-  isPending = false,
   isMobile = false,
+  isPending = false,
+  onCancel,
+  onSubmit,
 }: ChatRenameFormProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const form = useForm<ChatRenameFormValues>({
-    resolver: zodResolver(ChatRenameFormSchema),
     defaultValues: { title: initialTitle },
     mode: 'onChange',
+    resolver: zodResolver(ChatRenameFormSchema),
   });
 
   const { isDirty, isValid } = form.formState;

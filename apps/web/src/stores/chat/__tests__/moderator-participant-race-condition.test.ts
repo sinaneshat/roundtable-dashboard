@@ -31,37 +31,37 @@ import { createChatStore } from '../store';
 
 function createThread() {
   return {
+    createdAt: '2024-01-01T00:00:00Z',
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    projectId: null,
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    mode: 'analyzing' as const,
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    metadata: null,
-    version: 1,
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z',
     lastMessageAt: '2024-01-01T00:00:00Z',
+    metadata: null,
+    mode: 'analyzing' as const,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: '2024-01-01T00:00:00Z',
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createParticipant(index: number) {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: '2024-01-01T00:00:00Z',
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: '2024-01-01T00:00:00Z',
   };
 }
@@ -69,9 +69,9 @@ function createParticipant(index: number) {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: `Question ${roundNumber}` }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: `Question ${roundNumber}`, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -82,20 +82,20 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{
-      type: 'text',
-      text: `Response ${roundNumber}-${participantIndex}`,
-      state,
-    }],
     metadata: {
+      finishReason: state === 'done' ? 'stop' : undefined,
+      model: `model-${participantIndex}`,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: state === 'done' ? 'stop' : undefined,
-      usage: state === 'done' ? { promptTokens: 100, completionTokens: 50, totalTokens: 150 } : undefined,
+      usage: state === 'done' ? { completionTokens: 50, promptTokens: 100, totalTokens: 150 } : undefined,
     },
+    parts: [{
+      state,
+      text: `Response ${roundNumber}-${participantIndex}`,
+      type: 'text',
+    }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -136,14 +136,15 @@ describe('moderator-Participant Race Prevention', () => {
       // The moderator orchestrator should check for streaming participants
       // and NOT actually create the moderator message
       const hasStreamingPart = store.getState().messages.some((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
 
       // This is the BUG: isModeratorStreaming can be true while participants are streaming
       // The test documents the expected behavior - moderator should wait
-      expect(hasStreamingPart).toBe(true);
+      expect(hasStreamingPart).toBeTruthy();
     });
 
     it('should allow moderator creation ONLY when all participant parts have state=done', () => {
@@ -166,15 +167,16 @@ describe('moderator-Participant Race Prevention', () => {
 
       // Verify no streaming parts
       const hasStreamingPart = store.getState().messages.some((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
+        }
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
-      expect(hasStreamingPart).toBe(false);
+      expect(hasStreamingPart).toBeFalsy();
 
       // Now moderator creation should be allowed
       store.getState().setIsModeratorStreaming(true);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
     });
 
     it('should track responded vs in-progress participants separately', () => {
@@ -247,7 +249,7 @@ describe('moderator-Participant Race Prevention', () => {
         );
       };
 
-      expect(allParticipantsComplete(0)).toBe(true);
+      expect(allParticipantsComplete(0)).toBeTruthy();
     });
 
     it('should NOT consider participants complete if any have state=streaming', () => {
@@ -278,7 +280,7 @@ describe('moderator-Participant Race Prevention', () => {
         );
       };
 
-      expect(allParticipantsComplete(0)).toBe(false);
+      expect(allParticipantsComplete(0)).toBeFalsy();
     });
   });
 
@@ -301,8 +303,8 @@ describe('moderator-Participant Race Prevention', () => {
       ]);
 
       // Should NOT create moderator yet
-      expect(store.getState().isStreaming).toBe(true);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeTruthy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
 
       // Complete the participant
       store.getState().setMessages([
@@ -315,7 +317,7 @@ describe('moderator-Participant Race Prevention', () => {
 
       // Now moderator can be created
       store.getState().setIsModeratorStreaming(true);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
     });
   });
 });
@@ -351,8 +353,9 @@ describe('multi-Participant Round Completion', () => {
       );
 
       // All participants must have responded
-      if (roundMessages.length < participants.length)
+      if (roundMessages.length < participants.length) {
         return false;
+      }
 
       // No parts should be streaming
       return !roundMessages.some(m =>
@@ -360,7 +363,7 @@ describe('multi-Participant Round Completion', () => {
       );
     };
 
-    expect(isRoundComplete()).toBe(false);
+    expect(isRoundComplete()).toBeFalsy();
 
     // Complete p2
     const messagesAllDone: UIMessage[] = [
@@ -372,7 +375,7 @@ describe('multi-Participant Round Completion', () => {
     store.getState().setMessages(messagesAllDone);
     store.getState().setIsStreaming(false);
 
-    expect(isRoundComplete()).toBe(true);
+    expect(isRoundComplete()).toBeTruthy();
   });
 
   it('should handle participant finish events in any order', () => {
@@ -403,7 +406,7 @@ describe('multi-Participant Round Completion', () => {
     // Still not complete
     expect(store.getState().messages.some(m =>
       m.parts?.some(p => 'state' in p && p.state === 'streaming'),
-    )).toBe(true);
+    )).toBeTruthy();
 
     // Final completion
     const step3: UIMessage[] = [
@@ -417,7 +420,7 @@ describe('multi-Participant Round Completion', () => {
     // Now complete
     expect(store.getState().messages.some(m =>
       m.parts?.some(p => 'state' in p && p.state === 'streaming'),
-    )).toBe(false);
+    )).toBeFalsy();
   });
 });
 
@@ -495,12 +498,12 @@ describe('one-Way Data Flow', () => {
 
     // isStreaming is the source of truth
     store.getState().setIsStreaming(true);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     // Other components should read from store, not maintain separate state
     // This test documents the expected pattern
     const streamingState = store.getState().isStreaming;
-    expect(streamingState).toBe(true);
+    expect(streamingState).toBeTruthy();
   });
 
   it('should not have conflicting streaming indicators', () => {
@@ -515,9 +518,9 @@ describe('one-Way Data Flow', () => {
 
     store.getState().completeStreaming();
 
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 
   it('should clear streaming state atomically', () => {
@@ -536,9 +539,9 @@ describe('one-Way Data Flow', () => {
     store.getState().completeStreaming();
 
     // All streaming state should be cleared
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().streamingRoundNumber).toBeNull();
     expect(store.getState().currentParticipantIndex).toBe(0);
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 });

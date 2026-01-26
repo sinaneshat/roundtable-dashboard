@@ -39,11 +39,11 @@ export function RHFComboBox<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
 >({
-  name,
-  title,
   description,
   loading = false,
+  name,
   options,
+  title,
 }: RHFComboBoxProps<TFieldValues, TName>) {
   const { control } = useFormContext<TFieldValues>();
   const t = useTranslations();

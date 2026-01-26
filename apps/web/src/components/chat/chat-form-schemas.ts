@@ -30,10 +30,10 @@ type CreateThreadPayload = {
 // ============================================================================
 
 export const ChatInputFormSchema = z.object({
+  enableWebSearch: z.boolean().optional(),
   message: MessageContentSchema,
   mode: ChatModeSchema,
   participants: z.array(ParticipantConfigSchema).min(1, 'At least one participant is required'),
-  enableWebSearch: z.boolean().optional(),
 });
 export type ChatInputFormData = z.infer<typeof ChatInputFormSchema>;
 export const ThreadInputFormSchema = z.object({
@@ -46,19 +46,33 @@ export function toCreateThreadRequest(
   projectId?: string,
 ): CreateThreadPayload {
   return {
-    title: 'New Chat',
-    mode: data.mode,
-    enableWebSearch: data.enableWebSearch ?? false,
-    participants: data.participants.map(p => ({
-      modelId: p.modelId,
-      role: p.role || undefined,
-      customRoleId: p.customRoleId,
-      temperature: p.settings?.temperature,
-      maxTokens: p.settings?.maxTokens,
-      systemPrompt: p.settings?.systemPrompt,
-    })),
-    firstMessage: data.message,
     attachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
+    enableWebSearch: data.enableWebSearch ?? false,
+    firstMessage: data.message,
+    mode: data.mode,
+    participants: data.participants.map((p) => {
+      // Conditionally build participant to satisfy exactOptionalPropertyTypes
+      const participant: CreateParticipantPayload = {
+        modelId: p.modelId,
+      };
+      if (p.customRoleId !== undefined) {
+        participant.customRoleId = p.customRoleId;
+      }
+      if (p.settings?.maxTokens !== undefined) {
+        participant.maxTokens = p.settings.maxTokens;
+      }
+      if (p.role) {
+        participant.role = p.role;
+      }
+      if (p.settings?.systemPrompt !== undefined) {
+        participant.systemPrompt = p.settings.systemPrompt;
+      }
+      if (p.settings?.temperature !== undefined) {
+        participant.temperature = p.settings.temperature;
+      }
+      return participant;
+    }),
     projectId: projectId ?? null,
+    title: 'New Chat',
   };
 }

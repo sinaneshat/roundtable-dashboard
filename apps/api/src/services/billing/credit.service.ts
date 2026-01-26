@@ -53,18 +53,19 @@ import {
  */
 export function toModelForPricing(modelId: string): ModelForPricing | undefined {
   const model = getModelById(modelId);
-  if (!model)
+  if (!model) {
     return undefined;
+  }
 
   return {
+    capabilities: model.capabilities,
+    context_length: model.context_length,
+    created: model.created ?? null,
     id: modelId,
     name: model.name,
     pricing: model.pricing,
     pricing_display: model.pricing_display ?? null,
-    context_length: model.context_length,
-    created: model.created ?? null,
     provider: model.provider,
-    capabilities: model.capabilities,
   };
 }
 
@@ -135,9 +136,9 @@ async function withOptimisticLockRetry<T>(
       || errorMessage.includes('SELECT')
     ) {
       console.error(`[CreditService] Database error in ${context.operation}:`, {
-        userId: context.userId,
         error: errorMessage,
         retryCount,
+        userId: context.userId,
       });
 
       const errorContext: ErrorContext = {
@@ -158,23 +159,23 @@ async function withOptimisticLockRetry<T>(
 }
 
 const _CreditBalanceInfoSchema = z.object({
-  balance: z.number(),
-  reserved: z.number(),
   available: z.number(),
-  planType: PlanTypeSchema,
+  balance: z.number(),
   monthlyCredits: z.number(),
   nextRefillAt: z.date().nullable(),
+  planType: PlanTypeSchema,
+  reserved: z.number(),
 }).strict();
 
 export type CreditBalanceInfo = z.infer<typeof _CreditBalanceInfoSchema>;
 
 const _TokenUsageSchema = z.object({
-  inputTokens: z.number(),
-  outputTokens: z.number(),
   action: CreditActionSchema,
-  threadId: z.string().optional(),
+  inputTokens: z.number(),
   messageId: z.string().optional(),
   modelId: z.string(),
+  outputTokens: z.number(),
+  threadId: z.string().optional(),
 }).strict();
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
@@ -207,14 +208,14 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
     const insertResult = await db
       .insert(tables.userCreditBalance)
       .values({
-        id: ulid(),
-        userId,
         balance: signupCredits,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
-        monthlyCredits: 0,
         createdAt: now,
+        id: ulid(),
+        monthlyCredits: 0,
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: now,
+        userId,
       })
       .onConflictDoNothing({ target: tables.userCreditBalance.userId })
       .returning();
@@ -244,12 +245,12 @@ export async function ensureUserCreditRecord(userId: string): Promise<UserCredit
   if (wasInserted && signupCredits > 0) {
     try {
       await recordTransaction({
-        userId,
-        type: CreditTransactionTypes.CREDIT_GRANT,
+        action: CreditActions.SIGNUP_BONUS,
         amount: signupCredits,
         balanceAfter: signupCredits,
-        action: CreditActions.SIGNUP_BONUS,
         description: 'Signup bonus credits - one free round',
+        type: CreditTransactionTypes.CREDIT_GRANT,
+        userId,
       });
     } catch {
       // Transaction recording failed - non-critical
@@ -263,12 +264,12 @@ export async function getUserCreditBalance(userId: string): Promise<CreditBalanc
   const record = await ensureUserCreditRecord(userId);
 
   return {
-    balance: record.balance,
-    reserved: record.reservedCredits,
     available: Math.max(0, record.balance - record.reservedCredits),
-    planType: parsePlanType(record.planType),
+    balance: record.balance,
     monthlyCredits: record.monthlyCredits,
     nextRefillAt: record.nextRefillAt,
+    planType: parsePlanType(record.planType),
+    reserved: record.reservedCredits,
   };
 }
 
@@ -455,8 +456,8 @@ export async function checkFreeUserHasCompletedRound(userId: string): Promise<bo
   if (enabledCount >= 2) {
     const moderatorMessageId = `${thread.id}_r0_moderator`;
     const moderatorMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.id, moderatorMessageId),
       columns: { parts: true },
+      where: eq(tables.chatMessage.id, moderatorMessageId),
     });
 
     if (!moderatorMessage) {
@@ -501,12 +502,12 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
   if (previousBalance > 0) {
     // recordTransaction() now includes cache invalidation
     await recordTransaction({
-      userId,
-      type: CreditTransactionTypes.DEDUCTION,
       action: CreditActions.FREE_ROUND_COMPLETE,
       amount: -previousBalance,
       balanceAfter: 0,
       description: 'Free round completed - credits exhausted',
+      type: CreditTransactionTypes.DEDUCTION,
+      userId,
     });
   } else {
     // Balance was already 0, but still invalidate cache for consistency
@@ -524,22 +525,22 @@ async function provisionPaidUserCredits(userId: string): Promise<void> {
   await db
     .update(tables.userCreditBalance)
     .set({
-      planType: PlanTypes.PAID,
       balance: planConfig.monthlyCredits,
-      monthlyCredits: planConfig.monthlyCredits,
       lastRefillAt: now,
+      monthlyCredits: planConfig.monthlyCredits,
       nextRefillAt: nextRefill,
+      planType: PlanTypes.PAID,
       updatedAt: now,
     })
     .where(eq(tables.userCreditBalance.userId, userId));
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.MONTHLY_REFILL,
     action: CreditActions.MONTHLY_RENEWAL,
     amount: planConfig.monthlyCredits,
     balanceAfter: planConfig.monthlyCredits,
     description: 'Credits provisioned (subscription sync recovery)',
+    type: CreditTransactionTypes.MONTHLY_REFILL,
+    userId,
   });
 }
 
@@ -562,8 +563,8 @@ export async function reserveCredits(
         .update(tables.userCreditBalance)
         .set({
           reservedCredits: sql`${tables.userCreditBalance.reservedCredits} + ${estimatedCredits}`,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: new Date(),
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -580,12 +581,12 @@ export async function reserveCredits(
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.RESERVATION,
     amount: -estimatedCredits, // Negative to show credits are held
     balanceAfter: updatedRecord.balance,
-    streamId,
     description: `Reserved ${estimatedCredits} credits for streaming`,
+    streamId,
+    type: CreditTransactionTypes.RESERVATION,
+    userId,
   });
 }
 
@@ -630,8 +631,8 @@ export async function finalizeCredits(
             THEN ${tables.userCreditBalance.reservedCredits} - ${weightedCredits}
             ELSE 0
           END`,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: new Date(),
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -648,22 +649,22 @@ export async function finalizeCredits(
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.DEDUCTION,
+    action: actualUsage.action,
     amount: -weightedCredits,
     balanceAfter: updatedRecord.balance,
-    inputTokens: actualUsage.inputTokens,
-    outputTokens: actualUsage.outputTokens,
-    totalTokens,
     creditsUsed: weightedCredits,
-    threadId: actualUsage.threadId,
+    description: `AI response (${pricingTier}): ${totalTokens} tokens = ${weightedCredits} credits`,
+    inputTokens: actualUsage.inputTokens,
     messageId: actualUsage.messageId,
-    streamId,
-    action: actualUsage.action,
     modelId: actualUsage.modelId,
     modelPricingInputPerMillion: inputPricingMicro,
     modelPricingOutputPerMillion: outputPricingMicro,
-    description: `AI response (${pricingTier}): ${totalTokens} tokens = ${weightedCredits} credits`,
+    outputTokens: actualUsage.outputTokens,
+    streamId,
+    threadId: actualUsage.threadId,
+    totalTokens,
+    type: CreditTransactionTypes.DEDUCTION,
+    userId,
   });
 }
 
@@ -691,8 +692,8 @@ export async function releaseReservation(
             THEN ${tables.userCreditBalance.reservedCredits} - ${reservedAmount}
             ELSE 0
           END`,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: new Date(),
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -709,12 +710,12 @@ export async function releaseReservation(
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.RELEASE,
     amount: reservedAmount,
     balanceAfter: updatedRecord.balance,
-    streamId,
     description: `Released ${reservedAmount} reserved credits (cancelled/error)`,
+    streamId,
+    type: CreditTransactionTypes.RELEASE,
+    userId,
   });
 }
 
@@ -735,8 +736,8 @@ export async function grantCredits(
         .update(tables.userCreditBalance)
         .set({
           balance: sql`${tables.userCreditBalance.balance} + ${amount}`,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: new Date(),
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -759,27 +760,27 @@ export async function grantCredits(
   };
 
   await recordTransaction({
-    userId,
-    type: getGrantTransactionType(type),
+    action: actionMap[type],
     amount,
     balanceAfter: updatedRecord.balance,
-    action: actionMap[type],
     description: description || `Granted ${amount} credits`,
+    type: getGrantTransactionType(type),
+    userId,
   });
 }
 
 const ACTION_COST_TO_CREDIT_ACTION_MAP: Record<keyof typeof CREDIT_CONFIG.ACTION_COSTS, CreditAction> = {
-  threadCreation: CreditActions.THREAD_CREATION,
-  webSearchQuery: CreditActions.WEB_SEARCH,
-  fileReading: CreditActions.FILE_READING,
   analysisGeneration: CreditActions.ANALYSIS_GENERATION,
-  customRoleCreation: CreditActions.THREAD_CREATION,
   autoModeAnalysis: CreditActions.ANALYSIS_GENERATION,
+  customRoleCreation: CreditActions.THREAD_CREATION,
+  fileReading: CreditActions.FILE_READING,
   // Project feature billing
   memoryExtraction: CreditActions.MEMORY_EXTRACTION,
-  ragQuery: CreditActions.RAG_QUERY,
   projectFileLink: CreditActions.PROJECT_FILE_LINK,
   projectStoragePer10MB: CreditActions.PROJECT_STORAGE,
+  ragQuery: CreditActions.RAG_QUERY,
+  threadCreation: CreditActions.THREAD_CREATION,
+  webSearchQuery: CreditActions.WEB_SEARCH,
 } as const;
 
 export async function deductCreditsForAction(
@@ -802,8 +803,8 @@ export async function deductCreditsForAction(
         .update(tables.userCreditBalance)
         .set({
           balance: sql`${tables.userCreditBalance.balance} - ${credits}`,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: new Date(),
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -820,14 +821,14 @@ export async function deductCreditsForAction(
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.DEDUCTION,
+    action: ACTION_COST_TO_CREDIT_ACTION_MAP[action],
     amount: -credits,
     balanceAfter: updatedRecord.balance,
     creditsUsed: credits,
-    threadId: context?.threadId,
-    action: ACTION_COST_TO_CREDIT_ACTION_MAP[action],
     description: context?.description || `${String(action)}: ${credits} credits`,
+    threadId: context?.threadId,
+    type: CreditTransactionTypes.DEDUCTION,
+    userId,
   });
 }
 
@@ -858,8 +859,8 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
           balance: sql`${tables.userCreditBalance.balance} + ${planConfig.monthlyCredits}`,
           lastRefillAt: now,
           nextRefillAt: nextRefill,
-          version: sql`${tables.userCreditBalance.version} + 1`,
           updatedAt: now,
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -876,12 +877,12 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.MONTHLY_REFILL,
+    action: CreditActions.MONTHLY_RENEWAL,
     amount: planConfig.monthlyCredits,
     balanceAfter: updatedRecord.balance,
-    action: CreditActions.MONTHLY_RENEWAL,
     description: `Monthly refill: ${planConfig.monthlyCredits} credits`,
+    type: CreditTransactionTypes.MONTHLY_REFILL,
+    userId,
   });
 }
 
@@ -905,13 +906,13 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
       db
         .update(tables.userCreditBalance)
         .set({
-          planType: PlanTypes.PAID,
           balance: planConfig.monthlyCredits,
-          monthlyCredits: planConfig.monthlyCredits,
           lastRefillAt: now,
+          monthlyCredits: planConfig.monthlyCredits,
           nextRefillAt: nextRefill,
-          version: sql`${tables.userCreditBalance.version} + 1`,
+          planType: PlanTypes.PAID,
           updatedAt: now,
+          version: sql`${tables.userCreditBalance.version} + 1`,
         })
         .where(
           and(
@@ -928,12 +929,12 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
   );
 
   await recordTransaction({
-    userId,
-    type: CreditTransactionTypes.CREDIT_GRANT,
+    action: CreditActions.MONTHLY_RENEWAL,
     amount: planConfig.monthlyCredits,
     balanceAfter: updatedRecord.balance,
-    action: CreditActions.MONTHLY_RENEWAL,
     description: `Upgraded to Pro plan: ${planConfig.monthlyCredits} credits`,
+    type: CreditTransactionTypes.CREDIT_GRANT,
+    userId,
   });
 
   // CRITICAL: Invalidate cached credit balance so subsequent requests see the new planType
@@ -942,22 +943,22 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
 }
 
 const _RecordTransactionSchema = z.object({
-  userId: z.string(),
-  type: CreditTransactionTypeSchema,
+  action: CreditActionSchema.optional(),
   amount: z.number(),
   balanceAfter: z.number(),
-  inputTokens: z.number().optional(),
-  outputTokens: z.number().optional(),
-  totalTokens: z.number().optional(),
   creditsUsed: z.number().optional(),
-  threadId: z.string().optional(),
+  description: z.string().optional(),
+  inputTokens: z.number().optional(),
   messageId: z.string().optional(),
-  streamId: z.string().optional(),
-  action: CreditActionSchema.optional(),
   modelId: z.string().optional(),
   modelPricingInputPerMillion: z.number().optional(),
   modelPricingOutputPerMillion: z.number().optional(),
-  description: z.string().optional(),
+  outputTokens: z.number().optional(),
+  streamId: z.string().optional(),
+  threadId: z.string().optional(),
+  totalTokens: z.number().optional(),
+  type: CreditTransactionTypeSchema,
+  userId: z.string(),
 }).strict();
 
 export type RecordTransactionParams = z.infer<typeof _RecordTransactionSchema>;
@@ -966,24 +967,24 @@ async function recordTransaction(record: RecordTransactionParams): Promise<void>
   const db = await getDbAsync();
 
   await db.insert(tables.creditTransaction).values({
-    id: ulid(),
-    userId: record.userId,
-    type: record.type,
+    action: record.action,
     amount: record.amount,
     balanceAfter: record.balanceAfter,
-    inputTokens: record.inputTokens,
-    outputTokens: record.outputTokens,
-    totalTokens: record.totalTokens,
+    createdAt: new Date(),
     creditsUsed: record.creditsUsed,
-    threadId: record.threadId,
+    description: record.description,
+    id: ulid(),
+    inputTokens: record.inputTokens,
     messageId: record.messageId,
-    streamId: record.streamId,
-    action: record.action,
     modelId: record.modelId,
     modelPricingInputPerMillion: record.modelPricingInputPerMillion,
     modelPricingOutputPerMillion: record.modelPricingOutputPerMillion,
-    description: record.description,
-    createdAt: new Date(),
+    outputTokens: record.outputTokens,
+    streamId: record.streamId,
+    threadId: record.threadId,
+    totalTokens: record.totalTokens,
+    type: record.type,
+    userId: record.userId,
   });
 
   // Invalidate credit balance cache after every credit mutation
@@ -1023,7 +1024,7 @@ export async function getUserTransactionHistory(
   ]);
 
   return {
-    transactions,
     total: countResult.length,
+    transactions,
   };
 }

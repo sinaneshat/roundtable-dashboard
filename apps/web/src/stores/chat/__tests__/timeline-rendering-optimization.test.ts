@@ -32,15 +32,15 @@ describe('timeline Rendering Optimization', () => {
 
       // Simulate participant streaming with 10 chunks
       const baseMessage = {
+        createdAt: new Date(),
         id: 'thread-1_r0_p0',
-        role: MessageRoles.ASSISTANT,
         metadata: {
+          participantId: 'participant-1',
+          participantIndex: 0,
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 0,
-          participantId: 'participant-1',
         },
-        createdAt: new Date(),
+        role: MessageRoles.ASSISTANT,
       };
 
       // Start streaming
@@ -55,7 +55,7 @@ describe('timeline Rendering Optimization', () => {
         store.getState().setMessages([
           {
             ...baseMessage,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'Hello '.repeat(i + 1) }],
+            parts: [{ text: 'Hello '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
           },
         ]);
       }
@@ -81,17 +81,17 @@ describe('timeline Rendering Optimization', () => {
       });
 
       const completedMessage = {
+        createdAt: new Date(),
         id: 'thread-1_r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: MessagePartTypes.TEXT as const, text: 'Final content' }],
         metadata: {
+          finishReason: FinishReasons.STOP,
+          participantId: 'participant-1',
+          participantIndex: 0,
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 0,
-          participantId: 'participant-1',
-          finishReason: FinishReasons.STOP,
         },
-        createdAt: new Date(),
+        parts: [{ text: 'Final content', type: MessagePartTypes.TEXT as const }],
+        role: MessageRoles.ASSISTANT,
       };
 
       // First set
@@ -170,16 +170,16 @@ describe('timeline Rendering Optimization', () => {
 
       // Create moderator message placeholder
       const moderatorMessage = {
-        id: 'thread-1_r0_moderator',
-        role: MessageRoles.ASSISTANT,
-        parts: [],
-        metadata: {
-          role: MessageRoles.ASSISTANT,
-          isModerator: true as const,
-          roundNumber: 0,
-          model: 'gpt-4',
-        },
         createdAt: new Date(),
+        id: 'thread-1_r0_moderator',
+        metadata: {
+          isModerator: true as const,
+          model: 'gpt-4',
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+        },
+        parts: [],
+        role: MessageRoles.ASSISTANT,
       };
 
       store.getState().setMessages([moderatorMessage]);
@@ -196,7 +196,7 @@ describe('timeline Rendering Optimization', () => {
         store.getState().setMessages([
           {
             ...moderatorMessage,
-            parts: [{ type: MessagePartTypes.TEXT as const, text }],
+            parts: [{ text, type: MessagePartTypes.TEXT as const }],
           },
         ]);
       }
@@ -218,8 +218,8 @@ describe('timeline Rendering Optimization', () => {
 
       // Verify all streaming flags cleared
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.isModeratorStreaming).toBeFalsy();
       expect(state.streamingRoundNumber).toBeNull();
       // Note: currentParticipantIndex resets to 0 (ready for next round), not -1
       expect(state.currentParticipantIndex).toBe(0);
@@ -230,30 +230,30 @@ describe('timeline Rendering Optimization', () => {
     it('should track setMessages call frequency', () => {
       const store = createChatStore();
       const callCounts = {
-        setMessages: 0,
-        setIsStreaming: 0,
         setIsModeratorStreaming: 0,
+        setIsStreaming: 0,
+        setMessages: 0,
       };
 
       // Wrap methods to track calls
       const originalMethods = {
-        setMessages: store.getState().setMessages,
-        setIsStreaming: store.getState().setIsStreaming,
         setIsModeratorStreaming: store.getState().setIsModeratorStreaming,
+        setIsStreaming: store.getState().setIsStreaming,
+        setMessages: store.getState().setMessages,
       };
 
       store.setState({
-        setMessages: (messages) => {
-          callCounts.setMessages++;
-          originalMethods.setMessages(messages);
+        setIsModeratorStreaming: (isModeratorStreaming) => {
+          callCounts.setIsModeratorStreaming++;
+          originalMethods.setIsModeratorStreaming(isModeratorStreaming);
         },
         setIsStreaming: (isStreaming) => {
           callCounts.setIsStreaming++;
           originalMethods.setIsStreaming(isStreaming);
         },
-        setIsModeratorStreaming: (isModeratorStreaming) => {
-          callCounts.setIsModeratorStreaming++;
-          originalMethods.setIsModeratorStreaming(isModeratorStreaming);
+        setMessages: (messages) => {
+          callCounts.setMessages++;
+          originalMethods.setMessages(messages);
         },
       });
 
@@ -264,11 +264,11 @@ describe('timeline Rendering Optimization', () => {
       // 2. User message + 2 participant messages
       store.getState().setMessages([
         {
-          id: 'msg-user-0',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Hello' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 0 },
           createdAt: new Date(),
+          id: 'msg-user-0',
+          metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -276,16 +276,16 @@ describe('timeline Rendering Optimization', () => {
       for (let i = 0; i < 3; i++) {
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r0_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'Response '.repeat(i + 1) }],
             metadata: {
+              participantId: 'p0',
+              participantIndex: 0,
               role: MessageRoles.ASSISTANT,
               roundNumber: 0,
-              participantIndex: 0,
-              participantId: 'p0',
             },
-            createdAt: new Date(),
+            parts: [{ text: 'Response '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       }
@@ -297,16 +297,16 @@ describe('timeline Rendering Optimization', () => {
       for (let i = 0; i < 3; i++) {
         store.getState().setMessages([
           {
-            id: 'thread-1_r0_moderator',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'Summary '.repeat(i + 1) }],
-            metadata: {
-              role: MessageRoles.ASSISTANT,
-              isModerator: true as const,
-              roundNumber: 0,
-              model: 'gpt-4',
-            },
             createdAt: new Date(),
+            id: 'thread-1_r0_moderator',
+            metadata: {
+              isModerator: true as const,
+              model: 'gpt-4',
+              role: MessageRoles.ASSISTANT,
+              roundNumber: 0,
+            },
+            parts: [{ text: 'Summary '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       }
@@ -326,22 +326,22 @@ describe('timeline Rendering Optimization', () => {
 
       // Create messages with streaming state
       const streamingMessage = {
+        createdAt: new Date(),
         id: 'thread-1_r0_p0',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          {
-            type: MessagePartTypes.TEXT as const,
-            text: 'Streaming...',
-            state: 'streaming' as const,
-          },
-        ],
         metadata: {
+          participantId: 'p0',
+          participantIndex: 0,
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          participantIndex: 0,
-          participantId: 'p0',
         },
-        createdAt: new Date(),
+        parts: [
+          {
+            state: 'streaming' as const,
+            text: 'Streaming...',
+            type: MessagePartTypes.TEXT as const,
+          },
+        ],
+        role: MessageRoles.ASSISTANT,
       };
 
       store.getState().setMessages([streamingMessage]);
@@ -351,21 +351,21 @@ describe('timeline Rendering Optimization', () => {
       const hasStreamingParts = messages[0]?.parts?.some(
         p => 'state' in p && p.state === 'streaming',
       );
-      expect(hasStreamingParts).toBe(true);
+      expect(hasStreamingParts).toBeTruthy();
 
       // Complete the message
       const completedMessage = {
         ...streamingMessage,
-        parts: [
-          {
-            type: MessagePartTypes.TEXT as const,
-            text: 'Complete!',
-          },
-        ],
         metadata: {
           ...streamingMessage.metadata,
           finishReason: FinishReasons.STOP,
         },
+        parts: [
+          {
+            text: 'Complete!',
+            type: MessagePartTypes.TEXT as const,
+          },
+        ],
       };
 
       store.getState().setMessages([completedMessage]);
@@ -373,7 +373,7 @@ describe('timeline Rendering Optimization', () => {
       // Verify completion
       const finalMessages = store.getState().messages;
       const hasFinishReason = finalMessages[0]?.metadata?.finishReason === FinishReasons.STOP;
-      expect(hasFinishReason).toBe(true);
+      expect(hasFinishReason).toBeTruthy();
     });
   });
 
@@ -384,35 +384,35 @@ describe('timeline Rendering Optimization', () => {
       // Create messages in order
       const messages = [
         {
-          id: 'msg-user-0',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 0 },
           createdAt: new Date('2024-01-01T00:00:00Z'),
+          id: 'msg-user-0',
+          metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Question', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
         {
-          id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Answer 1' }],
-          metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
-          },
           createdAt: new Date('2024-01-01T00:00:01Z'),
-        },
-        {
-          id: 'thread-1_r0_p1',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Answer 2' }],
+          id: 'thread-1_r0_p0',
           metadata: {
+            participantId: 'p0',
+            participantIndex: 0,
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantIndex: 1,
-            participantId: 'p1',
           },
+          parts: [{ text: 'Answer 1', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
+        },
+        {
           createdAt: new Date('2024-01-01T00:00:02Z'),
+          id: 'thread-1_r0_p1',
+          metadata: {
+            participantId: 'p1',
+            participantIndex: 1,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'Answer 2', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
       ];
 
@@ -431,35 +431,35 @@ describe('timeline Rendering Optimization', () => {
       // Add moderator message
       const messagesWithModerator = [
         {
+          createdAt: new Date(),
           id: 'msg-user-0',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Question' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
-          createdAt: new Date(),
+          parts: [{ text: 'Question', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Answer 1' }],
           metadata: {
+            participantId: 'p0',
+            participantIndex: 0,
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Answer 1', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
         {
-          id: 'thread-1_r0_moderator',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Summary' }],
-          metadata: {
-            role: MessageRoles.ASSISTANT,
-            isModerator: true as const,
-            roundNumber: 0,
-            model: 'gpt-4',
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_moderator',
+          metadata: {
+            isModerator: true as const,
+            model: 'gpt-4',
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'Summary', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
       ];
 
@@ -482,70 +482,70 @@ describe('timeline Rendering Optimization', () => {
       // Round 0 messages
       const round0Messages = [
         {
+          createdAt: new Date(),
           id: 'msg-user-0',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Question 1' }],
           metadata: { role: MessageRoles.USER, roundNumber: 0 },
-          createdAt: new Date(),
+          parts: [{ text: 'Question 1', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r0_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Answer 1' }],
           metadata: {
+            participantId: 'p0',
+            participantIndex: 0,
             role: MessageRoles.ASSISTANT,
             roundNumber: 0,
-            participantIndex: 0,
-            participantId: 'p0',
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Answer 1', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
         {
-          id: 'thread-1_r0_moderator',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Summary 1' }],
-          metadata: {
-            role: MessageRoles.ASSISTANT,
-            isModerator: true as const,
-            roundNumber: 0,
-            model: 'gpt-4',
-          },
           createdAt: new Date(),
+          id: 'thread-1_r0_moderator',
+          metadata: {
+            isModerator: true as const,
+            model: 'gpt-4',
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+          },
+          parts: [{ text: 'Summary 1', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
       ];
 
       // Round 1 messages
       const round1Messages = [
         {
+          createdAt: new Date(),
           id: 'msg-user-1',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Question 2' }],
           metadata: { role: MessageRoles.USER, roundNumber: 1 },
-          createdAt: new Date(),
+          parts: [{ text: 'Question 2', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
         {
+          createdAt: new Date(),
           id: 'thread-1_r1_p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Answer 2' }],
           metadata: {
+            participantId: 'p0',
+            participantIndex: 0,
             role: MessageRoles.ASSISTANT,
             roundNumber: 1,
-            participantIndex: 0,
-            participantId: 'p0',
           },
-          createdAt: new Date(),
+          parts: [{ text: 'Answer 2', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
         {
-          id: 'thread-1_r1_moderator',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Summary 2' }],
-          metadata: {
-            role: MessageRoles.ASSISTANT,
-            isModerator: true as const,
-            roundNumber: 1,
-            model: 'gpt-4',
-          },
           createdAt: new Date(),
+          id: 'thread-1_r1_moderator',
+          metadata: {
+            isModerator: true as const,
+            model: 'gpt-4',
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 1,
+          },
+          parts: [{ text: 'Summary 2', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.ASSISTANT,
         },
       ];
 
@@ -572,14 +572,14 @@ describe('timeline Rendering Optimization', () => {
       const originalCAF = globalThis.cancelAnimationFrame;
 
       // Mock RAF to track IDs
-      globalThis.requestAnimationFrame = vi.fn((_callback) => {
+      vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((_callback) => {
         const id = Math.random();
         rafIds.push(id);
         // Don't actually call callback in test
         return id;
       });
 
-      globalThis.cancelAnimationFrame = vi.fn((id) => {
+      vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation((id) => {
         const index = rafIds.indexOf(id);
         if (index > -1) {
           rafIds.splice(index, 1);
@@ -609,15 +609,15 @@ describe('timeline Rendering Optimization', () => {
 
       // Check if already triggered
       const isTriggered = store.getState().hasModeratorStreamBeenTriggered('thread-1_r0_moderator', 0);
-      expect(isTriggered).toBe(true);
+      expect(isTriggered).toBeTruthy();
 
       // Different ID, same round - should also be blocked
       const sameRoundTriggered = store.getState().hasModeratorStreamBeenTriggered('different-id', 0);
-      expect(sameRoundTriggered).toBe(true);
+      expect(sameRoundTriggered).toBeTruthy();
 
       // Same ID, different round - should also be blocked
       const sameIdTriggered = store.getState().hasModeratorStreamBeenTriggered('thread-1_r0_moderator', 1);
-      expect(sameIdTriggered).toBe(true);
+      expect(sameIdTriggered).toBeTruthy();
 
       // Different ID, different round - should NOT be blocked
       // Note: This depends on implementation - may still be blocked by ID check
@@ -638,7 +638,7 @@ describe('timeline Rendering Optimization', () => {
       // Round 0 should be clearable now
       // Round 1 should still be blocked
       const round1Triggered = store.getState().hasModeratorStreamBeenTriggered('thread-1_r1_moderator', 1);
-      expect(round1Triggered).toBe(true);
+      expect(round1Triggered).toBeTruthy();
     });
   });
 
@@ -660,11 +660,11 @@ describe('timeline Rendering Optimization', () => {
       // 2. User message
       store.getState().setMessages([
         {
-          id: 'msg-user-0',
-          role: MessageRoles.USER,
-          parts: [{ type: MessagePartTypes.TEXT as const, text: 'Hello' }],
-          metadata: { role: MessageRoles.USER, roundNumber: 0 },
           createdAt: new Date(),
+          id: 'msg-user-0',
+          metadata: { role: MessageRoles.USER, roundNumber: 0 },
+          parts: [{ text: 'Hello', type: MessagePartTypes.TEXT as const }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -672,16 +672,16 @@ describe('timeline Rendering Optimization', () => {
       for (let i = 0; i < 3; i++) {
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r0_p0',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'P0 '.repeat(i + 1) }],
             metadata: {
+              participantId: 'p0',
+              participantIndex: 0,
               role: MessageRoles.ASSISTANT,
               roundNumber: 0,
-              participantIndex: 0,
-              participantId: 'p0',
             },
-            createdAt: new Date(),
+            parts: [{ text: 'P0 '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       }
@@ -691,16 +691,16 @@ describe('timeline Rendering Optimization', () => {
       for (let i = 0; i < 3; i++) {
         store.getState().setMessages([
           {
+            createdAt: new Date(),
             id: 'thread-1_r0_p1',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'P1 '.repeat(i + 1) }],
             metadata: {
+              participantId: 'p1',
+              participantIndex: 1,
               role: MessageRoles.ASSISTANT,
               roundNumber: 0,
-              participantIndex: 1,
-              participantId: 'p1',
             },
-            createdAt: new Date(),
+            parts: [{ text: 'P1 '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       }
@@ -710,16 +710,16 @@ describe('timeline Rendering Optimization', () => {
       for (let i = 0; i < 3; i++) {
         store.getState().setMessages([
           {
-            id: 'thread-1_r0_moderator',
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'Mod '.repeat(i + 1) }],
-            metadata: {
-              role: MessageRoles.ASSISTANT,
-              isModerator: true as const,
-              roundNumber: 0,
-              model: 'gpt-4',
-            },
             createdAt: new Date(),
+            id: 'thread-1_r0_moderator',
+            metadata: {
+              isModerator: true as const,
+              model: 'gpt-4',
+              role: MessageRoles.ASSISTANT,
+              roundNumber: 0,
+            },
+            parts: [{ text: 'Mod '.repeat(i + 1), type: MessagePartTypes.TEXT as const }],
+            role: MessageRoles.ASSISTANT,
           },
         ]);
       }

@@ -31,13 +31,13 @@ export const ErrorTypeSchema = z.enum(ERROR_TYPES).openapi({
 export type ErrorType = z.infer<typeof ErrorTypeSchema>;
 
 export const ErrorTypes = {
-  RATE_LIMIT: 'rate_limit' as const,
-  CONTEXT_LENGTH: 'context_length' as const,
   API_ERROR: 'api_error' as const,
-  NETWORK: 'network' as const,
-  TIMEOUT: 'timeout' as const,
-  MODEL_UNAVAILABLE: 'model_unavailable' as const,
+  CONTEXT_LENGTH: 'context_length' as const,
   EMPTY_RESPONSE: 'empty_response' as const,
+  MODEL_UNAVAILABLE: 'model_unavailable' as const,
+  NETWORK: 'network' as const,
+  RATE_LIMIT: 'rate_limit' as const,
+  TIMEOUT: 'timeout' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
 
@@ -65,11 +65,11 @@ export type StreamErrorType = z.infer<typeof StreamErrorTypeSchema>;
 
 export const StreamErrorTypes = {
   ABORT: 'abort' as const,
-  VALIDATION: 'validation' as const,
   CONFLICT: 'conflict' as const,
-  NETWORK: 'network' as const,
   EMPTY_RESPONSE: 'empty_response' as const,
+  NETWORK: 'network' as const,
   UNKNOWN: 'unknown' as const,
+  VALIDATION: 'validation' as const,
 } as const;
 
 // ============================================================================
@@ -95,12 +95,12 @@ export const AuthFailureReasonSchema = z.enum(AUTH_FAILURE_REASONS).openapi({
 export type AuthFailureReason = z.infer<typeof AuthFailureReasonSchema>;
 
 export const AuthFailureReasons = {
-  INVALID_CREDENTIALS: 'invalid_credentials' as const,
   ACCOUNT_LOCKED: 'account_locked' as const,
-  TOKEN_EXPIRED: 'token_expired' as const,
+  INVALID_CREDENTIALS: 'invalid_credentials' as const,
   MISSING_TOKEN: 'missing_token' as const,
-  SESSION_REQUIRED: 'session_required' as const,
   SESSION_EXPIRED: 'session_expired' as const,
+  SESSION_REQUIRED: 'session_required' as const,
+  TOKEN_EXPIRED: 'token_expired' as const,
 } as const;
 
 // ============================================================================
@@ -119,10 +119,10 @@ export type ResourceUnavailableReason = z.infer<typeof ResourceUnavailableReason
 export const DEFAULT_RESOURCE_UNAVAILABLE_REASON: ResourceUnavailableReason = 'deleted';
 
 export const ResourceUnavailableReasons = {
-  DELETED: 'deleted' as const,
   ARCHIVED: 'archived' as const,
-  PRIVATE: 'private' as const,
+  DELETED: 'deleted' as const,
   EXPIRED: 'expired' as const,
+  PRIVATE: 'private' as const,
 } as const;
 
 // ============================================================================
@@ -143,9 +143,9 @@ export type AuthAction = z.infer<typeof AuthActionSchema>;
 export const AuthActions = {
   LOGIN: 'login' as const,
   LOGOUT: 'logout' as const,
-  TOKEN_REFRESH: 'token_refresh' as const,
   PERMISSION_CHECK: 'permission_check' as const,
   REGISTRATION: 'registration' as const,
+  TOKEN_REFRESH: 'token_refresh' as const,
 } as const;
 
 // ============================================================================
@@ -165,9 +165,9 @@ export type ValidationType = z.infer<typeof ValidationTypeSchema>;
 
 export const ValidationTypes = {
   BODY: 'body' as const,
-  QUERY: 'query' as const,
-  PARAMS: 'params' as const,
   HEADERS: 'headers' as const,
+  PARAMS: 'params' as const,
+  QUERY: 'query' as const,
 } as const;
 
 // ============================================================================
@@ -200,19 +200,19 @@ export const ErrorCategorySchema = z.enum(ERROR_CATEGORIES).openapi({
 export type ErrorCategory = z.infer<typeof ErrorCategorySchema>;
 
 export const ErrorCategories = {
-  MODEL_NOT_FOUND: 'model_not_found' as const,
+  AUTHENTICATION: 'authentication' as const,
   CONTENT_FILTER: 'content_filter' as const,
-  RATE_LIMIT: 'rate_limit' as const,
+  EMPTY_RESPONSE: 'empty_response' as const,
+  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
+  MODEL_NOT_FOUND: 'model_not_found' as const,
   NETWORK: 'network' as const,
   PROVIDER_ERROR: 'provider_error' as const,
-  VALIDATION: 'validation' as const,
-  AUTHENTICATION: 'authentication' as const,
-  SILENT_FAILURE: 'silent_failure' as const,
-  EMPTY_RESPONSE: 'empty_response' as const,
-  UNKNOWN: 'unknown' as const,
-  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
   PROVIDER_NETWORK: 'provider_network' as const,
-  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
+  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
+  RATE_LIMIT: 'rate_limit' as const,
+  SILENT_FAILURE: 'silent_failure' as const,
+  UNKNOWN: 'unknown' as const,
+  VALIDATION: 'validation' as const,
 } as const;
 
 // ============================================================================
@@ -243,17 +243,17 @@ export const UIMessageErrorTypeSchema = z.enum(UI_MESSAGE_ERROR_TYPES).openapi({
 export type UIMessageErrorType = z.infer<typeof UIMessageErrorTypeSchema>;
 
 export const UIMessageErrorTypes = {
-  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
-  PROVIDER_NETWORK: 'provider_network' as const,
-  MODEL_NOT_FOUND: 'model_not_found' as const,
-  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
   AUTHENTICATION: 'authentication' as const,
-  VALIDATION: 'validation' as const,
-  SILENT_FAILURE: 'silent_failure' as const,
-  EMPTY_RESPONSE: 'empty_response' as const,
   BACKEND_INCONSISTENCY: 'backend_inconsistency' as const,
+  EMPTY_RESPONSE: 'empty_response' as const,
   FAILED: 'failed' as const,
+  MODEL_CONTENT_FILTER: 'model_content_filter' as const,
+  MODEL_NOT_FOUND: 'model_not_found' as const,
+  PROVIDER_NETWORK: 'provider_network' as const,
+  PROVIDER_RATE_LIMIT: 'provider_rate_limit' as const,
+  SILENT_FAILURE: 'silent_failure' as const,
   UNKNOWN: 'unknown' as const,
+  VALIDATION: 'validation' as const,
 } as const;
 
 // ============================================================================
@@ -273,8 +273,8 @@ export type AIHistoryStatus = z.infer<typeof AIHistoryStatusSchema>;
 
 export const AIHistoryStatuses = {
   ABORTED: 'aborted' as const,
-  SUCCESS: 'success' as const,
   FAILED: 'failed' as const,
+  SUCCESS: 'success' as const,
 } as const;
 
 // ============================================================================
@@ -333,45 +333,45 @@ export const ErrorCodeSchema = z.enum(ERROR_CODES).openapi({
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
 export const ErrorCodes = {
-  // Authentication & Authorization
-  UNAUTHENTICATED: 'UNAUTHENTICATED' as const,
-  UNAUTHORIZED: 'UNAUTHORIZED' as const,
-  TOKEN_EXPIRED: 'TOKEN_EXPIRED' as const,
-  TOKEN_INVALID: 'TOKEN_INVALID' as const,
-  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS' as const,
-
-  // Validation & Input
-  VALIDATION_ERROR: 'VALIDATION_ERROR' as const,
-  INVALID_INPUT: 'INVALID_INPUT' as const,
-  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD' as const,
-  INVALID_FORMAT: 'INVALID_FORMAT' as const,
-  INVALID_ENUM_VALUE: 'INVALID_ENUM_VALUE' as const,
-
-  // Resource Management
-  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND' as const,
-  RESOURCE_ALREADY_EXISTS: 'RESOURCE_ALREADY_EXISTS' as const,
-  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT' as const,
-  RESOURCE_LOCKED: 'RESOURCE_LOCKED' as const,
-  RESOURCE_EXPIRED: 'RESOURCE_EXPIRED' as const,
-
+  BATCH_FAILED: 'BATCH_FAILED' as const,
+  BATCH_SIZE_EXCEEDED: 'BATCH_SIZE_EXCEEDED' as const,
   // Business Logic
   BUSINESS_RULE_VIOLATION: 'BUSINESS_RULE_VIOLATION' as const,
+  DATABASE_ERROR: 'DATABASE_ERROR' as const,
+  EMAIL_SERVICE_ERROR: 'EMAIL_SERVICE_ERROR' as const,
 
   // External Services
   EXTERNAL_SERVICE_ERROR: 'EXTERNAL_SERVICE_ERROR' as const,
-  EMAIL_SERVICE_ERROR: 'EMAIL_SERVICE_ERROR' as const,
-  STORAGE_SERVICE_ERROR: 'STORAGE_SERVICE_ERROR' as const,
-
+  INSUFFICIENT_PERMISSIONS: 'INSUFFICIENT_PERMISSIONS' as const,
   // System & Infrastructure
   INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR' as const,
-  DATABASE_ERROR: 'DATABASE_ERROR' as const,
-  NETWORK_ERROR: 'NETWORK_ERROR' as const,
-  TIMEOUT_ERROR: 'TIMEOUT_ERROR' as const,
-  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED' as const,
-  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE' as const,
+  INVALID_ENUM_VALUE: 'INVALID_ENUM_VALUE' as const,
+  INVALID_FORMAT: 'INVALID_FORMAT' as const,
+
+  INVALID_INPUT: 'INVALID_INPUT' as const,
   MAINTENANCE_MODE: 'MAINTENANCE_MODE' as const,
-  BATCH_FAILED: 'BATCH_FAILED' as const,
-  BATCH_SIZE_EXCEEDED: 'BATCH_SIZE_EXCEEDED' as const,
+  MISSING_REQUIRED_FIELD: 'MISSING_REQUIRED_FIELD' as const,
+  NETWORK_ERROR: 'NETWORK_ERROR' as const,
+  RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED' as const,
+
+  RESOURCE_ALREADY_EXISTS: 'RESOURCE_ALREADY_EXISTS' as const,
+
+  RESOURCE_CONFLICT: 'RESOURCE_CONFLICT' as const,
+  RESOURCE_EXPIRED: 'RESOURCE_EXPIRED' as const,
+  RESOURCE_LOCKED: 'RESOURCE_LOCKED' as const,
+
+  // Resource Management
+  RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND' as const,
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE' as const,
+  STORAGE_SERVICE_ERROR: 'STORAGE_SERVICE_ERROR' as const,
+  TIMEOUT_ERROR: 'TIMEOUT_ERROR' as const,
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED' as const,
+  TOKEN_INVALID: 'TOKEN_INVALID' as const,
+  // Authentication & Authorization
+  UNAUTHENTICATED: 'UNAUTHENTICATED' as const,
+  UNAUTHORIZED: 'UNAUTHORIZED' as const,
+  // Validation & Input
+  VALIDATION_ERROR: 'VALIDATION_ERROR' as const,
 } as const;
 
 // ============================================================================
@@ -404,17 +404,17 @@ export const ErrorContextTypeSchema = z.enum(ERROR_CONTEXT_TYPES).openapi({
 export type ErrorContextType = z.infer<typeof ErrorContextTypeSchema>;
 
 export const ErrorContextTypes = {
-  VALIDATION: 'validation' as const,
   AUTHENTICATION: 'authentication' as const,
   AUTHORIZATION: 'authorization' as const,
+  CONFIGURATION: 'configuration' as const,
   DATABASE: 'database' as const,
   EXTERNAL_SERVICE: 'external_service' as const,
+  MODERATOR_ERROR: 'moderator_error' as const,
+  QUEUE: 'queue' as const,
+  QUOTA: 'quota' as const,
   RESOURCE: 'resource' as const,
   RESOURCE_UNAVAILABLE: 'resource_unavailable' as const,
-  CONFIGURATION: 'configuration' as const,
-  QUOTA: 'quota' as const,
-  SUBSCRIPTION: 'subscription' as const,
-  MODERATOR_ERROR: 'moderator_error' as const,
   RETRY_EXHAUSTED: 'retry_exhausted' as const,
-  QUEUE: 'queue' as const,
+  SUBSCRIPTION: 'subscription' as const,
+  VALIDATION: 'validation' as const,
 } as const;

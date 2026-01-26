@@ -32,25 +32,25 @@ export function getRouter() {
   const queryClient = makeQueryClient();
 
   const router = createTanStackRouter({
-    routeTree,
     context: { queryClient, session: null },
-    scrollRestoration: true,
+    defaultNotFoundComponent: NotFoundScreen,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
-    defaultNotFoundComponent: NotFoundScreen,
+    routeTree,
+    scrollRestoration: true,
     // Note: defaultSsr: false is configured in start.ts via createStart()
   });
 
   setupRouterSsrQueryIntegration({
-    router,
     queryClient,
+    router,
   });
 
   return router;
 }
 
 declare module '@tanstack/react-router' {
-  // eslint-disable-next-line ts/consistent-type-definitions
+  // eslint-disable-next-line ts/consistent-type-definitions -- Module augmentation requires interface for declaration merging
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

@@ -53,7 +53,9 @@ async function r2WithRetry<T>(
 
       // Exponential backoff: 100ms, 200ms, 400ms (max ~700ms total)
       const delay = 100 * 2 ** attempt;
-      await new Promise(r => setTimeout(r, delay));
+      await new Promise((resolve) => {
+        setTimeout(resolve, delay);
+      });
     }
   }
 
@@ -143,7 +145,7 @@ async function putFileLocal(
   const fs = await getFs();
   const path = await getPath();
   if (!fs || !path) {
-    return { success: false, error: 'Local storage not available (Node.js fs module required)' };
+    return { error: 'Local storage not available (Node.js fs module required)', success: false };
   }
 
   try {
@@ -175,16 +177,16 @@ async function putFileLocal(
       }
       buffer = Buffer.concat(chunks);
     } else {
-      return { success: false, error: 'Unsupported data type' };
+      return { error: 'Unsupported data type', success: false };
     }
 
     await fs.writeFile(filePath, buffer);
     await writeMetadata(filePath, metadata);
 
-    return { success: true, key };
+    return { key, success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Local storage write failed';
-    return { success: false, error: message };
+    return { error: message, success: false };
   }
 }
 
@@ -196,7 +198,7 @@ async function getFileStreamLocal(
 ): Promise<R2StreamResult> {
   const fs = await getFs();
   if (!fs) {
-    return { found: false, body: null, writeHttpMetadata: () => {}, httpEtag: '', size: 0 };
+    return { body: null, found: false, httpEtag: '', size: 0, writeHttpMetadata: () => {} };
   }
 
   try {
@@ -218,19 +220,19 @@ async function getFileStreamLocal(
     });
 
     return {
-      found: true,
       body: stream,
+      customMetadata: metadata?.customMetadata,
+      found: true,
+      httpEtag: etag,
+      size: stat.size,
       writeHttpMetadata: (headers: Headers) => {
         if (metadata?.contentType) {
           headers.set('content-type', metadata.contentType);
         }
       },
-      httpEtag: etag,
-      size: stat.size,
-      customMetadata: metadata?.customMetadata,
     };
   } catch {
-    return { found: false, body: null, writeHttpMetadata: () => {}, httpEtag: '', size: 0 };
+    return { body: null, found: false, httpEtag: '', size: 0, writeHttpMetadata: () => {} };
   }
 }
 
@@ -240,7 +242,7 @@ async function getFileStreamLocal(
 async function deleteFileLocal(key: string): Promise<StorageResult> {
   const fs = await getFs();
   if (!fs) {
-    return { success: false, error: 'Local storage not available' };
+    return { error: 'Local storage not available', success: false };
   }
 
   try {
@@ -252,10 +254,10 @@ async function deleteFileLocal(key: string): Promise<StorageResult> {
     } catch {
       // Ignore
     }
-    return { success: true, key };
+    return { key, success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Local storage delete failed';
-    return { success: false, error: message };
+    return { error: message, success: false };
   }
 }
 
@@ -290,22 +292,24 @@ export async function putFile(
   // Use local storage fallback in development when R2 is unavailable
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
-      return putFileLocal(key, data, metadata);
+      return await putFileLocal(key, data, metadata);
     }
-    return { success: false, error: 'R2 bucket binding required' };
+    return { error: 'R2 bucket binding required', success: false };
   }
 
   try {
-    await r2WithRetry(() =>
-      r2Bucket.put(key, data, {
-        httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
-        customMetadata: metadata?.customMetadata,
-      }),
-    );
-    return { success: true, key };
+    const putOptions: R2PutOptions = {};
+    if (metadata?.customMetadata !== undefined) {
+      putOptions.customMetadata = metadata.customMetadata;
+    }
+    if (metadata?.contentType !== undefined) {
+      putOptions.httpMetadata = { contentType: metadata.contentType };
+    }
+    await r2WithRetry(async () => await r2Bucket.put(key, data, putOptions));
+    return { key, success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'R2 upload failed';
-    return { success: false, error: message };
+    return { error: message, success: false };
   }
 }
 
@@ -315,41 +319,46 @@ export async function getFileStream(
   options?: { onlyIf?: Headers; range?: Headers },
 ): Promise<R2StreamResult> {
   const notFound: R2StreamResult = {
-    found: false,
     body: null,
-    writeHttpMetadata: () => {},
+    found: false,
     httpEtag: '',
     size: 0,
+    writeHttpMetadata: () => {},
   };
 
   // Use local storage fallback in development when R2 is unavailable
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
-      return getFileStreamLocal(key);
+      return await getFileStreamLocal(key);
     }
     return notFound;
   }
 
   try {
-    const object = await r2WithRetry(() =>
-      r2Bucket.get(key, {
-        onlyIf: options?.onlyIf,
-        range: options?.range,
-      }),
-    );
+    const getOptions: R2GetOptions = {};
+    if (options?.onlyIf !== undefined) {
+      getOptions.onlyIf = options.onlyIf;
+    }
+    if (options?.range !== undefined) {
+      getOptions.range = options.range;
+    }
+    const object = await r2WithRetry(async () => await r2Bucket.get(key, getOptions));
 
     if (!object) {
       return notFound;
     }
 
-    return {
-      found: true,
+    const result: R2StreamResult = {
       body: object.body,
-      writeHttpMetadata: (headers: Headers) => object.writeHttpMetadata(headers),
+      found: true,
       httpEtag: object.httpEtag,
       size: object.size,
-      customMetadata: object.customMetadata,
+      writeHttpMetadata: (headers: Headers) => object.writeHttpMetadata(headers),
     };
+    if (object.customMetadata !== undefined) {
+      result.customMetadata = object.customMetadata;
+    }
+    return result;
   } catch {
     return notFound;
   }
@@ -361,13 +370,13 @@ export type R2StreamResult = {
   writeHttpMetadata: (headers: Headers) => void;
   httpEtag: string;
   size: number;
-  customMetadata?: Record<string, string>;
+  customMetadata?: Record<string, string> | undefined;
 };
 
 export async function getFile(
   r2Bucket: R2Bucket | undefined,
   key: string,
-): Promise<{ data: ArrayBuffer | null; metadata?: StorageMetadata }> {
+): Promise<{ data: ArrayBuffer | null; metadata?: StorageMetadata | undefined }> {
   // Use local storage fallback in development when R2 is unavailable
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
@@ -387,7 +396,7 @@ export async function getFile(
   }
 
   try {
-    const object = await r2WithRetry(() => r2Bucket.get(key));
+    const object = await r2WithRetry(async () => await r2Bucket.get(key));
     if (!object) {
       return { data: null };
     }
@@ -411,17 +420,17 @@ export async function deleteFile(
   // Use local storage fallback in development when R2 is unavailable
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
-      return deleteFileLocal(key);
+      return await deleteFileLocal(key);
     }
-    return { success: false, error: 'R2 bucket required' };
+    return { error: 'R2 bucket required', success: false };
   }
 
   try {
-    await r2WithRetry(() => r2Bucket.delete(key));
-    return { success: true, key };
+    await r2WithRetry(async () => await r2Bucket.delete(key));
+    return { key, success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'R2 delete failed';
-    return { success: false, error: message };
+    return { error: message, success: false };
   }
 }
 
@@ -432,13 +441,13 @@ export async function fileExists(
   // Use local storage fallback in development when R2 is unavailable
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
-      return fileExistsLocal(key);
+      return await fileExistsLocal(key);
     }
     return false;
   }
 
   try {
-    const object = await r2WithRetry(() => r2Bucket.head(key));
+    const object = await r2WithRetry(async () => await r2Bucket.head(key));
     return object !== null;
   } catch {
     return false;
@@ -453,10 +462,10 @@ export async function copyFile(
   const { data, metadata } = await getFile(r2Bucket, sourceKey);
 
   if (!data) {
-    return { success: false, error: `Source not found: ${sourceKey}` };
+    return { error: `Source not found: ${sourceKey}`, success: false };
   }
 
-  return putFile(r2Bucket, destKey, data, metadata);
+  return await putFile(r2Bucket, destKey, data, metadata);
 }
 
 export async function createMultipartUpload(
@@ -474,12 +483,14 @@ export async function createMultipartUpload(
   }
 
   try {
-    const upload = await r2WithRetry(() =>
-      r2Bucket.createMultipartUpload(key, {
-        httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
-        customMetadata: metadata?.customMetadata,
-      }),
-    );
+    const multipartOptions: R2MultipartOptions = {};
+    if (metadata?.customMetadata !== undefined) {
+      multipartOptions.customMetadata = metadata.customMetadata;
+    }
+    if (metadata?.contentType !== undefined) {
+      multipartOptions.httpMetadata = { contentType: metadata.contentType };
+    }
+    const upload = await r2WithRetry(async () => await r2Bucket.createMultipartUpload(key, multipartOptions));
     return { uploadId: upload.uploadId };
   } catch {
     return null;

@@ -47,7 +47,7 @@ function isAssistantMessage(msg: TestUserMessage | TestAssistantMessage): msg is
  * Get assistant messages with proper typing
  * ✅ TYPE-SAFE: Returns narrowed array without casting
  */
-function getAssistantMessages(messages: Array<TestUserMessage | TestAssistantMessage>): TestAssistantMessage[] {
+function getAssistantMessages(messages: (TestUserMessage | TestAssistantMessage)[]): TestAssistantMessage[] {
   return messages.filter(isAssistantMessage);
 }
 
@@ -66,26 +66,26 @@ type JourneyState = {
   currentParticipantIndex: number;
   hasNavigated: boolean;
   pendingMessage: string | null;
-  messages: Array<TestUserMessage | TestAssistantMessage>;
-  preSearches: Array<StoredPreSearch>;
-  participants: Array<ChatParticipant>;
+  messages: (TestUserMessage | TestAssistantMessage)[];
+  preSearches: StoredPreSearch[];
+  participants: ChatParticipant[];
 };
 
 function createInitialJourneyState(): JourneyState {
   return {
-    screenMode: ScreenModes.OVERVIEW,
-    threadId: null,
-    slug: null,
-    isAiGeneratedTitle: false,
-    currentRoundNumber: 0,
-    isStreaming: false,
-    waitingToStartStreaming: false,
     currentParticipantIndex: 0,
+    currentRoundNumber: 0,
     hasNavigated: false,
-    pendingMessage: null,
+    isAiGeneratedTitle: false,
+    isStreaming: false,
     messages: [],
-    preSearches: [],
     participants: [],
+    pendingMessage: null,
+    preSearches: [],
+    screenMode: ScreenModes.OVERVIEW,
+    slug: null,
+    threadId: null,
+    waitingToStartStreaming: false,
   };
 }
 
@@ -114,7 +114,7 @@ describe('complete Round 1 Journey', () => {
       state.isAiGeneratedTitle = false; // Not yet generated
 
       expect(state.threadId).toBe('thread-123');
-      expect(state.isAiGeneratedTitle).toBe(false);
+      expect(state.isAiGeneratedTitle).toBeFalsy();
 
       // Step 4: URL should still be /chat during streaming (overview screen stays mounted)
       expect(state.screenMode).toBe(ScreenModes.OVERVIEW);
@@ -125,8 +125,8 @@ describe('complete Round 1 Journey', () => {
 
       // Step 6: Add user message
       state.messages.push(createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'What is the best approach for this problem?',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       }));
 
@@ -137,28 +137,28 @@ describe('complete Round 1 Journey', () => {
       state.isStreaming = true;
       state.currentParticipantIndex = 0;
 
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.currentParticipantIndex).toBe(0);
 
       // Step 8: First participant completes
       state.messages.push(createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'I recommend approach A because...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
       state.currentParticipantIndex = 1;
 
       // Step 9: Second participant completes
       state.messages.push(createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'I would suggest approach B since...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       // Step 10: All participants done, streaming ends
@@ -166,7 +166,7 @@ describe('complete Round 1 Journey', () => {
       state.currentParticipantIndex = 0;
 
       expect(state.messages.filter(m => m.role === UIMessageRoles.ASSISTANT)).toHaveLength(2);
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
 
       // Step 11: Moderator created and streaming
 
@@ -177,13 +177,13 @@ describe('complete Round 1 Journey', () => {
       state.slug = 'best-approach-for-problem-solving';
 
       // Step 14: Navigation to thread screen
-      expect(state.isAiGeneratedTitle).toBe(true);
+      expect(state.isAiGeneratedTitle).toBeTruthy();
 
       // Navigation happens: overview → thread screen
       state.hasNavigated = true;
       state.screenMode = ScreenModes.THREAD;
 
-      expect(state.hasNavigated).toBe(true);
+      expect(state.hasNavigated).toBeTruthy();
       expect(state.screenMode).toBe(ScreenModes.THREAD);
     });
 
@@ -192,7 +192,7 @@ describe('complete Round 1 Journey', () => {
       // 1. window.history.replaceState updates URL in background
       // 2. router.push happens after moderator completes
 
-      const urlUpdates: Array<{ type: 'replace' | 'push'; url: string }> = [];
+      const urlUpdates: { type: 'replace' | 'push'; url: string }[] = [];
 
       // Step 1: Thread created, initial slug generated
       const initialSlug = 'say-hi-1-word-only-nzj311';
@@ -231,42 +231,43 @@ describe('complete Round 1 Journey', () => {
           || preSearch?.status === MessageStatuses.STREAMING;
       };
 
-      expect(shouldWaitForPreSearch()).toBe(true);
+      expect(shouldWaitForPreSearch()).toBeTruthy();
 
       // Step 3: Pre-search starts streaming
       const preSearch0 = state.preSearches[0];
-      if (!preSearch0)
+      if (!preSearch0) {
         throw new Error('expected pre-search at index 0');
+      }
       preSearch0.status = MessageStatuses.STREAMING;
-      expect(shouldWaitForPreSearch()).toBe(true);
+      expect(shouldWaitForPreSearch()).toBeTruthy();
 
       // Step 4: Pre-search completes
       preSearch0.status = MessageStatuses.COMPLETE;
       preSearch0.searchData = {
-        queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-        results: [],
-        moderatorSummary: 'Moderator',
-        successCount: 1,
         failureCount: 0,
+        moderatorSummary: 'Moderator',
+        queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+        results: [],
+        successCount: 1,
         totalResults: 0,
         totalTime: 1000,
       };
-      expect(shouldWaitForPreSearch()).toBe(false);
+      expect(shouldWaitForPreSearch()).toBeFalsy();
 
       // Step 5: Participants can now stream
       state.isStreaming = true;
       state.currentParticipantIndex = 0;
 
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
 
       // Step 6: Participant completes with pre-search context
       state.messages.push(createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Based on the web search results, I found that...',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       state.isStreaming = false;
@@ -283,11 +284,11 @@ describe('complete Round 1 Journey', () => {
 
       // Timeout exceeded - proceed anyway
       const hasTimedOut = Date.now() - preSearchStartTime > TIMEOUT_MS;
-      expect(hasTimedOut).toBe(true);
+      expect(hasTimedOut).toBeTruthy();
 
       // When timed out, streaming should proceed
       const shouldProceed = hasTimedOut;
-      expect(shouldProceed).toBe(true);
+      expect(shouldProceed).toBeTruthy();
     });
   });
 });
@@ -306,22 +307,22 @@ describe('multi-Round Conversation Journey', () => {
 
       // Existing round 0 complete
       state.messages = [
-        createTestUserMessage({ id: 'u0', content: 'Round 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Round 0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'Response 1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p1-r0',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -331,8 +332,8 @@ describe('multi-Round Conversation Journey', () => {
 
       // Round 1 starts
       state.messages.push(createTestUserMessage({
-        id: 'u1',
         content: 'Follow up question',
+        id: 'u1',
         roundNumber: 1,
       }));
 
@@ -341,23 +342,23 @@ describe('multi-Round Conversation Journey', () => {
 
       // Round 1 participant 0 responds
       state.messages.push(createTestAssistantMessage({
-        id: 'p0-r1',
         content: 'Follow up response 0',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r1',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }));
       state.currentParticipantIndex = 1;
 
       // Round 1 participant 1 responds
       state.messages.push(createTestAssistantMessage({
-        id: 'p1-r1',
         content: 'Follow up response 1',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'p1-r1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }));
 
       state.isStreaming = false;
@@ -377,17 +378,17 @@ describe('multi-Round Conversation Journey', () => {
       // Simulate 5 rounds
       for (let round = 0; round < 5; round++) {
         state.messages.push(createTestUserMessage({
-          id: `u${round}`,
           content: `Round ${round} question`,
+          id: `u${round}`,
           roundNumber: round,
         }));
         state.messages.push(createTestAssistantMessage({
-          id: `p0-r${round}`,
           content: `Round ${round} response`,
-          roundNumber: round,
+          finishReason: FinishReasons.STOP,
+          id: `p0-r${round}`,
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: round,
         }));
       }
 
@@ -405,14 +406,14 @@ describe('multi-Round Conversation Journey', () => {
       state.threadId = 'thread-123';
 
       // Round 0 without web search
-      state.messages.push(createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }));
+      state.messages.push(createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }));
       state.messages.push(createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'R0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       // No pre-search for round 0
@@ -441,7 +442,7 @@ describe('multi-Round Conversation Journey', () => {
 
       // Should NOT create pre-search for round 1
       const shouldCreatePreSearch = enableWebSearchForRound1;
-      expect(shouldCreatePreSearch).toBe(false);
+      expect(shouldCreatePreSearch).toBeFalsy();
     });
   });
 });
@@ -460,33 +461,33 @@ describe('stop Button Journey', () => {
       state.currentParticipantIndex = 0;
 
       // User message added
-      state.messages.push(createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }));
+      state.messages.push(createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }));
 
       // Participant 0 partially streaming
       state.messages.push({
         id: 'p0-r0',
-        role: UIMessageRoles.ASSISTANT,
-        parts: [{ type: 'text' as const, text: 'Partial response being str...' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN,
+          hasError: false,
+          isPartialResponse: true,
+          isTransient: false,
+          model: 'gpt-4',
           participantId: 'participant-0',
           participantIndex: 0,
           participantRole: null,
-          model: 'gpt-4',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: true,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [{ text: 'Partial response being str...', type: 'text' as const }],
+        role: UIMessageRoles.ASSISTANT,
       });
 
       // User clicks stop
       state.isStreaming = false;
 
       // Streaming stopped
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
 
       // Partial message preserved - ✅ TYPE-SAFE: Use getAssistantMessages for typed access
       const partialMessage = getAssistantMessages(state.messages).find(m => m.id === 'p0-r0');
@@ -501,14 +502,14 @@ describe('stop Button Journey', () => {
 
       // Only one participant completed before stop
       state.messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -520,7 +521,7 @@ describe('stop Button Journey', () => {
         m => m.role === UIMessageRoles.ASSISTANT && m.metadata.roundNumber === 0,
       ).length === state.participants.length;
 
-      expect(allParticipantsComplete).toBe(false);
+      expect(allParticipantsComplete).toBeFalsy();
     });
   });
 
@@ -533,8 +534,9 @@ describe('stop Button Journey', () => {
 
       // User clicks stop during pre-search
       const preSearch0 = state.preSearches[0];
-      if (!preSearch0)
+      if (!preSearch0) {
         throw new Error('expected pre-search at index 0');
+      }
       preSearch0.status = MessageStatuses.FAILED;
       preSearch0.errorMessage = 'Cancelled by user';
 
@@ -545,7 +547,7 @@ describe('stop Button Journey', () => {
       const canProceed = preSearch?.status === MessageStatuses.COMPLETE
         || preSearch?.status === MessageStatuses.FAILED;
 
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
   });
 
@@ -557,14 +559,14 @@ describe('stop Button Journey', () => {
 
       // All participants complete
       state.messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
@@ -579,11 +581,11 @@ describe('stop Button Journey', () => {
       );
       const allParticipantsComplete = completedParticipants.length === state.participants.length;
 
-      expect(allParticipantsComplete).toBe(true);
+      expect(allParticipantsComplete).toBeTruthy();
 
       // User can proceed to next round
       const canSubmitNewMessage = allParticipantsComplete && !state.isStreaming;
-      expect(canSubmitNewMessage).toBe(true);
+      expect(canSubmitNewMessage).toBeTruthy();
     });
   });
 });
@@ -604,38 +606,38 @@ describe('error Recovery Journey', () => {
       ];
 
       state.messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
       ];
 
       // P0 succeeds
       state.messages.push(createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'Response 0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       // P1 fails
       state.messages.push(createTestAssistantMessage({
-        id: 'p1-r0',
         content: 'Error: Rate limit exceeded',
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: 'p1-r0',
+        participantId: 'participant-1',
+        participantIndex: 1,
+        roundNumber: 0,
       }));
 
       // P2 succeeds
       state.messages.push(createTestAssistantMessage({
-        id: 'p2-r0',
         content: 'Response 2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p2-r0',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       // Round still completes
@@ -656,23 +658,23 @@ describe('error Recovery Journey', () => {
 
       // Complete round with error
       state.messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-r0',
           content: 'Response 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-r0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'p1-r0',
           content: 'Error response',
-          roundNumber: 0,
-          participantId: 'participant-1',
-          participantIndex: 1,
           finishReason: FinishReasons.ERROR,
           hasError: true,
+          id: 'p1-r0',
+          participantId: 'participant-1',
+          participantIndex: 1,
+          roundNumber: 0,
         }),
       ];
 
@@ -692,20 +694,20 @@ describe('error Recovery Journey', () => {
 
       // New responses
       state.messages.push(createTestAssistantMessage({
-        id: 'p0-r0-retry',
         content: 'New response 0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r0-retry',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
       state.messages.push(createTestAssistantMessage({
-        id: 'p1-r0-retry',
         content: 'New response 1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p1-r0-retry',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }));
 
       state.isStreaming = false;
@@ -728,12 +730,12 @@ describe('slug Polling Journey', () => {
 
       // Before thread creation - no polling
       const shouldPoll = state.threadId !== null && !state.isAiGeneratedTitle;
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
 
       // After thread creation - start polling
       state.threadId = 'thread-123';
       const shouldPollNow = state.threadId !== null && !state.isAiGeneratedTitle;
-      expect(shouldPollNow).toBe(true);
+      expect(shouldPollNow).toBeTruthy();
     });
 
     it('polling stops when AI title detected', () => {
@@ -742,14 +744,14 @@ describe('slug Polling Journey', () => {
 
       // Polling active
       let shouldPoll = state.threadId !== null && !state.isAiGeneratedTitle;
-      expect(shouldPoll).toBe(true);
+      expect(shouldPoll).toBeTruthy();
 
       // AI title ready
       state.isAiGeneratedTitle = true;
 
       // Polling stops
       shouldPoll = state.threadId !== null && !state.isAiGeneratedTitle;
-      expect(shouldPoll).toBe(false);
+      expect(shouldPoll).toBeFalsy();
     });
 
     it('uRL updates via replaceState when AI title ready', () => {
@@ -764,7 +766,7 @@ describe('slug Polling Journey', () => {
       // URL should be updated via replaceState (not push)
       // This is a state transition, not an actual URL change in tests
       expect(state.slug).toBe('ai-generated-slug-xyz789');
-      expect(state.isAiGeneratedTitle).toBe(true);
+      expect(state.isAiGeneratedTitle).toBeTruthy();
     });
   });
 });
@@ -794,30 +796,30 @@ describe('navigation Timing Journey', () => {
       // Condition 1: AI title not ready, but moderator complete
       state.isAiGeneratedTitle = false;
       state.messages.push(createTestModeratorMessage({
-        id: 'moderator-r0',
         content: 'Discussion moderator for round 0',
+        id: 'moderator-r0',
         roundNumber: 0,
       }));
 
       let canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
-      expect(canNavigate).toBe(false);
+      expect(canNavigate).toBeFalsy();
 
       // Condition 2: AI title ready but no moderator yet
       state.isAiGeneratedTitle = true;
       state.messages = []; // Remove moderator message
 
       canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
-      expect(canNavigate).toBe(false);
+      expect(canNavigate).toBeFalsy();
 
       // Condition 3: Both ready
       state.messages.push(createTestModeratorMessage({
-        id: 'moderator-r0',
         content: 'Discussion moderator for round 0',
+        id: 'moderator-r0',
         roundNumber: 0,
       }));
 
       canNavigate = state.isAiGeneratedTitle && hasCompletedModerator();
-      expect(canNavigate).toBe(true);
+      expect(canNavigate).toBeTruthy();
     });
 
     it('hasNavigated flag prevents duplicate navigation', () => {
@@ -828,18 +830,18 @@ describe('navigation Timing Journey', () => {
 
       // Add completed moderator message for round 0
       state.messages.push(createTestModeratorMessage({
-        id: 'moderator-r0',
         content: 'Discussion moderator for round 0',
+        id: 'moderator-r0',
         roundNumber: 0,
       }));
 
       // First navigation attempt
-      expect(state.hasNavigated).toBe(false);
+      expect(state.hasNavigated).toBeFalsy();
       state.hasNavigated = true;
 
       // Second navigation attempt blocked
       const shouldNavigate = !state.hasNavigated;
-      expect(shouldNavigate).toBe(false);
+      expect(shouldNavigate).toBeFalsy();
     });
 
     it('hasNavigated resets when returning to overview', () => {
@@ -852,7 +854,7 @@ describe('navigation Timing Journey', () => {
       state.screenMode = ScreenModes.OVERVIEW;
       state.threadId = null;
 
-      expect(state.hasNavigated).toBe(false);
+      expect(state.hasNavigated).toBeFalsy();
     });
   });
 });
@@ -866,29 +868,29 @@ describe('token Usage Tracking', () => {
     // ✅ TYPE-SAFE: messages array is properly typed as TestAssistantMessage[]
     const messages: TestAssistantMessage[] = [
       createTestAssistantMessage({
-        id: 'p0',
         content: 'R0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'p1',
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p1',
         participantId: 'p1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 
     // ✅ TYPE-SAFE: Direct metadata access on typed array
     const totalUsage = messages.reduce((acc, msg) => ({
-      promptTokens: acc.promptTokens + msg.metadata.usage.promptTokens,
       completionTokens: acc.completionTokens + msg.metadata.usage.completionTokens,
+      promptTokens: acc.promptTokens + msg.metadata.usage.promptTokens,
       totalTokens: acc.totalTokens + msg.metadata.usage.totalTokens,
-    }), { promptTokens: 0, completionTokens: 0, totalTokens: 0 });
+    }), { completionTokens: 0, promptTokens: 0, totalTokens: 0 });
 
     // Each message has 100/50/150 tokens (from helper defaults)
     expect(totalUsage.promptTokens).toBe(200);
@@ -900,20 +902,20 @@ describe('token Usage Tracking', () => {
     // ✅ TYPE-SAFE: Explicitly typed array
     const messages: TestAssistantMessage[] = [
       createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'R0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'p0-r1',
         content: 'R1',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-r1',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ];
 
@@ -921,7 +923,7 @@ describe('token Usage Tracking', () => {
     const usageByRound = messages.reduce<Record<number, LanguageModelUsage>>((acc, msg) => {
       const round = msg.metadata.roundNumber;
       if (!acc[round]) {
-        acc[round] = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        acc[round] = { completionTokens: 0, promptTokens: 0, totalTokens: 0 };
       }
       acc[round].promptTokens += msg.metadata.usage.promptTokens;
       acc[round].completionTokens += msg.metadata.usage.completionTokens;

@@ -33,7 +33,7 @@ describe('store Action Frequency Audit', () => {
       let unsubscribeCount = 0;
 
       // Create multiple subscriptions to simulate component mounts
-      const subscriptions: Array<() => void> = [];
+      const subscriptions: (() => void)[] = [];
       for (let i = 0; i < 5; i++) {
         const unsub = store.subscribe(() => {
           _subscriptionCount++;
@@ -53,11 +53,11 @@ describe('store Action Frequency Audit', () => {
       for (let i = 0; i < 10; i++) {
         store.getState().setMessages([
           createTestAssistantMessage({
-            id: 'thread_r0_p0',
             content: `Chunk ${i}`,
-            roundNumber: 0,
+            id: 'thread_r0_p0',
             participantId: 'p0',
             participantIndex: 0,
+            roundNumber: 0,
           }),
         ]);
       }
@@ -77,7 +77,7 @@ describe('store Action Frequency Audit', () => {
         newSubCalled = true;
       });
       store.getState().setInputValue('test');
-      expect(newSubCalled).toBe(true);
+      expect(newSubCalled).toBeTruthy();
       newUnsub();
     });
 
@@ -111,11 +111,11 @@ describe('store Action Frequency Audit', () => {
 
       // Verify all state was reset
       const state = store.getState();
-      expect(state.isStreaming).toBe(false);
-      expect(state.streamingRoundNumber).toBe(null);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.streamingRoundNumber).toBeNull();
       expect(state.currentParticipantIndex).toBe(0);
-      expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.isModeratorStreaming).toBe(false);
+      expect(state.waitingToStartStreaming).toBeFalsy();
+      expect(state.isModeratorStreaming).toBeFalsy();
     });
 
     it('2.3 - initializeThread batches atomically', () => {
@@ -130,38 +130,38 @@ describe('store Action Frequency Audit', () => {
       const before = updateCount;
 
       const thread = {
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Test Thread',
-        slug: 'test-thread',
-        mode: 'brainstorming' as const,
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming' as const,
+        slug: 'test-thread',
+        title: 'Test Thread',
         updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [
         {
-          id: 'p0',
-          threadId: 'thread-123',
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p0',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
         {
-          id: 'p1',
-          threadId: 'thread-123',
-          modelId: 'claude',
-          role: null,
-          customRoleId: null,
-          priority: 1,
-          isEnabled: true,
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p1',
+          isEnabled: true,
+          modelId: 'claude',
+          priority: 1,
+          role: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -208,7 +208,7 @@ describe('store Action Frequency Audit', () => {
 
       // Change messages
       store.getState().setMessages([
-        createTestUserMessage({ id: 'msg1', content: 'Hello', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Hello', id: 'msg1', roundNumber: 0 }),
       ]);
 
       // Change streaming state
@@ -216,13 +216,13 @@ describe('store Action Frequency Audit', () => {
 
       // Change messages again
       store.getState().setMessages([
-        createTestUserMessage({ id: 'msg1', content: 'Hello', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Hello', id: 'msg1', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'msg2',
           content: 'Hi',
-          roundNumber: 0,
+          id: 'msg2',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ]);
 
@@ -258,11 +258,11 @@ describe('store Action Frequency Audit', () => {
       unsubscribe();
 
       // First add should succeed and trigger update
-      expect(firstResult).toBe(true);
+      expect(firstResult).toBeTruthy();
       expect(afterFirst).toBe(1);
 
       // Second add should fail (already tracked) and NOT trigger update
-      expect(secondResult).toBe(false);
+      expect(secondResult).toBeFalsy();
       expect(afterSecond).toBe(0);
 
       // Set should only have 1 entry
@@ -276,7 +276,7 @@ describe('store Action Frequency Audit', () => {
        */
       // Set initial messages
       store.getState().setMessages([
-        createTestUserMessage({ id: 'user-0', content: 'Initial', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Initial', id: 'user-0', roundNumber: 0 }),
       ]);
 
       let updateCount = 0;
@@ -290,33 +290,33 @@ describe('store Action Frequency Audit', () => {
       store.getState().setMessages(prev => [
         ...prev,
         createTestAssistantMessage({
-          id: 'p0-0',
           content: 'P0',
-          roundNumber: 0,
+          id: 'p0-0',
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
       ]);
 
       store.getState().setMessages(prev => [
         ...prev,
         createTestAssistantMessage({
-          id: 'p1-0',
           content: 'P1',
-          roundNumber: 0,
+          id: 'p1-0',
           participantId: 'p1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
       ]);
 
       store.getState().setMessages(prev => [
         ...prev,
         createTestAssistantMessage({
-          id: 'p2-0',
           content: 'P2',
-          roundNumber: 0,
+          id: 'p2-0',
           participantId: 'p2',
           participantIndex: 2,
+          roundNumber: 0,
         }),
       ]);
 
@@ -337,26 +337,26 @@ describe('store Action Frequency Audit', () => {
       // Initialize thread first
       store.getState().initializeThread(
         {
-          id: 'thread-123',
-          userId: 'user-1',
-          title: 'Test',
-          slug: 'test',
-          mode: 'brainstorming',
-          enableWebSearch: false,
-          isPublic: false,
           createdAt: new Date(),
+          enableWebSearch: false,
+          id: 'thread-123',
+          isPublic: false,
+          mode: 'brainstorming',
+          slug: 'test',
+          title: 'Test',
           updatedAt: new Date(),
+          userId: 'user-1',
         },
         [
           {
-            id: 'p0',
-            threadId: 'thread-123',
-            modelId: 'gpt-4',
-            role: null,
-            customRoleId: null,
-            priority: 0,
-            isEnabled: true,
             createdAt: new Date(),
+            customRoleId: null,
+            id: 'p0',
+            isEnabled: true,
+            modelId: 'gpt-4',
+            priority: 0,
+            role: null,
+            threadId: 'thread-123',
             updatedAt: new Date(),
           },
         ],

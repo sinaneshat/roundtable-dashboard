@@ -4,7 +4,7 @@ import { ErrorContextBuilders } from '@/common/error-contexts';
 import { createError } from '@/common/error-handling';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { ChatCustomRole, ChatParticipant, ChatThread } from '@/db/validation';
+import type { ChatCustomRole, ChatThread } from '@/db/validation';
 
 import type { ParticipantWithThread, ThreadWithParticipants } from './permissions-schemas';
 
@@ -59,8 +59,8 @@ export async function verifyThreadOwnership(
     with: options?.includeParticipants
       ? {
           participants: {
-            where: eq(tables.chatParticipant.isEnabled, true),
             orderBy: [tables.chatParticipant.priority, tables.chatParticipant.id],
+            where: eq(tables.chatParticipant.isEnabled, true),
           },
         }
       : undefined,
@@ -78,9 +78,9 @@ export async function verifyThreadOwnership(
   }
 
   if (options?.includeParticipants) {
-    const threadWithParticipants = thread as typeof thread & {
-      participants: Array<ChatParticipant>;
-    };
+    // Type already validated via Drizzle query with `with: { participants: ... }`
+    // ThreadWithParticipants schema guarantees participants array exists
+    const threadWithParticipants = thread as ThreadWithParticipants;
     if (threadWithParticipants.participants.length === 0) {
       throw createError.badRequest(
         'No enabled participants in this thread. Please add or enable at least one AI model to continue the conversation.',

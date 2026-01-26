@@ -15,7 +15,6 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { TAVILY_COST_PER_SEARCH } from '@roundtable/shared/constants';
 import { CreditActions, FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@roundtable/shared/enums';
 import { eq } from 'drizzle-orm';
-import type { ExecutionContext } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
@@ -83,14 +82,15 @@ import { PreSearchRequestSchema } from '../schema';
  * @returns Description of image contents for search context
  */
 async function analyzeImagesForSearchContext(
-  fileParts: Array<{
+  fileParts: {
     type: string;
     data?: Uint8Array;
     mimeType?: string;
-    filename?: string;
+    filename?: string | undefined;
     url?: string;
     image?: string; // URL for image parts from loadAttachmentContentUrl
-  }>,
+    mediaType?: string; // For ModelFilePart compatibility
+  }[],
   env: ApiEnv['Bindings'],
   billingContext?: ImageAnalysisBillingContext,
 ): Promise<string> {
@@ -110,8 +110,8 @@ async function analyzeImagesForSearchContext(
   try {
     // Build message parts for vision model
     const textPart = {
-      type: MessagePartTypes.TEXT,
       text: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT,
+      type: MessagePartTypes.TEXT,
     };
 
     // Build file parts for images - support both URL-based and data-based parts
@@ -121,25 +121,25 @@ async function analyzeImagesForSearchContext(
       .map((part) => {
         // URL-based parts (from loadAttachmentContentUrl in production)
         // Check for image URL first (ModelImagePartUrl format), then file URL
-        if (part.image && part.image.startsWith('http')) {
+        if (part.image?.startsWith('http')) {
           return {
-            type: 'file' as const,
             mediaType: part.mimeType,
+            type: 'file' as const,
             url: part.image,
           };
         }
-        if (part.url && part.url.startsWith('http')) {
+        if (part.url?.startsWith('http')) {
           return {
-            type: 'file' as const,
             mediaType: part.mimeType,
+            type: 'file' as const,
             url: part.url,
           };
         }
         // Data URL (already base64 encoded)
-        if (part.url && part.url.startsWith('data:')) {
+        if (part.url?.startsWith('data:')) {
           return {
-            type: 'file' as const,
             mediaType: part.mimeType,
+            type: 'file' as const,
             url: part.url,
           };
         }
@@ -155,8 +155,8 @@ async function analyzeImagesForSearchContext(
           const base64 = btoa(chunks.join(''));
           const dataUrl = `data:${part.mimeType};base64,${base64}`;
           return {
-            type: 'file' as const,
             mediaType: part.mimeType,
+            type: 'file' as const,
             url: dataUrl,
           };
         }
@@ -167,16 +167,16 @@ async function analyzeImagesForSearchContext(
     // Call vision model to analyze images
     const imageAnalysisStartTime = performance.now();
     const result = await openRouterService.generateText({
-      modelId: AIModels.IMAGE_ANALYSIS,
+      maxTokens: 1000, // Enough for detailed description
       messages: [
         {
           id: `img-analysis-${ulid()}`,
-          role: UIMessageRoles.USER,
           parts: [textPart, ...filePartsList],
+          role: UIMessageRoles.USER,
         },
       ],
+      modelId: AIModels.IMAGE_ANALYSIS,
       temperature: 0.3, // Lower temperature for more accurate descriptions
-      maxTokens: 1000, // Enough for detailed description
     });
 
     const description = result.text.trim();
@@ -191,11 +191,11 @@ async function analyzeImagesForSearchContext(
         // Credit deduction
         billingContext.executionCtx.waitUntil(
           finalizeCredits(billingContext.userId, `presearch-img-analysis-${ulid()}`, {
-            inputTokens: safeInputTokens,
-            outputTokens: safeOutputTokens,
             action: CreditActions.AI_RESPONSE,
-            threadId: billingContext.threadId,
+            inputTokens: safeInputTokens,
             modelId: AIModels.IMAGE_ANALYSIS,
+            outputTokens: safeOutputTokens,
+            threadId: billingContext.threadId,
           }),
         );
 
@@ -207,31 +207,31 @@ async function analyzeImagesForSearchContext(
         billingContext.executionCtx.waitUntil(
           trackLLMGeneration(
             {
-              userId: billingContext.userId,
-              threadId: billingContext.threadId,
-              roundNumber: 0,
-              threadMode: 'image_analysis',
+              modelId: AIModels.IMAGE_ANALYSIS,
               participantId: 'system',
               participantIndex: 0,
-              modelId: AIModels.IMAGE_ANALYSIS,
+              roundNumber: 0,
+              threadId: billingContext.threadId,
+              threadMode: 'image_analysis',
+              userId: billingContext.userId,
             },
             {
-              text: description,
               finishReason: result.finishReason,
+              text: description,
               usage: {
                 inputTokens: safeInputTokens,
                 outputTokens: safeOutputTokens,
               },
             },
-            [{ role: 'user', content: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT }],
+            [{ content: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT, role: 'user' }],
             traceId,
             imageAnalysisStartTime,
             {
-              modelPricing: imagePricing,
               additionalProperties: {
-                operation_type: 'image_analysis',
                 image_count: imageFileParts.length,
+                operation_type: 'image_analysis',
               },
+              modelPricing: imagePricing,
             },
           ),
         );
@@ -288,13 +288,13 @@ async function analyzeImagesForSearchContext(
 export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadRoundParamSchema,
-    validateBody: PreSearchRequestSchema,
     operationName: 'executePreSearch',
+    validateBody: PreSearchRequestSchema,
+    validateParams: ThreadRoundParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId, roundNumber } = c.validated.params;
+    const { roundNumber, threadId } = c.validated.params;
     const body = c.validated.body;
     const db = await getDbAsync();
 
@@ -319,21 +319,21 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // (thread was created without enableWebSearch, user enabled it later)
     // ✅ OPTIMIZED: Select only needed columns for faster query
     let existingSearch = await db.query.chatPreSearch.findFirst({
+      columns: {
+        completedAt: true,
+        createdAt: true,
+        errorMessage: true,
+        id: true,
+        roundNumber: true,
+        searchData: true,
+        status: true,
+        threadId: true,
+        userQuery: true,
+      },
       where: (fields, { and, eq: eqOp }) => and(
         eqOp(fields.threadId, threadId),
         eqOp(fields.roundNumber, roundNum),
       ),
-      columns: {
-        id: true,
-        threadId: true,
-        roundNumber: true,
-        userQuery: true,
-        status: true,
-        searchData: true,
-        createdAt: true,
-        errorMessage: true,
-        completedAt: true,
-      },
     });
 
     // ✅ AUTO-CREATE: If record doesn't exist, create it (supports mid-conversation web search enable)
@@ -343,12 +343,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       const [newSearch] = await db
         .insert(tables.chatPreSearch)
         .values({
-          id: ulid(),
-          threadId,
-          roundNumber: roundNum,
-          userQuery: body.userQuery,
-          status: MessageStatuses.PENDING,
           createdAt: new Date(),
+          id: ulid(),
+          roundNumber: roundNum,
+          status: MessageStatuses.PENDING,
+          threadId,
+          userQuery: body.userQuery,
         })
         .returning();
 
@@ -370,8 +370,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // SSE connections can get interrupted without backend knowing
         await db.update(tables.chatPreSearch)
           .set({
-            status: MessageStatuses.FAILED,
             errorMessage: `Stream timeout after ${formatAgeMs(getTimestampAge(existingSearch.createdAt))} - SSE connection likely interrupted`,
+            status: MessageStatuses.FAILED,
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
@@ -393,8 +393,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             await clearActivePreSearchStream(threadId, roundNum, c.env);
             await db.update(tables.chatPreSearch)
               .set({
-                status: MessageStatuses.PENDING,
                 errorMessage: null,
+                status: MessageStatuses.PENDING,
               })
               .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
@@ -404,17 +404,17 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // ✅ PATTERN: Uses Responses.sse() builder for consistent SSE headers
             const liveStream = createLivePreSearchResumeStream(existingStreamId, c.env);
             return Responses.sse(liveStream, {
-              streamId: existingStreamId,
               resumedFromBuffer: true,
+              streamId: existingStreamId,
             });
           }
         } else {
           // FALLBACK: No active stream ID (KV not available in local dev)
           return Responses.polling(c, {
-            status: PollingStatuses.STREAMING,
-            resourceId: existingSearch.id,
             message: `Pre-search is in progress (age: ${formatAgeMs(ageMs)}). Please poll for completion.`,
+            resourceId: existingSearch.id,
             retryAfterMs: 2000,
+            status: PollingStatuses.STREAMING,
           });
         }
       }
@@ -437,7 +437,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
     // ✅ POSTHOG LLM TRACKING: Initialize pre-search tracking
     const { session } = c.auth();
     const userTier = await getUserTier(user.id);
-    const { traceId: preSearchTraceId, parentSpanId: preSearchParentSpanId } = initializePreSearchTracking();
+    const { parentSpanId: preSearchParentSpanId, traceId: preSearchTraceId } = initializePreSearchTracking();
 
     return streamSSE(c, async (stream) => {
       // ✅ BUFFERED SSE: Wrapper to buffer all SSE events for stream resumption
@@ -452,10 +452,10 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
       // ✅ POSTHOG TRACKING CONTEXT
       const trackingContext: PreSearchTrackingContext = {
-        userId: user.id,
+        roundNumber: roundNum,
         sessionId: session?.id,
         threadId,
-        roundNumber: roundNum,
+        userId: user.id,
         userQuery: body.userQuery,
         userTier,
       };
@@ -464,11 +464,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       let projectContext: { instructions?: string | null; ragContext?: string } | undefined;
       if (thread.projectId) {
         const ragResult = await getProjectRagContext({
-          projectId: thread.projectId,
-          query: body.userQuery,
           ai: c.env.AI,
           db,
           maxResults: 3, // Fewer results for pre-search (focus on query generation)
+          projectId: thread.projectId,
+          query: body.userQuery,
           userId: user.id,
         });
         if (ragResult.instructions || ragResult.ragContext) {
@@ -505,26 +505,26 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               const { fileParts } = canUseUrlLoading
                 ? await loadAttachmentContentUrl({
                     attachmentIds: body.attachmentIds,
-                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
-                    db,
                     baseUrl,
-                    userId: user.id,
+                    db,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
                     secret: c.env.BETTER_AUTH_SECRET,
                     threadId,
+                    userId: user.id,
                   })
                 : await loadAttachmentContent({
                     attachmentIds: body.attachmentIds,
-                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
                     db,
+                    r2Bucket: c.env.UPLOADS_R2_BUCKET,
                   });
 
               if (fileParts.length > 0) {
                 // Analyze images with vision model to get searchable descriptions
                 // ✅ BILLING: Pass billing context for credit deduction
                 imageContext = await analyzeImagesForSearchContext(fileParts, c.env, {
-                  userId: user.id,
+                  executionCtx: c.executionCtx,
                   threadId,
-                  executionCtx: c.executionCtx as ExecutionContext,
+                  userId: user.id,
                 });
               }
             } catch (error) {
@@ -537,7 +537,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // This ensures search queries are relevant to both user message AND file contents
           // Combine text file context with image analysis context
           let combinedContext = '';
-          if (body.fileContext && body.fileContext.trim()) {
+          if (body.fileContext?.trim()) {
             combinedContext = body.fileContext.trim();
           }
           if (imageContext) {
@@ -563,7 +563,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             let bestPartialResult: {
               totalQueries?: string | number;
               analysisRationale?: string;
-              queries?: Array<Partial<GeneratedSearchQuery> | undefined>;
+              queries?: (Partial<GeneratedSearchQuery> | undefined)[];
             } | null = null;
 
             // ✅ RESILIENT STREAMING: Wrap iteration in try-catch to preserve partial progress
@@ -583,13 +583,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 if (totalQueries && totalQueries !== lastTotalQueries) {
                   lastTotalQueries = totalQueries;
                   await bufferedWriteSSE({
-                    event: PreSearchSseEvents.START,
                     data: JSON.stringify({
-                      timestamp: Date.now(),
-                      userQuery: body.userQuery,
-                      totalQueries,
                       analysisRationale: partialResult.analysisRationale || '',
+                      timestamp: Date.now(),
+                      totalQueries,
+                      userQuery: body.userQuery,
                     }),
+                    event: PreSearchSseEvents.START,
                   });
                 }
 
@@ -599,15 +599,15 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                     const query = partialResult.queries[i];
                     if (query?.query && query.query !== lastSentQueries[i]) {
                       await bufferedWriteSSE({
-                        event: PreSearchSseEvents.QUERY,
                         data: JSON.stringify({
-                          timestamp: Date.now(),
+                          index: i,
                           query: query.query || '',
                           rationale: query.rationale || '',
                           searchDepth: query.searchDepth || WebSearchDepths.BASIC,
-                          index: i,
+                          timestamp: Date.now(),
                           total: totalQueries || 1,
                         }),
+                        event: PreSearchSseEvents.QUERY,
                       });
                       lastSentQueries[i] = query.query;
                     }
@@ -634,24 +634,24 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 if (validQueries.length > 0) {
                   // ✅ RECONSTRUCT: Build complete GeneratedSearchQuery objects with required fields
                   multiQueryResult = {
-                    totalQueries: validQueries.length,
                     analysisRationale: bestPartialResult.analysisRationale || 'Recovered from streaming partial result',
                     queries: validQueries.map((q): GeneratedSearchQuery => ({
-                      query: q.query, // Already validated to exist
-                      rationale: q.rationale || 'Query from partial streaming result',
-                      searchDepth: q.searchDepth || WebSearchDepths.ADVANCED,
+                      analysis: q.analysis,
+                      chunksPerSource: q.chunksPerSource,
                       // Optional fields with defaults
                       complexity: q.complexity || WebSearchComplexities.MODERATE,
-                      sourceCount: q.sourceCount,
-                      requiresFullContent: q.requiresFullContent,
-                      chunksPerSource: q.chunksPerSource,
-                      topic: q.topic,
-                      timeRange: q.timeRange,
-                      needsAnswer: q.needsAnswer,
-                      includeImages: q.includeImages,
                       includeImageDescriptions: q.includeImageDescriptions,
-                      analysis: q.analysis,
+                      includeImages: q.includeImages,
+                      needsAnswer: q.needsAnswer,
+                      query: q.query, // Already validated to exist
+                      rationale: q.rationale || 'Query from partial streaming result',
+                      requiresFullContent: q.requiresFullContent,
+                      searchDepth: q.searchDepth || WebSearchDepths.ADVANCED,
+                      sourceCount: q.sourceCount,
+                      timeRange: q.timeRange,
+                      topic: q.topic,
                     })),
+                    totalQueries: validQueries.length,
                   };
                 } else {
                   // No valid queries in partial - rethrow original error
@@ -671,29 +671,29 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 const query = multiQueryResult.queries[i];
                 if (query?.query) {
                   await bufferedWriteSSE({
-                    event: PreSearchSseEvents.QUERY,
                     data: JSON.stringify({
-                      timestamp: Date.now(),
+                      final: true, // Flag to indicate this is the final/corrected data
+                      index: i,
                       query: query.query,
                       rationale: query.rationale || '',
                       searchDepth: query.searchDepth || WebSearchDepths.ADVANCED,
-                      index: i,
+                      timestamp: Date.now(),
                       total: multiQueryResult.totalQueries || multiQueryResult.queries.length,
-                      final: true, // Flag to indicate this is the final/corrected data
                     }),
+                    event: PreSearchSseEvents.QUERY,
                   });
                 }
               }
             }
 
             // Validate generation succeeded
-            if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+            if (!multiQueryResult?.queries || multiQueryResult.queries.length === 0) {
               throw createError.internal(
                 'Query generation failed - no queries produced',
                 {
                   errorType: 'external_service',
-                  service: 'openrouter',
                   operation: 'stream_query_generation',
+                  service: 'openrouter',
                 },
               );
             }
@@ -709,11 +709,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 if (safeInputTokens > 0 || safeOutputTokens > 0) {
                   c.executionCtx.waitUntil(
                     finalizeCredits(user.id, `presearch-query-${streamId}`, {
-                      inputTokens: safeInputTokens,
-                      outputTokens: safeOutputTokens,
                       action: CreditActions.AI_RESPONSE,
-                      threadId,
+                      inputTokens: safeInputTokens,
                       modelId: AIModels.WEB_SEARCH,
+                      outputTokens: safeOutputTokens,
+                      threadId,
                     }),
                   );
                 }
@@ -728,13 +728,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               multiQueryResult = queryGenResult.output;
 
               // Validate generation succeeded
-              if (!multiQueryResult || !multiQueryResult.queries || multiQueryResult.queries.length === 0) {
+              if (!multiQueryResult?.queries || multiQueryResult.queries.length === 0) {
                 throw createError.internal(
                   'Non-streaming query generation failed - no queries produced',
                   {
                     errorType: 'external_service',
-                    service: 'openrouter',
                     operation: 'non_stream_query_generation',
+                    service: 'openrouter',
                   },
                 );
               }
@@ -748,11 +748,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 if (safeInputTokens > 0 || safeOutputTokens > 0) {
                   c.executionCtx.waitUntil(
                     finalizeCredits(user.id, `presearch-query-fallback-${streamId}`, {
-                      inputTokens: safeInputTokens,
-                      outputTokens: safeOutputTokens,
                       action: CreditActions.AI_RESPONSE,
-                      threadId,
+                      inputTokens: safeInputTokens,
                       modelId: AIModels.WEB_SEARCH,
+                      outputTokens: safeOutputTokens,
+                      threadId,
                     }),
                   );
                 }
@@ -760,13 +760,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
               // Send start event for non-streaming result
               await bufferedWriteSSE({
-                event: PreSearchSseEvents.START,
                 data: JSON.stringify({
-                  timestamp: Date.now(),
-                  userQuery: body.userQuery,
-                  totalQueries: multiQueryResult.totalQueries,
                   analysisRationale: multiQueryResult.analysisRationale || '',
+                  timestamp: Date.now(),
+                  totalQueries: multiQueryResult.totalQueries,
+                  userQuery: body.userQuery,
                 }),
+                event: PreSearchSseEvents.START,
               });
 
               // Send all queries at once (non-streaming)
@@ -774,15 +774,15 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 const query = multiQueryResult.queries[i];
                 if (query) {
                   await bufferedWriteSSE({
-                    event: PreSearchSseEvents.QUERY,
                     data: JSON.stringify({
-                      timestamp: Date.now(),
+                      index: i,
                       query: query.query || '',
                       rationale: query.rationale || '',
                       searchDepth: query.searchDepth || WebSearchDepths.BASIC,
-                      index: i,
+                      timestamp: Date.now(),
                       total: multiQueryResult.totalQueries,
                     }),
+                    event: PreSearchSseEvents.QUERY,
                   });
                 }
               }
@@ -792,45 +792,45 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
               // Create fallback with single query using extracted terms
               multiQueryResult = {
-                totalQueries: 1,
                 analysisRationale: 'Searching based on key terms from your message',
                 queries: [{
-                  query: optimizedQuery,
-                  searchDepth: WebSearchDepths.BASIC,
-                  complexity: WebSearchComplexities.MODERATE,
-                  rationale: 'Searching for relevant information based on your input',
-                  sourceCount: 4,
-                  requiresFullContent: false,
-                  chunksPerSource: 1,
-                  needsAnswer: 'basic',
                   analysis: `Extracting search terms from: "${body.userQuery}"`,
+                  chunksPerSource: 1,
+                  complexity: WebSearchComplexities.MODERATE,
+                  needsAnswer: 'basic',
+                  query: optimizedQuery,
+                  rationale: 'Searching for relevant information based on your input',
+                  requiresFullContent: false,
+                  searchDepth: WebSearchDepths.BASIC,
+                  sourceCount: 4,
                 }],
+                totalQueries: 1,
               };
 
               // Send start event
               await bufferedWriteSSE({
-                event: PreSearchSseEvents.START,
                 data: JSON.stringify({
-                  timestamp: Date.now(),
-                  userQuery: body.userQuery,
-                  totalQueries: 1,
                   analysisRationale: 'Searching based on key terms from your message',
+                  timestamp: Date.now(),
+                  totalQueries: 1,
+                  userQuery: body.userQuery,
                 }),
+                event: PreSearchSseEvents.START,
               });
 
               // Send query event
               const fallbackQuery = multiQueryResult.queries[0];
               if (fallbackQuery) {
                 await bufferedWriteSSE({
-                  event: PreSearchSseEvents.QUERY,
                   data: JSON.stringify({
-                    timestamp: Date.now(),
+                    index: 0,
                     query: fallbackQuery.query,
                     rationale: fallbackQuery.rationale,
                     searchDepth: WebSearchDepths.BASIC,
-                    index: 0,
+                    timestamp: Date.now(),
                     total: 1,
                   }),
+                  event: PreSearchSseEvents.QUERY,
                 });
               }
             }
@@ -843,8 +843,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             'Failed to generate search queries',
             {
               errorType: 'external_service',
-              service: 'openrouter',
               operation: 'query_generation',
+              service: 'openrouter',
             },
           );
         }
@@ -877,15 +877,15 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // ✅ STREAM: Notify frontend about complexity decision
         // Note: We may have already sent START during fallback, but frontend handles duplicates
         await bufferedWriteSSE({
-          event: PreSearchSseEvents.START,
           data: JSON.stringify({
-            timestamp: Date.now(),
-            userQuery: body.userQuery,
-            totalQueries,
             analysisRationale: multiQueryResult.analysisRationale,
             complexity: complexityResult.complexity,
             complexityReasoning: complexityResult.reasoning,
+            timestamp: Date.now(),
+            totalQueries,
+            userQuery: body.userQuery,
           }),
+          event: PreSearchSseEvents.START,
         });
 
         // ✅ POSTHOG TRACKING: Track query generation completion
@@ -894,19 +894,19 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           trackQueryGeneration(
             trackingContext,
             {
-              traceId: preSearchTraceId,
-              parentSpanId: preSearchParentSpanId,
-              queriesGenerated: totalQueries,
               analysisRationale: multiQueryResult.analysisRationale || '',
               complexity: complexityResult.complexity,
               modelId: AIModels.WEB_SEARCH,
+              parentSpanId: preSearchParentSpanId,
+              queriesGenerated: totalQueries,
+              traceId: preSearchTraceId,
             },
             queryGenerationDuration,
           ),
         );
 
         // ✅ MULTI-QUERY EXECUTION: Execute all queries and collect results
-        const allResults: Array<{ query: GeneratedSearchQuery; result: WebSearchResult | null; duration: number }> = [];
+        const allResults: { query: GeneratedSearchQuery; result: WebSearchResult | null; duration: number }[] = [];
 
         for (let queryIndex = 0; queryIndex < generatedQueries.length; queryIndex++) {
           const generatedQuery = generatedQueries[queryIndex];
@@ -922,19 +922,19 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             result = searchCache.get(generatedQuery.query);
             if (result) {
               await bufferedWriteSSE({
-                event: PreSearchSseEvents.RESULT,
                 data: JSON.stringify({
-                  timestamp: Date.now(),
-                  query: result.query,
                   answer: result.answer,
-                  results: result.results,
-                  resultCount: result.results.length,
-                  responseTime: 0,
                   index: queryIndex,
+                  query: result.query,
+                  responseTime: 0,
+                  resultCount: result.results.length,
+                  results: result.results,
+                  timestamp: Date.now(),
                   total: totalQueries,
                 }),
+                event: PreSearchSseEvents.RESULT,
               });
-              allResults.push({ query: generatedQuery, result, duration: 0 });
+              allResults.push({ duration: 0, query: generatedQuery, result });
               continue;
             }
           }
@@ -944,18 +944,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           try {
             // Send initial "searching" state
             await bufferedWriteSSE({
-              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
-                timestamp: Date.now(),
-                query: generatedQuery.query,
                 answer: null,
-                results: [],
-                resultCount: 0,
-                responseTime: 0,
                 index: queryIndex,
-                total: totalQueries,
+                query: generatedQuery.query,
+                responseTime: 0,
+                resultCount: 0,
+                results: [],
                 status: 'searching',
+                timestamp: Date.now(),
+                total: totalQueries,
               }),
+              event: PreSearchSseEvents.RESULT,
             });
 
             // Dynamic source count based on complexity
@@ -982,23 +982,23 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // - No answer generation - participants synthesize directly
             result = await performWebSearch(
               {
-                query: generatedQuery.query,
-                maxResults: sourceCount ?? defaultSourceCount,
-                searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
+                autoParameters: false,
                 chunksPerSource: chunksPerSource ?? 2,
-                includeImages: true, // ✅ ALWAYS include images from pages
-                includeImageDescriptions: false, // Skip AI descriptions for speed
                 includeAnswer: false, // ✅ NO ANSWER - raw data only
                 includeFavicon: true,
+                includeImageDescriptions: false, // Skip AI descriptions for speed
+                includeImages: true, // ✅ ALWAYS include images from pages
                 includeRawContent: 'markdown', // ✅ ALWAYS include raw markdown content
-                topic: generatedQuery.topic,
+                maxResults: sourceCount ?? defaultSourceCount,
+                query: generatedQuery.query,
+                searchDepth: generatedQuery.searchDepth ?? WebSearchDepths.ADVANCED,
                 timeRange: generatedQuery.timeRange,
-                autoParameters: false,
+                topic: generatedQuery.topic,
               },
               c.env,
               complexity,
               undefined, // logger
-              { userId: user.id, threadId }, // ✅ BILLING: Pass billing context
+              { threadId, userId: user.id }, // ✅ BILLING: Pass billing context
             );
             const searchDuration = performance.now() - searchStartTime;
 
@@ -1008,56 +1008,58 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             if (result.results.length > 0) {
               for (let i = 0; i < result.results.length; i++) {
                 await bufferedWriteSSE({
-                  event: PreSearchSseEvents.RESULT,
                   data: JSON.stringify({
-                    timestamp: Date.now(),
-                    query: result.query,
                     answer: null,
-                    results: result.results.slice(0, i + 1),
-                    resultCount: i + 1,
-                    responseTime: searchDuration,
                     index: queryIndex,
-                    total: totalQueries,
+                    query: result.query,
+                    responseTime: searchDuration,
+                    resultCount: i + 1,
+                    results: result.results.slice(0, i + 1),
                     status: 'processing',
+                    timestamp: Date.now(),
+                    total: totalQueries,
                   }),
+                  event: PreSearchSseEvents.RESULT,
                 });
 
                 if (i < result.results.length - 1) {
-                  await new Promise(resolve => setTimeout(resolve, 50));
+                  await new Promise((resolve) => {
+                    setTimeout(resolve, 50);
+                  });
                 }
               }
             }
 
             // Send final result for this query
             await bufferedWriteSSE({
-              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
-                timestamp: Date.now(),
-                query: result.query,
                 answer: null,
-                results: result.results,
-                resultCount: result.results.length,
-                responseTime: searchDuration,
                 index: queryIndex,
-                total: totalQueries,
+                query: result.query,
+                responseTime: searchDuration,
+                resultCount: result.results.length,
+                results: result.results,
                 status: PreSearchQueryStatuses.COMPLETE,
+                timestamp: Date.now(),
+                total: totalQueries,
               }),
+              event: PreSearchSseEvents.RESULT,
             });
 
-            allResults.push({ query: generatedQuery, result, duration: searchDuration });
+            allResults.push({ duration: searchDuration, query: generatedQuery, result });
 
             // ✅ POSTHOG TRACKING: Track successful web search execution with actual cost
             c.executionCtx.waitUntil(
               trackWebSearchExecution(
                 trackingContext,
                 {
-                  traceId: preSearchTraceId,
                   parentSpanId: preSearchParentSpanId,
-                  searchQuery: generatedQuery.query,
-                  searchIndex: queryIndex,
-                  totalSearches: totalQueries,
                   resultsCount: result.results.length,
                   searchDepth: generatedQuery.searchDepth || 'basic',
+                  searchIndex: queryIndex,
+                  searchQuery: generatedQuery.query,
+                  totalSearches: totalQueries,
+                  traceId: preSearchTraceId,
                 },
                 searchDuration,
                 { cacheHit: false, searchCostUsd: TAVILY_COST_PER_SEARCH },
@@ -1072,39 +1074,39 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             const searchDurationOnError = performance.now() - searchStartTime;
 
             await bufferedWriteSSE({
-              event: PreSearchSseEvents.RESULT,
               data: JSON.stringify({
-                timestamp: Date.now(),
-                query: generatedQuery.query,
                 answer: null,
-                results: [],
-                resultCount: 0,
-                responseTime: 0,
-                index: queryIndex,
-                total: totalQueries,
-                status: 'error',
                 error: error instanceof Error ? error.message : 'Search failed',
+                index: queryIndex,
+                query: generatedQuery.query,
+                responseTime: 0,
+                resultCount: 0,
+                results: [],
+                status: 'error',
+                timestamp: Date.now(),
+                total: totalQueries,
               }),
+              event: PreSearchSseEvents.RESULT,
             });
-            allResults.push({ query: generatedQuery, result: null, duration: 0 });
+            allResults.push({ duration: 0, query: generatedQuery, result: null });
 
             // ✅ POSTHOG TRACKING: Track failed web search execution
             c.executionCtx.waitUntil(
               trackWebSearchExecution(
                 trackingContext,
                 {
-                  traceId: preSearchTraceId,
                   parentSpanId: preSearchParentSpanId,
-                  searchQuery: generatedQuery.query,
-                  searchIndex: queryIndex,
-                  totalSearches: totalQueries,
                   resultsCount: 0,
                   searchDepth: generatedQuery.searchDepth || 'basic',
+                  searchIndex: queryIndex,
+                  searchQuery: generatedQuery.query,
+                  totalSearches: totalQueries,
+                  traceId: preSearchTraceId,
                 },
                 searchDurationOnError,
                 {
-                  isError: true,
                   error: error instanceof Error ? error : new Error(String(error)),
+                  isError: true,
                 },
               ),
             );
@@ -1122,25 +1124,26 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
         // Send complete event with multi-query statistics
         await bufferedWriteSSE({
-          event: PreSearchSseEvents.COMPLETE,
           data: JSON.stringify({
-            timestamp: Date.now(),
-            totalSearches: totalQueries,
-            successfulSearches: successfulResults.length,
             failedSearches: totalQueries - successfulResults.length,
+            successfulSearches: successfulResults.length,
+            timestamp: Date.now(),
             totalResults: allSearchResults.length,
+            totalSearches: totalQueries,
           }),
+          event: PreSearchSseEvents.COMPLETE,
         });
 
         // Save results to database
         // ✅ TAVILY PATTERN: Store raw results with full content, no summaries
         if (isSuccess) {
           const searchData = {
+            failureCount: totalQueries - successfulResults.length,
             queries: allResults.map((r, idx) => ({
+              index: idx,
               query: r.query.query,
               rationale: r.query.rationale,
               searchDepth: r.query.searchDepth || WebSearchDepths.BASIC,
-              index: idx,
               total: totalQueries,
             })),
             // ✅ FULL RAW DATA: Include fullContent, rawContent for participant access
@@ -1151,28 +1154,27 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               // ✅ TYPE-SAFE: Capture result in const - type predicate guarantees non-null
               const searchResult = r.result;
               return {
-                query: searchResult.query,
                 answer: null, // No pre-generated answers - participants synthesize from raw data
+                index: originalIdx >= 0 ? originalIdx : idx, // ✅ Original query index for matching
+                query: searchResult.query,
+                responseTime: r.duration,
                 results: searchResult.results.map((res: WebSearchResult['results'][number]) => ({
-                  title: res.title,
-                  url: res.url,
                   content: res.content,
+                  domain: res.domain,
                   excerpt: res.excerpt,
                   fullContent: res.fullContent, // ✅ CRITICAL: Full scraped content
+                  images: res.images,
+                  metadata: res.metadata,
+                  publishedDate: res.publishedDate ?? null,
                   rawContent: res.rawContent, // ✅ CRITICAL: Raw markdown content
                   score: res.score,
-                  publishedDate: res.publishedDate ?? null,
-                  domain: res.domain,
-                  metadata: res.metadata,
-                  images: res.images,
+                  title: res.title,
+                  url: res.url,
                 })),
-                responseTime: r.duration,
-                index: originalIdx >= 0 ? originalIdx : idx, // ✅ Original query index for matching
               };
             }),
-            summary: multiQueryResult.analysisRationale || `Multi-query search: ${totalQueries} queries`,
             successCount: successfulResults.length,
-            failureCount: totalQueries - successfulResults.length,
+            summary: multiQueryResult.analysisRationale || `Multi-query search: ${totalQueries} queries`,
             totalResults: allSearchResults.length,
             totalTime,
             // ✅ NO combinedAnswer - participants synthesize directly from raw data
@@ -1181,9 +1183,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Update search record
           await db.update(tables.chatPreSearch)
             .set({
-              status: MessageStatuses.COMPLETE,
-              searchData,
               completedAt: new Date(),
+              searchData,
+              status: MessageStatuses.COMPLETE,
             })
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
@@ -1191,22 +1193,22 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           const preSearchMsgId = `pre-search-${roundNum}-${ulid()}`;
           await db.insert(tables.chatMessage)
             .values({
+              createdAt: new Date(),
               id: preSearchMsgId,
-              threadId,
-              role: MessageRoles.ASSISTANT,
-              parts: [{
-                type: MessagePartTypes.TEXT,
-                text: JSON.stringify({ type: 'web_search_results', ...searchData }),
-              }] satisfies MessagePart[],
-              roundNumber: roundNum,
               // ✅ TYPE-SAFE: Use DbPreSearchMessageMetadata discriminated union
               metadata: {
-                role: UIMessageRoles.SYSTEM,
-                roundNumber: roundNum,
                 isPreSearch: true as const,
                 preSearch: searchData,
+                role: UIMessageRoles.SYSTEM,
+                roundNumber: roundNum,
               },
-              createdAt: new Date(),
+              parts: [{
+                text: JSON.stringify({ type: 'web_search_results', ...searchData }),
+                type: MessagePartTypes.TEXT,
+              }] satisfies MessagePart[],
+              role: MessageRoles.ASSISTANT,
+              roundNumber: roundNum,
+              threadId,
             })
             .onConflictDoNothing();
 
@@ -1215,8 +1217,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           // Send final done event with complete data
           await bufferedWriteSSE({
-            event: PreSearchSseEvents.DONE,
             data: JSON.stringify(searchData),
+            event: PreSearchSseEvents.DONE,
           });
 
           // ✅ POSTHOG TRACKING: Track successful pre-search completion with total cost
@@ -1224,13 +1226,13 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             trackPreSearchComplete(
               trackingContext,
               {
-                traceId: preSearchTraceId,
-                parentSpanId: preSearchParentSpanId,
-                totalQueries,
-                successfulSearches: successfulResults.length,
                 failedSearches: totalQueries - successfulResults.length,
+                parentSpanId: preSearchParentSpanId,
+                successfulSearches: successfulResults.length,
+                totalQueries,
                 totalResults: allSearchResults.length,
                 totalWebSearchCostUsd: successfulResults.length * TAVILY_COST_PER_SEARCH,
+                traceId: preSearchTraceId,
               },
               totalTime,
             ),
@@ -1247,24 +1249,24 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Mark as failed if no successful searches
           // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
           const errorMetadata = buildEmptyResponseError({
+            finishReason: FinishReasons.FAILED,
             inputTokens: 0,
             outputTokens: 0,
-            finishReason: FinishReasons.FAILED,
           });
 
           await db.update(tables.chatPreSearch)
             .set({
-              status: MessageStatuses.FAILED,
               errorMessage: errorMetadata.errorMessage || 'No successful searches completed',
+              status: MessageStatuses.FAILED,
             })
             .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
           await bufferedWriteSSE({
-            event: PreSearchSseEvents.FAILED,
             data: JSON.stringify({
               error: errorMetadata.errorMessage || 'No successful searches completed',
               errorCategory: errorMetadata.errorCategory,
             }),
+            event: PreSearchSseEvents.FAILED,
           });
 
           // ✅ POSTHOG TRACKING: Track failed pre-search (no successful searches)
@@ -1272,17 +1274,17 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             trackPreSearchComplete(
               trackingContext,
               {
-                traceId: preSearchTraceId,
-                parentSpanId: preSearchParentSpanId,
-                totalQueries,
-                successfulSearches: 0,
                 failedSearches: totalQueries,
+                parentSpanId: preSearchParentSpanId,
+                successfulSearches: 0,
+                totalQueries,
                 totalResults: 0,
+                traceId: preSearchTraceId,
               },
               totalTime,
               {
-                isError: true,
                 errorCategory: errorMetadata.errorCategory,
+                isError: true,
               },
             ),
           );
@@ -1298,27 +1300,27 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       } catch (error) {
         // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization
         const errorMetadata = extractErrorMetadata({
+          finishReason: FinishReasons.ERROR,
           providerMetadata: {},
           response: error,
-          finishReason: FinishReasons.ERROR,
-          usage: { inputTokens: 0, outputTokens: 0 },
           text: '',
+          usage: { inputTokens: 0, outputTokens: 0 },
         });
 
         await db.update(tables.chatPreSearch)
           .set({
-            status: MessageStatuses.FAILED,
             errorMessage: errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Unknown error'),
+            status: MessageStatuses.FAILED,
           })
           .where(eq(tables.chatPreSearch.id, existingSearch.id));
 
         await bufferedWriteSSE({
-          event: PreSearchSseEvents.FAILED,
           data: JSON.stringify({
             error: errorMetadata.errorMessage || (error instanceof Error ? error.message : 'Pre-search failed'),
             errorCategory: errorMetadata.errorCategory,
             isTransient: errorMetadata.isTransientError,
           }),
+          event: PreSearchSseEvents.FAILED,
         });
 
         // ✅ POSTHOG TRACKING: Track pre-search error
@@ -1326,18 +1328,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           trackPreSearchComplete(
             trackingContext,
             {
-              traceId: preSearchTraceId,
-              parentSpanId: preSearchParentSpanId,
-              totalQueries: 0,
-              successfulSearches: 0,
               failedSearches: 0,
+              parentSpanId: preSearchParentSpanId,
+              successfulSearches: 0,
+              totalQueries: 0,
               totalResults: 0,
+              traceId: preSearchTraceId,
             },
             performance.now() - startTime,
             {
-              isError: true,
               error: error instanceof Error ? error : new Error(String(error)),
               errorCategory: errorMetadata.errorCategory,
+              isError: true,
             },
           ),
         );
@@ -1367,8 +1369,8 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearchesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getThreadPreSearches',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1379,19 +1381,19 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
 
     // ✅ OPTIMIZED: Select only needed columns for faster query
     const allPreSearches = await db.query.chatPreSearch.findMany({
-      where: eq(tables.chatPreSearch.threadId, threadId),
-      orderBy: (fields, { asc }) => [asc(fields.roundNumber)],
       columns: {
-        id: true,
-        threadId: true,
-        roundNumber: true,
-        userQuery: true,
-        status: true,
-        searchData: true,
+        completedAt: true,
         createdAt: true,
         errorMessage: true,
-        completedAt: true,
+        id: true,
+        roundNumber: true,
+        searchData: true,
+        status: true,
+        threadId: true,
+        userQuery: true,
       },
+      orderBy: (fields, { asc }) => [asc(fields.roundNumber)],
+      where: eq(tables.chatPreSearch.threadId, threadId),
     });
 
     // ✅ NON-BLOCKING: Fire-and-forget orphan cleanup via waitUntil
@@ -1414,8 +1416,8 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
     // ✅ RETURN IMMEDIATELY: Don't wait for orphan cleanup
     // Client sees current state; any orphans will be cleaned on next request
     return Responses.ok(c, {
-      items: allPreSearches,
       count: allPreSearches.length,
+      items: allPreSearches,
     });
   },
 );
@@ -1424,13 +1426,13 @@ export const getThreadPreSearchesHandler: RouteHandler<typeof getThreadPreSearch
  * Background orphan cleanup - runs via waitUntil after response is sent
  */
 async function cleanupOrphanedPreSearches(
-  potentialOrphans: Array<{
+  potentialOrphans: {
     id: string;
     threadId: string;
     roundNumber: number;
     status: string;
     createdAt: Date;
-  }>,
+  }[],
   threadId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
   env: ApiEnv['Bindings'],
@@ -1446,10 +1448,10 @@ async function cleanupOrphanedPreSearches(
           const lastChunkTime = Math.max(...chunks.map(chunk => chunk.timestamp));
           const isStale = Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
           if (!isStale) {
-            return { search, isOrphaned: false };
+            return { isOrphaned: false, search };
           }
         }
-        return { search, isOrphaned: true };
+        return { isOrphaned: true, search };
       }),
     );
 
@@ -1464,15 +1466,15 @@ async function cleanupOrphanedPreSearches(
     // Clean up KV and update DB in parallel
     await Promise.all([
       // Clear KV tracking
-      ...orphanedSearches.map(search =>
-        clearActivePreSearchStream(threadId, search.roundNumber, env),
+      ...orphanedSearches.map(async search =>
+        await clearActivePreSearchStream(threadId, search.roundNumber, env),
       ),
       // Update DB status
       ...orphanedSearches.map(search =>
         db.update(tables.chatPreSearch)
           .set({
-            status: MessageStatuses.FAILED,
             errorMessage: 'Search timed out. May have been caused by page refresh or connection issue.',
+            status: MessageStatuses.FAILED,
           })
           .where(eq(tables.chatPreSearch.id, search.id)),
       ),

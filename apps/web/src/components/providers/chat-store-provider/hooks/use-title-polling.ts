@@ -27,7 +27,7 @@ type UseTitlePollingOptions = {
   queryClientRef: RefObject<QueryClient>;
 };
 
-export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOptions) {
+export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOptions) {
   const { createdThreadId, createdThreadProjectId } = useStore(store, useShallow(s => ({
     createdThreadId: s.createdThreadId,
     createdThreadProjectId: s.createdThreadProjectId,
@@ -90,8 +90,9 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
     pendingProjectIdRef.current = null;
 
     const queryClient = queryClientRef.current;
-    if (!queryClient)
+    if (!queryClient) {
       return;
+    }
 
     const state = store.getState();
     const currentThread = state.thread;
@@ -101,18 +102,20 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
 
     // Try to get from sidebar cache for more accurate old title
     const sidebarData = queryClient.getQueriesData({
-      queryKey: queryKeys.threads.all,
       predicate: isListOrSidebarQuery,
+      queryKey: queryKeys.threads.all,
     });
 
     for (const [, data] of sidebarData) {
       const parsed = validateInfiniteQueryCache(data);
-      if (!parsed)
+      if (!parsed) {
         continue;
+      }
 
       for (const page of parsed.pages) {
-        if (!page.success || !page.data?.items)
+        if (!page.success || !page.data?.items) {
           continue;
+        }
         const thread = page.data.items.find(t => t.id === pendingThreadId);
         if (thread) {
           oldTitle = thread.title ?? 'New conversation';
@@ -129,16 +132,16 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
       state.setThread({
         ...currentThread,
         isAiGeneratedTitle: true,
-        title: slugData.title,
         slug: slugData.slug,
+        title: slugData.title,
       });
     }
 
     // Optimistically update sidebar cache with new title (always - regardless of current view)
     queryClient.setQueriesData(
       {
-        queryKey: queryKeys.threads.all,
         predicate: isListOrSidebarQuery,
+        queryKey: queryKeys.threads.all,
       },
       (old) => {
         const parsedQuery = validateInfiniteQueryCache(old);
@@ -154,8 +157,9 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
             }
 
             const updatedItems = page.data.items.map((thread) => {
-              if (thread.id !== pendingThreadId)
+              if (thread.id !== pendingThreadId) {
                 return thread;
+              }
 
               // Preserve old slug as previousSlug so isChatActive() can match the URL
               // This ensures sidebar selection state is maintained during slug transition
@@ -163,10 +167,10 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
 
               return {
                 ...thread,
-                title: slugData.title,
-                slug: slugData.slug,
-                previousSlug,
                 isAiGeneratedTitle: true,
+                previousSlug,
+                slug: slugData.slug,
+                title: slugData.title,
               };
             });
 
@@ -188,8 +192,9 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
         queryKeys.projects.threads(projectId),
         (old: unknown) => {
           const parsedQuery = validateInfiniteQueryCache(old);
-          if (!parsedQuery)
+          if (!parsedQuery) {
             return old;
+          }
 
           return {
             ...parsedQuery,
@@ -198,16 +203,17 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
               data: {
                 ...page.data,
                 items: page.data?.items?.map((thread) => {
-                  if (thread.id !== pendingThreadId)
+                  if (thread.id !== pendingThreadId) {
                     return thread;
+                  }
 
                   const previousSlug = thread.slug !== slugData.slug ? thread.slug : thread.previousSlug;
                   return {
                     ...thread,
-                    title: slugData.title,
-                    slug: slugData.slug,
-                    previousSlug,
                     isAiGeneratedTitle: true,
+                    previousSlug,
+                    slug: slugData.slug,
+                    title: slugData.title,
                   };
                 }) ?? [],
               },

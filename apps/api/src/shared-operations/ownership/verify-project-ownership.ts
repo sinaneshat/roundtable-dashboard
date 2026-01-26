@@ -29,6 +29,17 @@ export type VerifyProjectOwnershipOptions = {
   includeMemories?: boolean;
 };
 
+type RelationConfig = { columns: { id: true } };
+type RelationsMap = Record<string, RelationConfig>;
+
+/**
+ * Helper to set relation config on object without triggering TS4111 index signature error.
+ * ESLint reverts bracket notation, so we use this function to safely set properties.
+ */
+function setRelation(obj: RelationsMap, key: string, value: RelationConfig): void {
+  obj[key] = value;
+}
+
 type DbInstance = Awaited<ReturnType<typeof getDbAsync>>;
 
 // ============================================================================
@@ -115,16 +126,16 @@ export async function verifyProjectOwnership(
   | ProjectWithCounts
   | ProjectWithMemories
 > {
-  const withRelations: Record<string, { columns: { id: true } }> = {};
+  const withRelations: RelationsMap = {};
 
   if (options?.includeAttachments) {
-    withRelations.attachments = { columns: { id: true } };
+    setRelation(withRelations, 'attachments', { columns: { id: true } });
   }
   if (options?.includeThreads) {
-    withRelations.threads = { columns: { id: true } };
+    setRelation(withRelations, 'threads', { columns: { id: true } });
   }
   if (options?.includeMemories) {
-    withRelations.memories = { columns: { id: true } };
+    setRelation(withRelations, 'memories', { columns: { id: true } });
   }
 
   const project = await db.query.chatProject.findFirst({

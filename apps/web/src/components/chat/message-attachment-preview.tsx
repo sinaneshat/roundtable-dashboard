@@ -13,10 +13,10 @@ import { cn } from '@/lib/ui/cn';
 /* eslint-enable simple-import-sort/imports */
 
 export const MessageAttachmentSchema = z.object({
-  url: z.string(),
   filename: z.string().optional(),
   mediaType: z.string().optional(),
   uploadId: z.string().optional(),
+  url: z.string(),
 });
 
 export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
@@ -58,14 +58,14 @@ function AttachmentThumbnail({
   messageId: string;
 }) {
   const t = useTranslations();
-  const { url: originalUrl, filename, mediaType, uploadId } = attachment;
+  const { filename, mediaType, uploadId, url: originalUrl } = attachment;
   const isImage = Boolean(mediaType?.startsWith('image/'));
   const iconType = getIconType(mediaType);
   const displayName = filename ?? t('chat.attachments.defaultName');
 
   const needsFetch = !isValidDisplayUrl(originalUrl) && Boolean(uploadId);
 
-  const { data: downloadUrlResult, isLoading, isError: fetchError } = useDownloadUrlQuery(
+  const { data: downloadUrlResult, isError: fetchError, isLoading } = useDownloadUrlQuery(
     uploadId ?? '',
     needsFetch,
   );
@@ -78,10 +78,10 @@ function AttachmentThumbnail({
   const WrapperComponent = hasValidUrl ? 'a' : 'div';
   const wrapperProps = hasValidUrl
     ? {
-        href: effectiveUrl,
         download: filename,
-        target: '_blank' as const,
+        href: effectiveUrl,
         rel: 'noopener noreferrer',
+        target: '_blank' as const,
       }
     : {};
 

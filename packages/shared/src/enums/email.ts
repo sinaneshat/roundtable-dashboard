@@ -20,10 +20,10 @@ export const EmailTextWeightSchema = z.enum(EMAIL_TEXT_WEIGHTS).openapi({
 export type EmailTextWeight = z.infer<typeof EmailTextWeightSchema>;
 
 export const EmailTextWeights = {
-  NORMAL: 'normal' as const,
-  MEDIUM: 'medium' as const,
-  SEMIBOLD: 'semibold' as const,
   BOLD: 'bold' as const,
+  MEDIUM: 'medium' as const,
+  NORMAL: 'normal' as const,
+  SEMIBOLD: 'semibold' as const,
 } as const;
 
 // ============================================================================
@@ -40,12 +40,12 @@ export const EmailColorSchema = z.enum(EMAIL_COLORS).openapi({
 export type EmailColor = z.infer<typeof EmailColorSchema>;
 
 export const EmailColors = {
+  DARK: 'dark' as const,
+  FAILED: 'failed' as const,
+  MUTED: 'muted' as const,
   PRIMARY: 'primary' as const,
   SECONDARY: 'secondary' as const,
-  MUTED: 'muted' as const,
   WHITE: 'white' as const,
-  FAILED: 'failed' as const,
-  DARK: 'dark' as const,
 } as const;
 
 // ============================================================================
@@ -62,7 +62,7 @@ export const EmailSpacingSchema = z.enum(EMAIL_SPACINGS).openapi({
 export type EmailSpacing = z.infer<typeof EmailSpacingSchema>;
 
 export const EmailSpacings = {
-  SM: 'sm' as const,
-  MD: 'md' as const,
   LG: 'lg' as const,
+  MD: 'md' as const,
+  SM: 'sm' as const,
 } as const;

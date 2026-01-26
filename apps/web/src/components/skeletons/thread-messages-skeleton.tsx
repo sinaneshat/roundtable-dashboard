@@ -22,11 +22,11 @@ type ThreadMessagesSkeletonProps = {
  * Used for chat thread loading states.
  */
 export function ThreadMessagesSkeleton({
-  participantCount = 2,
-  showModerator = true,
-  showInput = false,
-  usecase,
   className,
+  participantCount = 2,
+  showInput = false,
+  showModerator = true,
+  usecase,
   ...props
 }: ThreadMessagesSkeletonProps) {
   const shouldShowModerator = usecase === SkeletonUsecases.DEMO ? false : showModerator;

@@ -43,16 +43,16 @@ export function formatErrorResponse(c: Context, error: unknown): Response {
 
     return c.json(
       {
-        success: false,
         error: {
           code: error.code,
-          message: error.message,
           context: error.context,
+          message: error.message,
         },
         meta: {
           requestId: c.get('requestId'),
           timestamp: new Date().toISOString(),
         },
+        success: false,
       },
       statusCode,
     );
@@ -60,7 +60,6 @@ export function formatErrorResponse(c: Context, error: unknown): Response {
 
   return c.json(
     {
-      success: false,
       error: {
         code: ErrorCodes.INTERNAL_SERVER_ERROR,
         message: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -69,6 +68,7 @@ export function formatErrorResponse(c: Context, error: unknown): Response {
         requestId: c.get('requestId'),
         timestamp: new Date().toISOString(),
       },
+      success: false,
     },
     HttpStatusCodes.INTERNAL_SERVER_ERROR,
   );

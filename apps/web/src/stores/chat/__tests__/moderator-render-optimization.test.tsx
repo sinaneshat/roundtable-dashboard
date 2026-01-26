@@ -36,11 +36,11 @@ const _messages = {
   en: {
     chat: {
       participant: {
+        gatheringThoughts: 'Thinking...',
         generating: 'Generating response from {model}...',
         moderatorObserving: 'Observing...',
-        gatheringThoughts: 'Thinking...',
-        waitingNamed: 'Thinking...',
         waitingForWebResults: 'Searching...',
+        waitingNamed: 'Thinking...',
       },
     },
   },
@@ -55,7 +55,7 @@ type RenderCounterProps = {
   children: ReactNode;
 };
 
-const RenderCounter = memo(({ componentId, onRender, children }: RenderCounterProps) => {
+const RenderCounter = memo(({ children, componentId, onRender }: RenderCounterProps) => {
   const renderCount = useRef(0);
 
   useEffect(() => {
@@ -76,7 +76,7 @@ type MockMessageCardProps = {
   onRender: (id: string) => void;
 };
 
-const MockMessageCard = memo(({ messageId, parts, status, onRender }: MockMessageCardProps) => {
+const MockMessageCard = memo(({ messageId, onRender, parts, status }: MockMessageCardProps) => {
   const renderCount = useRef(0);
 
   useEffect(() => {
@@ -97,17 +97,20 @@ const MockMessageCard = memo(({ messageId, parts, status, onRender }: MockMessag
   );
 }, (prev, next) => {
   // Custom comparison: only re-render if parts content or status changed
-  if (prev.status !== next.status)
+  if (prev.status !== next.status) {
     return false;
-  if (prev.parts.length !== next.parts.length)
+  }
+  if (prev.parts.length !== next.parts.length) {
     return false;
+  }
 
   // Deep compare text content
   for (let i = 0; i < prev.parts.length; i++) {
     const prevPart = prev.parts[i];
     const nextPart = next.parts[i];
-    if (prevPart?.type !== nextPart?.type)
+    if (prevPart?.type !== nextPart?.type) {
       return false;
+    }
     if (prevPart?.type === MessagePartTypes.TEXT && nextPart?.type === MessagePartTypes.TEXT) {
       if ('text' in prevPart && 'text' in nextPart && prevPart.text !== nextPart.text) {
         return false;
@@ -175,27 +178,27 @@ describe('moderator Render Optimization', () => {
   describe('participant Messages During Moderator Streaming', () => {
     it('should not re-render completed participant messages when moderator streams', () => {
       const userMessage = createTestUserMessage({
-        id: 'user-1',
         content: 'Hello',
+        id: 'user-1',
         roundNumber: 0,
       });
 
       const participant1 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Response from participant 1',
-        roundNumber: 0,
+        finishReason: 'stop',
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: 'stop',
+        roundNumber: 0,
       });
 
       const participant2 = createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'Response from participant 2',
-        roundNumber: 0,
+        finishReason: 'stop',
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
-        finishReason: 'stop',
+        roundNumber: 0,
       });
 
       const { rerender } = rtlRender(
@@ -215,8 +218,8 @@ describe('moderator Render Optimization', () => {
 
       // Moderator starts streaming - add moderator message (empty at first)
       const moderatorMessage = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: '', // No content yet
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -239,23 +242,23 @@ describe('moderator Render Optimization', () => {
 
     it('should not re-render participants when moderator content updates', () => {
       const userMessage = createTestUserMessage({
-        id: 'user-1',
         content: 'Hello',
+        id: 'user-1',
         roundNumber: 0,
       });
 
       const participant1 = createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Response from participant 1',
-        roundNumber: 0,
+        finishReason: 'stop',
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: 'stop',
+        roundNumber: 0,
       });
 
       const moderatorMessage1 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'First chunk',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -272,8 +275,8 @@ describe('moderator Render Optimization', () => {
 
       // Moderator receives more content
       const moderatorMessage2 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'First chunk Second chunk',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -294,8 +297,8 @@ describe('moderator Render Optimization', () => {
 
     it('should render moderator only once when content does not change', () => {
       const moderatorMessage = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Summary content',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -322,15 +325,15 @@ describe('moderator Render Optimization', () => {
   describe('incremental Moderator Streaming', () => {
     it('should render moderator progressively as chunks arrive', () => {
       const userMessage = createTestUserMessage({
-        id: 'user-1',
         content: 'Summarize the discussion',
+        id: 'user-1',
         roundNumber: 0,
       });
 
       // Start with empty moderator
       const moderatorChunk1 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: '',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -346,8 +349,8 @@ describe('moderator Render Optimization', () => {
 
       // Chunk 2: First word
       const moderatorChunk2 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'The',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -360,8 +363,8 @@ describe('moderator Render Optimization', () => {
 
       // Chunk 3: More content
       const moderatorChunk3 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'The discussion',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -375,8 +378,8 @@ describe('moderator Render Optimization', () => {
 
     it('should handle rapid moderator chunks without excessive renders', () => {
       const userMessage = createTestUserMessage({
-        id: 'user-1',
         content: 'Summarize',
+        id: 'user-1',
         roundNumber: 0,
       });
 
@@ -401,8 +404,8 @@ describe('moderator Render Optimization', () => {
       // Simulate rapid chunk streaming
       chunks.forEach((chunk) => {
         const moderatorMessage = createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: chunk,
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         });
 
@@ -426,8 +429,8 @@ describe('moderator Render Optimization', () => {
   describe('memo Comparison Function', () => {
     it('should prevent renders when parts array reference changes but content is same', () => {
       const message1 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Summary',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -440,8 +443,8 @@ describe('moderator Render Optimization', () => {
 
       // Same content, new parts array reference
       const message2 = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Summary', // Same content
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -459,8 +462,8 @@ describe('moderator Render Optimization', () => {
       // not from props, so status-based re-renders happen automatically when store changes
 
       const moderatorMessage = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Complete summary',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -490,8 +493,8 @@ describe('moderator Render Optimization', () => {
       // Create a large number of messages
       const messages: UIMessage[] = [
         createTestUserMessage({
-          id: 'user-1',
           content: 'Question',
+          id: 'user-1',
           roundNumber: 0,
         }),
       ];
@@ -500,12 +503,12 @@ describe('moderator Render Optimization', () => {
       for (let i = 0; i < 10; i++) {
         messages.push(
           createTestAssistantMessage({
-            id: `thread_r0_p${i}`,
             content: `Response ${i}`,
-            roundNumber: 0,
+            finishReason: 'stop',
+            id: `thread_r0_p${i}`,
             participantId: `p${i}`,
             participantIndex: i,
-            finishReason: 'stop',
+            roundNumber: 0,
           }),
         );
       }
@@ -513,8 +516,8 @@ describe('moderator Render Optimization', () => {
       // Add moderator at the end
       messages.push(
         createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: 'Summary',
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         }),
       );
@@ -532,8 +535,8 @@ describe('moderator Render Optimization', () => {
       const updatedMessages = [...messages.slice(0, -1)];
       updatedMessages.push(
         createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: 'Summary updated',
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         }),
       );
@@ -592,21 +595,21 @@ describe('moderator Render Optimization', () => {
       // Round 0 messages (complete)
       const round0Messages = [
         createTestUserMessage({
-          id: 'user-0',
           content: 'First question',
+          id: 'user-0',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'First response',
-          roundNumber: 0,
+          finishReason: 'stop',
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: 'stop',
+          roundNumber: 0,
         }),
         createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: 'First round summary',
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         }),
       ];
@@ -614,17 +617,17 @@ describe('moderator Render Optimization', () => {
       // Round 1 messages (streaming)
       const round1Messages = [
         createTestUserMessage({
-          id: 'user-1',
           content: 'Second question',
+          id: 'user-1',
           roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'thread_r1_p0',
           content: 'Second response',
-          roundNumber: 1,
+          finishReason: 'stop',
+          id: 'thread_r1_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: 'stop',
+          roundNumber: 1,
         }),
       ];
 
@@ -640,8 +643,8 @@ describe('moderator Render Optimization', () => {
 
       // Add round 1 moderator
       const round1Moderator = createTestModeratorMessage({
-        id: 'thread_r1_moderator',
         content: 'Second round summary',
+        id: 'thread_r1_moderator',
         roundNumber: 1,
       });
 
@@ -667,25 +670,25 @@ describe('moderator Render Optimization', () => {
     it('should document actual render counts during typical streaming flow', () => {
       const messages: UIMessage[] = [
         createTestUserMessage({
-          id: 'user-1',
           content: 'Question',
+          id: 'user-1',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p0',
           content: 'Answer 1',
-          roundNumber: 0,
+          finishReason: 'stop',
+          id: 'thread_r0_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: 'stop',
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'thread_r0_p1',
           content: 'Answer 2',
-          roundNumber: 0,
+          finishReason: 'stop',
+          id: 'thread_r0_p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: 'stop',
+          roundNumber: 0,
         }),
       ];
 
@@ -699,8 +702,8 @@ describe('moderator Render Optimization', () => {
       // Phase 2: Add empty moderator
       messages.push(
         createTestModeratorMessage({
-          id: 'thread_r0_moderator',
           content: '',
+          id: 'thread_r0_moderator',
           roundNumber: 0,
         }),
       );
@@ -714,8 +717,8 @@ describe('moderator Render Optimization', () => {
 
       // Phase 3: Moderator chunk 1
       messages[messages.length - 1] = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'In summary,',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -728,8 +731,8 @@ describe('moderator Render Optimization', () => {
 
       // Phase 4: Moderator chunk 2
       messages[messages.length - 1] = createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'In summary, both participants provided valuable insights.',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       });
 
@@ -763,14 +766,17 @@ describe('moderator Render Optimization', () => {
 
       // Total moderator renders: 3 (initial empty + chunk1 + chunk2)
       const p2ModCount = phase2Renders.get('thread_r0_moderator');
-      if (!p2ModCount)
+      if (!p2ModCount) {
         throw new Error('expected phase2 moderator render count');
+      }
       const p3ModCount = phase3Renders.get('thread_r0_moderator');
-      if (!p3ModCount)
+      if (!p3ModCount) {
         throw new Error('expected phase3 moderator render count');
+      }
       const p4ModCount = phase4Renders.get('thread_r0_moderator');
-      if (!p4ModCount)
+      if (!p4ModCount) {
         throw new Error('expected phase4 moderator render count');
+      }
       expect(p2ModCount + p3ModCount + p4ModCount).toBe(3);
     });
   });

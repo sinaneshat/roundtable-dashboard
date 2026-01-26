@@ -15,15 +15,16 @@ export function useAutoResizeTextarea(
   options: UseAutoResizeTextareaOptions = {},
 ): UseAutoResizeTextareaReturn {
   const {
-    minHeight = 80,
     maxHeight = 240,
+    minHeight = 80,
     value,
   } = options;
 
   const resize = useCallback(() => {
     const textarea = ref.current;
-    if (!textarea)
+    if (!textarea) {
       return;
+    }
 
     // Reset height to auto to get the correct scrollHeight
     textarea.style.height = 'auto';

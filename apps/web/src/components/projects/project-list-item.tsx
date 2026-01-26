@@ -33,8 +33,8 @@ type ProjectListItemProps = {
 };
 
 function ProjectListItemComponent({
-  project,
   onDelete,
+  project,
 }: ProjectListItemProps) {
   const t = useTranslations();
   const pathname = useRouterState({ select: s => s.location.pathname });

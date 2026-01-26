@@ -13,12 +13,12 @@ import { userSelectSchema } from '@/db/validation/auth';
  */
 export const SecureMePayloadSchema = userSelectSchema
   .pick({
-    id: true,
-    email: true,
-    name: true,
-    emailVerified: true,
-    image: true,
     createdAt: true,
+    email: true,
+    emailVerified: true,
+    id: true,
+    image: true,
+    name: true,
     updatedAt: true,
   })
   .openapi('SecureMePayload');
@@ -35,8 +35,8 @@ export type SecureMePayload = z.infer<typeof SecureMePayloadSchema>;
  */
 export const ClearOwnCachePayloadSchema = z.object({
   cleared: z.boolean().openapi({
-    example: true,
     description: 'Whether cache was cleared successfully',
+    example: true,
   }),
 }).openapi('ClearOwnCachePayload');
 

@@ -18,10 +18,10 @@ type RHFCheckboxProps<TFieldValues extends FieldValues = FieldValues> = {
 };
 
 export function RHFCheckbox<TFieldValues extends FieldValues = FieldValues>({
-  name,
-  title,
   description,
+  name,
   required,
+  title,
 }: RHFCheckboxProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

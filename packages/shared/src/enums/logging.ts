@@ -28,9 +28,9 @@ export type LogLevel = z.infer<typeof LogLevelSchema>;
 // 5. CONSTANT OBJECT
 export const LogLevels = {
   DEBUG: 'DEBUG' as const,
+  ERROR: 'ERROR' as const,
   INFO: 'INFO' as const,
   WARN: 'WARN' as const,
-  ERROR: 'ERROR' as const,
 } as const;
 
 // ============================================================================
@@ -55,9 +55,9 @@ export type DevLogLevel = z.infer<typeof DevLogLevelSchema>;
 // 5. CONSTANT OBJECT
 export const DevLogLevels = {
   DEBUG: 'debug' as const,
+  ERROR: 'error' as const,
   INFO: 'info' as const,
   WARN: 'warn' as const,
-  ERROR: 'error' as const,
 } as const;
 
 // ============================================================================
@@ -66,16 +66,16 @@ export const DevLogLevels = {
 
 export const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
   [LogLevels.DEBUG]: 'Debug',
+  [LogLevels.ERROR]: 'Error',
   [LogLevels.INFO]: 'Info',
   [LogLevels.WARN]: 'Warning',
-  [LogLevels.ERROR]: 'Error',
 } as const;
 
 export const DEV_LOG_LEVEL_LABELS: Record<DevLogLevel, string> = {
   [DevLogLevels.DEBUG]: 'Debug',
+  [DevLogLevels.ERROR]: 'Error',
   [DevLogLevels.INFO]: 'Info',
   [DevLogLevels.WARN]: 'Warning',
-  [DevLogLevels.ERROR]: 'Error',
 } as const;
 
 // ============================================================================
@@ -96,16 +96,16 @@ export function isValidDevLogLevel(value: unknown): value is DevLogLevel {
 
 export const LOG_LEVEL_VALUES: Record<LogLevel, number> = {
   [LogLevels.DEBUG]: 0,
+  [LogLevels.ERROR]: 3,
   [LogLevels.INFO]: 1,
   [LogLevels.WARN]: 2,
-  [LogLevels.ERROR]: 3,
 } as const;
 
 export const DEV_LOG_LEVEL_VALUES: Record<DevLogLevel, number> = {
   [DevLogLevels.DEBUG]: 0,
+  [DevLogLevels.ERROR]: 3,
   [DevLogLevels.INFO]: 1,
   [DevLogLevels.WARN]: 2,
-  [DevLogLevels.ERROR]: 3,
 } as const;
 
 // ============================================================================
@@ -129,18 +129,18 @@ export type RlogCategory = z.infer<typeof RlogCategorySchema>;
 
 // 5. CONSTANT OBJECT
 export const RlogCategories = {
+  CHANGELOG: 'CHANGELOG' as const,
+  GATE: 'GATE' as const,
+  INIT: 'INIT' as const,
+  MOD: 'MOD' as const,
+  MSG: 'MSG' as const,
   PHASE: 'PHASE' as const,
+  PRESRCH: 'PRESRCH' as const,
   RESUME: 'RESUME' as const,
   STREAM: 'STREAM' as const,
-  MSG: 'MSG' as const,
-  GATE: 'GATE' as const,
-  TRIGGER: 'TRIGGER' as const,
-  PRESRCH: 'PRESRCH' as const,
-  MOD: 'MOD' as const,
-  CHANGELOG: 'CHANGELOG' as const,
   SUBMIT: 'SUBMIT' as const,
-  INIT: 'INIT' as const,
   SYNC: 'SYNC' as const,
+  TRIGGER: 'TRIGGER' as const,
 } as const;
 
 // ============================================================================
@@ -164,10 +164,10 @@ export type RlogStreamAction = z.infer<typeof RlogStreamActionSchema>;
 
 // 5. CONSTANT OBJECT
 export const RlogStreamActions = {
-  START: 'start' as const,
+  CHECK: 'check' as const,
   END: 'end' as const,
   RESUME: 'resume' as const,
-  CHECK: 'check' as const,
+  START: 'start' as const,
 } as const;
 
 // ============================================================================
@@ -191,11 +191,11 @@ export type DevLogModEvent = z.infer<typeof DevLogModEventSchema>;
 
 // 5. CONSTANT OBJECT
 export const DevLogModEvents = {
+  ADD: 'add' as const,
+  DONE: 'done' as const,
+  ERR: 'err' as const,
   START: 'start' as const,
   TEXT: 'text' as const,
-  DONE: 'done' as const,
-  ADD: 'add' as const,
-  ERR: 'err' as const,
 } as const;
 
 // ============================================================================
@@ -219,8 +219,8 @@ export type DevLogMsgEvent = z.infer<typeof DevLogMsgEventSchema>;
 
 // 5. CONSTANT OBJECT
 export const DevLogMsgEvents = {
-  SYNC: 'sync' as const,
   FLASH: 'flash' as const,
+  SYNC: 'sync' as const,
 } as const;
 
 // ============================================================================
@@ -244,18 +244,18 @@ export type LogType = z.infer<typeof LogTypeSchema>;
 
 // 5. CONSTANT OBJECT
 export const LogTypes = {
-  REQUEST: 'request' as const,
-  DATABASE: 'database' as const,
-  AUTH: 'auth' as const,
-  VALIDATION: 'validation' as const,
-  PERFORMANCE: 'performance' as const,
-  API: 'api' as const,
-  OPERATION: 'operation' as const,
-  SYSTEM: 'system' as const,
-  EDGE_CASE: 'edge_case' as const,
   ALARM_ERROR: 'alarm_error' as const,
   ALARM_RETRY: 'alarm_retry' as const,
+  API: 'api' as const,
+  AUTH: 'auth' as const,
+  DATABASE: 'database' as const,
   DO_FETCH_ERROR: 'do_fetch_error' as const,
+  EDGE_CASE: 'edge_case' as const,
+  OPERATION: 'operation' as const,
+  PERFORMANCE: 'performance' as const,
+  REQUEST: 'request' as const,
+  SYSTEM: 'system' as const,
+  VALIDATION: 'validation' as const,
 } as const;
 
 // ============================================================================
@@ -263,18 +263,18 @@ export const LogTypes = {
 // ============================================================================
 
 export const RLOG_CATEGORY_STYLES: Record<RlogCategory, string> = {
+  [RlogCategories.CHANGELOG]: 'color: #009688; font-weight: bold',
+  [RlogCategories.GATE]: 'color: #F44336',
+  [RlogCategories.INIT]: 'color: #607D8B; font-weight: bold',
+  [RlogCategories.MOD]: 'color: #673AB7; font-weight: bold',
+  [RlogCategories.MSG]: 'color: #9C27B0',
   [RlogCategories.PHASE]: 'color: #4CAF50; font-weight: bold',
+  [RlogCategories.PRESRCH]: 'color: #E91E63',
   [RlogCategories.RESUME]: 'color: #2196F3; font-weight: bold',
   [RlogCategories.STREAM]: 'color: #FF9800',
-  [RlogCategories.MSG]: 'color: #9C27B0',
-  [RlogCategories.GATE]: 'color: #F44336',
-  [RlogCategories.TRIGGER]: 'color: #00BCD4; font-weight: bold',
-  [RlogCategories.PRESRCH]: 'color: #E91E63',
-  [RlogCategories.MOD]: 'color: #673AB7; font-weight: bold',
-  [RlogCategories.CHANGELOG]: 'color: #009688; font-weight: bold',
   [RlogCategories.SUBMIT]: 'color: #795548; font-weight: bold',
-  [RlogCategories.INIT]: 'color: #607D8B; font-weight: bold',
   [RlogCategories.SYNC]: 'color: #3F51B5',
+  [RlogCategories.TRIGGER]: 'color: #00BCD4; font-weight: bold',
 } as const;
 
 // ============================================================================
@@ -298,12 +298,12 @@ export type PosthogLogLevel = z.infer<typeof PosthogLogLevelSchema>;
 
 // 5. CONSTANT OBJECT
 export const PosthogLogLevels = {
-  TRACE: 'trace' as const,
   DEBUG: 'debug' as const,
-  INFO: 'info' as const,
-  WARN: 'warn' as const,
   ERROR: 'error' as const,
   FATAL: 'fatal' as const,
+  INFO: 'info' as const,
+  TRACE: 'trace' as const,
+  WARN: 'warn' as const,
 } as const;
 
 // 6. VALIDATION HELPER
@@ -313,12 +313,12 @@ export function isValidPosthogLogLevel(value: unknown): value is PosthogLogLevel
 
 // 7. PRIORITY VALUES (for sorting/comparison)
 export const POSTHOG_LOG_LEVEL_VALUES: Record<PosthogLogLevel, number> = {
-  [PosthogLogLevels.TRACE]: 0,
   [PosthogLogLevels.DEBUG]: 1,
-  [PosthogLogLevels.INFO]: 2,
-  [PosthogLogLevels.WARN]: 3,
   [PosthogLogLevels.ERROR]: 4,
   [PosthogLogLevels.FATAL]: 5,
+  [PosthogLogLevels.INFO]: 2,
+  [PosthogLogLevels.TRACE]: 0,
+  [PosthogLogLevels.WARN]: 3,
 } as const;
 
 // ============================================================================
@@ -354,11 +354,11 @@ export function isValidRequestLogLevel(value: unknown): value is RequestLogLevel
 
 // 7. ENVIRONMENT MAPPING
 export const REQUEST_LOG_LEVEL_BY_ENV: Record<string, RequestLogLevel> = {
+  development: RequestLogLevels.VERBOSE,
+  local: RequestLogLevels.VERBOSE,
+  preview: RequestLogLevels.STANDARD,
   prod: RequestLogLevels.MINIMAL,
   production: RequestLogLevels.MINIMAL,
-  preview: RequestLogLevels.STANDARD,
-  local: RequestLogLevels.VERBOSE,
-  development: RequestLogLevels.VERBOSE,
   test: RequestLogLevels.MINIMAL,
 } as const;
 

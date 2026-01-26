@@ -456,38 +456,38 @@ describe('per-Message Credit Costs', () => {
 
 describe('per-Model Credit Costs', () => {
   const mockBudgetModel: ModelForPricing = {
-    id: 'test/budget-model',
-    pricing: { prompt: '0.00000005', completion: '0.0000001' }, // $0.05/M input
-    pricing_display: { input: '0.05', output: '0.10' },
     context_length: 8192,
+    id: 'test/budget-model',
+    pricing: { completion: '0.0000001', prompt: '0.00000005' }, // $0.05/M input
+    pricing_display: { input: '0.05', output: '0.10' },
   };
 
   const mockStandardModel: ModelForPricing = {
-    id: 'test/standard-model',
-    pricing: { prompt: '0.00000025', completion: '0.0000005' }, // $0.25/M input
-    pricing_display: { input: '0.25', output: '0.50' },
     context_length: 16384,
+    id: 'test/standard-model',
+    pricing: { completion: '0.0000005', prompt: '0.00000025' }, // $0.25/M input
+    pricing_display: { input: '0.25', output: '0.50' },
   };
 
   const mockProModel: ModelForPricing = {
-    id: 'test/pro-model',
-    pricing: { prompt: '0.000001', completion: '0.000002' }, // $1.00/M input
-    pricing_display: { input: '1.00', output: '2.00' },
     context_length: 32768,
+    id: 'test/pro-model',
+    pricing: { completion: '0.000002', prompt: '0.000001' }, // $1.00/M input
+    pricing_display: { input: '1.00', output: '2.00' },
   };
 
   const mockFlagshipModel: ModelForPricing = {
-    id: 'test/flagship-model',
-    pricing: { prompt: '0.000005', completion: '0.000015' }, // $5.00/M input
-    pricing_display: { input: '5.00', output: '15.00' },
     context_length: 128000,
+    id: 'test/flagship-model',
+    pricing: { completion: '0.000015', prompt: '0.000005' }, // $5.00/M input
+    pricing_display: { input: '5.00', output: '15.00' },
   };
 
   const mockUltimateModel: ModelForPricing = {
-    id: 'test/ultimate-model',
-    pricing: { prompt: '0.000020', completion: '0.000060' }, // $20.00/M input
-    pricing_display: { input: '20.00', output: '60.00' },
     context_length: 200000,
+    id: 'test/ultimate-model',
+    pricing: { completion: '0.000060', prompt: '0.000020' }, // $20.00/M input
+    pricing_display: { input: '20.00', output: '60.00' },
   };
 
   describe('model Pricing Tier Classification', () => {
@@ -552,9 +552,9 @@ describe('per-Model Credit Costs', () => {
     const mockGetModel = (id: string): ModelForPricing | undefined => {
       const models: Record<string, ModelForPricing> = {
         'test/budget-model': mockBudgetModel,
-        'test/standard-model': mockStandardModel,
-        'test/pro-model': mockProModel,
         'test/flagship-model': mockFlagshipModel,
+        'test/pro-model': mockProModel,
+        'test/standard-model': mockStandardModel,
         'test/ultimate-model': mockUltimateModel,
       };
       return models[id];
@@ -631,8 +631,8 @@ describe('per-Model Credit Costs', () => {
     const mockGetModel = (id: string): ModelForPricing | undefined => {
       const models: Record<string, ModelForPricing> = {
         'test/budget-model': mockBudgetModel,
-        'test/standard-model': mockStandardModel,
         'test/flagship-model': mockFlagshipModel,
+        'test/standard-model': mockStandardModel,
         'test/ultimate-model': mockUltimateModel,
       };
       return models[id];
@@ -1250,16 +1250,16 @@ describe('model Tier Multiplier Edge Cases', () => {
   const mockGetModel = (id: string): ModelForPricing | undefined => {
     const models: Record<string, ModelForPricing> = {
       'test/budget': {
-        id: 'test/budget',
-        pricing: { prompt: '0.00000005', completion: '0.0000001' },
-        pricing_display: { input: '0.05', output: '0.10' },
         context_length: 8192,
+        id: 'test/budget',
+        pricing: { completion: '0.0000001', prompt: '0.00000005' },
+        pricing_display: { input: '0.05', output: '0.10' },
       },
       'test/ultimate': {
-        id: 'test/ultimate',
-        pricing: { prompt: '0.000020', completion: '0.000060' },
-        pricing_display: { input: '20.00', output: '60.00' },
         context_length: 200000,
+        id: 'test/ultimate',
+        pricing: { completion: '0.000060', prompt: '0.000020' },
+        pricing_display: { input: '20.00', output: '60.00' },
       },
     };
     return models[id];

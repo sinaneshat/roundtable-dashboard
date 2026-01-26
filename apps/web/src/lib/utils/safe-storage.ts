@@ -7,8 +7,9 @@ import type { StorageType } from '@/lib/enums/storage';
 import { DEFAULT_STORAGE_TYPE, StorageTypes } from '@/lib/enums/storage';
 
 function getStorage(type: StorageType): Storage | null {
-  if (typeof window === 'undefined')
+  if (typeof window === 'undefined') {
     return null;
+  }
   return type === StorageTypes.SESSION ? sessionStorage : localStorage;
 }
 
@@ -18,8 +19,9 @@ function getStorage(type: StorageType): Storage | null {
  */
 export function safeStorageGet<T>(key: string, type: StorageType = DEFAULT_STORAGE_TYPE): T | null {
   const storage = getStorage(type);
-  if (!storage)
+  if (!storage) {
     return null;
+  }
 
   try {
     const item = storage.getItem(key);
@@ -35,8 +37,9 @@ export function safeStorageGet<T>(key: string, type: StorageType = DEFAULT_STORA
  */
 export function safeStorageSet<T>(key: string, value: T, type: StorageType = DEFAULT_STORAGE_TYPE): void {
   const storage = getStorage(type);
-  if (!storage)
+  if (!storage) {
     return;
+  }
 
   try {
     storage.setItem(key, JSON.stringify(value));
@@ -50,8 +53,9 @@ export function safeStorageSet<T>(key: string, value: T, type: StorageType = DEF
  */
 export function safeStorageRemove(key: string, type: StorageType = DEFAULT_STORAGE_TYPE): void {
   const storage = getStorage(type);
-  if (!storage)
+  if (!storage) {
     return;
+  }
 
   try {
     storage.removeItem(key);
@@ -66,8 +70,8 @@ export function safeStorageRemove(key: string, type: StorageType = DEFAULT_STORA
  */
 export function createStorageHelper<T>(key: string, type: StorageType = DEFAULT_STORAGE_TYPE) {
   return {
+    clear: (): void => safeStorageRemove(key, type),
     get: (): T | null => safeStorageGet<T>(key, type),
     set: (value: T): void => safeStorageSet(key, value, type),
-    clear: (): void => safeStorageRemove(key, type),
   };
 }

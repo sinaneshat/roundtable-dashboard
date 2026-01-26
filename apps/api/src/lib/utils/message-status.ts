@@ -32,8 +32,6 @@ import { getAssistantMetadata } from './metadata';
  * Reduces magic arrays scattered across the codebase.
  */
 export const MESSAGE_PART_CATEGORIES = {
-  /** Text and reasoning parts only (for simple text display) */
-  TEXT_ONLY: [MessagePartTypes.TEXT, MessagePartTypes.REASONING] as const,
   /** Text, reasoning, tool-call, and tool-result parts (for full UI) */
   DISPLAYABLE: [
     MessagePartTypes.TEXT,
@@ -43,6 +41,8 @@ export const MESSAGE_PART_CATEGORIES = {
   ] as const,
   /** Source URL and source document parts (for citations) */
   SOURCES: [MessagePartTypes.SOURCE_URL, MessagePartTypes.SOURCE_DOCUMENT] as const,
+  /** Text and reasoning parts only (for simple text display) */
+  TEXT_ONLY: [MessagePartTypes.TEXT, MessagePartTypes.REASONING] as const,
 } as const;
 
 // ============================================================================
@@ -136,12 +136,12 @@ export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
   const hasAnyContent = hasTextContent || hasToolCalls;
 
   return {
-    textParts,
     displayableParts,
-    sourceParts,
+    hasAnyContent,
     hasTextContent,
     hasToolCalls,
-    hasAnyContent,
+    sourceParts,
+    textParts,
   };
 }
 
@@ -201,9 +201,9 @@ export type MessageStatusInput = {
  * ```
  */
 export function getMessageStatus({
-  message,
-  isStreaming = false,
   hasAnyContent = true,
+  isStreaming = false,
+  message,
 }: MessageStatusInput): MessageStatus {
   // Extract metadata using type-safe utility
   // getAssistantMetadata already returns AssistantMessageMetadata | null with validation
@@ -259,9 +259,9 @@ export function analyzeMessage(
 ): { parts: MessagePartsAnalysis; status: MessageStatus } {
   const parts = getMessageParts(message);
   const status = getMessageStatus({
-    message,
-    isStreaming,
     hasAnyContent: parts.hasAnyContent,
+    isStreaming,
+    message,
   });
 
   return { parts, status };

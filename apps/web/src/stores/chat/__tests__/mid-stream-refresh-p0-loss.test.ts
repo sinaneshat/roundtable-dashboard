@@ -89,19 +89,19 @@ function simulateServerKVOnlyLogic(
   const allComplete = nextParticipantIndex === null;
 
   return {
-    roundNumber: kvState.roundNumber,
     currentPhase: allComplete ? RoundPhases.MODERATOR : RoundPhases.PARTICIPANTS,
+    moderator: null,
     participants: {
+      allComplete,
+      currentParticipantIndex: kvState.participantIndex,
       hasActiveStream: true,
+      nextParticipantToTrigger: nextParticipantIndex,
+      participantStatuses: kvState.participantStatuses,
       streamId: kvState.streamId,
       totalParticipants: kvState.totalParticipants,
-      currentParticipantIndex: kvState.participantIndex,
-      participantStatuses: kvState.participantStatuses,
-      nextParticipantToTrigger: nextParticipantIndex,
-      allComplete,
     },
-    moderator: null,
     roundComplete: allComplete,
+    roundNumber: kvState.roundNumber,
   };
 }
 
@@ -115,13 +115,16 @@ function simulateServerWithDbValidation(
   // Get participant indices that have actual DB messages
   const participantIndicesWithMessages = new Set<number>();
   for (const msg of dbMessages) {
-    if (msg.role !== MessageRoles.ASSISTANT)
+    if (msg.role !== MessageRoles.ASSISTANT) {
       continue;
+    }
     const metadata = msg.metadata as DbMessageMetadata | null;
-    if (!metadata)
+    if (!metadata) {
       continue;
-    if (isModeratorMessageMetadata(metadata))
+    }
+    if (isModeratorMessageMetadata(metadata)) {
       continue;
+    }
     if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
       participantIndicesWithMessages.add(metadata.participantIndex);
     }
@@ -139,19 +142,19 @@ function simulateServerWithDbValidation(
   const allComplete = nextParticipantIndex === null;
 
   return {
-    roundNumber: kvState.roundNumber,
     currentPhase: allComplete ? RoundPhases.MODERATOR : RoundPhases.PARTICIPANTS,
+    moderator: null,
     participants: {
+      allComplete,
+      currentParticipantIndex: kvState.participantIndex,
       hasActiveStream: true,
+      nextParticipantToTrigger: nextParticipantIndex,
+      participantStatuses: kvState.participantStatuses,
       streamId: kvState.streamId,
       totalParticipants: kvState.totalParticipants,
-      currentParticipantIndex: kvState.participantIndex,
-      participantStatuses: kvState.participantStatuses,
-      nextParticipantToTrigger: nextParticipantIndex,
-      allComplete,
     },
-    moderator: null,
     roundComplete: allComplete,
+    roundNumber: kvState.roundNumber,
   };
 }
 
@@ -223,54 +226,56 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
     // State BEFORE refresh: P0 complete, P1 streaming
     const storeMessagesBeforeRefresh: UIMessage[] = [
       createTestUserMessage({
-        id: 'user-0',
         content: 'We run a $10M content writing agency...',
+        id: 'user-0',
         roundNumber: 0,
       }),
       // P0 COMPLETED with full response
       (() => {
         const p0 = participants[0];
-        if (!p0)
+        if (!p0) {
           throw new Error('expected participant 0');
+        }
         return createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: p0.id,
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         });
       })(),
       // P1 STREAMING with partial response
       {
         id: 'thread-123_r0_p1',
-        role: MessageRoles.ASSISTANT as const,
-        parts: [
-          { type: 'step-start' as const },
-          {
-            type: 'text' as const,
-            text: 'I challenge the "double down on human-only quality" option...',
-            state: TextPartStates.STREAMING, // Still streaming!
-          },
-        ],
         metadata: (() => {
           const p1 = participants[1];
-          if (!p1)
+          if (!p1) {
             throw new Error('expected participant 1');
+          }
           return {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'x-ai/grok-4-fast',
             participantId: p1.id,
             participantIndex: 1,
             participantRole: 'Industry Analyst',
-            model: 'x-ai/grok-4-fast',
-            finishReason: FinishReasons.UNKNOWN,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           };
         })(),
+        parts: [
+          { type: 'step-start' as const },
+          {
+            state: TextPartStates.STREAMING, // Still streaming!
+            text: 'I challenge the "double down on human-only quality" option...',
+            type: 'text' as const,
+          },
+        ],
+        role: MessageRoles.ASSISTANT as const,
       },
     ];
 
@@ -278,38 +283,39 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
     // P1's message was never saved (still streaming when refresh happened)
     const dbMessagesAfterRefresh: UIMessage[] = [
       createTestUserMessage({
-        id: 'user-0',
         content: 'We run a $10M content writing agency...',
+        id: 'user-0',
         roundNumber: 0,
       }),
       (() => {
         const p0 = participants[0];
-        if (!p0)
+        if (!p0) {
           throw new Error('expected participant 0');
+        }
         return createTestAssistantMessage({
-          id: 'thread-123_r0_p0',
           content: 'As the Innovation Lead, I recommend a hybrid approach combining AI tools with human creativity...',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r0_p0',
           participantId: p0.id,
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         });
       })(),
     ];
 
     // KV state: P0 completed, P1 active
     const kvState: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p1',
-      roundNumber: 0,
+      createdAt: new Date().toISOString(),
       participantIndex: 1, // Currently streaming P1
-      totalParticipants: 3,
       participantStatuses: {
         0: ParticipantStreamStatuses.COMPLETED, // P0 done
         1: ParticipantStreamStatuses.ACTIVE, // P1 streaming
         // P2 not started (undefined)
       },
-      createdAt: new Date().toISOString(),
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p1',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     it('bUG: KV-only server logic returns P1 as next (correct in this case)', () => {
@@ -341,7 +347,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       expect(mergedMessages.some((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0;
-      })).toBe(true);
+      })).toBeTruthy();
     });
 
     it('cRITICAL: P0 message should be preserved after refresh', () => {
@@ -382,8 +388,8 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
     // DB state: Only user message (P0's message save failed/pending)
     const dbMessagesRaceCondition: UIMessage[] = [
       createTestUserMessage({
-        id: 'user-0',
         content: 'We run a $10M content writing agency...',
+        id: 'user-0',
         roundNumber: 0,
       }),
       // NO P0 message! Save was interrupted
@@ -391,15 +397,15 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
 
     // KV state: P0 marked as COMPLETED (race condition!)
     const kvStateRaceCondition: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p0',
-      roundNumber: 0,
+      createdAt: new Date(Date.now() - 30000).toISOString(),
       participantIndex: 0,
-      totalParticipants: 3,
       participantStatuses: {
         0: ParticipantStreamStatuses.COMPLETED, // BUG: KV says done but DB has no message!
       },
-      createdAt: new Date(Date.now() - 30000).toISOString(),
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p0',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     it('bUG (BEFORE FIX): KV-only server returns P1, skipping P0 entirely', () => {
@@ -431,23 +437,23 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
 
     const dbMessagesStaleDetection: UIMessage[] = [
       createTestUserMessage({
-        id: 'user-0',
         content: 'We run a $10M content writing agency...',
+        id: 'user-0',
         roundNumber: 0,
       }),
       // NO P0 message! Stream was interrupted before save
     ];
 
     const kvStateStaleDetection: ThreadActiveStream = {
-      threadId: 'thread-123',
-      streamId: 'stream-xyz_r0_p0',
-      roundNumber: 0,
+      createdAt: new Date(Date.now() - 60000).toISOString(),
       participantIndex: 0,
-      totalParticipants: 3,
       participantStatuses: {
         0: ParticipantStreamStatuses.FAILED, // Marked failed by stale detection
       },
-      createdAt: new Date(Date.now() - 60000).toISOString(),
+      roundNumber: 0,
+      streamId: 'stream-xyz_r0_p0',
+      threadId: 'thread-123',
+      totalParticipants: 3,
     };
 
     it('bUG (BEFORE FIX): KV-only server skips failed P0, returns P1', () => {
@@ -470,57 +476,57 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
       // === PHASE 1: Before Refresh ===
       // Store has: user message, P0 complete, P1 streaming
       const storeBeforeRefresh: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 full response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'p0-id',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         {
           id: 'p1-msg',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'P1 partial...', state: TextPartStates.STREAMING }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'test',
             participantId: 'p1-id',
             participantIndex: 1,
             participantRole: 'Analyst',
-            model: 'test',
-            finishReason: FinishReasons.UNKNOWN,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ state: TextPartStates.STREAMING, text: 'P1 partial...', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       // DB has: user message, P0 complete (P1 not saved)
       const dbAfterRefresh: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 full response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'p0-id',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
       // KV: P0 completed, P1 active
       const kv: ThreadActiveStream = {
-        threadId: 't1',
-        streamId: 's1_r0_p1',
-        roundNumber: 0,
-        participantIndex: 1,
-        totalParticipants: 3,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED, 1: ParticipantStreamStatuses.ACTIVE },
         createdAt: new Date().toISOString(),
+        participantIndex: 1,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED, 1: ParticipantStreamStatuses.ACTIVE },
+        roundNumber: 0,
+        streamId: 's1_r0_p1',
+        threadId: 't1',
+        totalParticipants: 3,
       };
 
       // === PHASE 2: Refresh happens ===
@@ -545,63 +551,63 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0 && m.role === MessageRoles.ASSISTANT;
       });
-      expect(p0Preserved).toBe(true);
+      expect(p0Preserved).toBeTruthy();
 
       // P1's partial message should be discarded (will restart)
       const p1InMessages = clientMessages.some((m) => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 1;
       });
-      expect(p1InMessages).toBe(false);
+      expect(p1InMessages).toBeFalsy();
     });
 
     it('simulates bug scenario where P0 message is NOT in DB', () => {
       // Store has P0 complete, P1 streaming
       const storeBeforeRefresh: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'p0-msg',
           content: 'P0 full response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'p0-msg',
           participantId: 'p0-id',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         {
           id: 'p1-msg',
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: 'text' as const, text: 'P1 partial...', state: TextPartStates.STREAMING }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'test',
             participantId: 'p1-id',
             participantIndex: 1,
             participantRole: 'Analyst',
-            model: 'test',
-            finishReason: FinishReasons.UNKNOWN,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ state: TextPartStates.STREAMING, text: 'P1 partial...', type: 'text' as const }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
       // BUG: DB only has user message (P0 save failed!)
       const dbAfterRefresh: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
         // P0's message is MISSING from DB!
       ];
 
       // KV: P0 marked completed (but DB doesn't have it!)
       const kvBuggy: ThreadActiveStream = {
-        threadId: 't1',
-        streamId: 's1_r0_p0',
-        roundNumber: 0,
-        participantIndex: 0,
-        totalParticipants: 3,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
         createdAt: new Date().toISOString(),
+        participantIndex: 0,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        roundNumber: 0,
+        streamId: 's1_r0_p0',
+        threadId: 't1',
+        totalParticipants: 3,
       };
 
       // === SERVER SIDE ===
@@ -625,7 +631,7 @@ describe('mid-Stream Refresh P0 Message Loss Bug', () => {
         const meta = m.metadata as DbAssistantMessageMetadata;
         return meta?.participantIndex === 0 && m.role === MessageRoles.ASSISTANT;
       });
-      expect(p0Lost).toBe(true); // P0 IS LOST - this is the bug!
+      expect(p0Lost).toBeTruthy(); // P0 IS LOST - this is the bug!
     });
   });
 });
@@ -677,8 +683,8 @@ describe('waitUntil Race Condition Fix', () => {
       // User refreshed before consumeSseStream (waitUntil) finished
       // Buffer is still ACTIVE, active key still exists
       return {
-        streamBuffer: { streamId, status: 'active', chunkCount: 50 },
         activeParticipantKey: streamId, // Still set!
+        streamBuffer: { chunkCount: 50, status: 'active', streamId },
         threadActiveStream: {
           participantStatuses: { 0: 'completed' }, // updateParticipantStatus was called
         },
@@ -687,8 +693,8 @@ describe('waitUntil Race Condition Fix', () => {
 
     // If consumeSseStream completed normally
     return {
-      streamBuffer: { streamId, status: 'completed', chunkCount: 100 },
       activeParticipantKey: null,
+      streamBuffer: { chunkCount: 100, status: 'completed', streamId },
       threadActiveStream: {
         participantStatuses: { 0: 'completed' },
       },
@@ -710,8 +716,8 @@ describe('waitUntil Race Condition Fix', () => {
 
     // Regardless of whether consumeSseStream finished, buffer is marked complete
     return {
-      streamBuffer: { streamId, status: 'completed', chunkCount: 50 }, // Marked by onFinish
       activeParticipantKey: null, // Cleared by onFinish
+      streamBuffer: { chunkCount: 50, status: 'completed', streamId }, // Marked by onFinish
       threadActiveStream: {
         participantStatuses: { 0: 'completed' },
       },
@@ -793,9 +799,9 @@ describe('waitUntil Race Condition Fix', () => {
       }
 
       return {
-        participantBuffers,
-        moderatorBuffer: moderatorCompleted ? { status: 'completed' } : null,
         activeParticipantKeys,
+        moderatorBuffer: moderatorCompleted ? { status: 'completed' } : null,
+        participantBuffers,
       };
     }
 
@@ -803,7 +809,7 @@ describe('waitUntil Race Condition Fix', () => {
       const result = simulateCompleteRound(3, true, true);
 
       // All buffers completed
-      expect(Object.values(result.participantBuffers).every(b => b.status === 'completed')).toBe(true);
+      expect(Object.values(result.participantBuffers).every(b => b.status === 'completed')).toBeTruthy();
       // No active keys
       expect(result.activeParticipantKeys).toHaveLength(0);
       // Moderator completed
@@ -814,7 +820,7 @@ describe('waitUntil Race Condition Fix', () => {
       const result = simulateCompleteRound(3, false, false);
 
       // All buffers still active (bug scenario)
-      expect(Object.values(result.participantBuffers).every(b => b.status === 'active')).toBe(true);
+      expect(Object.values(result.participantBuffers).every(b => b.status === 'active')).toBeTruthy();
       // Active keys still exist (causes re-trigger)
       expect(result.activeParticipantKeys).toHaveLength(3);
     });
@@ -824,46 +830,46 @@ describe('waitUntil Race Condition Fix', () => {
 describe('message Merging Edge Cases', () => {
   it('preserves completed messages even when partial messages exist', () => {
     const storeMessages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
       // P0: Complete message
       createTestAssistantMessage({
-        id: 'p0-complete',
         content: 'Complete P0 response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-complete',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       // P1: Partial streaming message
       {
         id: 'p1-partial',
-        role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: 'text' as const, text: 'Partial...', state: TextPartStates.STREAMING }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 0,
+          finishReason: FinishReasons.UNKNOWN,
+          hasError: false,
+          isPartialResponse: false,
+          isTransient: false,
+          model: 'test',
           participantId: 'p1',
           participantIndex: 1,
           participantRole: 'Test',
-          model: 'test',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: false,
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 0,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [{ state: TextPartStates.STREAMING, text: 'Partial...', type: 'text' as const }],
+        role: MessageRoles.ASSISTANT as const,
       },
     ];
 
     const dbMessages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Query', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Query', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0-complete',
         content: 'Complete P0 response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'p0-complete',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 
@@ -874,7 +880,7 @@ describe('message Merging Edge Cases', () => {
     expect(merged.some((m) => {
       const meta = m.metadata as DbAssistantMessageMetadata;
       return meta?.participantIndex === 0;
-    })).toBe(true);
+    })).toBeTruthy();
   });
 });
 
@@ -897,23 +903,23 @@ describe('stale Resumption State on New Round Submission', () => {
 
     // Round 0 completes - sets phase to COMPLETE
     store.getState().prefillStreamResumptionState('thread-1', {
-      roundComplete: true,
       currentPhase: RoundPhases.COMPLETE,
-      resumptionRoundNumber: 0,
-      preSearch: null,
-      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
       moderator: null,
+      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
+      preSearch: null,
+      resumptionRoundNumber: 0,
+      roundComplete: true,
     });
 
     expect(store.getState().currentResumptionPhase).toBe(RoundPhases.COMPLETE);
-    expect(store.getState().streamResumptionPrefilled).toBe(true);
+    expect(store.getState().streamResumptionPrefilled).toBeTruthy();
 
     // Simulate what form-actions does at start of handleUpdateThreadAndSend
     store.getState().clearStreamResumption();
 
     // State should be cleared
     expect(store.getState().currentResumptionPhase).toBeNull();
-    expect(store.getState().streamResumptionPrefilled).toBe(false);
+    expect(store.getState().streamResumptionPrefilled).toBeFalsy();
     expect(store.getState().resumptionRoundNumber).toBeNull();
   });
 
@@ -922,12 +928,12 @@ describe('stale Resumption State on New Round Submission', () => {
 
     // Setup: Round 0 complete, phase still set to COMPLETE
     store.getState().prefillStreamResumptionState('thread-1', {
-      roundComplete: true,
       currentPhase: RoundPhases.COMPLETE,
-      resumptionRoundNumber: 0,
-      preSearch: null,
-      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
       moderator: null,
+      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
+      preSearch: null,
+      resumptionRoundNumber: 0,
+      roundComplete: true,
     });
 
     // User submits round 1 - WITHOUT clearing resumption state (old buggy behavior)
@@ -949,7 +955,7 @@ describe('stale Resumption State on New Round Submission', () => {
     const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
 
     // BUG: preserveStreamingState is false even though we're about to stream round 1
-    expect(preserveStreamingState).toBe(false);
+    expect(preserveStreamingState).toBeFalsy();
   });
 
   it('clearing resumption state prevents pendingMessage wipe', () => {
@@ -957,12 +963,12 @@ describe('stale Resumption State on New Round Submission', () => {
 
     // Setup: Round 0 complete
     store.getState().prefillStreamResumptionState('thread-1', {
-      roundComplete: true,
       currentPhase: RoundPhases.COMPLETE,
-      resumptionRoundNumber: 0,
-      preSearch: null,
-      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
       moderator: null,
+      participants: { allComplete: true, nextParticipantToTrigger: null, totalParticipants: 2 },
+      preSearch: null,
+      resumptionRoundNumber: 0,
+      roundComplete: true,
     });
 
     // User submits round 1 - WITH clearing resumption state (fixed behavior)
@@ -983,8 +989,8 @@ describe('stale Resumption State on New Round Submission', () => {
     const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
 
     // FIX: preserveStreamingState is true because configChangeRoundNumber is set
-    expect(hasActiveFormSubmission).toBe(true);
-    expect(preserveStreamingState).toBe(true);
+    expect(hasActiveFormSubmission).toBeTruthy();
+    expect(preserveStreamingState).toBeTruthy();
   });
 
   it('should skip prefill when isPatchInProgress is true', () => {
@@ -1004,11 +1010,11 @@ describe('stale Resumption State on New Round Submission', () => {
       || freshState.pendingMessage !== null;
 
     // Prefill should be skipped
-    expect(skipPrefillDueToFormSubmission).toBe(true);
+    expect(skipPrefillDueToFormSubmission).toBeTruthy();
 
     // If we were to call prefillStreamResumptionState, it would re-set stale data
     // But since we skip it, the state remains clean for the new submission
-    expect(freshState.streamResumptionPrefilled).toBe(false);
+    expect(freshState.streamResumptionPrefilled).toBeFalsy();
     expect(freshState.currentResumptionPhase).toBeNull();
   });
 });

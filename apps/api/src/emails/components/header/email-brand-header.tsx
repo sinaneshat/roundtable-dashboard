@@ -17,27 +17,27 @@ type EmailBrandHeaderProps = {
 // Simple header without background colors
 
 const paddingStyles: Record<string, CSSProperties> = {
-  sm: {
-    padding: `${spacing[6]} ${spacing[4]}`,
+  lg: {
+    padding: `${spacing[10]} ${spacing[8]}`,
   },
   md: {
     padding: `${spacing[8]} ${spacing[6]}`,
   },
-  lg: {
-    padding: `${spacing[10]} ${spacing[8]}`,
+  sm: {
+    padding: `${spacing[6]} ${spacing[4]}`,
   },
 };
 
 export function EmailBrandHeader({
   children,
-  showLogo = true,
   logoSize = 60,
   padding = 'md',
+  showLogo = true,
   style,
 }: EmailBrandHeaderProps) {
   const baseStyle: CSSProperties = {
-    textAlign: 'center',
     backgroundColor: 'transparent',
+    textAlign: 'center',
     ...paddingStyles[padding],
     ...style,
   };

@@ -18,12 +18,14 @@ export function useHydrationInputCapture(
   const hasCapturedRef = useRef(false);
 
   useLayoutEffect(() => {
-    if (hasCapturedRef.current)
+    if (hasCapturedRef.current) {
       return;
+    }
 
     const textarea = textareaRef.current;
-    if (!textarea)
+    if (!textarea) {
       return;
+    }
 
     // Read DOM value - catches text typed during SSR
     const domValue = textarea.value;

@@ -40,39 +40,39 @@ describe('participant-message-isolation', () => {
 
       const participants = [
         {
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          customRoleId: null,
           id: 'participant-0-id',
-          threadId,
+          isEnabled: true,
           modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
           priority: 0,
+          role: null,
           settings: {},
-          createdAt: new Date('2024-01-01T00:00:00Z'),
+          threadId,
           updatedAt: new Date('2024-01-01T00:00:00Z'),
         },
         {
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          customRoleId: null,
           id: 'participant-1-id',
-          threadId,
-          modelId: 'claude-3',
-          role: null,
-          customRoleId: null,
           isEnabled: true,
+          modelId: 'claude-3',
           priority: 1,
+          role: null,
           settings: {},
-          createdAt: new Date('2024-01-01T00:00:00Z'),
+          threadId,
           updatedAt: new Date('2024-01-01T00:00:00Z'),
         },
         {
-          id: 'participant-2-id',
-          threadId,
-          modelId: 'gemini-pro',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
-          priority: 2,
-          settings: {},
           createdAt: new Date('2024-01-01T00:00:00Z'),
+          customRoleId: null,
+          id: 'participant-2-id',
+          isEnabled: true,
+          modelId: 'gemini-pro',
+          priority: 2,
+          role: null,
+          settings: {},
+          threadId,
           updatedAt: new Date('2024-01-01T00:00:00Z'),
         },
       ];
@@ -90,30 +90,30 @@ describe('participant-message-isolation', () => {
       // PARTICIPANT 0 starts streaming
       const message0Id = `${threadId}_r${roundNumber}_p0`;
       setState({
+        currentParticipantIndex: 0,
+        isStreaming: true,
         messages: [
           {
             id: message0Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant0Content }],
             // ❌ BUG: During streaming, metadata may not be set yet
             // OR metadata may have wrong participantIndex due to race condition
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'gpt-4',
               participantId: participants[0].id, // Should be participant-0-id
               participantIndex: 0, // Should be 0
               participantRole: null,
-              model: 'gpt-4',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant0Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ],
-        currentParticipantIndex: 0,
-        isStreaming: true,
       });
 
       // PARTICIPANT 1 starts streaming BEFORE participant 0 finishes
@@ -121,112 +121,112 @@ describe('participant-message-isolation', () => {
       // ❌ CRITICAL BUG: If metadata is shared/not isolated, participant 0's content could leak here
       const message1Id = `${threadId}_r${roundNumber}_p1`;
       setState({
+        currentParticipantIndex: 1,
+        isStreaming: true,
         messages: [
           // Participant 0's message (still streaming)
           {
             id: message0Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant0Content }],
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'gpt-4',
               participantId: participants[0].id,
               participantIndex: 0,
               participantRole: null,
-              model: 'gpt-4',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant0Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
           // Participant 1 starts streaming
           {
             id: message1Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant1Content }],
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'claude-3',
               participantId: participants[1].id, // ❌ BUG: Could be wrong if metadata merge is broken
               participantIndex: 1, // ❌ BUG: Could be 0 if currentParticipantIndex not updated
               participantRole: null,
-              model: 'claude-3',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant1Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ],
-        currentParticipantIndex: 1,
-        isStreaming: true,
       });
 
       // PARTICIPANT 2 starts streaming BEFORE participants 0 and 1 finish
       const message2Id = `${threadId}_r${roundNumber}_p2`;
       setState({
+        currentParticipantIndex: 2,
+        isStreaming: true,
         messages: [
           // All 3 participants now streaming concurrently
           {
             id: message0Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant0Content }],
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'gpt-4',
               participantId: participants[0].id,
               participantIndex: 0,
               participantRole: null,
-              model: 'gpt-4',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant0Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
           {
             id: message1Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant1Content }],
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'claude-3',
               participantId: participants[1].id,
               participantIndex: 1,
               participantRole: null,
-              model: 'claude-3',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant1Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
           {
             id: message2Id,
-            role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: participant2Content }],
             metadata: {
-              role: MessageRoles.ASSISTANT,
-              roundNumber,
+              finishReason: 'unknown',
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'gemini-pro',
               participantId: participants[2].id, // ❌ BUG: Could be participant-0-id or participant-1-id
               participantIndex: 2, // ❌ BUG: Could be 0 or 1
               participantRole: null,
-              model: 'gemini-pro',
-              finishReason: 'unknown',
-              usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT,
+              roundNumber,
+              usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
             },
+            parts: [{ text: participant2Content, type: MessagePartTypes.TEXT }],
+            role: MessageRoles.ASSISTANT,
           },
         ],
-        currentParticipantIndex: 2,
-        isStreaming: true,
       });
 
       // VERIFY: All messages exist and have correct IDs
@@ -242,12 +242,15 @@ describe('participant-message-isolation', () => {
       expect(message2).toBeDefined();
 
       // VERIFY: Each message has ONLY its own content (no cross-contamination)
-      if (!message0)
+      if (!message0) {
         throw new Error('expected message0');
-      if (!message1)
+      }
+      if (!message1) {
         throw new Error('expected message1');
-      if (!message2)
+      }
+      if (!message2) {
         throw new Error('expected message2');
+      }
       const message0Text = extractTextFromParts(message0.parts);
       const message1Text = extractTextFromParts(message1.parts);
       const message2Text = extractTextFromParts(message2.parts);
@@ -302,27 +305,27 @@ describe('participant-message-isolation', () => {
 
       const participants = [
         {
-          id: 'p0',
-          threadId,
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
-          priority: 0,
-          settings: {},
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p0',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          settings: {},
+          threadId,
           updatedAt: new Date(),
         },
         {
-          id: 'p1',
-          threadId,
-          modelId: 'claude-3',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
-          priority: 1,
-          settings: {},
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p1',
+          isEnabled: true,
+          modelId: 'claude-3',
+          priority: 1,
+          role: null,
+          settings: {},
+          threadId,
           updatedAt: new Date(),
         },
       ];
@@ -334,40 +337,40 @@ describe('participant-message-isolation', () => {
       // two messages created in the same millisecond could collide
       const message0 = {
         id: `${threadId}_r${roundNumber}_p0`,
-        role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 0 response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT as const,
-          roundNumber,
+          finishReason: 'unknown' as const,
+          hasError: false,
+          isPartialResponse: false,
+          isTransient: false,
+          model: 'gpt-4',
           participantId: 'p0',
           participantIndex: 0,
           participantRole: null,
-          model: 'gpt-4',
-          finishReason: 'unknown' as const,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: false,
+          role: MessageRoles.ASSISTANT as const,
+          roundNumber,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [{ text: 'Participant 0 response', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.ASSISTANT as const,
       };
 
       const message1 = {
         id: `${threadId}_r${roundNumber}_p1`,
-        role: MessageRoles.ASSISTANT as const,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Participant 1 response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT as const,
-          roundNumber,
+          finishReason: 'unknown' as const,
+          hasError: false,
+          isPartialResponse: false,
+          isTransient: false,
+          model: 'claude-3',
           participantId: 'p1',
           participantIndex: 1,
           participantRole: null,
-          model: 'claude-3',
-          finishReason: 'unknown' as const,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
-          isTransient: false,
-          isPartialResponse: false,
+          role: MessageRoles.ASSISTANT as const,
+          roundNumber,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [{ text: 'Participant 1 response', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.ASSISTANT as const,
       };
 
       setState({ messages: [message0, message1] });
@@ -384,10 +387,12 @@ describe('participant-message-isolation', () => {
       const msg0 = state.messages.find(m => m.id === message0.id);
       const msg1 = state.messages.find(m => m.id === message1.id);
 
-      if (!msg0)
+      if (!msg0) {
         throw new Error('expected msg0');
-      if (!msg1)
+      }
+      if (!msg1) {
         throw new Error('expected msg1');
+      }
       expect(extractTextFromParts(msg0.parts)).toBe('Participant 0 response');
       expect(extractTextFromParts(msg1.parts)).toBe('Participant 1 response');
 
@@ -408,16 +413,16 @@ describe('participant-message-isolation', () => {
 
       // Step 1: Message starts streaming (no metadata yet)
       setState({
+        currentParticipantIndex: 1, // Important: This is participant 1, not 0
+        isStreaming: true,
         messages: [
           {
             id: messageId,
+            parts: [{ text: 'Streaming...', type: MessagePartTypes.TEXT }],
             role: MessageRoles.ASSISTANT,
-            parts: [{ type: MessagePartTypes.TEXT, text: 'Streaming...' }],
             // No metadata yet - this is AI SDK's initial state
           },
         ],
-        currentParticipantIndex: 1, // Important: This is participant 1, not 0
-        isStreaming: true,
       });
 
       // Step 2: Metadata gets merged (simulating onFinish callback)
@@ -427,29 +432,30 @@ describe('participant-message-isolation', () => {
           return {
             ...msg,
             metadata: {
-              role: MessageRoles.ASSISTANT as const,
-              roundNumber,
+              finishReason: 'stop' as const,
+              hasError: false,
+              isPartialResponse: false,
+              isTransient: false,
+              model: 'claude-3',
               participantId: 'participant-1-id',
               participantIndex: 1, // ❌ BUG: Could be 0 if merge uses wrong index
               participantRole: null,
-              model: 'claude-3',
-              finishReason: 'stop' as const,
-              usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
-              hasError: false,
-              isTransient: false,
-              isPartialResponse: false,
+              role: MessageRoles.ASSISTANT as const,
+              roundNumber,
+              usage: { completionTokens: 200, promptTokens: 100, totalTokens: 300 },
             },
           };
         }
         return msg;
       });
 
-      setState({ messages: updatedMessages, isStreaming: false });
+      setState({ isStreaming: false, messages: updatedMessages });
 
       // VERIFY: Metadata has correct participantIndex
       const finalMessage = getState().messages.find(m => m.id === messageId);
-      if (!finalMessage)
+      if (!finalMessage) {
         throw new Error('expected finalMessage');
+      }
       const participantIndex = getParticipantIndex(finalMessage.metadata);
 
       // ❌ FAILING TEST: participantIndex is 0 instead of 1
@@ -470,39 +476,39 @@ describe('participant-message-isolation', () => {
       const round0Messages = [
         {
           id: `${threadId}_r0_p0`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 0, Participant 0' }],
           metadata: {
-            role: MessageRoles.ASSISTANT as const,
-            roundNumber: 0,
+            finishReason: 'stop' as const,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'gpt-4',
             participantId: 'p0',
             participantIndex: 0,
             participantRole: null,
-            model: 'gpt-4',
-            finishReason: 'stop' as const,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT as const,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Round 0, Participant 0', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
         {
           id: `${threadId}_r0_p1`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 0, Participant 1' }],
           metadata: {
-            role: MessageRoles.ASSISTANT as const,
-            roundNumber: 0,
+            finishReason: 'stop' as const,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'claude-3',
             participantId: 'p1',
             participantIndex: 1,
             participantRole: null,
-            model: 'claude-3',
-            finishReason: 'stop' as const,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT as const,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Round 0, Participant 1', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -510,21 +516,21 @@ describe('participant-message-isolation', () => {
       const round1Messages = [
         {
           id: `${threadId}_r1_p0`,
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Round 1, Participant 0' }],
           metadata: {
-            role: MessageRoles.ASSISTANT as const,
-            roundNumber: 1,
+            finishReason: 'stop' as const,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'gpt-4',
             participantId: 'p0',
             participantIndex: 0, // ❌ BUG: Could be 2 if index doesn't reset per round
             participantRole: null,
-            model: 'gpt-4',
-            finishReason: 'stop' as const,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT as const,
+            roundNumber: 1,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Round 1, Participant 0', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -532,8 +538,9 @@ describe('participant-message-isolation', () => {
 
       // VERIFY: Round 1 participant 0 has correct metadata
       const round1p0 = getState().messages.find(m => m.id === `${threadId}_r1_p0`);
-      if (!round1p0)
+      if (!round1p0) {
         throw new Error('expected round1p0');
+      }
       const participantIndex = getParticipantIndex(round1p0.metadata);
 
       // ❌ FAILING TEST: participantIndex continues from round 0 (shows as 2 instead of 0)
@@ -562,27 +569,27 @@ describe('participant-message-isolation', () => {
 
       const participants = [
         {
-          id: 'participant-0-id',
-          threadId,
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
-          priority: 0,
-          settings: {},
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'participant-0-id',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          settings: {},
+          threadId,
           updatedAt: new Date(),
         },
         {
-          id: 'participant-1-id',
-          threadId,
-          modelId: 'claude-3',
-          role: null,
-          customRoleId: null,
-          isEnabled: true,
-          priority: 1,
-          settings: {},
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'participant-1-id',
+          isEnabled: true,
+          modelId: 'claude-3',
+          priority: 1,
+          role: null,
+          settings: {},
+          threadId,
           updatedAt: new Date(),
         },
       ];
@@ -593,21 +600,21 @@ describe('participant-message-isolation', () => {
       const messages = [
         {
           id: `${threadId}_r${roundNumber}_p1`, // ID is correct (p1)
-          role: MessageRoles.ASSISTANT as const,
-          parts: [{ type: MessagePartTypes.TEXT, text: 'Claude-3 response (should be index 1)' }],
           metadata: {
-            role: MessageRoles.ASSISTANT as const,
-            roundNumber,
+            finishReason: 'stop' as const,
+            hasError: false,
+            isPartialResponse: false,
+            isTransient: false,
+            model: 'claude-3',
             participantId: participants[1].id, // participantId is correct
             participantIndex: 0, // ❌ BUG: Wrong! Should be 1, not 0
             participantRole: null,
-            model: 'claude-3',
-            finishReason: 'stop' as const,
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            hasError: false,
-            isTransient: false,
-            isPartialResponse: false,
+            role: MessageRoles.ASSISTANT as const,
+            roundNumber,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Claude-3 response (should be index 1)', type: MessagePartTypes.TEXT }],
+          role: MessageRoles.ASSISTANT as const,
         },
       ];
 
@@ -630,15 +637,17 @@ describe('participant-message-isolation', () => {
       // Strategy 1 (by participantId) will succeed even though strategy 2 (by index) fails
       const resilientLookup = getParticipantMessageFromMaps(maps, participants[1], 1);
       expect(resilientLookup).toBeDefined(); // Falls back to participantId lookup
-      if (!resilientLookup)
+      if (!resilientLookup) {
         throw new Error('expected resilientLookup');
+      }
       expect(extractTextFromParts(resilientLookup.parts)).toBe('Claude-3 response (should be index 1)');
 
       // VERIFY: The metadata inconsistency is detectable
       const message = maps.byId.get('participant-1-id');
       expect(message).toBeDefined();
-      if (!message)
+      if (!message) {
         throw new Error('expected message');
+      }
       expect(getParticipantIndex(message.metadata)).toBe(0); // Wrong index in metadata
       expect(getParticipantId(message.metadata)).toBe('participant-1-id'); // Correct ID
 

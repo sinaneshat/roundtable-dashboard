@@ -18,18 +18,18 @@ import { UploadItemSchema } from './use-file-upload';
  * Combines upload status, item, and preview for chat input display
  */
 export const PendingAttachmentSchema = z.object({
-  /** Unique attachment ID (client-side) */
-  id: z.string(),
   /** Original file */
   file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
-  /** Upload status */
-  status: UploadStatusSchema,
-  /** Upload item with progress */
-  uploadItem: UploadItemSchema.optional(),
+  /** Unique attachment ID (client-side) */
+  id: z.string(),
   /** File preview (thumbnail/icon) */
   preview: FilePreviewSchema.optional(),
+  /** Upload status */
+  status: UploadStatusSchema,
   /** Backend upload ID (after successful upload) */
   uploadId: z.string().optional(),
+  /** Upload item with progress */
+  uploadItem: UploadItemSchema.optional(),
 });
 
 export type PendingAttachment = z.infer<typeof PendingAttachmentSchema>;

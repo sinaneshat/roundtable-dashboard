@@ -36,36 +36,36 @@ describe('server-Client Sync Audit', () => {
        */
       // User left when P0 was streaming
       const staleClientState = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: true, // Was streaming when user left
-        streamingRoundNumber: 0,
         currentParticipantIndex: 0, // P0 was streaming
-        participants: createMockResumptionParticipants(2),
+        isStreaming: true, // Was streaming when user left
         messages: [
           createMockUserMessage(0),
           // P0 partial message
           {
             id: 'msg-p0-r0',
-            role: 'assistant' as const,
-            parts: [{ type: 'text' as const, text: 'Partial P0 response...' }],
             metadata: {
-              role: 'assistant' as const,
-              roundNumber: 0,
+              finishReason: 'unknown', // Not finished
+              model: 'gpt-4',
               participantId: 'participant-0',
               participantIndex: 0,
-              model: 'gpt-4',
-              finishReason: 'unknown', // Not finished
+              role: 'assistant' as const,
+              roundNumber: 0,
             },
+            parts: [{ text: 'Partial P0 response...', type: 'text' as const }],
+            role: 'assistant' as const,
           },
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        screenMode: ScreenModes.THREAD,
+        streamingRoundNumber: 0,
+        thread: { enableWebSearch: false, id: 'thread-123' },
       });
 
       // Server has completed everything (simulating what DB would return)
       const serverCompletedState = {
-        roundNumber: 0,
-        messages: createCompleteRoundMessages(0, 2), // user + P0 + P1 + moderator
         currentPhase: RoundPhases.COMPLETE,
+        messages: createCompleteRoundMessages(0, 2), // user + P0 + P1 + moderator
+        roundNumber: 0,
       };
 
       // Verify server state is complete
@@ -75,7 +75,7 @@ describe('server-Client Sync Audit', () => {
       // Client state was stale (partial P0)
       const clientState = staleClientState.getState();
       expect(clientState.messages).toHaveLength(2);
-      expect(clientState.isStreaming).toBe(true);
+      expect(clientState.isStreaming).toBeTruthy();
 
       // On return, client should:
       // 1. Fetch fresh messages from DB (complete round)
@@ -91,16 +91,16 @@ describe('server-Client Sync Audit', () => {
        * system should NOT trigger any streaming.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: false,
-        waitingToStartStreaming: false,
         // Server prefilled COMPLETE phase
         currentResumptionPhase: RoundPhases.COMPLETE,
-        streamResumptionPrefilled: true,
-        resumptionRoundNumber: 0,
-        participants: createMockResumptionParticipants(2),
+        isStreaming: false,
         messages: createCompleteRoundMessages(0, 2),
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        resumptionRoundNumber: 0,
+        screenMode: ScreenModes.THREAD,
+        streamResumptionPrefilled: true,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       const state = store.getState();
@@ -118,8 +118,8 @@ describe('server-Client Sync Audit', () => {
       expect(moderatorMsg).toBeDefined();
 
       // No streaming should be triggered
-      expect(state.isStreaming).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
     });
 
     it('4.3 - user returns mid-participant', () => {
@@ -131,40 +131,40 @@ describe('server-Client Sync Audit', () => {
        * System should NOT trigger P1 again.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: false, // Not streaming yet (just returned)
-        waitingToStartStreaming: false,
         // Server says P1 has active stream
         currentResumptionPhase: RoundPhases.PARTICIPANTS,
-        streamResumptionPrefilled: true,
-        resumptionRoundNumber: 0,
-        participants: createMockResumptionParticipants(2),
+        isStreaming: false, // Not streaming yet (just returned)
         messages: [
           createMockUserMessage(0),
           createMockAssistantMessage(0, 0), // P0 complete
           // P1 not yet in cache (streaming on server)
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        resumptionRoundNumber: 0,
+        screenMode: ScreenModes.THREAD,
+        streamResumptionPrefilled: true,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       // Server resumption state indicates active stream for P1
       const serverResumption = createMockStreamResumptionState({
-        roundNumber: 0,
         currentPhase: RoundPhases.PARTICIPANTS,
         hasActiveStream: true, // Active stream exists!
-        streamId: 'active-stream-p1',
         participants: {
-          hasActiveStream: true,
-          streamId: 'active-stream-p1',
-          totalParticipants: 2,
+          allComplete: false,
           currentParticipantIndex: 1, // P1 is streaming
+          hasActiveStream: true,
+          nextParticipantToTrigger: null, // Nothing to trigger, stream active
           participantStatuses: {
             0: { complete: true, hasError: false },
             1: { complete: false, hasError: false }, // P1 in progress
           },
-          nextParticipantToTrigger: null, // Nothing to trigger, stream active
-          allComplete: false,
+          streamId: 'active-stream-p1',
+          totalParticipants: 2,
         },
+        roundNumber: 0,
+        streamId: 'active-stream-p1',
       });
 
       // Client state
@@ -172,9 +172,9 @@ describe('server-Client Sync Audit', () => {
       expect(state.messages).toHaveLength(2); // user + P0
 
       // Server indicates active stream
-      expect(serverResumption.hasActiveStream).toBe(true);
-      expect(serverResumption.participants?.hasActiveStream).toBe(true);
-      expect(serverResumption.participants?.nextParticipantToTrigger).toBe(null);
+      expect(serverResumption.hasActiveStream).toBeTruthy();
+      expect(serverResumption.participants?.hasActiveStream).toBeTruthy();
+      expect(serverResumption.participants?.nextParticipantToTrigger).toBeNull();
 
       // When hasActiveStream=true and nextParticipantToTrigger=null:
       // AI SDK's resume:true handles reconnection
@@ -193,22 +193,22 @@ describe('server-Client Sync Audit', () => {
       store.getState().setMessages([
         {
           id: 'user-0',
-          role: 'user' as const,
-          parts: [{ type: 'text' as const, text: 'Original question' }],
           metadata: { role: 'user' as const, roundNumber: 0 },
+          parts: [{ text: 'Original question', type: 'text' as const }],
+          role: 'user' as const,
         },
         {
           id: 'p0-0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Partial...' }], // Stale partial
           metadata: {
-            role: 'assistant' as const,
-            roundNumber: 0,
+            finishReason: FinishReasons.UNKNOWN,
+            model: 'gpt-4',
             participantId: 'p0',
             participantIndex: 0,
-            model: 'gpt-4',
-            finishReason: FinishReasons.UNKNOWN,
+            role: 'assistant' as const,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Partial...', type: 'text' as const }], // Stale partial
+          role: 'assistant' as const,
         },
       ]);
 
@@ -218,47 +218,47 @@ describe('server-Client Sync Audit', () => {
       const freshMessages = [
         {
           id: 'user-0',
-          role: 'user' as const,
-          parts: [{ type: 'text' as const, text: 'Original question' }],
           metadata: { role: 'user' as const, roundNumber: 0 },
+          parts: [{ text: 'Original question', type: 'text' as const }],
+          role: 'user' as const,
         },
         {
           id: 'p0-0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Complete P0 response with full content!' }],
           metadata: {
-            role: 'assistant' as const,
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP, // Complete
+            model: 'gpt-4',
             participantId: 'p0',
             participantIndex: 0,
-            model: 'gpt-4',
-            finishReason: FinishReasons.STOP, // Complete
+            role: 'assistant' as const,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Complete P0 response with full content!', type: 'text' as const }],
+          role: 'assistant' as const,
         },
         {
           id: 'p1-0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Complete P1 response' }],
           metadata: {
-            role: 'assistant' as const,
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP,
+            model: 'claude',
             participantId: 'p1',
             participantIndex: 1,
-            model: 'claude',
-            finishReason: FinishReasons.STOP,
+            role: 'assistant' as const,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Complete P1 response', type: 'text' as const }],
+          role: 'assistant' as const,
         },
         {
           id: 'mod-0',
-          role: 'assistant' as const,
-          parts: [{ type: 'text' as const, text: 'Moderator summary' }],
           metadata: {
-            role: 'assistant' as const,
-            roundNumber: 0,
+            finishReason: FinishReasons.STOP,
             isModerator: true,
             model: 'gemini',
-            finishReason: FinishReasons.STOP,
+            role: 'assistant' as const,
+            roundNumber: 0,
           },
+          parts: [{ text: 'Moderator summary', type: 'text' as const }],
+          role: 'assistant' as const,
         },
       ];
 
@@ -295,13 +295,8 @@ describe('server-Client Sync Audit', () => {
        * All messages should be present.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
-        isStreaming: false,
-        waitingToStartStreaming: false,
         currentResumptionPhase: RoundPhases.COMPLETE,
-        streamResumptionPrefilled: true,
-        resumptionRoundNumber: 2, // Latest round
-        participants: createMockResumptionParticipants(2),
+        isStreaming: false,
         // All 3 rounds complete
         messages: [
           // Round 0
@@ -311,7 +306,12 @@ describe('server-Client Sync Audit', () => {
           // Round 2
           ...createCompleteRoundMessages(2, 2),
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        resumptionRoundNumber: 2, // Latest round
+        screenMode: ScreenModes.THREAD,
+        streamResumptionPrefilled: true,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       const state = store.getState();
@@ -352,18 +352,18 @@ describe('server-Client Sync Audit', () => {
        * Prefill state from thread A should not be used for thread B.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
+        currentResumptionPhase: RoundPhases.PARTICIPANTS,
         isStreaming: false,
-        waitingToStartStreaming: false,
+        messages: [createMockUserMessage(0)],
+        participants: createMockResumptionParticipants(2),
+        prefilledForThreadId: 'thread-A',
+        resumptionRoundNumber: 0,
+        screenMode: ScreenModes.THREAD,
         // Prefill state was set for thread-A
         streamResumptionPrefilled: true,
-        prefilledForThreadId: 'thread-A',
-        currentResumptionPhase: RoundPhases.PARTICIPANTS,
-        resumptionRoundNumber: 0,
-        participants: createMockResumptionParticipants(2),
-        messages: [createMockUserMessage(0)],
         // But current thread is thread-B!
-        thread: { id: 'thread-B', enableWebSearch: false },
+        thread: { enableWebSearch: false, id: 'thread-B' },
+        waitingToStartStreaming: false,
       });
 
       const state = store.getState();
@@ -388,33 +388,33 @@ describe('server-Client Sync Audit', () => {
        * System must wait for onFinish to acknowledge completion.
        */
       const store = createMockChatStore({
-        screenMode: ScreenModes.THREAD,
         // Stream just finished (isStreaming went false)
         isStreaming: false,
-        streamingRoundNumber: null,
-        // But onFinish hasn't run yet!
-        streamFinishAcknowledged: false,
-        waitingToStartStreaming: false,
-        participants: createMockResumptionParticipants(2),
         messages: [
           createMockUserMessage(0),
           createMockAssistantMessage(0, 0), // P0 just finished
         ],
-        thread: { id: 'thread-123', enableWebSearch: false },
+        participants: createMockResumptionParticipants(2),
+        screenMode: ScreenModes.THREAD,
+        // But onFinish hasn't run yet!
+        streamFinishAcknowledged: false,
+        streamingRoundNumber: null,
+        thread: { enableWebSearch: false, id: 'thread-123' },
+        waitingToStartStreaming: false,
       });
 
       const state = store.getState();
 
       // Stream is "done" but not acknowledged
-      expect(state.isStreaming).toBe(false);
-      expect(state.streamFinishAcknowledged).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
+      expect(state.streamFinishAcknowledged).toBeFalsy();
 
       // Resumption should be blocked until streamFinishAcknowledged=true
       // This prevents triggering P1 before P0's onFinish has cleaned up state
 
       // After onFinish runs:
       store.setState({ streamFinishAcknowledged: true });
-      expect(store.getState().streamFinishAcknowledged).toBe(true);
+      expect(store.getState().streamFinishAcknowledged).toBeTruthy();
       // Now resumption can safely proceed
     });
   });

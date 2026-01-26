@@ -40,13 +40,13 @@ import { GC_TIMES, STALE_TIMES } from './stale-times';
  * - Client: Makes RPC call to server function
  */
 export const modelsQueryOptions = queryOptions({
-  queryKey: queryKeys.models.list(),
-  queryFn: () => getModels(),
-  staleTime: STALE_TIMES.models, // Infinity - never auto-refetch
   gcTime: GC_TIMES.INFINITE, // Infinity - keep in cache forever (matches staleTime)
-  refetchOnWindowFocus: false,
+  queryFn: () => getModels(),
+  queryKey: queryKeys.models.list(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
   retry: 2,
+  staleTime: STALE_TIMES.models, // Infinity - never auto-refetch
 });
 
 /**
@@ -61,12 +61,12 @@ export const modelsQueryOptions = queryOptions({
  * - Client: Makes RPC call to server function
  */
 export const productsQueryOptions = queryOptions({
-  queryKey: queryKeys.products.list(),
   queryFn: () => getProducts(),
-  staleTime: STALE_TIMES.products,
-  refetchOnWindowFocus: false,
+  queryKey: queryKeys.products.list(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
   retry: 1,
+  staleTime: STALE_TIMES.products,
 });
 
 /**
@@ -81,12 +81,12 @@ export const productsQueryOptions = queryOptions({
  * Manual invalidation handles subscription state changes after plan updates.
  */
 export const subscriptionsQueryOptions = queryOptions({
-  queryKey: queryKeys.subscriptions.current(),
   queryFn: () => getSubscriptions(),
-  staleTime: STALE_TIMES.subscriptions, // Use centralized stale time for consistency
-  refetchOnWindowFocus: false,
+  queryKey: queryKeys.subscriptions.current(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
   retry: 1,
+  staleTime: STALE_TIMES.subscriptions, // Use centralized stale time for consistency
 });
 
 /**
@@ -100,12 +100,12 @@ export const subscriptionsQueryOptions = queryOptions({
  * Usage is invalidated after chat operations, so stale data is acceptable.
  */
 export const usageQueryOptions = queryOptions({
-  queryKey: queryKeys.usage.stats(),
   queryFn: () => getUsageStats(),
-  staleTime: STALE_TIMES.threadsSidebar, // 30s - prevent immediate refetch on hydration
-  refetchOnWindowFocus: false,
+  queryKey: queryKeys.usage.stats(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
   retry: 1,
+  staleTime: STALE_TIMES.threadsSidebar, // 30s - prevent immediate refetch on hydration
 });
 
 /**
@@ -119,7 +119,6 @@ export const usageQueryOptions = queryOptions({
  * Throws on error to satisfy TanStack Query's type requirements.
  */
 export const sidebarThreadsQueryOptions = infiniteQueryOptions({
-  queryKey: queryKeys.threads.sidebar(),
   queryFn: async () => {
     const result = await getSidebarThreads();
     if (!result.success) {
@@ -129,9 +128,10 @@ export const sidebarThreadsQueryOptions = infiniteQueryOptions({
   },
   initialPageParam: undefined as string | undefined,
   getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
-  staleTime: STALE_TIMES.threadsSidebar,
-  refetchOnWindowFocus: false,
+  queryKey: queryKeys.threads.sidebar(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
+  staleTime: STALE_TIMES.threadsSidebar,
 });
 
 /**
@@ -145,7 +145,6 @@ export const sidebarThreadsQueryOptions = infiniteQueryOptions({
  * Throws on error to satisfy TanStack Query's type requirements.
  */
 export const sidebarProjectsQueryOptions = infiniteQueryOptions({
-  queryKey: queryKeys.projects.sidebar(),
   queryFn: async () => {
     const result = await getSidebarProjects();
     if (!result.success) {
@@ -155,9 +154,10 @@ export const sidebarProjectsQueryOptions = infiniteQueryOptions({
   },
   initialPageParam: undefined as string | undefined,
   getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
-  staleTime: STALE_TIMES.threadsSidebar,
-  refetchOnWindowFocus: false,
+  queryKey: queryKeys.projects.sidebar(),
   refetchOnMount: false,
+  refetchOnWindowFocus: false,
+  staleTime: STALE_TIMES.threadsSidebar,
 });
 
 /**
@@ -177,12 +177,12 @@ export const sidebarProjectsQueryOptions = infiniteQueryOptions({
  */
 export function threadBySlugQueryOptions(slug: string) {
   return queryOptions({
-    queryKey: queryKeys.threads.bySlug(slug),
     queryFn: () => getThreadBySlug({ data: slug }),
-    staleTime: STALE_TIMES.threadDetail,
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.threads.bySlug(slug),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.threadDetail,
   });
 }
 
@@ -202,12 +202,12 @@ export function threadBySlugQueryOptions(slug: string) {
  */
 export function threadChangelogQueryOptions(threadId: string) {
   return queryOptions({
-    queryKey: queryKeys.threads.changelog(threadId),
     queryFn: () => getThreadChangelog({ data: threadId }),
-    staleTime: STALE_TIMES.threadChangelog, // Infinity
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.threads.changelog(threadId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.threadChangelog, // Infinity
   });
 }
 
@@ -226,12 +226,12 @@ export function threadChangelogQueryOptions(threadId: string) {
  */
 export function threadFeedbackQueryOptions(threadId: string) {
   return queryOptions({
-    queryKey: queryKeys.threads.feedback(threadId),
     queryFn: () => getThreadFeedback({ data: threadId }),
-    staleTime: STALE_TIMES.threadFeedback, // Infinity
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.threads.feedback(threadId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.threadFeedback, // Infinity
   });
 }
 
@@ -251,13 +251,13 @@ export function threadFeedbackQueryOptions(threadId: string) {
  */
 export function streamResumptionQueryOptions(threadId: string) {
   return queryOptions({
-    queryKey: queryKeys.threads.streamResumption(threadId),
-    queryFn: () => getStreamResumptionState({ data: threadId }),
-    staleTime: 0, // Always fetch fresh - stream state changes
     gcTime: GC_TIMES.SHORT, // 1 min - ephemeral data
-    refetchOnWindowFocus: false,
+    queryFn: () => getStreamResumptionState({ data: threadId }),
+    queryKey: queryKeys.threads.streamResumption(threadId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: 0, // Always fetch fresh - stream state changes
   });
 }
 
@@ -277,12 +277,12 @@ export function streamResumptionQueryOptions(threadId: string) {
  */
 export function threadPreSearchesQueryOptions(threadId: string) {
   return queryOptions({
-    queryKey: queryKeys.threads.preSearches(threadId),
     queryFn: () => getThreadPreSearches({ data: threadId }),
-    staleTime: STALE_TIMES.preSearch, // Infinity
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.threads.preSearches(threadId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.preSearch, // Infinity
   });
 }
 
@@ -299,12 +299,12 @@ export function threadPreSearchesQueryOptions(threadId: string) {
  */
 export function projectQueryOptions(projectId: string) {
   return queryOptions({
-    queryKey: queryKeys.projects.detail(projectId),
     queryFn: () => getProjectById({ data: projectId }),
-    staleTime: STALE_TIMES.threadDetail, // 10s
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.projects.detail(projectId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.threadDetail, // 10s
   });
 }
 
@@ -321,7 +321,6 @@ export function projectQueryOptions(projectId: string) {
  */
 export function projectAttachmentsQueryOptions(projectId: string) {
   return infiniteQueryOptions({
-    queryKey: queryKeys.projects.attachments(projectId),
     queryFn: async () => {
       const result = await getProjectAttachments({ data: projectId });
       if (!result.success) {
@@ -331,9 +330,10 @@ export function projectAttachmentsQueryOptions(projectId: string) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
-    staleTime: STALE_TIMES.threadDetail,
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.projects.attachments(projectId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    staleTime: STALE_TIMES.threadDetail,
   });
 }
 
@@ -350,7 +350,6 @@ export function projectAttachmentsQueryOptions(projectId: string) {
  */
 export function projectMemoriesQueryOptions(projectId: string) {
   return infiniteQueryOptions({
-    queryKey: queryKeys.projects.memories(projectId),
     queryFn: async () => {
       const result = await getProjectMemories({ data: projectId });
       if (!result.success) {
@@ -360,9 +359,10 @@ export function projectMemoriesQueryOptions(projectId: string) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
-    staleTime: STALE_TIMES.threadDetail,
-    refetchOnWindowFocus: false,
+    queryKey: queryKeys.projects.memories(projectId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    staleTime: STALE_TIMES.threadDetail,
   });
 }
 
@@ -381,8 +381,6 @@ export function projectMemoriesQueryOptions(projectId: string) {
  */
 export function projectThreadsQueryOptions(projectId: string) {
   return infiniteQueryOptions({
-    // Use canonical key from queryKeys.projects.threads() for consistent invalidation
-    queryKey: queryKeys.projects.threads(projectId),
     queryFn: async () => {
       const result = await getThreadsByProject({ data: projectId });
       if (!result.success) {
@@ -392,9 +390,11 @@ export function projectThreadsQueryOptions(projectId: string) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
-    staleTime: STALE_TIMES.threads, // 1 minute - match useThreadsQuery
-    refetchOnWindowFocus: false,
+    // Use canonical key from queryKeys.projects.threads() for consistent invalidation
+    queryKey: queryKeys.projects.threads(projectId),
     refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    staleTime: STALE_TIMES.threads, // 1 minute - match useThreadsQuery
   });
 }
 
@@ -410,13 +410,13 @@ export function projectThreadsQueryOptions(projectId: string) {
  * - Client: Makes RPC call to server function
  */
 export const adminJobsQueryOptions = queryOptions({
-  queryKey: queryKeys.adminJobs.list(),
-  queryFn: () => getAdminJobs(),
-  staleTime: STALE_TIMES.adminJobs, // 5s - poll frequently for running jobs
   gcTime: GC_TIMES.SHORT, // 1 min - admin data doesn't need long cache
-  refetchOnWindowFocus: true,
+  queryFn: () => getAdminJobs(),
+  queryKey: queryKeys.adminJobs.list(),
   refetchOnMount: true,
+  refetchOnWindowFocus: true,
   retry: false,
+  staleTime: STALE_TIMES.adminJobs, // 5s - poll frequently for running jobs
 });
 
 /**
@@ -430,7 +430,7 @@ export const adminJobsQueryOptions = queryOptions({
  * for when the backend supports cursor-based pagination.
  */
 export const adminJobsInfiniteQueryOptions = infiniteQueryOptions({
-  queryKey: queryKeys.adminJobs.lists(),
+  gcTime: GC_TIMES.SHORT,
   queryFn: async () => {
     const result = await getAdminJobs();
     if (!result.success) {
@@ -440,8 +440,8 @@ export const adminJobsInfiniteQueryOptions = infiniteQueryOptions({
   },
   initialPageParam: undefined as string | undefined,
   getNextPageParam: lastPage => lastPage.data?.nextCursor ?? undefined,
-  staleTime: STALE_TIMES.adminJobs,
-  gcTime: GC_TIMES.SHORT,
-  refetchOnWindowFocus: true,
+  queryKey: queryKeys.adminJobs.lists(),
   refetchOnMount: true,
+  refetchOnWindowFocus: true,
+  staleTime: STALE_TIMES.adminJobs,
 });

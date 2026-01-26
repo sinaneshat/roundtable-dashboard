@@ -49,9 +49,9 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
 
   // Store actions - batched with useShallow for stable reference
   const actions = useChatStore(useShallow(s => ({
+    loadFeedbackFromServer: s.loadFeedbackFromServer,
     setFeedback: s.setFeedback,
     setPendingFeedback: s.setPendingFeedback,
-    loadFeedbackFromServer: s.loadFeedbackFromServer,
   })));
 
   // Mutation
@@ -73,11 +73,11 @@ export function useFeedbackActions(options: UseFeedbackActionsOptions): UseFeedb
       // Trigger mutation to persist to server
       setRoundFeedbackMutation.mutate(
         {
-          param: {
-            threadId,
-            roundNumber: String(roundNumber),
-          },
           json: { feedbackType },
+          param: {
+            roundNumber: String(roundNumber),
+            threadId,
+          },
         },
         {
           onSettled: () => {

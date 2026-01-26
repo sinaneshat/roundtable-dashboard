@@ -13,7 +13,7 @@ import { formatRelativeTime } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
-import type { ChatThreadChangelogFlexible, DbChangelogData } from '@/services/api';
+import type { ChatThreadChangelogFlexible } from '@/services/api';
 import {
   isModeChange,
   isParticipantChange,
@@ -34,19 +34,22 @@ function getChangeAction(changeType: ChatThreadChangelogFlexible['changeType']):
 }
 const actionConfig: Record<ChangelogType, { icon: typeof Icons.plus; color: string }> = {
   [ChangelogTypes.ADDED]: {
-    icon: Icons.plus,
     color: 'text-green-500',
+    icon: Icons.plus,
   },
   [ChangelogTypes.MODIFIED]: {
-    icon: Icons.pencil,
     color: 'text-blue-500',
+    icon: Icons.pencil,
   },
   [ChangelogTypes.REMOVED]: {
-    icon: Icons.minus,
     color: 'text-red-500',
+    icon: Icons.minus,
   },
 };
 
+/**
+ * Extended configuration changes group props
+ */
 type ConfigurationChangesGroupExtendedProps = ConfigurationChangesGroupProps & {
   /** Skip models API call (for public/read-only pages) */
   isReadOnly?: boolean;
@@ -54,10 +57,10 @@ type ConfigurationChangesGroupExtendedProps = ConfigurationChangesGroupProps & {
 
 type ChangeItemProps = {
   change: ChatThreadChangelogFlexible;
-  isReadOnly?: boolean;
+  isReadOnly: boolean | undefined;
 };
 
-export function ConfigurationChangesGroup({ group, className, isReadOnly }: ConfigurationChangesGroupExtendedProps) {
+export function ConfigurationChangesGroup({ className, group, isReadOnly }: ConfigurationChangesGroupExtendedProps) {
   const t = useTranslations();
   if (!group.changes || group.changes.length === 0) {
     return null;
@@ -149,8 +152,9 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
   const t = useTranslations();
   const { findModel } = useModelLookup({ enabled: !isReadOnly });
 
-  // API already validates changelog data - trust the type
-  const changeData = change.changeData as DbChangelogData;
+  // changeData is properly typed as DbChangelogData from ChatThreadChangelogFlexible
+  // Runtime validation below guards against malformed data before using type guards
+  const changeData = change.changeData;
 
   if (!changeData || typeof changeData !== 'object' || !('type' in changeData)) {
     return null;

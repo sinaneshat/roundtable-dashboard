@@ -46,7 +46,7 @@ type ChatThreadActionsProps = {
   skipFetch?: boolean;
 };
 
-export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false, skipFetch = false }: ChatThreadActionsProps) {
+export function ChatThreadActions({ isPublicMode = false, onDeleteClick, skipFetch = false, slug, thread }: ChatThreadActionsProps) {
   const t = useTranslations();
   const isDesktop = useMediaQuery('(min-width: 768px)', true);
   const toggleFavoriteMutation = useToggleFavoriteMutation();
@@ -65,14 +65,14 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const threadIsPublic = cachedThread?.isPublic ?? thread.isPublic;
   const threadIsFavorite = cachedThread?.isFavorite ?? thread.isFavorite ?? false;
 
-  const { storeThreadId, storeThreadTitle, isBusy } = useChatStore(useShallow(s => ({
-    storeThreadId: s.thread?.id,
-    storeThreadTitle: s.thread?.title,
+  const { isBusy, storeThreadId, storeThreadTitle } = useChatStore(useShallow(s => ({
     isBusy: s.isStreaming
       || s.waitingToStartStreaming
       || s.isCreatingThread
       || s.streamingRoundNumber !== null
       || s.preSearches.some(ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING),
+    storeThreadId: s.thread?.id,
+    storeThreadTitle: s.thread?.title,
   })));
   const currentTitle = (storeThreadTitle && thread.id === storeThreadId)
     ? storeThreadTitle
@@ -94,12 +94,13 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const isProjectThread = 'projectId' in thread && thread.projectId !== null;
 
   const handleToggleFavorite = () => {
-    if (isProjectThread)
+    if (isProjectThread) {
       return;
+    }
     toggleFavoriteMutation.mutate({
-      threadId: thread.id,
       isFavorite: !displayIsFavorite,
       slug,
+      threadId: thread.id,
     });
   };
 
@@ -107,7 +108,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     if (threadIsPublic || togglePublicMutation.isPending) {
       return;
     }
-    togglePublicMutation.mutate({ threadId: thread.id, isPublic: true, slug });
+    togglePublicMutation.mutate({ isPublic: true, slug, threadId: thread.id });
   };
 
   const handleMakePrivate = () => {
@@ -116,12 +117,13 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
       return;
     }
     setIsShareDialogOpen(false);
-    togglePublicMutation.mutate({ threadId: thread.id, isPublic: false, slug });
+    togglePublicMutation.mutate({ isPublic: false, slug, threadId: thread.id });
   };
 
   const handleShareDialogOpenChange = (open: boolean) => {
-    if (!open && togglePublicMutation.isPending)
+    if (!open && togglePublicMutation.isPending) {
       return;
+    }
     setIsShareDialogOpen(open);
   };
 

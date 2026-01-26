@@ -26,16 +26,17 @@ export type UseCopyToClipboardReturn = {
 
 export function useCopyToClipboard({
   messages,
-  onSuccess,
   onError,
+  onSuccess,
 }: UseCopyToClipboardOptions): UseCopyToClipboardReturn {
   const [copied, setCopied] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const copy = useCallback(async (text: string): Promise<boolean> => {
-    if (isCopying)
+    if (isCopying) {
       return false;
+    }
 
     setIsCopying(true);
 
@@ -68,5 +69,5 @@ export function useCopyToClipboard({
     }
   }, [isCopying, messages, onSuccess, onError]);
 
-  return { copied, isCopying, copy };
+  return { copied, copy, isCopying };
 }

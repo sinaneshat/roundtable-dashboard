@@ -35,20 +35,20 @@ function transformJob(
   isPublic?: boolean,
 ): JobResponse {
   return {
+    autoPublish: job.autoPublish,
+    createdAt: job.createdAt.toISOString(),
+    currentRound: job.currentRound,
     id: job.id,
-    userId: job.userId,
+    initialPrompt: job.initialPrompt,
+    isPublic: isPublic ?? false,
+    metadata: job.metadata ?? null,
+    selectedModels: job.selectedModels ?? null,
+    status: job.status,
     threadId: job.threadId,
     threadSlug: threadSlug ?? null,
-    isPublic: isPublic ?? false,
-    initialPrompt: job.initialPrompt,
     totalRounds: job.totalRounds,
-    currentRound: job.currentRound,
-    autoPublish: job.autoPublish,
-    status: job.status,
-    selectedModels: job.selectedModels ?? null,
-    metadata: job.metadata ?? null,
-    createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
+    userId: job.userId,
   };
 }
 
@@ -58,14 +58,14 @@ function transformJob(
 export const listJobsHandler: RouteHandler<typeof listJobsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: JobListQuerySchema,
     operationName: 'listJobs',
+    validateQuery: JobListQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
     requireAdmin(user);
 
-    const { status, limit = 20, cursor } = c.validated.query;
+    const { cursor, limit = 20, status } = c.validated.query;
     const db = await getDbAsync();
 
     // Build where conditions
@@ -96,11 +96,11 @@ export const listJobsHandler: RouteHandler<typeof listJobsRoute, ApiEnv> = creat
     const threadMap = new Map<string, { slug: string; isPublic: boolean }>();
     if (threadIds.length > 0) {
       const threads = await db.query.chatThread.findMany({
+        columns: { id: true, isPublic: true, slug: true },
         where: (t, { inArray }) => inArray(t.id, threadIds),
-        columns: { id: true, slug: true, isPublic: true },
       });
       for (const t of threads) {
-        threadMap.set(t.id, { slug: t.slug, isPublic: t.isPublic });
+        threadMap.set(t.id, { isPublic: t.isPublic, slug: t.slug });
       }
     }
 
@@ -115,10 +115,10 @@ export const listJobsHandler: RouteHandler<typeof listJobsRoute, ApiEnv> = creat
       : null;
 
     return Responses.ok(c, {
-      jobs: transformedJobs,
-      total: results.length,
       hasMore,
+      jobs: transformedJobs,
       nextCursor,
+      total: results.length,
     });
   },
 );
@@ -129,8 +129,8 @@ export const listJobsHandler: RouteHandler<typeof listJobsRoute, ApiEnv> = creat
 export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateJobRequestSchema,
     operationName: 'createJob',
+    validateBody: CreateJobRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -149,15 +149,15 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
     const [job] = await db
       .insert(tables.automatedJob)
       .values({
-        id: jobId,
-        userId: user.id,
-        initialPrompt: body.initialPrompt,
-        totalRounds: body.totalRounds,
         autoPublish: body.autoPublish,
-        status: AutomatedJobStatuses.PENDING,
-        currentRound: 0,
         createdAt: now,
+        currentRound: 0,
+        id: jobId,
+        initialPrompt: body.initialPrompt,
+        status: AutomatedJobStatuses.PENDING,
+        totalRounds: body.totalRounds,
         updatedAt: now,
+        userId: user.id,
       })
       .returning();
 
@@ -173,12 +173,12 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
     let queued = false;
     try {
       const message: StartAutomatedJobQueueMessage = {
-        type: RoundOrchestrationMessageTypes.START_AUTOMATED_JOB,
-        messageId: `start-${jobId}`,
         jobId,
-        userId: user.id,
-        sessionToken,
+        messageId: `start-${jobId}`,
         queuedAt: new Date().toISOString(),
+        sessionToken,
+        type: RoundOrchestrationMessageTypes.START_AUTOMATED_JOB,
+        userId: user.id,
       };
 
       await c.env.ROUND_ORCHESTRATION_QUEUE.send(message);
@@ -189,8 +189,8 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
       await db
         .update(tables.automatedJob)
         .set({
-          status: 'failed',
           metadata: { errorMessage: 'Failed to queue job for processing' },
+          status: 'failed',
         })
         .where(eq(tables.automatedJob.id, jobId));
     }
@@ -208,8 +208,8 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
 export const getJobHandler: RouteHandler<typeof getJobRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getJob',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -235,8 +235,8 @@ export const getJobHandler: RouteHandler<typeof getJobRoute, ApiEnv> = createHan
     let isPublic = false;
     if (job.threadId) {
       const thread = await db.query.chatThread.findFirst({
+        columns: { isPublic: true, slug: true },
         where: eq(tables.chatThread.id, job.threadId),
-        columns: { slug: true, isPublic: true },
       });
       threadSlug = thread?.slug ?? null;
       isPublic = thread?.isPublic ?? false;
@@ -252,9 +252,9 @@ export const getJobHandler: RouteHandler<typeof getJobRoute, ApiEnv> = createHan
 export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateJobRequestSchema,
     operationName: 'updateJob',
+    validateBody: UpdateJobRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -291,21 +291,21 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
       await db
         .update(tables.automatedJob)
         .set({
-          status: AutomatedJobStatuses.PENDING,
           currentRound: 0,
           metadata: null,
+          status: AutomatedJobStatuses.PENDING,
           updatedAt: new Date(),
         })
         .where(eq(tables.automatedJob.id, id));
 
       // Queue the job
       const message: StartAutomatedJobQueueMessage = {
-        type: RoundOrchestrationMessageTypes.START_AUTOMATED_JOB,
-        messageId: `start-${id}-${Date.now()}`,
         jobId: id,
-        userId: user.id,
-        sessionToken,
+        messageId: `start-${id}-${Date.now()}`,
         queuedAt: new Date().toISOString(),
+        sessionToken,
+        type: RoundOrchestrationMessageTypes.START_AUTOMATED_JOB,
+        userId: user.id,
       };
 
       try {
@@ -315,14 +315,14 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
         await db
           .update(tables.automatedJob)
           .set({
-            status: AutomatedJobStatuses.FAILED,
             metadata: { errorMessage: 'Failed to queue job for processing' },
+            status: AutomatedJobStatuses.FAILED,
           })
           .where(eq(tables.automatedJob.id, id));
         throw createError.internal('Failed to queue job', {
           errorType: 'queue',
-          queueName: 'ROUND_ORCHESTRATION_QUEUE',
           operation: 'send',
+          queueName: 'ROUND_ORCHESTRATION_QUEUE',
         });
       }
     }
@@ -356,8 +356,8 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
     let isPublic = false;
     if (updatedJob.threadId) {
       const thread = await db.query.chatThread.findFirst({
+        columns: { isPublic: true, slug: true },
         where: eq(tables.chatThread.id, updatedJob.threadId),
-        columns: { slug: true, isPublic: true },
       });
       threadSlug = thread?.slug ?? null;
       isPublic = thread?.isPublic ?? false;
@@ -375,9 +375,9 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
 export const deleteJobHandler: RouteHandler<typeof deleteJobRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'deleteJob',
     validateParams: IdParamSchema,
     validateQuery: DeleteJobQuerySchema,
-    operationName: 'deleteJob',
   },
   async (c) => {
     const { user } = c.auth();

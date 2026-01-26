@@ -111,8 +111,9 @@ export function transformCloudflareImage(
   options: CloudflareImageOptions,
 ): string {
   const optionsString = buildOptionsString(options);
-  if (!optionsString)
+  if (!optionsString) {
     return src;
+  }
 
   // Handle relative URLs
   if (src.startsWith('/') && !src.startsWith('//')) {
@@ -137,10 +138,10 @@ export function transformCloudflareImage(
  */
 export function generateBlurPlaceholder(src: string): string {
   return transformCloudflareImage(src, {
-    width: 20,
     blur: 50,
-    quality: 30,
     format: 'auto',
+    quality: 30,
+    width: 20,
   });
 }
 

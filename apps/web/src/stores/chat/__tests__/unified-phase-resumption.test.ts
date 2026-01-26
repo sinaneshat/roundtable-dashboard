@@ -84,35 +84,35 @@ function createMockParticipantMessage(
     state?: 'streaming' | 'done';
   } = {},
 ): UIMessage {
-  const { hasContent = true, finishReason = 'stop', state = 'done' } = options;
+  const { finishReason = 'stop', hasContent = true, state = 'done' } = options;
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
+    metadata: {
+      finishReason,
+      participantIndex,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
+    },
     parts: hasContent
       ? [
           { type: 'step-start' },
-          { type: 'text', text: `Response from participant ${participantIndex}`, state },
+          { state, text: `Response from participant ${participantIndex}`, type: 'text' },
         ]
       : [],
-    metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
-      participantIndex,
-      finishReason,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-    },
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createMockUserMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'Test question' }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text: 'Test question', type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -120,64 +120,64 @@ describe('unified Phase Resumption', () => {
   describe('phase Detection', () => {
     it('should correctly detect pre_search phase when pre-search is streaming', () => {
       const serverState: ThreadStreamResumptionState = {
-        roundNumber: 0,
         currentPhase: 'pre_search',
-        preSearch: {
-          enabled: true,
-          status: 'streaming',
-          streamId: 'presearch_thread_123_0',
-          preSearchId: 'ps_123',
-        },
+        hasActiveStream: true,
+        nextParticipantToTrigger: 0,
         participants: {
+          allComplete: false,
+          currentParticipantIndex: null,
           hasActiveStream: false,
+          nextParticipantToTrigger: 0,
+          participantStatuses: null,
           streamId: null,
           totalParticipants: 3,
-          currentParticipantIndex: null,
-          participantStatuses: null,
-          nextParticipantToTrigger: 0,
-          allComplete: false,
         },
-        summarizer: null,
-        roundComplete: false,
-        hasActiveStream: true,
-        streamId: 'presearch_thread_123_0',
-        totalParticipants: 3,
         participantStatuses: null,
-        nextParticipantToTrigger: 0,
+        preSearch: {
+          enabled: true,
+          preSearchId: 'ps_123',
+          status: 'streaming',
+          streamId: 'presearch_thread_123_0',
+        },
+        roundComplete: false,
+        roundNumber: 0,
+        streamId: 'presearch_thread_123_0',
+        summarizer: null,
+        totalParticipants: 3,
       };
 
       expect(serverState.currentPhase).toBe('pre_search');
       expect(serverState.preSearch?.status).toBe('streaming');
       // Participants should NOT be triggered while pre-search is streaming
-      expect(serverState.participants.hasActiveStream).toBe(false);
+      expect(serverState.participants.hasActiveStream).toBeFalsy();
     });
 
     it('should correctly detect participants phase when some participants have completed', () => {
       const serverState: ThreadStreamResumptionState = {
-        roundNumber: 0,
         currentPhase: 'participants',
-        preSearch: {
-          enabled: true,
-          status: 'complete',
-          streamId: null,
-          preSearchId: 'ps_123',
-        },
+        hasActiveStream: true,
+        nextParticipantToTrigger: 2,
         participants: {
+          allComplete: false,
+          currentParticipantIndex: 1,
           hasActiveStream: true,
+          nextParticipantToTrigger: 2,
+          participantStatuses: { 0: 'completed', 1: 'active', 2: 'active' },
           streamId: 'thread_123_r0_p1',
           totalParticipants: 3,
-          currentParticipantIndex: 1,
-          participantStatuses: { 0: 'completed', 1: 'active', 2: 'active' },
-          nextParticipantToTrigger: 2,
-          allComplete: false,
         },
-        summarizer: null,
-        roundComplete: false,
-        hasActiveStream: true,
-        streamId: 'thread_123_r0_p1',
-        totalParticipants: 3,
         participantStatuses: { 0: 'completed', 1: 'active', 2: 'active' },
-        nextParticipantToTrigger: 2,
+        preSearch: {
+          enabled: true,
+          preSearchId: 'ps_123',
+          status: 'complete',
+          streamId: null,
+        },
+        roundComplete: false,
+        roundNumber: 0,
+        streamId: 'thread_123_r0_p1',
+        summarizer: null,
+        totalParticipants: 3,
       };
 
       expect(serverState.currentPhase).toBe('participants');
@@ -190,38 +190,38 @@ describe('unified Phase Resumption', () => {
 
     it('should correctly detect summarizer phase when all participants done', () => {
       const serverState: ThreadStreamResumptionState = {
-        roundNumber: 0,
         currentPhase: 'summarizer',
-        preSearch: {
-          enabled: true,
-          status: 'complete',
-          streamId: null,
-          preSearchId: 'ps_123',
-        },
+        hasActiveStream: true,
+        nextParticipantToTrigger: null,
         participants: {
+          allComplete: true,
+          currentParticipantIndex: null,
           hasActiveStream: false,
+          nextParticipantToTrigger: null,
+          participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
           streamId: null,
           totalParticipants: 3,
-          currentParticipantIndex: null,
-          participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
-          nextParticipantToTrigger: null,
-          allComplete: true,
         },
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        preSearch: {
+          enabled: true,
+          preSearchId: 'ps_123',
+          status: 'complete',
+          streamId: null,
+        },
+        roundComplete: false,
+        roundNumber: 0,
+        streamId: 'summary_thread_123_r0',
         summarizer: {
           status: 'streaming',
           streamId: 'summary_thread_123_r0',
           summaryId: 'summary_123',
         },
-        roundComplete: false,
-        hasActiveStream: true,
-        streamId: 'summary_thread_123_r0',
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
-        nextParticipantToTrigger: null,
       };
 
       expect(serverState.currentPhase).toBe('summarizer');
-      expect(serverState.participants.allComplete).toBe(true);
+      expect(serverState.participants.allComplete).toBeTruthy();
       expect(serverState.summarizer?.status).toBe('streaming');
     });
   });
@@ -239,7 +239,7 @@ describe('unified Phase Resumption', () => {
       const shouldTriggerParticipants
         = currentPhase === 'participants' && participantsNextToTrigger !== null;
 
-      expect(shouldTriggerParticipants).toBe(false);
+      expect(shouldTriggerParticipants).toBeFalsy();
     });
 
     it('should NOT trigger summarizer while participants are still streaming', () => {
@@ -257,7 +257,7 @@ describe('unified Phase Resumption', () => {
         = currentPhase === 'summarizer'
           || (participantsAllComplete && summarizerStatus === null);
 
-      expect(shouldTriggerSummarizer).toBe(false);
+      expect(shouldTriggerSummarizer).toBeFalsy();
     });
 
     it('should prevent double-triggering of the same participant', () => {
@@ -284,7 +284,7 @@ describe('unified Phase Resumption', () => {
       }
 
       // Should NOT trigger while participant 1 is active
-      expect(nextToTrigger).toBe(null);
+      expect(nextToTrigger).toBeNull();
     });
   });
 
@@ -294,8 +294,8 @@ describe('unified Phase Resumption', () => {
       // Then KV resume sends the same content again, creating duplicates
 
       const prefetchedMessage = createMockParticipantMessage(0, 0, {
-        hasContent: true,
         finishReason: 'unknown', // Incomplete
+        hasContent: true,
         state: 'streaming',
       });
 
@@ -304,7 +304,7 @@ describe('unified Phase Resumption', () => {
         p => p.type === 'text' && p.text && p.text.length > 0,
       );
 
-      expect(hasExistingContent).toBe(true);
+      expect(hasExistingContent).toBeTruthy();
 
       // When AI SDK resumes, it should NOT create a new message
       // but instead append to the existing one (or skip if complete)
@@ -339,11 +339,11 @@ describe('unified Phase Resumption', () => {
 
       // Check if message with this ID already exists
       const messageExists = existingMessages.some(m => m.id === expectedMessageId);
-      expect(messageExists).toBe(true);
+      expect(messageExists).toBeTruthy();
 
       // Resumption should NOT add another message for participant 0
       const shouldCreateNewMessage = !messageExists;
-      expect(shouldCreateNewMessage).toBe(false);
+      expect(shouldCreateNewMessage).toBeFalsy();
     });
   });
 
@@ -398,7 +398,7 @@ describe('unified Phase Resumption', () => {
       // 3. Show error to user
 
       const shouldSkipToParticipants = preSearchStatus === 'failed';
-      expect(shouldSkipToParticipants).toBe(true);
+      expect(shouldSkipToParticipants).toBeTruthy();
     });
   });
 
@@ -418,16 +418,16 @@ describe('unified Phase Resumption', () => {
 
       // First attempt should succeed
       const canAttemptPreSearch = !resumptionAttempted.has(preSearchKey);
-      expect(canAttemptPreSearch).toBe(true);
+      expect(canAttemptPreSearch).toBeTruthy();
       resumptionAttempted.set(preSearchKey, true);
 
       // Second attempt should be blocked
       const canAttemptPreSearchAgain = !resumptionAttempted.has(preSearchKey);
-      expect(canAttemptPreSearchAgain).toBe(false);
+      expect(canAttemptPreSearchAgain).toBeFalsy();
 
       // Different phases should have separate tracking
       const canAttemptParticipants = !resumptionAttempted.has(participantsKey);
-      expect(canAttemptParticipants).toBe(true);
+      expect(canAttemptParticipants).toBeTruthy();
     });
 
     it('should handle concurrent AI SDK resume and incomplete-round-resumption', () => {
@@ -443,7 +443,7 @@ describe('unified Phase Resumption', () => {
         = !aiSdkIsStreaming || aiSdkStreamingParticipant !== incompleteRoundNextParticipant;
 
       // AI SDK is streaming participant 0, so incomplete-round should NOT trigger
-      expect(shouldIncompleteRoundTrigger).toBe(false);
+      expect(shouldIncompleteRoundTrigger).toBeFalsy();
     });
 
     it('should serialize phase transitions to prevent state corruption', () => {
@@ -475,14 +475,14 @@ describe('unified Phase Resumption', () => {
       // (e.g., if stream finished between KV write and DB write)
 
       const prefetchedMessage = createMockParticipantMessage(0, 0, {
-        hasContent: true,
         finishReason: 'stop', // Complete
+        hasContent: true,
         state: 'done',
       });
 
       const resumedMessage = createMockParticipantMessage(0, 0, {
-        hasContent: true,
         finishReason: 'unknown', // Partial
+        hasContent: true,
         state: 'streaming',
       });
 
@@ -490,8 +490,8 @@ describe('unified Phase Resumption', () => {
       const prefetchIsComplete = prefetchedMessage.metadata?.finishReason === 'stop';
       const resumeIsComplete = resumedMessage.metadata?.finishReason === 'stop';
 
-      expect(prefetchIsComplete).toBe(true);
-      expect(resumeIsComplete).toBe(false);
+      expect(prefetchIsComplete).toBeTruthy();
+      expect(resumeIsComplete).toBeFalsy();
 
       // Should use prefetched content
       const useContent = prefetchIsComplete ? prefetchedMessage : resumedMessage;
@@ -502,7 +502,7 @@ describe('unified Phase Resumption', () => {
       // Scenario: Prefetch has "Hello, " and resume continues with "world!"
 
       const prefetchParts: MessagePart[] = [
-        { type: 'text', text: 'Hello, ', state: 'streaming' },
+        { state: 'streaming', text: 'Hello, ', type: 'text' },
       ];
 
       const resumeDelta = 'world!';
@@ -518,39 +518,39 @@ describe('unified Phase Resumption', () => {
 
     it('should skip resumption when all phases are complete in prefetch', () => {
       const serverState: ThreadStreamResumptionState = {
-        roundNumber: 0,
         currentPhase: 'complete',
-        preSearch: {
-          enabled: true,
-          status: 'complete',
-          streamId: null,
-          preSearchId: 'ps_123',
-        },
+        hasActiveStream: false,
+        nextParticipantToTrigger: null,
         participants: {
+          allComplete: true,
+          currentParticipantIndex: null,
           hasActiveStream: false,
+          nextParticipantToTrigger: null,
+          participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
           streamId: null,
           totalParticipants: 3,
-          currentParticipantIndex: null,
-          participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
-          nextParticipantToTrigger: null,
-          allComplete: true,
         },
+        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
+        preSearch: {
+          enabled: true,
+          preSearchId: 'ps_123',
+          status: 'complete',
+          streamId: null,
+        },
+        roundComplete: true,
+        roundNumber: 0,
+        streamId: null,
         summarizer: {
           status: 'complete',
           streamId: null,
           summaryId: 'summary_123',
         },
-        roundComplete: true,
-        hasActiveStream: false,
-        streamId: null,
         totalParticipants: 3,
-        participantStatuses: { 0: 'completed', 1: 'completed', 2: 'completed' },
-        nextParticipantToTrigger: null,
       };
 
       // When round is complete, no resumption should happen
       const shouldResume = !serverState.roundComplete && serverState.currentPhase !== 'complete';
-      expect(shouldResume).toBe(false);
+      expect(shouldResume).toBeFalsy();
     });
   });
 
@@ -575,7 +575,7 @@ describe('unified Phase Resumption', () => {
     it('should update existing message instead of creating duplicate', () => {
       const messages: UIMessage[] = [
         createMockUserMessage(0),
-        createMockParticipantMessage(0, 0, { hasContent: false, finishReason: 'unknown' }),
+        createMockParticipantMessage(0, 0, { finishReason: 'unknown', hasContent: false }),
       ];
 
       const messageId = 'thread-123_r0_p0';
@@ -584,7 +584,7 @@ describe('unified Phase Resumption', () => {
       expect(existingIndex).toBe(1); // Message exists at index 1
 
       // Update should happen at existing index, not push new message
-      const newContent = { type: 'text' as const, text: 'Updated content', state: 'done' as const };
+      const newContent = { state: 'done' as const, text: 'Updated content', type: 'text' as const };
 
       if (existingIndex >= 0) {
         const message = messages[existingIndex];
@@ -639,7 +639,7 @@ describe('unified Phase Resumption', () => {
         }
       }
 
-      expect(nextToTrigger).toBe(null);
+      expect(nextToTrigger).toBeNull();
     });
 
     it('should NOT trigger already active participant', () => {
@@ -659,7 +659,7 @@ describe('unified Phase Resumption', () => {
       // Let the current one finish first
       const shouldTriggerNew = !hasActiveStream;
 
-      expect(shouldTriggerNew).toBe(false);
+      expect(shouldTriggerNew).toBeFalsy();
     });
   });
 });

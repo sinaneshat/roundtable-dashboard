@@ -62,7 +62,7 @@ export async function executePreSearchStreamService(data: PreSearchRequest) {
 export type StoredPreSearch = Extract<
   GetThreadPreSearchesResponse,
   { success: true }
-> extends { data: { items: Array<infer P> } }
+> extends { data: { items: (infer P)[] } }
   ? P
   : never;
 
@@ -94,7 +94,9 @@ export type WebSearchResultItem = PreSearchResult['results'][number];
 /**
  * GeneratedSearchQuery - Search query with status (extends PreSearchQuery)
  */
-export type GeneratedSearchQuery = PreSearchQuery & { status?: string };
+export type GeneratedSearchQuery = PreSearchQuery & {
+  status?: string;
+};
 
 // ============================================================================
 // Validation Schema - Derived from RPC Type

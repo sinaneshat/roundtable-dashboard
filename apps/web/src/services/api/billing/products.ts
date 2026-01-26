@@ -63,8 +63,8 @@ export async function getProductService(data: GetProductRequest): Promise<GetPro
 // ============================================================================
 
 type ProductsSuccessData = Extract<ListProductsResponse, { success: true }> extends { data: infer D } ? D : never;
-type ProductItem = ProductsSuccessData extends { items: Array<infer P> } ? P : never;
-type PriceItem = NonNullable<ProductItem> extends { prices?: Array<infer Pr> } ? Pr : never;
+type ProductItem = ProductsSuccessData extends { items: (infer P)[] } ? P : never;
+type PriceItem = NonNullable<ProductItem> extends { prices?: (infer Pr)[] } ? Pr : never;
 
 /**
  * Product - Product item derived from API response
@@ -75,3 +75,30 @@ export type Product = ProductItem;
  * Price - Price item derived from product prices
  */
 export type Price = PriceItem;
+
+// ============================================================================
+// Type Guards - Accept both service response and server function result types
+// ============================================================================
+
+type SuccessResponse = Extract<ListProductsResponse, { success: true }>;
+
+/**
+ * Type guard to check if products response is successful
+ * Accepts ListProductsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function isProductsSuccess(response: { success: boolean; data?: unknown } | null | undefined): response is SuccessResponse {
+  return response !== undefined && response !== null && response.success === true && 'data' in response;
+}
+
+/**
+ * Extract products array from response safely
+ * Accepts ListProductsResponse | ServerFnErrorResponse | undefined to handle both
+ * direct service calls and TanStack Query results
+ */
+export function getProductsFromResponse(response: { success: boolean; data?: unknown } | null | undefined): Product[] {
+  if (!isProductsSuccess(response)) {
+    return [];
+  }
+  return response.data.items;
+}

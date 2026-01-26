@@ -54,14 +54,14 @@ describe('non-Initial Round Flow', () => {
     },
   ) {
     const {
-      nextRound,
-      hasParticipantChanges,
-      modeChanged,
-      webSearchChanged,
-      hasPendingConfigChanges,
       enableWebSearch,
-      threadId,
       firstParticipantId,
+      hasParticipantChanges,
+      hasPendingConfigChanges,
+      modeChanged,
+      nextRound,
+      threadId,
+      webSearchChanged,
     } = params;
 
     const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || hasPendingConfigChanges;
@@ -75,10 +75,10 @@ describe('non-Initial Round Flow', () => {
     if (enableWebSearch) {
       store.getState().addPreSearch({
         id: `pre-search-${nextRound}`,
-        threadId,
         roundNumber: nextRound,
-        status: 'pending',
         searchData: null,
+        status: 'pending',
+        threadId,
         userQuery: 'Test query',
       });
     }
@@ -103,8 +103,8 @@ describe('non-Initial Round Flow', () => {
 
       // Round 0 complete
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'First', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0', content: 'Response', roundNumber: 0, participantId: 'p1', participantIndex: 0 }),
+        createTestUserMessage({ content: 'First', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a0', participantId: 'p1', participantIndex: 0, roundNumber: 0 }),
       ]);
 
       // User enables web search (config change)
@@ -115,7 +115,7 @@ describe('non-Initial Round Flow', () => {
 
       // At this point, streaming should be blocked
       const isBlocked = store.getState().configChangeRoundNumber !== null;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
 
       // Now set other state
       store.getState().setWaitingToStartStreaming(true);
@@ -131,8 +131,8 @@ describe('non-Initial Round Flow', () => {
 
       // No config changes - don't set blocking flag
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
 
     it('should set isWaitingForChangelog AFTER PATCH when config changes', () => {
@@ -140,13 +140,13 @@ describe('non-Initial Round Flow', () => {
 
       // Before PATCH - only configChangeRoundNumber set
       store.getState().setConfigChangeRoundNumber(1);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // After PATCH success - set isWaitingForChangelog
       store.getState().setIsWaitingForChangelog(true);
 
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
   });
 
@@ -156,28 +156,28 @@ describe('non-Initial Round Flow', () => {
       store.getState().setEnableWebSearch(true);
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: false,
-        modeChanged: false,
-        webSearchChanged: true,
-        hasPendingConfigChanges: false,
         enableWebSearch: true,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: false,
+        modeChanged: false,
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: true,
       });
 
       const state = store.getState();
 
       // Both blocking conditions should be true
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // Pre-search should be added
       expect(state.preSearches.find(ps => ps.roundNumber === 1)).toBeDefined();
 
       // Streaming blocked by changelog
       const blockedByChangelog = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(blockedByChangelog).toBe(true);
+      expect(blockedByChangelog).toBeTruthy();
     });
 
     it('should unblock streaming only after BOTH changelog AND pre-search complete', () => {
@@ -185,14 +185,14 @@ describe('non-Initial Round Flow', () => {
       store.getState().setEnableWebSearch(true);
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: false,
-        modeChanged: false,
-        webSearchChanged: true,
-        hasPendingConfigChanges: false,
         enableWebSearch: true,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: false,
+        modeChanged: false,
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: true,
       });
 
       // Step 1: Clear changelog flags (simulates use-changelog-sync completion)
@@ -201,7 +201,7 @@ describe('non-Initial Round Flow', () => {
 
       // Changelog unblocked, but pre-search still pending
       const blockedByChangelog = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(blockedByChangelog).toBe(false);
+      expect(blockedByChangelog).toBeFalsy();
 
       // Pre-search still pending
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
@@ -219,35 +219,35 @@ describe('non-Initial Round Flow', () => {
     it('should trigger changelog when participants change', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() },
+        { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() },
       ]);
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: true, // <-- Key difference
-        modeChanged: false,
-        webSearchChanged: false,
-        hasPendingConfigChanges: false,
         enableWebSearch: false,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: true, // <-- Key difference
+        hasPendingConfigChanges: false,
+        modeChanged: false,
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: false,
       });
 
       // Changelog should be triggered due to participant changes
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should update nextParticipantToTrigger when participants change after PATCH', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
 
       // Initial participant
-      const initialParticipant = { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const initialParticipant = { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
       store.getState().setParticipants([initialParticipant]);
       store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
 
       // PATCH response returns updated participant with NEW ID
-      const updatedParticipant = { id: 'p1-new', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() };
+      const updatedParticipant = { createdAt: new Date(), id: 'p1-new', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() };
       store.getState().setParticipants([updatedParticipant]);
 
       // Update nextParticipantToTrigger with new ID (as form-actions.ts does)
@@ -262,13 +262,13 @@ describe('non-Initial Round Flow', () => {
 
       // Set initial trigger
       store.getState().setParticipants([
-        { id: 'p1', modelId: 'gpt-4', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() },
+        { createdAt: new Date(), id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: null, threadId: 't1', updatedAt: new Date() },
       ]);
       store.getState().setNextParticipantToTrigger({ index: 0, participantId: 'p1' });
 
       // Config changes - different participant at index 0
       store.getState().setParticipants([
-        { id: 'p2', modelId: 'claude-3', role: null, priority: 0, isEnabled: true, threadId: 't1', createdAt: new Date(), updatedAt: new Date() },
+        { createdAt: new Date(), id: 'p2', isEnabled: true, modelId: 'claude-3', priority: 0, role: null, threadId: 't1', updatedAt: new Date() },
       ]);
 
       // Don't update nextParticipantToTrigger (simulating bug)
@@ -287,37 +287,37 @@ describe('non-Initial Round Flow', () => {
     it('should trigger changelog when mode changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        slug: 'test',
-        title: 'Test',
-        mode: 'panel',
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        participantCount: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'panel',
+        participantCount: 1,
+        slug: 'test',
+        status: 'active',
+        title: 'Test',
+        updatedAt: new Date(),
         userId: 'user-1',
       });
       store.getState().setSelectedMode('council'); // Changed from panel
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: false,
-        modeChanged: true, // <-- Key difference
-        webSearchChanged: false,
-        hasPendingConfigChanges: false,
         enableWebSearch: false,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: false,
+        modeChanged: true, // <-- Key difference
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: false,
       });
 
       // Changelog should be triggered due to mode change
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
   });
 
@@ -325,74 +325,74 @@ describe('non-Initial Round Flow', () => {
     it('should trigger changelog when web search enabled mid-conversation', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
+        createdAt: new Date(),
+        enableWebSearch: false, // Was disabled
         id: 'thread-1',
-        slug: 'test',
-        title: 'Test',
-        mode: 'panel',
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false, // Was disabled
-        participantCount: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'panel',
+        participantCount: 1,
+        slug: 'test',
+        status: 'active',
+        title: 'Test',
+        updatedAt: new Date(),
         userId: 'user-1',
       });
       store.getState().setEnableWebSearch(true); // Now enabled
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: false,
-        modeChanged: false,
-        webSearchChanged: true, // <-- Key difference
-        hasPendingConfigChanges: false,
         enableWebSearch: true,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: false,
+        modeChanged: false,
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: true, // <-- Key difference
       });
 
       // Changelog AND pre-search should be triggered
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().preSearches.find(ps => ps.roundNumber === 1)).toBeDefined();
     });
 
     it('should trigger changelog when web search disabled mid-conversation', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
+        createdAt: new Date(),
+        enableWebSearch: true, // Was enabled
         id: 'thread-1',
-        slug: 'test',
-        title: 'Test',
-        mode: 'panel',
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: true, // Was enabled
-        participantCount: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'panel',
+        participantCount: 1,
+        slug: 'test',
+        status: 'active',
+        title: 'Test',
+        updatedAt: new Date(),
         userId: 'user-1',
       });
       store.getState().setEnableWebSearch(false); // Now disabled
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 1,
-        hasParticipantChanges: false,
-        modeChanged: false,
-        webSearchChanged: true,
-        hasPendingConfigChanges: false,
         enableWebSearch: false, // <-- No pre-search added
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: false,
+        modeChanged: false,
+        nextRound: 1,
+        threadId: 'thread-1',
+        webSearchChanged: true,
       });
 
       // Changelog should be triggered, but no pre-search
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().preSearches.find(ps => ps.roundNumber === 1)).toBeUndefined();
     });
   });
@@ -401,19 +401,19 @@ describe('non-Initial Round Flow', () => {
     it('should NOT trigger changelog when no config changes', () => {
       store.getState().setScreenMode(ScreenModes.THREAD);
       store.getState().setThread({
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        slug: 'test',
-        title: 'Test',
-        mode: 'panel',
-        status: 'active',
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        participantCount: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'panel',
+        participantCount: 1,
+        slug: 'test',
+        status: 'active',
+        title: 'Test',
+        updatedAt: new Date(),
         userId: 'user-1',
       });
       store.getState().setEnableWebSearch(false); // Same as thread
@@ -422,12 +422,12 @@ describe('non-Initial Round Flow', () => {
 
       // No changes - don't set any changelog flags
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
 
       // Streaming should NOT be blocked
       const isBlocked = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
     });
   });
 
@@ -448,10 +448,10 @@ describe('non-Initial Round Flow', () => {
       store.getState().setStreamingRoundNumber(null);
 
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
-      expect(state.waitingToStartStreaming).toBe(false);
-      expect(state.nextParticipantToTrigger).toBe(null);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
+      expect(state.waitingToStartStreaming).toBeFalsy();
+      expect(state.nextParticipantToTrigger).toBeNull();
     });
   });
 
@@ -461,8 +461,8 @@ describe('non-Initial Round Flow', () => {
 
       // Round 0 (initial) - no changelog
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'First', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'a0', content: 'Response', roundNumber: 0, participantId: 'p1', participantIndex: 0 }),
+        createTestUserMessage({ content: 'First', id: 'u0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response', id: 'a0', participantId: 'p1', participantIndex: 0, roundNumber: 0 }),
       ]);
       store.getState().completeStreaming();
 
@@ -473,13 +473,13 @@ describe('non-Initial Round Flow', () => {
 
       // Should NOT be blocked
       let isBlocked = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(false);
+      expect(isBlocked).toBeFalsy();
 
       // Complete round 1
       store.getState().setMessages([
         ...store.getState().messages,
-        createTestUserMessage({ id: 'u1', content: 'Second', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'a1', content: 'Response 2', roundNumber: 1, participantId: 'p1', participantIndex: 0 }),
+        createTestUserMessage({ content: 'Second', id: 'u1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'Response 2', id: 'a1', participantId: 'p1', participantIndex: 0, roundNumber: 1 }),
       ]);
       store.getState().completeStreaming();
 
@@ -488,19 +488,19 @@ describe('non-Initial Round Flow', () => {
       store.getState().setHasPendingConfigChanges(true);
 
       simulateHandleUpdateThreadAndSend(store, {
-        nextRound: 2,
-        hasParticipantChanges: false,
-        modeChanged: false,
-        webSearchChanged: true,
-        hasPendingConfigChanges: true,
         enableWebSearch: true,
-        threadId: 'thread-1',
         firstParticipantId: 'p1',
+        hasParticipantChanges: false,
+        hasPendingConfigChanges: true,
+        modeChanged: false,
+        nextRound: 2,
+        threadId: 'thread-1',
+        webSearchChanged: true,
       });
 
       // Should be blocked by changelog
       isBlocked = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
-      expect(isBlocked).toBe(true);
+      expect(isBlocked).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(2);
     });
   });
@@ -513,29 +513,29 @@ describe('non-Initial Round Flow', () => {
       store.getState().setHasPendingConfigChanges(true);
 
       const thread = {
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorm' as const,
-        status: 'active' as const,
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'brainstorm' as const,
+        slug: 'test',
+        status: 'active' as const,
+        title: 'Test',
+        updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [{
-        id: 'p1',
-        threadId: 'thread-1',
-        modelId: 'gpt-4',
-        role: null,
-        priority: 0,
-        isEnabled: true,
         createdAt: new Date(),
+        id: 'p1',
+        isEnabled: true,
+        modelId: 'gpt-4',
+        priority: 0,
+        role: null,
+        threadId: 'thread-1',
         updatedAt: new Date(),
       }];
 
@@ -545,7 +545,7 @@ describe('non-Initial Round Flow', () => {
       // Flags should be preserved
       const state = store.getState();
       expect(state.configChangeRoundNumber).toBe(1);
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
     });
 
     it('should reset changelog flags when initializeThread called without active submission', () => {
@@ -554,29 +554,29 @@ describe('non-Initial Round Flow', () => {
       store.getState().setIsWaitingForChangelog(false);
 
       const thread = {
+        createdAt: new Date(),
+        enableWebSearch: false,
         id: 'thread-1',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorm' as const,
-        status: 'active' as const,
+        isAiGeneratedTitle: false,
         isFavorite: false,
         isPublic: false,
-        isAiGeneratedTitle: false,
-        enableWebSearch: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         lastMessageAt: new Date(),
+        mode: 'brainstorm' as const,
+        slug: 'test',
+        status: 'active' as const,
+        title: 'Test',
+        updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [{
-        id: 'p1',
-        threadId: 'thread-1',
-        modelId: 'gpt-4',
-        role: null,
-        priority: 0,
-        isEnabled: true,
         createdAt: new Date(),
+        id: 'p1',
+        isEnabled: true,
+        modelId: 'gpt-4',
+        priority: 0,
+        role: null,
+        threadId: 'thread-1',
         updatedAt: new Date(),
       }];
 
@@ -584,8 +584,8 @@ describe('non-Initial Round Flow', () => {
 
       // Flags should remain cleared
       const state = store.getState();
-      expect(state.configChangeRoundNumber).toBe(null);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.configChangeRoundNumber).toBeNull();
+      expect(state.isWaitingForChangelog).toBeFalsy();
     });
   });
 });

@@ -44,13 +44,13 @@ const OpenRouterServiceConfigSchema = z.object({
 export type OpenRouterServiceConfig = z.infer<typeof OpenRouterServiceConfigSchema>;
 
 export const GenerateTextParamsSchema = z.object({
-  modelId: z.string().min(1),
+  maxTokens: z.number().int().positive().optional(),
   messages: z.array(z.custom<UIMessage>((data) => {
     return typeof data === 'object' && data !== null && 'id' in data && 'role' in data;
   })),
+  modelId: z.string().min(1),
   system: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
-  maxTokens: z.number().int().positive().optional(),
   topP: z.number().min(0).max(1).optional(),
 }).strict();
 
@@ -128,7 +128,7 @@ class OpenRouterService {
     usage: LanguageModelUsage;
   }> {
     // ✅ LAZY LOAD AI SDK & OpenRouter: Load at method invocation, not module startup
-    const { generateText, convertToModelMessages } = await getAiSdk();
+    const { convertToModelMessages, generateText } = await getAiSdk();
 
     const client = await this.getClient();
     this.validateModelId(params.modelId);
@@ -139,23 +139,23 @@ class OpenRouterService {
 
     try {
       const result = await generateText({
-        model: client.chat(params.modelId),
-        messages: await convertToModelMessages(params.messages),
-        system: systemPrompt,
-        temperature: params.temperature ?? DEFAULT_AI_PARAMS.temperature,
         maxOutputTokens: params.maxTokens ?? DEFAULT_AI_PARAMS.maxTokens,
-        topP: params.topP ?? DEFAULT_AI_PARAMS.topP,
+        messages: await convertToModelMessages(params.messages),
+        model: client.chat(params.modelId),
         // ✅ MIDDLE-OUT TRANSFORM: Enable automatic context compression
         providerOptions: {
           openrouter: {
             transforms: ['middle-out'],
           },
         },
+        system: systemPrompt,
+        temperature: params.temperature ?? DEFAULT_AI_PARAMS.temperature,
+        topP: params.topP ?? DEFAULT_AI_PARAMS.topP,
       });
 
       return {
-        text: result.text,
         finishReason: result.finishReason,
+        text: result.text,
         usage: result.usage,
       };
     } catch (error) {
@@ -163,9 +163,9 @@ class OpenRouterService {
 
       const context: ErrorContext = {
         errorType: 'external_service',
-        service: 'openrouter',
         operation: 'generate_text',
         resourceId: params.modelId,
+        service: 'openrouter',
       };
 
       throw createError.internal(

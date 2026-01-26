@@ -109,8 +109,9 @@ export function useAnalytics(): AnalyticsHook {
 
   const trackAction = useCallback(
     (action: string, properties?: BaseEventProperties) => {
-      if (!posthog)
+      if (!posthog) {
         return;
+      }
       posthog.capture(action, properties);
     },
     [posthog],
@@ -295,27 +296,27 @@ export function useAnalytics(): AnalyticsHook {
   return {
     trackAction,
     trackButtonClick,
-    trackLinkClick,
-    trackModalOpen,
-    trackModalClose,
+    trackChatFeedback,
     trackChatMessageSent,
     trackChatThreadCreated,
     trackChatThreadDeleted,
-    trackChatFeedback,
-    trackProjectCreated,
-    trackProjectUpdated,
-    trackProjectDeleted,
-    trackProjectAttachmentAdded,
-    trackFileUploadStarted,
+    trackError,
+    trackFeatureUsed,
     trackFileUploadCompleted,
     trackFileUploadFailed,
+    trackFileUploadStarted,
+    trackLinkClick,
+    trackModalClose,
+    trackModalOpen,
+    trackProjectAttachmentAdded,
+    trackProjectCreated,
+    trackProjectDeleted,
+    trackProjectUpdated,
+    trackSearchPerformed,
+    trackSettingsChanged,
     trackSignIn,
     trackSignOut,
-    trackSignUpStarted,
     trackSignUpCompleted,
-    trackFeatureUsed,
-    trackSearchPerformed,
-    trackError,
-    trackSettingsChanged,
+    trackSignUpStarted,
   };
 }

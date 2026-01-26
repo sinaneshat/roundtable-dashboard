@@ -75,24 +75,24 @@ type MockRoundState = {
  */
 function createMockRoundState(overrides: Partial<MockRoundState> = {}): MockRoundState {
   return {
-    threadId: 'thread-123',
-    roundNumber: 0,
-    status: RoundExecutionStatuses.RUNNING,
-    phase: RoundExecutionPhases.PARTICIPANTS,
-    totalParticipants: 3,
-    completedParticipants: 0,
-    failedParticipants: 0,
-    participantStatuses: {},
-    moderatorStatus: null,
-    startedAt: new Date().toISOString(),
     completedAt: null,
+    completedParticipants: 0,
     error: null,
-    triggeredParticipants: [],
-    preSearchStatus: null,
-    preSearchId: null,
+    failedParticipants: 0,
     lastActivityAt: new Date().toISOString(),
-    recoveryAttempts: 0,
     maxRecoveryAttempts: 3,
+    moderatorStatus: null,
+    participantStatuses: {},
+    phase: RoundExecutionPhases.PARTICIPANTS,
+    preSearchId: null,
+    preSearchStatus: null,
+    recoveryAttempts: 0,
+    roundNumber: 0,
+    startedAt: new Date().toISOString(),
+    status: RoundExecutionStatuses.RUNNING,
+    threadId: 'thread-123',
+    totalParticipants: 3,
+    triggeredParticipants: [],
     ...overrides,
   };
 }
@@ -148,9 +148,9 @@ describe('background round completion E2E', () => {
   describe('stage 1: thread just created', () => {
     it('should trigger pre-search when web search enabled and status is pending', () => {
       const state = createMockRoundState({
-        preSearchStatus: 'pending',
         completedParticipants: 0,
         participantStatuses: {},
+        preSearchStatus: 'pending',
       });
 
       const action = determineNextAction(state);
@@ -159,9 +159,9 @@ describe('background round completion E2E', () => {
 
     it('should trigger first participant when web search disabled', () => {
       const state = createMockRoundState({
-        preSearchStatus: null,
         completedParticipants: 0,
         participantStatuses: {},
+        preSearchStatus: null,
       });
 
       const action = determineNextAction(state);
@@ -171,9 +171,9 @@ describe('background round completion E2E', () => {
 
     it('should recover from failed pre-search by re-triggering', () => {
       const state = createMockRoundState({
-        preSearchStatus: 'failed',
         completedParticipants: 0,
         participantStatuses: {},
+        preSearchStatus: 'failed',
       });
 
       const action = determineNextAction(state);
@@ -188,9 +188,9 @@ describe('background round completion E2E', () => {
   describe('stage 2: during pre-search', () => {
     it('should wait for pre-search when status is running', () => {
       const state = createMockRoundState({
-        preSearchStatus: 'running',
         completedParticipants: 0,
         participantStatuses: {},
+        preSearchStatus: 'running',
       });
 
       // When pre-search is running, we don't trigger anything new
@@ -200,9 +200,9 @@ describe('background round completion E2E', () => {
 
     it('should proceed to participants after pre-search completes', () => {
       const state = createMockRoundState({
-        preSearchStatus: 'completed',
         completedParticipants: 0,
         participantStatuses: {},
+        preSearchStatus: 'completed',
       });
 
       const action = determineNextAction(state);
@@ -219,28 +219,29 @@ describe('background round completion E2E', () => {
     describe('user refresh during P0 streaming', () => {
       it('should detect stale P0 stream and queue completion check', () => {
         const state = createMockRoundState({
-          preSearchStatus: 'completed',
+          lastActivityAt: new Date(Date.now() - 60_000).toISOString(), // 60s ago (stale)
           participantStatuses: {
             0: ParticipantStreamStatuses.ACTIVE, // P0 was streaming
           },
-          lastActivityAt: new Date(Date.now() - 60_000).toISOString(), // 60s ago (stale)
+          preSearchStatus: 'completed',
         });
 
         // Staleness check
         const lastActivityAt = state.lastActivityAt;
-        if (!lastActivityAt)
+        if (!lastActivityAt) {
           throw new Error('expected lastActivityAt');
+        }
         const isStale = Date.now() - new Date(lastActivityAt).getTime() > 30_000;
-        expect(isStale).toBe(true);
+        expect(isStale).toBeTruthy();
       });
 
       it('should trigger P0 again when stale and incomplete', () => {
         const state = createMockRoundState({
-          preSearchStatus: 'completed',
+          completedParticipants: 0,
           participantStatuses: {
             0: ParticipantStreamStatuses.FAILED, // P0 failed/stale
           },
-          completedParticipants: 0,
+          preSearchStatus: 'completed',
         });
 
         const action = determineNextAction(state);
@@ -252,12 +253,12 @@ describe('background round completion E2E', () => {
     describe('user refresh during P1 streaming (P0 complete)', () => {
       it('should skip P0 and trigger P1 when P0 already complete', () => {
         const state = createMockRoundState({
-          preSearchStatus: 'completed',
+          completedParticipants: 1,
           participantStatuses: {
             0: ParticipantStreamStatuses.COMPLETED, // P0 done
             1: ParticipantStreamStatuses.FAILED, // P1 failed
           },
-          completedParticipants: 1,
+          preSearchStatus: 'completed',
         });
 
         const action = determineNextAction(state);
@@ -269,14 +270,14 @@ describe('background round completion E2E', () => {
     describe('user refresh during last participant', () => {
       it('should trigger last participant when others complete', () => {
         const state = createMockRoundState({
-          totalParticipants: 3,
-          preSearchStatus: 'completed',
+          completedParticipants: 2,
           participantStatuses: {
             0: ParticipantStreamStatuses.COMPLETED,
             1: ParticipantStreamStatuses.COMPLETED,
             2: ParticipantStreamStatuses.FAILED, // Last one failed
           },
-          completedParticipants: 2,
+          preSearchStatus: 'completed',
+          totalParticipants: 3,
         });
 
         const action = determineNextAction(state);
@@ -293,12 +294,12 @@ describe('background round completion E2E', () => {
   describe('stage 4: between participants', () => {
     it('should trigger next participant when previous completed', () => {
       const state = createMockRoundState({
-        totalParticipants: 3,
-        preSearchStatus: 'completed',
+        completedParticipants: 1,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 1,
+        preSearchStatus: 'completed',
+        totalParticipants: 3,
       });
 
       const action = determineNextAction(state);
@@ -309,14 +310,14 @@ describe('background round completion E2E', () => {
     it('should handle gap in participant completion', () => {
       // Edge case: P0 and P2 complete but P1 failed
       const state = createMockRoundState({
-        totalParticipants: 3,
-        preSearchStatus: 'completed',
+        completedParticipants: 2,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.FAILED,
           2: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 2,
+        preSearchStatus: 'completed',
+        totalParticipants: 3,
       });
 
       const action = determineNextAction(state);
@@ -332,15 +333,15 @@ describe('background round completion E2E', () => {
   describe('stage 5: before moderator', () => {
     it('should trigger moderator when all participants complete (2+ participants)', () => {
       const state = createMockRoundState({
-        totalParticipants: 3,
-        preSearchStatus: 'completed',
+        completedParticipants: 3,
+        moderatorStatus: null, // Not started
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
           2: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 3,
-        moderatorStatus: null, // Not started
+        preSearchStatus: 'completed',
+        totalParticipants: 3,
       });
 
       const action = determineNextAction(state);
@@ -349,13 +350,13 @@ describe('background round completion E2E', () => {
 
     it('should skip moderator for single participant', () => {
       const state = createMockRoundState({
-        totalParticipants: 1,
-        preSearchStatus: 'completed',
+        completedParticipants: 1,
+        moderatorStatus: null,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 1,
-        moderatorStatus: null,
+        preSearchStatus: 'completed',
+        totalParticipants: 1,
       });
 
       const action = determineNextAction(state);
@@ -370,15 +371,15 @@ describe('background round completion E2E', () => {
   describe('stage 6: during moderator streaming', () => {
     it('should trigger moderator when stale during streaming', () => {
       const state = createMockRoundState({
-        totalParticipants: 3,
-        preSearchStatus: 'completed',
+        completedParticipants: 3,
+        moderatorStatus: ParticipantStreamStatuses.FAILED, // Moderator failed
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
           2: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 3,
-        moderatorStatus: ParticipantStreamStatuses.FAILED, // Moderator failed
+        preSearchStatus: 'completed',
+        totalParticipants: 3,
       });
 
       const action = determineNextAction(state);
@@ -387,15 +388,15 @@ describe('background round completion E2E', () => {
 
     it('should complete round when moderator done', () => {
       const state = createMockRoundState({
-        totalParticipants: 3,
-        preSearchStatus: 'completed',
+        completedParticipants: 3,
+        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.COMPLETED,
           2: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 3,
-        moderatorStatus: ParticipantStreamStatuses.COMPLETED,
+        preSearchStatus: 'completed',
+        totalParticipants: 3,
       });
 
       const action = determineNextAction(state);
@@ -410,36 +411,38 @@ describe('background round completion E2E', () => {
   describe('recovery attempt limits', () => {
     it('should allow recovery within max attempts', () => {
       const state = createMockRoundState({
-        recoveryAttempts: 2,
         maxRecoveryAttempts: 3,
+        recoveryAttempts: 2,
       });
 
       const recoveryAttempts = state.recoveryAttempts;
       const maxRecoveryAttempts = state.maxRecoveryAttempts;
-      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined)
+      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined) {
         throw new Error('expected recoveryAttempts and maxRecoveryAttempts');
+      }
       const canRecover = recoveryAttempts < maxRecoveryAttempts;
-      expect(canRecover).toBe(true);
+      expect(canRecover).toBeTruthy();
     });
 
     it('should prevent recovery after max attempts', () => {
       const state = createMockRoundState({
-        recoveryAttempts: 3,
         maxRecoveryAttempts: 3,
+        recoveryAttempts: 3,
       });
 
       const recoveryAttempts = state.recoveryAttempts;
       const maxRecoveryAttempts = state.maxRecoveryAttempts;
-      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined)
+      if (recoveryAttempts === undefined || maxRecoveryAttempts === undefined) {
         throw new Error('expected recoveryAttempts and maxRecoveryAttempts');
+      }
       const canRecover = recoveryAttempts < maxRecoveryAttempts;
-      expect(canRecover).toBe(false);
+      expect(canRecover).toBeFalsy();
     });
 
     it('should use default max attempts if not set', () => {
       const state = createMockRoundState({
-        recoveryAttempts: 2,
         maxRecoveryAttempts: undefined,
+        recoveryAttempts: 2,
       });
 
       const DEFAULT_MAX_RECOVERY_ATTEMPTS = 3;
@@ -455,10 +458,10 @@ describe('background round completion E2E', () => {
   describe('multi-round scenarios', () => {
     it('should handle round 2 correctly after round 1 complete', () => {
       const round2State = createMockRoundState({
-        roundNumber: 1, // Second round (0-indexed)
-        preSearchStatus: 'pending', // Web search enabled for round 2
-        participantStatuses: {},
         completedParticipants: 0,
+        participantStatuses: {},
+        preSearchStatus: 'pending', // Web search enabled for round 2
+        roundNumber: 1, // Second round (0-indexed)
       });
 
       const action = determineNextAction(round2State);
@@ -467,29 +470,31 @@ describe('background round completion E2E', () => {
 
     it('should isolate recovery attempts per round', () => {
       const round1State = createMockRoundState({
-        roundNumber: 0,
         recoveryAttempts: 3, // Exhausted
+        roundNumber: 0,
       });
 
       const round2State = createMockRoundState({
-        roundNumber: 1,
         recoveryAttempts: 0, // Fresh
+        roundNumber: 1,
       });
 
       const round1Recovery = round1State.recoveryAttempts;
       const round1Max = round1State.maxRecoveryAttempts;
-      if (round1Recovery === undefined || round1Max === undefined)
+      if (round1Recovery === undefined || round1Max === undefined) {
         throw new Error('expected round1 recoveryAttempts and maxRecoveryAttempts');
+      }
       const round1CanRecover = round1Recovery < round1Max;
 
       const round2Recovery = round2State.recoveryAttempts;
       const round2Max = round2State.maxRecoveryAttempts;
-      if (round2Recovery === undefined || round2Max === undefined)
+      if (round2Recovery === undefined || round2Max === undefined) {
         throw new Error('expected round2 recoveryAttempts and maxRecoveryAttempts');
+      }
       const round2CanRecover = round2Recovery < round2Max;
 
-      expect(round1CanRecover).toBe(false);
-      expect(round2CanRecover).toBe(true);
+      expect(round1CanRecover).toBeFalsy();
+      expect(round2CanRecover).toBeTruthy();
     });
   });
 
@@ -500,8 +505,8 @@ describe('background round completion E2E', () => {
   describe('edge cases', () => {
     it('should handle empty participant statuses', () => {
       const state = createMockRoundState({
-        totalParticipants: 2,
         participantStatuses: {},
+        totalParticipants: 2,
       });
 
       const action = determineNextAction(state);
@@ -511,14 +516,14 @@ describe('background round completion E2E', () => {
 
     it('should handle mixed participant statuses', () => {
       const state = createMockRoundState({
-        totalParticipants: 4,
+        completedParticipants: 2,
         participantStatuses: {
           0: ParticipantStreamStatuses.COMPLETED,
           1: ParticipantStreamStatuses.ACTIVE, // Still streaming
           2: ParticipantStreamStatuses.FAILED,
           3: ParticipantStreamStatuses.COMPLETED,
         },
-        completedParticipants: 2,
+        totalParticipants: 4,
       });
 
       // Determine next based on completion status (ACTIVE might be stale)
@@ -530,8 +535,8 @@ describe('background round completion E2E', () => {
 
     it('should handle zero participants (edge case)', () => {
       const state = createMockRoundState({
-        totalParticipants: 0,
         participantStatuses: {},
+        totalParticipants: 0,
       });
 
       const action = determineNextAction(state);
@@ -591,14 +596,14 @@ describe('background round completion E2E', () => {
       const attachmentIds = ['upload-1', 'upload-2'];
 
       const message: TriggerParticipantQueueMessage = {
-        type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
-        messageId: 'trigger-thread-r0-p0-123',
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        userId: 'user-123',
         attachmentIds,
+        messageId: 'trigger-thread-r0-p0-123',
+        participantIndex: 0,
         queuedAt: new Date().toISOString(),
+        roundNumber: 0,
+        threadId: 'thread-123',
+        type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
+        userId: 'user-123',
       };
 
       expect(message.attachmentIds).toEqual(attachmentIds);
@@ -614,13 +619,13 @@ describe('background round completion E2E', () => {
       const STALE_THRESHOLD_MS = 30_000;
 
       const scenarios = [
-        { lastActivity: Date.now() - 10_000, expected: false }, // 10s - not stale
-        { lastActivity: Date.now() - 25_000, expected: false }, // 25s - not stale
-        { lastActivity: Date.now() - 31_000, expected: true }, // 31s - stale
-        { lastActivity: Date.now() - 60_000, expected: true }, // 60s - stale
+        { expected: false, lastActivity: Date.now() - 10_000 }, // 10s - not stale
+        { expected: false, lastActivity: Date.now() - 25_000 }, // 25s - not stale
+        { expected: true, lastActivity: Date.now() - 31_000 }, // 31s - stale
+        { expected: true, lastActivity: Date.now() - 60_000 }, // 60s - stale
       ];
 
-      for (const { lastActivity, expected } of scenarios) {
+      for (const { expected, lastActivity } of scenarios) {
         const isStale = Date.now() - lastActivity > STALE_THRESHOLD_MS;
         expect(isStale).toBe(expected);
       }
@@ -632,7 +637,7 @@ describe('background round completion E2E', () => {
       const startedAt = Date.now() - 15_000; // Started 15s ago
       const isTimedOut = Date.now() - startedAt > PRE_SEARCH_TIMEOUT_MS;
 
-      expect(isTimedOut).toBe(true);
+      expect(isTimedOut).toBeTruthy();
     });
   });
 });

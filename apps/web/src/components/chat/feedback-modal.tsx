@@ -23,7 +23,7 @@ export type FeedbackModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
+export function FeedbackModal({ onOpenChange, open }: FeedbackModalProps) {
   const t = useTranslations();
   const posthog = usePostHog();
 
@@ -32,14 +32,14 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   const hasCapturedShownRef = useRef(false);
 
   const methods = useForm<FeedbackFormValues>({
-    resolver: zodResolver(FeedbackFormSchema),
     defaultValues: {
       feedbackType: DEFAULT_USER_FEEDBACK_TYPE,
       message: '',
     },
+    resolver: zodResolver(FeedbackFormSchema),
   });
 
-  const { handleSubmit, reset, formState: { isSubmitting } } = methods;
+  const { formState: { isSubmitting }, handleSubmit, reset } = methods;
 
   const feedbackTypeOptions: FormOptions = useMemo(() =>
     USER_FEEDBACK_TYPES.map((type: UserFeedbackType) => ({
@@ -63,12 +63,15 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   }, [open, posthog]);
 
   const onSubmit = useCallback((values: FeedbackFormValues) => {
-    if (!posthog)
+    if (!posthog) {
       return;
+    }
 
     hasSubmittedRef.current = true;
 
     posthog.capture('survey sent', {
+      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.MESSAGE}`]: values.message,
+      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.TYPE}`]: values.feedbackType,
       $survey_id: POSTHOG_SURVEYS.FEEDBACK.ID,
       $survey_name: POSTHOG_SURVEYS.FEEDBACK.NAME,
       $survey_questions: [
@@ -83,8 +86,6 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
           type: 'multiple_choice',
         },
       ],
-      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.MESSAGE}`]: values.message,
-      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.TYPE}`]: values.feedbackType,
     });
 
     setShowSuccess(true);
@@ -96,8 +97,9 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   }, [posthog, reset, onOpenChange, t]);
 
   const handleClose = useCallback(() => {
-    if (isSubmitting)
+    if (isSubmitting) {
       return;
+    }
 
     if (posthog && !hasSubmittedRef.current && !showSuccess) {
       posthog.capture('survey dismissed', {

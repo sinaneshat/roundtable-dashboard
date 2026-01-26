@@ -26,26 +26,26 @@ import { getRoundNumber } from '@/lib/utils';
 describe('submission Flow Sanity - State Transition Order', () => {
   it('should transition from initial UI to streaming in correct order', () => {
     const store = createTestChatStore();
-    const stateLog: Array<{
+    const stateLog: {
       showInitialUI: boolean;
       isCreatingThread: boolean;
       isStreaming: boolean;
       hasMessages: boolean;
-    }> = [];
+    }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       stateLog.push({
-        showInitialUI: state.showInitialUI,
+        hasMessages: state.messages.length > 0,
         isCreatingThread: state.isCreatingThread,
         isStreaming: state.isStreaming,
-        hasMessages: state.messages.length > 0,
+        showInitialUI: state.showInitialUI,
       });
     });
 
     // Initial state (ChatOverviewScreen)
-    expect(store.getState().showInitialUI).toBe(true);
-    expect(store.getState().isCreatingThread).toBe(false);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().showInitialUI).toBeTruthy();
+    expect(store.getState().isCreatingThread).toBeFalsy();
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // 1. User submits - thread creation starts
     store.getState().setIsCreatingThread(true);
@@ -53,8 +53,8 @@ describe('submission Flow Sanity - State Transition Order', () => {
 
     // 2. Thread created - user message added
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -76,12 +76,12 @@ describe('submission Flow Sanity - State Transition Order', () => {
 
     // Verify messages exist when streaming starts
     const firstStreamingState = stateLog[streamingStartIndex];
-    expect(firstStreamingState?.hasMessages).toBe(true);
+    expect(firstStreamingState?.hasMessages).toBeTruthy();
   });
 
   it('should never have isCreatingThread and isStreaming true simultaneously', () => {
     const store = createTestChatStore();
-    const invalidStates: Array<{ isCreatingThread: boolean; isStreaming: boolean }> = [];
+    const invalidStates: { isCreatingThread: boolean; isStreaming: boolean }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       if (state.isCreatingThread && state.isStreaming) {
@@ -97,8 +97,8 @@ describe('submission Flow Sanity - State Transition Order', () => {
     store.getState().setShowInitialUI(false);
 
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     store.getState().setMessages([userMessage]);
@@ -121,16 +121,16 @@ describe('submission Flow Sanity - State Transition Order', () => {
 
     // Add round 0 messages
     const userMessage = createTestUserMessage({
-      id: 'thread_abc_r0_user',
       content: 'Question',
+      id: 'thread_abc_r0_user',
       roundNumber: 0,
     });
     const assistantMessage = createTestAssistantMessage({
-      id: 'thread_abc_r0_p0',
       content: 'Response',
-      roundNumber: 0,
+      id: 'thread_abc_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
 
     store.getState().setMessages([userMessage, assistantMessage]);
@@ -141,8 +141,9 @@ describe('submission Flow Sanity - State Transition Order', () => {
 
     expect(currentRound).toBe(0);
     expect(lastMessage).toBeDefined();
-    if (!lastMessage)
+    if (!lastMessage) {
       throw new Error('Expected last message');
+    }
     expect(lastMessage.metadata).toBeDefined();
 
     // Type-safe metadata extraction
@@ -176,7 +177,7 @@ describe('submission Flow Sanity - Invalid State Prevention', () => {
 
   it('should not have isStreaming true when streamingRoundNumber is null', () => {
     const store = createTestChatStore();
-    const invalidStates: Array<{ isStreaming: boolean; streamingRoundNumber: number | null }> = [];
+    const invalidStates: { isStreaming: boolean; streamingRoundNumber: number | null }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       if (state.isStreaming && state.streamingRoundNumber === null) {
@@ -205,29 +206,29 @@ describe('submission Flow Sanity - Invalid State Prevention', () => {
 
     // Start streaming
     store.setState({
+      currentParticipantIndex: 2,
       isStreaming: true,
       streamingRoundNumber: 0,
-      currentParticipantIndex: 2,
     });
 
     // Complete streaming
     store.getState().completeStreaming();
 
     // Verify state is cleared
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().streamingRoundNumber).toBeNull();
     expect(store.getState().currentParticipantIndex).toBe(0);
   });
 
   it('should not allow isStreaming and isModeratorStreaming true simultaneously', () => {
     const store = createTestChatStore();
-    const invalidStates: Array<{ isStreaming: boolean; isModeratorStreaming: boolean }> = [];
+    const invalidStates: { isStreaming: boolean; isModeratorStreaming: boolean }[] = [];
 
     const unsubscribe = store.subscribe((state) => {
       if (state.isStreaming && state.isModeratorStreaming) {
         invalidStates.push({
-          isStreaming: state.isStreaming,
           isModeratorStreaming: state.isModeratorStreaming,
+          isStreaming: state.isStreaming,
         });
       }
     });
@@ -253,14 +254,14 @@ describe('submission Flow Sanity - Pre-Search Integration', () => {
     const store = createTestChatStore({ enableWebSearch: true });
 
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question with search',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question with search',
     };
 
     store.getState().addPreSearch(preSearchPlaceholder);
@@ -275,14 +276,14 @@ describe('submission Flow Sanity - Pre-Search Integration', () => {
 
     // Create PENDING
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
@@ -315,24 +316,24 @@ describe('submission Flow Sanity - Pre-Search Integration', () => {
 
     // Add pre-search
     const preSearchPlaceholder = {
-      id: 'presearch_r0',
-      threadId: 'thread_abc',
-      roundNumber: 0,
-      userQuery: 'Question',
-      status: MessageStatuses.PENDING,
-      data: null,
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      data: null,
+      id: 'presearch_r0',
+      roundNumber: 0,
+      status: MessageStatuses.PENDING,
+      threadId: 'thread_abc',
+      userQuery: 'Question',
     };
     store.getState().addPreSearch(preSearchPlaceholder);
 
     // First try to mark - should succeed
     const didMark = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMark).toBe(true);
+    expect(didMark).toBeTruthy();
 
     // Second try to mark - should fail (already marked)
     const didMarkAgain = store.getState().tryMarkPreSearchTriggered(0);
-    expect(didMarkAgain).toBe(false);
+    expect(didMarkAgain).toBeFalsy();
   });
 });
 
@@ -342,26 +343,26 @@ describe('submission Flow Sanity - Message Ordering', () => {
 
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
-        roundNumber: 0,
         createdAt: '2024-01-01T00:00:00.000Z',
+        id: 'thread_abc_r0_user',
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Response 1',
-        roundNumber: 0,
+        createdAt: '2024-01-01T00:00:01.000Z',
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        createdAt: '2024-01-01T00:00:01.000Z',
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p1',
         content: 'Response 2',
-        roundNumber: 0,
+        createdAt: '2024-01-01T00:00:02.000Z',
+        id: 'thread_abc_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        createdAt: '2024-01-01T00:00:02.000Z',
+        roundNumber: 0,
       }),
     ];
 
@@ -377,8 +378,9 @@ describe('submission Flow Sanity - Message Ordering', () => {
       const metadata = msg.metadata as { createdAt?: string } | undefined;
       expect(metadata?.createdAt).toBeDefined();
       const createdAt = metadata?.createdAt;
-      if (!createdAt)
+      if (!createdAt) {
         throw new Error('Expected createdAt');
+      }
       return new Date(createdAt).getTime();
     });
 
@@ -386,8 +388,9 @@ describe('submission Flow Sanity - Message Ordering', () => {
     const ts0 = timestamps[0];
     const ts1 = timestamps[1];
     const ts2 = timestamps[2];
-    if (ts0 === undefined || ts1 === undefined || ts2 === undefined)
+    if (ts0 === undefined || ts1 === undefined || ts2 === undefined) {
       throw new Error('Expected 3 timestamps');
+    }
     expect(ts0).toBeLessThanOrEqual(ts1);
     expect(ts1).toBeLessThanOrEqual(ts2);
   });
@@ -397,16 +400,16 @@ describe('submission Flow Sanity - Message Ordering', () => {
 
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Response',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -426,30 +429,30 @@ describe('submission Flow Sanity - Message Ordering', () => {
 
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Response 1',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p1',
         content: 'Response 2',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p2',
         content: 'Response 3',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p2',
         participantId: 'participant-2',
         participantIndex: 2,
+        roundNumber: 0,
       }),
     ];
 
@@ -482,27 +485,27 @@ describe('submission Flow Sanity - Council Moderator Integration', () => {
 
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Response 1',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p1',
         content: 'Response 2',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: 'thread_abc_r0_moderator',
         content: 'Council moderator summary',
+        id: 'thread_abc_r0_moderator',
         roundNumber: 0,
       }),
     ];
@@ -530,23 +533,23 @@ describe('submission Flow Sanity - Council Moderator Integration', () => {
     // Start moderator streaming
     store.getState().setIsModeratorStreaming(true);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
 
     // Moderator completes
     store.getState().setIsModeratorStreaming(false);
 
-    expect(store.getState().isModeratorStreaming).toBe(false);
+    expect(store.getState().isModeratorStreaming).toBeFalsy();
   });
 
   it('should not start moderator if participants still streaming', () => {
     const store = createTestChatStore();
 
     // Participants streaming
-    store.setState({ isStreaming: true, isModeratorStreaming: false });
+    store.setState({ isModeratorStreaming: false, isStreaming: true });
 
     // Verify moderator should not start
     const shouldBlockModerator = store.getState().isStreaming;
-    expect(shouldBlockModerator).toBe(true);
+    expect(shouldBlockModerator).toBeTruthy();
   });
 });
 
@@ -558,7 +561,7 @@ describe('submission Flow Sanity - Screen Mode Transitions', () => {
     store.setState({ screenMode: ScreenModes.OVERVIEW, showInitialUI: true });
 
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
-    expect(store.getState().showInitialUI).toBe(true);
+    expect(store.getState().showInitialUI).toBeTruthy();
 
     // After submission: initial UI hidden but still OVERVIEW during streaming
     store.getState().setShowInitialUI(false);
@@ -568,7 +571,7 @@ describe('submission Flow Sanity - Screen Mode Transitions', () => {
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
-    expect(store.getState().showInitialUI).toBe(false);
+    expect(store.getState().showInitialUI).toBeFalsy();
   });
 
   it('should stay in THREAD mode for subsequent rounds', () => {
@@ -579,15 +582,15 @@ describe('submission Flow Sanity - Screen Mode Transitions', () => {
 
     // Submit second message
     const round1User = createTestUserMessage({
-      id: 'thread_abc_r1_user',
       content: 'Second question',
+      id: 'thread_abc_r1_user',
       roundNumber: 1,
     });
     store.getState().setMessages([round1User]);
 
     // Screen mode should remain THREAD
     expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
-    expect(store.getState().showInitialUI).toBe(false);
+    expect(store.getState().showInitialUI).toBeFalsy();
   });
 });
 
@@ -609,14 +612,14 @@ describe('submission Flow Sanity - Critical Flags', () => {
 
     // Before streaming starts, waiting flag may be true
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // When streaming actually starts, flag should clear
     store.getState().setWaitingToStartStreaming(false);
     store.getState().setIsStreaming(true);
 
-    expect(store.getState().waitingToStartStreaming).toBe(false);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
+    expect(store.getState().isStreaming).toBeTruthy();
   });
 
   it('should reset pendingMessage after submission', () => {
@@ -628,22 +631,22 @@ describe('submission Flow Sanity - Critical Flags', () => {
 
     // After submission, should clear
     store.getState().setPendingMessage(null);
-    expect(store.getState().pendingMessage).toBe(null);
+    expect(store.getState().pendingMessage).toBeNull();
   });
 
   it('should handle enableWebSearch toggle correctly', () => {
     const store = createTestChatStore();
 
     // Initially disabled
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
 
     // User enables web search
     store.getState().setEnableWebSearch(true);
-    expect(store.getState().enableWebSearch).toBe(true);
+    expect(store.getState().enableWebSearch).toBeTruthy();
 
     // User disables web search
     store.getState().setEnableWebSearch(false);
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
   });
 });
 
@@ -652,7 +655,7 @@ describe('submission Flow Sanity - Thread State', () => {
     const store = createTestChatStore();
 
     // Before creation
-    expect(store.getState().createdThreadId).toBe(null);
+    expect(store.getState().createdThreadId).toBeNull();
 
     // After creation
     store.getState().setCreatedThreadId('thread_abc123');
@@ -672,7 +675,7 @@ describe('submission Flow Sanity - Thread State', () => {
 
     // After navigation
     store.setState({ hasNavigated: true });
-    expect(store.getState().hasNavigated).toBe(true);
+    expect(store.getState().hasNavigated).toBeTruthy();
 
     // Reset to initial UI (returning to /chat overview)
     store.getState().setShowInitialUI(true);
@@ -683,6 +686,6 @@ describe('submission Flow Sanity - Thread State', () => {
       store.setState({ hasNavigated: false });
     }
 
-    expect(store.getState().hasNavigated).toBe(false);
+    expect(store.getState().hasNavigated).toBeFalsy();
   });
 });

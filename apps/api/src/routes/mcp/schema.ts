@@ -38,8 +38,8 @@ export const MCP_PROTOCOL_VERSION = '2024-11-05';
  * Base structure for all MCP requests
  */
 export const JsonRpcRequestSchema = z.object({
-  jsonrpc: z.literal('2.0'),
   id: z.union([z.string(), z.number()]).optional(),
+  jsonrpc: z.literal('2.0'),
   method: z.string(),
   params: z.record(z.string(), z.unknown()).optional(),
 }).openapi('JsonRpcRequest');
@@ -49,18 +49,18 @@ export const JsonRpcRequestSchema = z.object({
  */
 export const JsonRpcErrorSchema = z.object({
   code: z.number(),
-  message: z.string(),
   data: z.unknown().optional(),
+  message: z.string(),
 }).openapi('JsonRpcError');
 
 /**
  * JSON-RPC 2.0 Response Schema
  */
 export const JsonRpcResponseSchema = z.object({
-  jsonrpc: z.literal('2.0'),
-  id: z.union([z.string(), z.number(), z.null()]),
-  result: z.unknown().optional(),
   error: JsonRpcErrorSchema.optional(),
+  id: z.union([z.string(), z.number(), z.null()]),
+  jsonrpc: z.literal('2.0'),
+  result: z.unknown().optional(),
 }).openapi('JsonRpcResponse');
 
 // ============================================================================
@@ -71,30 +71,30 @@ export const JsonRpcResponseSchema = z.object({
  * Text Content - Primary content type
  */
 export const TextContentSchema = z.object({
-  type: z.literal('text'),
   text: z.string(),
+  type: z.literal('text'),
 }).openapi('TextContent');
 
 /**
  * Image Content - Base64 encoded images
  */
 export const ImageContentSchema = z.object({
-  type: z.literal('image'),
   data: z.string().describe('Base64-encoded image data'),
   mimeType: z.string(),
+  type: z.literal('image'),
 }).openapi('ImageContent');
 
 /**
  * Resource Content - Embedded resource references
  */
 export const ResourceContentSchema = z.object({
-  type: z.literal('resource'),
   resource: z.object({
-    uri: z.string(),
+    blob: z.string().optional(),
     mimeType: z.string().optional(),
     text: z.string().optional(),
-    blob: z.string().optional(),
+    uri: z.string(),
   }),
+  type: z.literal('resource'),
 }).openapi('ResourceContent');
 
 /**
@@ -115,25 +115,25 @@ export const MCPContentSchema = z.discriminatedUnion('type', [
  * inputSchema follows JSON Schema format (OpenAI function parameters)
  */
 export const MCPToolSchema = z.object({
-  name: z.string().openapi({
-    description: 'Unique tool identifier (snake_case)',
-    example: 'create_thread',
-  }),
   description: z.string().openapi({
     description: 'Human-readable description for AI model context',
     example: 'Creates a new multi-model brainstorming chat thread',
   }),
   inputSchema: z.object({
-    type: z.literal('object'),
     properties: z.record(z.string(), z.unknown()),
     required: z.array(z.string()).optional(),
+    type: z.literal('object'),
   }).openapi({
     description: 'JSON Schema for tool parameters (OpenAI compatible)',
   }),
+  name: z.string().openapi({
+    description: 'Unique tool identifier (snake_case)',
+    example: 'create_thread',
+  }),
   outputSchema: z.object({
-    type: z.literal('object'),
     properties: z.record(z.string(), z.unknown()),
     required: z.array(z.string()).optional(),
+    type: z.literal('object'),
   }).optional().openapi({
     description: 'JSON Schema for structured output validation',
   }),
@@ -147,16 +147,16 @@ export const MCPToolSchema = z.object({
  * MCP Resource Schema
  */
 export const MCPResourceSchema = z.object({
-  uri: z.string().openapi({
-    description: 'Resource URI (protocol://path format)',
-    example: 'roundtable://thread/abc123',
-  }),
+  description: z.string().optional(),
+  mimeType: z.string().default('application/json'),
   name: z.string().openapi({
     description: 'Human-readable resource name',
     example: 'Product Strategy Discussion',
   }),
-  description: z.string().optional(),
-  mimeType: z.string().default('application/json'),
+  uri: z.string().openapi({
+    description: 'Resource URI (protocol://path format)',
+    example: 'roundtable://thread/abc123',
+  }),
 }).openapi('MCPResource');
 
 // ============================================================================
@@ -167,27 +167,27 @@ export const MCPResourceSchema = z.object({
  * Server Capabilities Schema
  */
 export const MCPCapabilitiesSchema = z.object({
-  tools: z.object({
-    listChanged: z.boolean().optional(),
-  }).optional(),
-  resources: z.object({
-    subscribe: z.boolean().optional(),
-    listChanged: z.boolean().optional(),
-  }).optional(),
+  logging: z.object({}).optional(),
   prompts: z.object({
     listChanged: z.boolean().optional(),
   }).optional(),
-  logging: z.object({}).optional(),
+  resources: z.object({
+    listChanged: z.boolean().optional(),
+    subscribe: z.boolean().optional(),
+  }).optional(),
+  tools: z.object({
+    listChanged: z.boolean().optional(),
+  }).optional(),
 }).openapi('MCPCapabilities');
 
 /**
  * Server Info Schema
  */
 export const MCPServerInfoSchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  protocolVersion: z.string().default(MCP_PROTOCOL_VERSION),
   capabilities: MCPCapabilitiesSchema,
+  name: z.string(),
+  protocolVersion: z.string().default(MCP_PROTOCOL_VERSION),
+  version: z.string(),
 }).openapi('MCPServerInfo');
 
 // ============================================================================
@@ -198,20 +198,20 @@ export const MCPServerInfoSchema = z.object({
  * Initialize Request Params
  */
 export const InitializeParamsSchema = z.object({
-  protocolVersion: z.string(),
   capabilities: MCPCapabilitiesSchema.optional(),
   clientInfo: z.object({
     name: z.string(),
     version: z.string(),
   }).optional(),
+  protocolVersion: z.string(),
 }).openapi('InitializeParams');
 
 /**
  * Initialize Result
  */
 export const InitializeResultSchema = z.object({
-  protocolVersion: z.string(),
   capabilities: MCPCapabilitiesSchema,
+  protocolVersion: z.string(),
   serverInfo: z.object({
     name: z.string(),
     version: z.string(),
@@ -229,8 +229,8 @@ export const ToolsListResultSchema = z.object({
  * Tool Call Params
  */
 export const ToolCallParamsSchema = z.object({
-  name: z.string(),
   arguments: z.record(z.string(), z.unknown()).optional(),
+  name: z.string(),
 }).openapi('ToolCallParams');
 
 /**
@@ -238,8 +238,8 @@ export const ToolCallParamsSchema = z.object({
  */
 export const ToolCallResultSchema = z.object({
   content: z.array(MCPContentSchema),
-  structuredContent: z.record(z.string(), z.unknown()).optional(),
   isError: z.boolean().optional(),
+  structuredContent: z.record(z.string(), z.unknown()).optional(),
 }).openapi('ToolCallResult');
 
 /**
@@ -261,10 +261,10 @@ export const ResourceReadParamsSchema = z.object({
  */
 export const ResourceReadResultSchema = z.object({
   contents: z.array(z.object({
-    uri: z.string(),
+    blob: z.string().optional(),
     mimeType: z.string().optional(),
     text: z.string().optional(),
-    blob: z.string().optional(),
+    uri: z.string(),
   })),
 }).openapi('ResourceReadResult');
 
@@ -280,13 +280,13 @@ export const ResourceReadResultSchema = z.object({
  * Create Project Input
  */
 export const CreateProjectInputSchema = z.object({
-  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX),
-  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
   customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional(),
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX),
   settings: z.object({
+    allowedFileTypes: z.array(z.string()).optional(),
     autoIndexing: z.boolean().optional(),
     maxFileSize: z.number().int().positive().optional(),
-    allowedFileTypes: z.array(z.string()).optional(),
   }).optional(),
 }).openapi('CreateProjectInput');
 
@@ -301,23 +301,23 @@ export const GetProjectInputSchema = z.object({
  * List Projects Input
  */
 export const ListProjectsInputSchema = z.object({
-  search: z.string().optional(),
   cursor: z.string().optional(),
   limit: z.number().int().positive().max(50).default(20),
+  search: z.string().optional(),
 }).openapi('ListProjectsInput');
 
 /**
  * Update Project Input
  */
 export const UpdateProjectInputSchema = z.object({
-  projectId: CoreSchemas.id(),
-  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).optional(),
-  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
   customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional(),
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).optional(),
+  projectId: CoreSchemas.id(),
   settings: z.object({
+    allowedFileTypes: z.array(z.string()).optional(),
     autoIndexing: z.boolean().optional(),
     maxFileSize: z.number().int().positive().optional(),
-    allowedFileTypes: z.array(z.string()).optional(),
   }).optional(),
 }).openapi('UpdateProjectInput');
 
@@ -332,27 +332,27 @@ export const DeleteProjectInputSchema = z.object({
  * List Project Threads Input
  */
 export const ListProjectThreadsInputSchema = z.object({
-  projectId: CoreSchemas.id(),
   cursor: z.string().optional(),
   limit: z.number().int().positive().max(50).default(20),
+  projectId: CoreSchemas.id(),
 }).openapi('ListProjectThreadsInput');
 
 /**
  * List Knowledge Files Input
  */
 export const ListKnowledgeFilesInputSchema = z.object({
-  projectId: CoreSchemas.id(),
-  status: ProjectIndexStatusSchema.optional(),
   cursor: z.string().optional(),
   limit: z.number().int().positive().max(50).default(20),
+  projectId: CoreSchemas.id(),
+  status: ProjectIndexStatusSchema.optional(),
 }).openapi('ListKnowledgeFilesInput');
 
 /**
  * Delete Knowledge File Input
  */
 export const DeleteKnowledgeFileInputSchema = z.object({
-  projectId: CoreSchemas.id(),
   fileId: CoreSchemas.id(),
+  projectId: CoreSchemas.id(),
 }).openapi('DeleteKnowledgeFileInput');
 
 // ============================================================================
@@ -363,34 +363,34 @@ export const DeleteKnowledgeFileInputSchema = z.object({
  * Create Thread Input
  */
 export const CreateThreadInputSchema = z.object({
-  title: z.string().min(1).max(200),
-  projectId: CoreSchemas.id().optional(),
+  isPublic: z.boolean().default(false),
   mode: ChatModeSchema.default(DEFAULT_CHAT_MODE),
   participants: z.array(z.object({
     modelId: z.string(),
+    priority: z.number().int().nonnegative().optional(),
     role: z.string().optional(),
     systemPrompt: z.string().optional(),
-    priority: z.number().int().nonnegative().optional(),
   })).min(1).max(10),
-  isPublic: z.boolean().default(false),
+  projectId: CoreSchemas.id().optional(),
+  title: z.string().min(1).max(200),
 }).openapi('CreateThreadInput');
 
 /**
  * Send Message Input
  */
 export const SendMessageInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   content: z.string().min(1).max(10000),
   enableWebSearch: z.boolean().default(false),
+  threadId: CoreSchemas.id(),
 }).openapi('SendMessageInput');
 
 /**
  * Get Thread Input
  */
 export const GetThreadInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   includeMessages: z.boolean().default(true),
   maxMessages: z.number().int().positive().max(100).default(50),
+  threadId: CoreSchemas.id(),
 }).openapi('GetThreadInput');
 
 /**
@@ -405,72 +405,72 @@ export const ListModelsInputSchema = z.object({
  * Add Participant Input
  */
 export const AddParticipantInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   modelId: z.string(),
+  priority: z.number().int().nonnegative().optional(),
   role: z.string().optional(),
   systemPrompt: z.string().optional(),
-  priority: z.number().int().nonnegative().optional(),
+  threadId: CoreSchemas.id(),
 }).openapi('AddParticipantInput');
 
 /**
  * Generate Responses Input
  */
 export const GenerateResponsesInputSchema = z.object({
-  threadId: CoreSchemas.id(),
-  messageContent: z.string().min(STRING_LIMITS.MESSAGE_MIN).max(STRING_LIMITS.MESSAGE_MAX),
   enableWebSearch: z.boolean().default(false),
+  messageContent: z.string().min(STRING_LIMITS.MESSAGE_MIN).max(STRING_LIMITS.MESSAGE_MAX),
+  threadId: CoreSchemas.id(),
 }).openapi('GenerateResponsesInput');
 
 /**
  * Generate Summary Input
  */
 export const GenerateAnalysisInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   roundNumber: RoundNumberSchema,
+  threadId: CoreSchemas.id(),
 }).openapi('GenerateAnalysisInput');
 
 /**
  * Regenerate Round Input
  */
 export const RegenerateRoundInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   roundNumber: RoundNumberSchema,
+  threadId: CoreSchemas.id(),
 }).openapi('RegenerateRoundInput');
 
 /**
  * Round Feedback Input
  */
 export const RoundFeedbackInputSchema = z.object({
-  threadId: CoreSchemas.id(),
-  roundNumber: RoundNumberSchema,
   feedback: RoundFeedbackValueSchema,
+  roundNumber: RoundNumberSchema,
+  threadId: CoreSchemas.id(),
 }).openapi('RoundFeedbackInput');
 
 /**
  * Remove Participant Input
  */
 export const RemoveParticipantInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   participantId: CoreSchemas.id(),
+  threadId: CoreSchemas.id(),
 }).openapi('RemoveParticipantInput');
 
 /**
  * Update Participant Input
  */
 export const UpdateParticipantInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   participantId: CoreSchemas.id(),
+  priority: z.number().int().nonnegative().optional(),
   role: z.string().optional(),
   systemPrompt: z.string().optional(),
-  priority: z.number().int().nonnegative().optional(),
+  threadId: CoreSchemas.id(),
 }).openapi('UpdateParticipantInput');
 
 /**
  * Get Round Summary Input
  */
 export const GetRoundAnalysisInputSchema = z.object({
-  threadId: CoreSchemas.id(),
   roundNumber: RoundNumberSchema,
+  threadId: CoreSchemas.id(),
 }).openapi('GetRoundAnalysisInput');
 
 /**
@@ -484,9 +484,9 @@ export const ListRoundsInputSchema = z.object({
  * List Threads Input
  */
 export const ListThreadsInputSchema = z.object({
-  projectId: CoreSchemas.id().optional(),
   cursor: z.string().optional(),
   limit: z.number().int().positive().max(50).default(20),
+  projectId: CoreSchemas.id().optional(),
 }).openapi('ListThreadsInput');
 
 /**
@@ -512,8 +512,8 @@ export const MCPJsonRpcResponseSchema = createApiResponseSchema(
  */
 export const MCPToolsListResponseSchema = createApiResponseSchema(
   z.object({
-    tools: z.array(MCPToolSchema),
     serverInfo: MCPServerInfoSchema,
+    tools: z.array(MCPToolSchema),
   }),
 ).openapi('MCPToolsListResponse');
 
@@ -522,8 +522,8 @@ export const MCPToolsListResponseSchema = createApiResponseSchema(
  */
 export const MCPResourcesListResponseSchema = createApiResponseSchema(
   z.object({
-    resources: z.array(MCPResourceSchema),
     count: z.number().int().nonnegative(),
+    resources: z.array(MCPResourceSchema),
   }),
 ).openapi('MCPResourcesListResponse');
 
@@ -532,13 +532,13 @@ export const MCPResourcesListResponseSchema = createApiResponseSchema(
  */
 export const MCPToolCallResponseSchema = createApiResponseSchema(
   z.object({
-    content: z.array(MCPContentSchema),
-    structuredContent: z.record(z.string(), z.unknown()).optional(),
-    isError: z.boolean().optional(),
     _meta: z.object({
-      toolName: z.string(),
       executionTimeMs: z.number(),
+      toolName: z.string(),
     }).optional(),
+    content: z.array(MCPContentSchema),
+    isError: z.boolean().optional(),
+    structuredContent: z.record(z.string(), z.unknown()).optional(),
   }),
 ).openapi('MCPToolCallResponse');
 
@@ -546,16 +546,16 @@ export const MCPToolCallResponseSchema = createApiResponseSchema(
  * OpenAI Function Schema
  */
 export const OpenAIFunctionSchema = z.object({
-  type: z.literal('function'),
   function: z.object({
-    name: z.string(),
     description: z.string(),
+    name: z.string(),
     parameters: z.object({
-      type: z.literal('object'),
       properties: z.record(z.string(), z.unknown()),
       required: z.array(z.string()).optional(),
+      type: z.literal('object'),
     }),
   }),
+  type: z.literal('function'),
 }).openapi('OpenAIFunction');
 
 /**
@@ -564,6 +564,55 @@ export const OpenAIFunctionSchema = z.object({
 export const OpenAIFunctionsResponseSchema = createApiResponseSchema(
   z.array(OpenAIFunctionSchema),
 ).openapi('OpenAIFunctionsResponse');
+
+// ============================================================================
+// Tool Args Union Schema
+// ============================================================================
+
+/**
+ * ToolArgsSchema - Union of all MCP tool input schemas
+ *
+ * Provides type-safe validation for tool arguments in executeToolInternal.
+ * Each tool validates its own args via safeParse in the switch statement,
+ * but this union provides the type signature for the args parameter.
+ */
+export const ToolArgsSchema = z.union([
+  // Project tools
+  CreateProjectInputSchema,
+  GetProjectInputSchema,
+  ListProjectsInputSchema,
+  UpdateProjectInputSchema,
+  DeleteProjectInputSchema,
+  ListProjectThreadsInputSchema,
+  // Knowledge file tools
+  ListKnowledgeFilesInputSchema,
+  DeleteKnowledgeFileInputSchema,
+  // Thread tools
+  CreateThreadInputSchema,
+  GetThreadInputSchema,
+  ListThreadsInputSchema,
+  DeleteThreadInputSchema,
+  // Message tools
+  SendMessageInputSchema,
+  GenerateResponsesInputSchema,
+  // Round tools
+  ListRoundsInputSchema,
+  RegenerateRoundInputSchema,
+  RoundFeedbackInputSchema,
+  // Analysis tools
+  GenerateAnalysisInputSchema,
+  GetRoundAnalysisInputSchema,
+  // Participant tools
+  AddParticipantInputSchema,
+  UpdateParticipantInputSchema,
+  RemoveParticipantInputSchema,
+  // Model tools
+  ListModelsInputSchema,
+  // Empty args (for tools with no required inputs)
+  z.object({}),
+]);
+
+export type ToolArgs = z.infer<typeof ToolArgsSchema>;
 
 // ============================================================================
 // Type Exports
@@ -611,11 +660,11 @@ export type OpenAIFunction = z.infer<typeof OpenAIFunctionSchema>;
 // ============================================================================
 
 export const JsonRpcErrorCodes = {
-  PARSE_ERROR: -32700,
+  INTERNAL_ERROR: -32603,
+  INVALID_PARAMS: -32602,
   INVALID_REQUEST: -32600,
   METHOD_NOT_FOUND: -32601,
-  INVALID_PARAMS: -32602,
-  INTERNAL_ERROR: -32603,
+  PARSE_ERROR: -32700,
 } as const;
 
 // ============================================================================
@@ -631,313 +680,313 @@ export const MCP_TOOLS: MCPTool[] = [
   // Project Management (RAG-enabled knowledge bases)
   // --------------------------------------------------------------------------
   {
-    name: 'create_project',
     description: 'Create a new project (knowledge base) for organizing threads with shared RAG context. Projects enable AutoRAG retrieval across all linked threads.',
     inputSchema: {
-      type: 'object',
       properties: {
-        name: { type: 'string', description: 'Project name (1-200 chars)' },
-        description: { type: 'string', description: 'Project description (max 1000 chars)' },
-        customInstructions: { type: 'string', description: 'Custom instructions for all threads in project (max 4000 chars). Prepended to AI system prompts.' },
+        customInstructions: { description: 'Custom instructions for all threads in project (max 4000 chars). Prepended to AI system prompts.', type: 'string' },
+        description: { description: 'Project description (max 1000 chars)', type: 'string' },
+        name: { description: 'Project name (1-200 chars)', type: 'string' },
         settings: {
-          type: 'object',
           description: 'Project settings',
           properties: {
-            autoIndexing: { type: 'boolean', description: 'Auto-index uploaded files. Default: true' },
-            maxFileSize: { type: 'integer', description: 'Max file size in bytes' },
-            allowedFileTypes: { type: 'array', items: { type: 'string' }, description: 'Allowed MIME types' },
+            allowedFileTypes: { description: 'Allowed MIME types', items: { type: 'string' }, type: 'array' },
+            autoIndexing: { description: 'Auto-index uploaded files. Default: true', type: 'boolean' },
+            maxFileSize: { description: 'Max file size in bytes', type: 'integer' },
           },
+          type: 'object',
         },
       },
       required: ['name'],
+      type: 'object',
     },
+    name: 'create_project',
   },
   {
-    name: 'get_project',
     description: 'Get project details including file count and thread count.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID' },
+        projectId: { description: 'Project ID', type: 'string' },
       },
       required: ['projectId'],
+      type: 'object',
     },
+    name: 'get_project',
   },
   {
-    name: 'list_projects',
     description: 'List user projects with optional search.',
     inputSchema: {
-      type: 'object',
       properties: {
-        search: { type: 'string', description: 'Search by project name' },
-        cursor: { type: 'string', description: 'Pagination cursor' },
-        limit: { type: 'integer', description: 'Results per page (1-50). Default: 20' },
+        cursor: { description: 'Pagination cursor', type: 'string' },
+        limit: { description: 'Results per page (1-50). Default: 20', type: 'integer' },
+        search: { description: 'Search by project name', type: 'string' },
       },
+      type: 'object',
     },
+    name: 'list_projects',
   },
   {
-    name: 'update_project',
     description: 'Update project settings, name, description, or custom instructions.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID' },
-        name: { type: 'string', description: 'New project name' },
-        description: { type: 'string', description: 'New description' },
-        customInstructions: { type: 'string', description: 'New custom instructions' },
-        settings: { type: 'object', description: 'Updated settings' },
+        customInstructions: { description: 'New custom instructions', type: 'string' },
+        description: { description: 'New description', type: 'string' },
+        name: { description: 'New project name', type: 'string' },
+        projectId: { description: 'Project ID', type: 'string' },
+        settings: { description: 'Updated settings', type: 'object' },
       },
       required: ['projectId'],
+      type: 'object',
     },
+    name: 'update_project',
   },
   {
-    name: 'delete_project',
     description: 'Delete a project. Threads linked to project will be unlinked (not deleted). Knowledge files will be deleted.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID to delete' },
+        projectId: { description: 'Project ID to delete', type: 'string' },
       },
       required: ['projectId'],
+      type: 'object',
     },
+    name: 'delete_project',
   },
   {
-    name: 'list_project_threads',
     description: 'List all threads linked to a specific project.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID' },
-        cursor: { type: 'string', description: 'Pagination cursor' },
-        limit: { type: 'integer', description: 'Results per page (1-50). Default: 20' },
+        cursor: { description: 'Pagination cursor', type: 'string' },
+        limit: { description: 'Results per page (1-50). Default: 20', type: 'integer' },
+        projectId: { description: 'Project ID', type: 'string' },
       },
       required: ['projectId'],
+      type: 'object',
     },
+    name: 'list_project_threads',
   },
 
   // --------------------------------------------------------------------------
   // Knowledge File Management (Project RAG)
   // --------------------------------------------------------------------------
   {
-    name: 'list_knowledge_files',
     description: 'List knowledge files in a project. Files are used for RAG retrieval in linked threads.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID' },
-        status: { type: 'string', enum: ['uploaded', 'indexing', 'indexed', 'failed'], description: 'Filter by status' },
-        cursor: { type: 'string', description: 'Pagination cursor' },
-        limit: { type: 'integer', description: 'Results per page (1-50). Default: 20' },
+        cursor: { description: 'Pagination cursor', type: 'string' },
+        limit: { description: 'Results per page (1-50). Default: 20', type: 'integer' },
+        projectId: { description: 'Project ID', type: 'string' },
+        status: { description: 'Filter by status', enum: ['uploaded', 'indexing', 'indexed', 'failed'], type: 'string' },
       },
       required: ['projectId'],
+      type: 'object',
     },
+    name: 'list_knowledge_files',
   },
   {
-    name: 'delete_knowledge_file',
     description: 'Delete a knowledge file from a project.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Project ID' },
-        fileId: { type: 'string', description: 'File ID to delete' },
+        fileId: { description: 'File ID to delete', type: 'string' },
+        projectId: { description: 'Project ID', type: 'string' },
       },
       required: ['projectId', 'fileId'],
+      type: 'object',
     },
+    name: 'delete_knowledge_file',
   },
 
   // --------------------------------------------------------------------------
   // Thread Management
   // --------------------------------------------------------------------------
   {
-    name: 'create_thread',
     description: 'Create a new multi-model brainstorming chat thread with AI participants. Optionally link to a project for RAG-enabled knowledge retrieval.',
     inputSchema: {
-      type: 'object',
       properties: {
-        title: { type: 'string', description: 'Thread title (1-200 chars)' },
-        projectId: { type: 'string', description: 'Optional project ID to link thread for RAG knowledge retrieval' },
-        mode: { type: 'string', enum: [...CHAT_MODES], description: `Chat mode. Default: ${DEFAULT_CHAT_MODE}` },
-        participants: { type: 'array', description: 'AI model participants (1-10)', items: { type: 'object', properties: { modelId: { type: 'string' }, role: { type: 'string' }, systemPrompt: { type: 'string' }, priority: { type: 'integer' } }, required: ['modelId'] } },
-        isPublic: { type: 'boolean', description: 'Make thread publicly accessible' },
+        isPublic: { description: 'Make thread publicly accessible', type: 'boolean' },
+        mode: { description: `Chat mode. Default: ${DEFAULT_CHAT_MODE}`, enum: [...CHAT_MODES], type: 'string' },
+        participants: { description: 'AI model participants (1-10)', items: { properties: { modelId: { type: 'string' }, priority: { type: 'integer' }, role: { type: 'string' }, systemPrompt: { type: 'string' } }, required: ['modelId'], type: 'object' }, type: 'array' },
+        projectId: { description: 'Optional project ID to link thread for RAG knowledge retrieval', type: 'string' },
+        title: { description: 'Thread title (1-200 chars)', type: 'string' },
       },
       required: ['title', 'participants'],
+      type: 'object',
     },
+    name: 'create_thread',
   },
   {
-    name: 'get_thread',
     description: 'Retrieve a chat thread with its messages and participant information.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        includeMessages: { type: 'boolean', description: 'Include messages. Default: true' },
-        maxMessages: { type: 'integer', description: 'Max messages (1-100). Default: 50' },
+        includeMessages: { description: 'Include messages. Default: true', type: 'boolean' },
+        maxMessages: { description: 'Max messages (1-100). Default: 50', type: 'integer' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId'],
+      type: 'object',
     },
+    name: 'get_thread',
   },
   {
-    name: 'list_threads',
     description: 'List user chat threads with cursor pagination. Optionally filter by project.',
     inputSchema: {
-      type: 'object',
       properties: {
-        projectId: { type: 'string', description: 'Filter threads by project ID' },
-        cursor: { type: 'string', description: 'Pagination cursor' },
-        limit: { type: 'integer', description: 'Results per page (1-50). Default: 20' },
+        cursor: { description: 'Pagination cursor', type: 'string' },
+        limit: { description: 'Results per page (1-50). Default: 20', type: 'integer' },
+        projectId: { description: 'Filter threads by project ID', type: 'string' },
       },
+      type: 'object',
     },
+    name: 'list_threads',
   },
   {
-    name: 'delete_thread',
     description: 'Delete a chat thread and all associated data.',
     inputSchema: {
-      type: 'object',
-      properties: { threadId: { type: 'string', description: 'Thread ID to delete' } },
+      properties: { threadId: { description: 'Thread ID to delete', type: 'string' } },
       required: ['threadId'],
+      type: 'object',
     },
+    name: 'delete_thread',
   },
   // Message & Response
   {
-    name: 'send_message',
     description: 'Send a user message to a chat thread. Note: Use generate_responses to get AI participant responses.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        content: { type: 'string', description: 'Message content (1-10000 chars)' },
-        enableWebSearch: { type: 'boolean', description: 'Enable web search for context' },
+        content: { description: 'Message content (1-10000 chars)', type: 'string' },
+        enableWebSearch: { description: 'Enable web search for context', type: 'boolean' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'content'],
+      type: 'object',
     },
+    name: 'send_message',
   },
   {
-    name: 'generate_responses',
     description: 'Generate AI responses from all thread participants. Executes sequentially, each seeing prior responses.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        messageContent: { type: 'string', description: 'User message to respond to' },
-        enableWebSearch: { type: 'boolean', description: 'Enable web search before responses' },
+        enableWebSearch: { description: 'Enable web search before responses', type: 'boolean' },
+        messageContent: { description: 'User message to respond to', type: 'string' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'messageContent'],
+      type: 'object',
     },
+    name: 'generate_responses',
   },
   // Round Management
   {
-    name: 'list_rounds',
     description: 'List all rounds in a thread with metadata (message count, summary status, feedback).',
     inputSchema: {
-      type: 'object',
-      properties: { threadId: { type: 'string', description: 'Thread ID' } },
+      properties: { threadId: { description: 'Thread ID', type: 'string' } },
       required: ['threadId'],
+      type: 'object',
     },
+    name: 'list_rounds',
   },
   {
-    name: 'regenerate_round',
     description: 'Delete and regenerate all AI responses for a specific round.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        roundNumber: { type: 'integer', description: 'Round number (0-based)' },
+        roundNumber: { description: 'Round number (0-based)', type: 'integer' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'roundNumber'],
+      type: 'object',
     },
+    name: 'regenerate_round',
   },
   {
-    name: 'round_feedback',
     description: 'Submit like/dislike feedback for a round.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        roundNumber: { type: 'integer', description: 'Round number (0-based)' },
-        feedback: { type: 'string', enum: ['like', 'dislike', 'none'], description: 'Feedback type' },
+        feedback: { description: 'Feedback type', enum: ['like', 'dislike', 'none'], type: 'string' },
+        roundNumber: { description: 'Round number (0-based)', type: 'integer' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'roundNumber', 'feedback'],
+      type: 'object',
     },
+    name: 'round_feedback',
   },
   // Summary
   {
-    name: 'generate_analysis',
     description: 'Generate AI moderator summary comparing participant responses for a round.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        roundNumber: { type: 'integer', description: 'Round number (0-based)' },
+        roundNumber: { description: 'Round number (0-based)', type: 'integer' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'roundNumber'],
+      type: 'object',
     },
+    name: 'generate_analysis',
   },
   {
-    name: 'get_round_analysis',
     description: 'Retrieve existing moderator summary for a specific round.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        roundNumber: { type: 'integer', description: 'Round number (0-based)' },
+        roundNumber: { description: 'Round number (0-based)', type: 'integer' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'roundNumber'],
+      type: 'object',
     },
+    name: 'get_round_analysis',
   },
   // Participant Management
   {
-    name: 'add_participant',
     description: 'Add a new AI model participant to an existing thread.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        modelId: { type: 'string', description: 'OpenRouter model ID' },
-        role: { type: 'string', description: 'Participant role name' },
-        systemPrompt: { type: 'string', description: 'Custom system prompt' },
-        priority: { type: 'integer', description: 'Response order (0-based)' },
+        modelId: { description: 'OpenRouter model ID', type: 'string' },
+        priority: { description: 'Response order (0-based)', type: 'integer' },
+        role: { description: 'Participant role name', type: 'string' },
+        systemPrompt: { description: 'Custom system prompt', type: 'string' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'modelId'],
+      type: 'object',
     },
+    name: 'add_participant',
   },
   {
-    name: 'update_participant',
     description: 'Update participant settings (role, system prompt, priority).',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        participantId: { type: 'string', description: 'Participant ID' },
-        role: { type: 'string', description: 'New role name' },
-        systemPrompt: { type: 'string', description: 'New system prompt' },
-        priority: { type: 'integer', description: 'New priority' },
+        participantId: { description: 'Participant ID', type: 'string' },
+        priority: { description: 'New priority', type: 'integer' },
+        role: { description: 'New role name', type: 'string' },
+        systemPrompt: { description: 'New system prompt', type: 'string' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'participantId'],
+      type: 'object',
     },
+    name: 'update_participant',
   },
   {
-    name: 'remove_participant',
     description: 'Remove (disable) a participant from a thread.',
     inputSchema: {
-      type: 'object',
       properties: {
-        threadId: { type: 'string', description: 'Thread ID' },
-        participantId: { type: 'string', description: 'Participant ID' },
+        participantId: { description: 'Participant ID', type: 'string' },
+        threadId: { description: 'Thread ID', type: 'string' },
       },
       required: ['threadId', 'participantId'],
+      type: 'object',
     },
+    name: 'remove_participant',
   },
   // Model Discovery
   {
-    name: 'list_models',
     description: 'List available AI models with optional filtering by provider or category.',
     inputSchema: {
-      type: 'object',
       properties: {
-        category: { type: 'string', enum: ['all', 'text', 'vision', 'code', 'function'], description: 'Filter by category. Default: all' },
-        provider: { type: 'string', description: 'Filter by provider (anthropic, openai, google, etc.)' },
+        category: { description: 'Filter by category. Default: all', enum: ['all', 'text', 'vision', 'code', 'function'], type: 'string' },
+        provider: { description: 'Filter by provider (anthropic, openai, google, etc.)', type: 'string' },
       },
+      type: 'object',
     },
+    name: 'list_models',
   },
 ];
 
@@ -946,13 +995,13 @@ export const MCP_TOOLS: MCPTool[] = [
 // ============================================================================
 
 export const MCP_SERVER_INFO = {
-  name: 'roundtable',
-  version: APP_VERSION,
-  protocolVersion: MCP_PROTOCOL_VERSION,
   capabilities: {
+    resources: { listChanged: false, subscribe: false },
     tools: { listChanged: false },
-    resources: { subscribe: false, listChanged: false },
   },
+  name: 'roundtable',
+  protocolVersion: MCP_PROTOCOL_VERSION,
+  version: APP_VERSION,
 } as const;
 
 // ============================================================================
@@ -965,12 +1014,12 @@ export function getToolByName(name: string): MCPTool | undefined {
 }
 
 /** Convert MCP tools to OpenAI function calling format */
-export function toOpenAIFunctions(): Array<{
+export function toOpenAIFunctions(): {
   type: 'function';
   function: { name: string; description: string; parameters: MCPTool['inputSchema'] };
-}> {
+}[] {
   return MCP_TOOLS.map(tool => ({
+    function: { description: tool.description, name: tool.name, parameters: tool.inputSchema },
     type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: tool.inputSchema },
   }));
 }

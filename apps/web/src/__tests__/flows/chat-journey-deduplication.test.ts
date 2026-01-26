@@ -23,12 +23,12 @@ import { createTestChatStore } from '@/lib/testing';
 
 describe('chat Journey - Duplicate Query Prevention', () => {
   let queryClient: QueryClient;
-  let fetchTracker: { calls: Array<{ key: string; timestamp: number }> };
+  let fetchTracker: { calls: { key: string; timestamp: number }[] };
 
   beforeEach(() => {
     queryClient = new QueryClient({
       defaultOptions: {
-        queries: { retry: false, gcTime: 0 },
+        queries: { gcTime: 0, retry: false },
       },
     });
     fetchTracker = { calls: [] };
@@ -44,11 +44,11 @@ describe('chat Journey - Duplicate Query Prevention', () => {
 
       // Simulate loader prefetch
       await queryClient.prefetchQuery({
-        queryKey: modelsKey,
         queryFn: async () => {
           fetchTracker.calls.push({ key: 'models', timestamp: Date.now() });
-          return { success: true, data: { items: [{ id: 'gpt-4' }] } };
+          return { data: { items: [{ id: 'gpt-4' }] }, success: true };
         },
+        queryKey: modelsKey,
         staleTime: STALE_TIMES.models,
       });
 
@@ -88,7 +88,7 @@ describe('chat Journey - Duplicate Query Prevention', () => {
        * - Pass modelsData as a prop to ChatView
        * - OR lift to a shared hook that both consume via context
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -99,18 +99,18 @@ describe('chat Journey - Duplicate Query Prevention', () => {
 
       // Simulate route loader prefetch
       await queryClient.prefetchQuery({
-        queryKey: threadKey,
         queryFn: async () => {
           fetchTracker.calls.push({ key: 'thread-prefetch', timestamp: Date.now() });
           return {
-            success: true,
             data: {
-              thread: { id: 'thread-123', slug },
-              participants: [],
               messages: [],
+              participants: [],
+              thread: { id: 'thread-123', slug },
             },
+            success: true,
           };
         },
+        queryKey: threadKey,
         staleTime: STALE_TIMES.threadDetail,
       });
 
@@ -134,37 +134,37 @@ describe('chat Journey - SSR Hydration Flash Prevention', () => {
 
       // Simulate SSR hydration via initializeThread
       const thread = {
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorming' as const,
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming' as const,
+        slug: 'test',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [
         {
-          id: 'p1',
-          threadId: 'thread-123',
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p1',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
 
       const messages = [
         {
-          id: 'msg-1',
-          role: 'user' as const,
           content: 'Hello',
-          parts: [{ type: 'text' as const, text: 'Hello' }],
+          id: 'msg-1',
+          parts: [{ text: 'Hello', type: 'text' as const }],
+          role: 'user' as const,
         },
       ];
 
@@ -172,12 +172,12 @@ describe('chat Journey - SSR Hydration Flash Prevention', () => {
 
       // CRITICAL: Store should be ready IMMEDIATELY after hydration
       const state = store.getState();
-      expect(state.hasInitiallyLoaded).toBe(true);
+      expect(state.hasInitiallyLoaded).toBeTruthy();
       expect(state.messages.length).toBeGreaterThan(0);
 
       // The isStoreReady check should pass without flash
       const isStoreReady = state.hasInitiallyLoaded && state.messages.length > 0;
-      expect(isStoreReady).toBe(true);
+      expect(isStoreReady).toBeTruthy();
     });
 
     it('documents the flash condition that needs fixing', () => {
@@ -202,7 +202,7 @@ describe('chat Journey - SSR Hydration Flash Prevention', () => {
        * - Should not need messages.length > 0 check if hydration is synchronous
        * - OR check should be: hasInitiallyLoaded (if hydration guarantees messages)
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 });
@@ -220,8 +220,8 @@ describe('chat Journey - Render Count Optimization', () => {
       // Simulate ChatView subscription (useShallow pattern)
       const unsubscribe = store.subscribe(
         state => ({
-          messages: state.messages,
           isStreaming: state.isStreaming,
+          messages: state.messages,
         }),
         () => {
           renderCount++;
@@ -261,7 +261,7 @@ describe('chat Journey - Render Count Optimization', () => {
        * - Consolidate into single selector
        * - OR move logic out of effect into event-driven pattern
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
   });
 
@@ -280,27 +280,27 @@ describe('chat Journey - Render Count Optimization', () => {
       });
 
       const thread = {
-        id: 'thread-123',
-        userId: 'user-1',
-        title: 'Test',
-        slug: 'test',
-        mode: 'brainstorming' as const,
-        enableWebSearch: false,
-        isPublic: false,
         createdAt: new Date(),
+        enableWebSearch: false,
+        id: 'thread-123',
+        isPublic: false,
+        mode: 'brainstorming' as const,
+        slug: 'test',
+        title: 'Test',
         updatedAt: new Date(),
+        userId: 'user-1',
       };
 
       const participants = [
         {
-          id: 'p1',
-          threadId: 'thread-123',
-          modelId: 'gpt-4',
-          role: null,
-          customRoleId: null,
-          priority: 0,
-          isEnabled: true,
           createdAt: new Date(),
+          customRoleId: null,
+          id: 'p1',
+          isEnabled: true,
+          modelId: 'gpt-4',
+          priority: 0,
+          role: null,
+          threadId: 'thread-123',
           updatedAt: new Date(),
         },
       ];
@@ -359,15 +359,15 @@ describe('chat Journey - Duplicate Logic Detection', () => {
        * - Hook returns { incompatibleModelIds, handleModelDeselection }
        * - Both components use the same hook
        */
-      expect(true).toBe(true);
+      expect(true).toBeTruthy();
     });
 
     it('should calculate incompatible models consistently', () => {
       // Test that the logic produces same results
       const models = [
-        { id: 'gpt-4', supports_vision: true, supports_file: true, is_accessible_to_user: true },
-        { id: 'claude-2', supports_vision: false, supports_file: true, is_accessible_to_user: true },
-        { id: 'llama-2', supports_vision: false, supports_file: false, is_accessible_to_user: false },
+        { id: 'gpt-4', is_accessible_to_user: true, supports_file: true, supports_vision: true },
+        { id: 'claude-2', is_accessible_to_user: true, supports_file: true, supports_vision: false },
+        { id: 'llama-2', is_accessible_to_user: false, supports_file: false, supports_vision: false },
       ];
 
       const hasImages = true;
@@ -391,9 +391,9 @@ describe('chat Journey - Duplicate Logic Detection', () => {
         }
       }
 
-      expect(incompatible.has('claude-2')).toBe(true); // Vision incompatible
-      expect(incompatible.has('llama-2')).toBe(true); // Inaccessible
-      expect(incompatible.has('gpt-4')).toBe(false); // Fully compatible
+      expect(incompatible.has('claude-2')).toBeTruthy(); // Vision incompatible
+      expect(incompatible.has('llama-2')).toBeTruthy(); // Inaccessible
+      expect(incompatible.has('gpt-4')).toBeFalsy(); // Fully compatible
     });
   });
 });
@@ -453,6 +453,6 @@ describe('chat Journey - Submission Flow Optimization', () => {
      * - prepareForSubmission(roundNumber, prompt)
      *   which sets all related state atomically
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

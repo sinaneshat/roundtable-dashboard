@@ -61,10 +61,10 @@ function createParticipantConfig(
 ): ParticipantConfig {
   return {
     id: `participant-${index}`,
-    modelId: `model-${index}`,
-    role: `Role ${index}`,
-    priority: index,
     isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: `Role ${index}`,
     ...overrides,
   };
 }
@@ -85,9 +85,9 @@ function detectParticipantChanges(
   currentConfig.forEach((p) => {
     if (!prevIds.has(p.id)) {
       changes.push({
-        type: ChangelogChangeTypesExtended.ADDED,
-        participantId: p.id,
         modelId: p.modelId,
+        participantId: p.id,
+        type: ChangelogChangeTypesExtended.ADDED,
       });
     }
   });
@@ -96,9 +96,9 @@ function detectParticipantChanges(
   previousConfig.forEach((p) => {
     if (!currIds.has(p.id)) {
       changes.push({
-        type: ChangelogChangeTypesExtended.REMOVED,
-        participantId: p.id,
         modelId: p.modelId,
+        participantId: p.id,
+        type: ChangelogChangeTypesExtended.REMOVED,
       });
     }
   });
@@ -110,24 +110,24 @@ function detectParticipantChanges(
       // Role change
       if (prev.role !== curr.role) {
         changes.push({
-          type: ChangelogChangeTypesExtended.MODIFIED,
-          participantId: curr.id,
           details: {
-            oldValue: prev.role ?? 'none',
             newValue: curr.role ?? 'none',
+            oldValue: prev.role ?? 'none',
           },
+          participantId: curr.id,
+          type: ChangelogChangeTypesExtended.MODIFIED,
         });
       }
 
       // Priority/order change
       if (prev.priority !== curr.priority) {
         changes.push({
-          type: ChangelogChangeTypesExtended.REORDERED,
-          participantId: curr.id,
           details: {
-            oldValue: prev.priority,
             newValue: curr.priority,
+            oldValue: prev.priority,
           },
+          participantId: curr.id,
+          type: ChangelogChangeTypesExtended.REORDERED,
         });
       }
     }
@@ -146,14 +146,18 @@ function createChangelogSummary(changes: ChangelogEntry[]): string {
   const modeChanged = changes.some(c => c.type === ChangelogChangeTypesExtended.MODE_CHANGED);
 
   const parts: string[] = [];
-  if (added > 0)
+  if (added > 0) {
     parts.push(`${added} added`);
-  if (removed > 0)
+  }
+  if (removed > 0) {
     parts.push(`${removed} removed`);
-  if (modified > 0)
+  }
+  if (modified > 0) {
     parts.push(`${modified} modified`);
-  if (modeChanged)
+  }
+  if (modeChanged) {
     parts.push('mode changed');
+  }
 
   return parts.join(', ');
 }
@@ -203,8 +207,8 @@ describe('participant Addition Detection', () => {
   describe('addition Summary', () => {
     it('creates correct summary for additions', () => {
       const changes: ChangelogEntry[] = [
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1', modelId: 'gpt-4' },
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2', modelId: 'claude-3' },
+        { modelId: 'gpt-4', participantId: 'p1', type: ChangelogChangeTypesExtended.ADDED },
+        { modelId: 'claude-3', participantId: 'p2', type: ChangelogChangeTypesExtended.ADDED },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -258,7 +262,7 @@ describe('participant Removal Detection', () => {
   describe('removal Summary', () => {
     it('creates correct summary for removals', () => {
       const changes: ChangelogEntry[] = [
-        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p1', modelId: 'gpt-4' },
+        { modelId: 'gpt-4', participantId: 'p1', type: ChangelogChangeTypesExtended.REMOVED },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -385,11 +389,11 @@ describe('mode Change Detection', () => {
     const changes: ChangelogEntry[] = [];
     if (previousMode !== currentMode) {
       changes.push({
-        type: ChangelogChangeTypesExtended.MODE_CHANGED,
         details: {
-          oldValue: previousMode,
           newValue: currentMode,
+          oldValue: previousMode,
         },
+        type: ChangelogChangeTypesExtended.MODE_CHANGED,
       });
     }
 
@@ -404,11 +408,11 @@ describe('mode Change Detection', () => {
     const changes: ChangelogEntry[] = [];
     if (previousMode !== currentMode) {
       changes.push({
-        type: ChangelogChangeTypesExtended.MODE_CHANGED,
         details: {
-          oldValue: previousMode,
           newValue: currentMode,
+          oldValue: previousMode,
         },
+        type: ChangelogChangeTypesExtended.MODE_CHANGED,
       });
     }
 
@@ -468,10 +472,10 @@ describe('combined Changes Detection', () => {
   describe('combined Summary', () => {
     it('creates correct summary for multiple change types', () => {
       const changes: ChangelogEntry[] = [
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1' },
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2' },
-        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p3' },
-        { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
+        { participantId: 'p1', type: ChangelogChangeTypesExtended.ADDED },
+        { participantId: 'p2', type: ChangelogChangeTypesExtended.ADDED },
+        { participantId: 'p3', type: ChangelogChangeTypesExtended.REMOVED },
+        { details: { newValue: 'B', oldValue: 'A' }, participantId: 'p4', type: ChangelogChangeTypesExtended.MODIFIED },
       ];
 
       const summary = createChangelogSummary(changes);
@@ -496,10 +500,10 @@ describe('changelog Record Creation', () => {
       const changes = detectParticipantChanges(previousConfig, currentConfig);
 
       const changelog: Changelog = {
-        roundNumber: 1,
         changes,
-        summary: createChangelogSummary(changes),
         createdAt: new Date(),
+        roundNumber: 1,
+        summary: createChangelogSummary(changes),
       };
 
       expect(changelog.roundNumber).toBe(1);
@@ -526,7 +530,7 @@ describe('changelog Record Creation', () => {
       const changes = detectParticipantChanges(config, config);
 
       const shouldCreateChangelog = changes.length > 0;
-      expect(shouldCreateChangelog).toBe(false);
+      expect(shouldCreateChangelog).toBeFalsy();
     });
   });
 });
@@ -540,10 +544,10 @@ describe('changelog Banner Display', () => {
     it('shows banner when changelog exists for round', () => {
       const changelogs: Changelog[] = [
         {
-          roundNumber: 1,
-          changes: [{ type: 'added', participantId: 'p1' }],
-          summary: '1 added',
+          changes: [{ participantId: 'p1', type: 'added' }],
           createdAt: new Date(),
+          roundNumber: 1,
+          summary: '1 added',
         },
       ];
 
@@ -570,10 +574,10 @@ describe('changelog Banner Display', () => {
 
       const changelogs: Changelog[] = [
         {
-          roundNumber: 2,
-          changes: [{ type: 'added', participantId: 'p1' }],
-          summary: '1 added',
+          changes: [{ participantId: 'p1', type: 'added' }],
           createdAt: new Date(),
+          roundNumber: 2,
+          summary: '1 added',
         },
       ];
 
@@ -598,16 +602,16 @@ describe('changelog Banner Display', () => {
   describe('expandable Details', () => {
     it('groups changes by type for display', () => {
       const changes: ChangelogEntry[] = [
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1', modelId: 'gpt-4' },
-        { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p2', modelId: 'claude-3' },
-        { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p3', modelId: 'gemini' },
-        { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p4', details: { oldValue: 'A', newValue: 'B' } },
+        { modelId: 'gpt-4', participantId: 'p1', type: ChangelogChangeTypesExtended.ADDED },
+        { modelId: 'claude-3', participantId: 'p2', type: ChangelogChangeTypesExtended.ADDED },
+        { modelId: 'gemini', participantId: 'p3', type: ChangelogChangeTypesExtended.REMOVED },
+        { details: { newValue: 'B', oldValue: 'A' }, participantId: 'p4', type: ChangelogChangeTypesExtended.MODIFIED },
       ];
 
       const grouped = {
         added: changes.filter(c => c.type === ChangelogChangeTypesExtended.ADDED),
-        removed: changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED),
         modified: changes.filter(c => c.type === ChangelogChangeTypesExtended.MODIFIED || c.type === ChangelogChangeTypesExtended.REORDERED),
+        removed: changes.filter(c => c.type === ChangelogChangeTypesExtended.REMOVED),
       };
 
       expect(grouped.added).toHaveLength(2);
@@ -654,10 +658,10 @@ describe('edge Cases', () => {
   describe('same IDs Different Properties', () => {
     it('detects changes even when only properties differ', () => {
       const previousConfig = [
-        { id: 'p1', modelId: 'gpt-4', role: 'Critic', priority: 0, isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 0, role: 'Critic' },
       ];
       const currentConfig = [
-        { id: 'p1', modelId: 'gpt-4', role: 'Advocate', priority: 1, isEnabled: true },
+        { id: 'p1', isEnabled: true, modelId: 'gpt-4', priority: 1, role: 'Advocate' },
       ];
 
       const changes = detectParticipantChanges(previousConfig, currentConfig);
@@ -697,18 +701,18 @@ describe('round-Specific Change Tracking', () => {
 
       // Changes before round 1
       changelogs.push({
-        roundNumber: 1,
-        changes: [{ type: 'added', participantId: 'p1' }],
-        summary: '1 added',
+        changes: [{ participantId: 'p1', type: 'added' }],
         createdAt: new Date(),
+        roundNumber: 1,
+        summary: '1 added',
       });
 
       // Changes before round 3
       changelogs.push({
-        roundNumber: 3,
-        changes: [{ type: 'removed', participantId: 'p1' }],
-        summary: '1 removed',
+        changes: [{ participantId: 'p1', type: 'removed' }],
         createdAt: new Date(),
+        roundNumber: 3,
+        summary: '1 removed',
       });
 
       expect(changelogs.find(c => c.roundNumber === 1)?.summary).toBe('1 added');
@@ -743,17 +747,17 @@ describe('round-Specific Change Tracking', () => {
 describe('atomicity of Changes', () => {
   it('all changes in a round are saved atomically', () => {
     const changes: ChangelogEntry[] = [
-      { type: ChangelogChangeTypesExtended.ADDED, participantId: 'p1' },
-      { type: ChangelogChangeTypesExtended.REMOVED, participantId: 'p2' },
-      { type: ChangelogChangeTypesExtended.MODIFIED, participantId: 'p3' },
+      { participantId: 'p1', type: ChangelogChangeTypesExtended.ADDED },
+      { participantId: 'p2', type: ChangelogChangeTypesExtended.REMOVED },
+      { participantId: 'p3', type: ChangelogChangeTypesExtended.MODIFIED },
       { type: ChangelogChangeTypesExtended.MODE_CHANGED },
     ];
 
     const changelog: Changelog = {
-      roundNumber: 1,
       changes,
-      summary: createChangelogSummary(changes),
       createdAt: new Date(),
+      roundNumber: 1,
+      summary: createChangelogSummary(changes),
     };
 
     // All changes saved together

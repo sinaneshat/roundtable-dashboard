@@ -39,67 +39,67 @@ export type RateLimitConfig = {
  * Preset rate limit configurations for common operations
  */
 export const RATE_LIMIT_PRESETS = {
-  // File upload operations
-  upload: {
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 100,
-    message: 'Too many upload requests. Please try again later.',
-  },
-
-  // File download operations (generous for pages with many images/files)
-  download: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 200, // 200 downloads per minute per user (supports page refreshes with many attachments)
-    message: 'Too many download requests. Please slow down.',
-  },
-
-  // Public file download (stricter limits for unauthenticated/public access)
-  publicDownload: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 10, // 10 downloads per minute per IP for public files
-    message: 'Too many download requests. Please try again later.',
-  },
-
-  // Read operations
-  read: {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 300,
-    message: 'Too many read requests. Please slow down.',
-  },
-
-  // Delete operations
-  delete: {
-    windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 50,
-    message: 'Too many deletion requests. Please try again later.',
-  },
-
   // API general operations
   api: {
-    windowMs: 60 * 1000, // 1 minute
     maxRequests: 100,
     message: 'Too many requests. Please slow down.',
+    windowMs: 60 * 1000, // 1 minute
   },
 
   // Auth operations
   auth: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
     maxRequests: 20,
     message: 'Too many authentication attempts. Please try again later.',
+    windowMs: 15 * 60 * 1000, // 15 minutes
   },
 
-  // Organization operations
-  organization: {
+  // Delete operations
+  delete: {
+    maxRequests: 50,
+    message: 'Too many deletion requests. Please try again later.',
     windowMs: 60 * 60 * 1000, // 1 hour
-    maxRequests: 200,
-    message: 'Organization rate limit exceeded.',
+  },
+
+  // File download operations (generous for pages with many images/files)
+  download: {
+    maxRequests: 200, // 200 downloads per minute per user (supports page refreshes with many attachments)
+    message: 'Too many download requests. Please slow down.',
+    windowMs: 60 * 1000, // 1 minute
   },
 
   // IP-based limiting
   ip: {
-    windowMs: 15 * 60 * 1000, // 15 minutes
     maxRequests: 1000,
     message: 'Too many requests from this IP address.',
+    windowMs: 15 * 60 * 1000, // 15 minutes
+  },
+
+  // Organization operations
+  organization: {
+    maxRequests: 200,
+    message: 'Organization rate limit exceeded.',
+    windowMs: 60 * 60 * 1000, // 1 hour
+  },
+
+  // Public file download (stricter limits for unauthenticated/public access)
+  publicDownload: {
+    maxRequests: 10, // 10 downloads per minute per IP for public files
+    message: 'Too many download requests. Please try again later.',
+    windowMs: 60 * 1000, // 1 minute
+  },
+
+  // Read operations
+  read: {
+    maxRequests: 300,
+    message: 'Too many read requests. Please slow down.',
+    windowMs: 60 * 1000, // 1 minute
+  },
+
+  // File upload operations
+  upload: {
+    maxRequests: 100,
+    message: 'Too many upload requests. Please try again later.',
+    windowMs: 60 * 60 * 1000, // 1 hour
   },
 } as const;
 
@@ -168,8 +168,9 @@ async function getRateLimitEntry(
   if (kv) {
     try {
       const entry = await kv.get(`ratelimit:${key}`, 'json');
-      if (!entry)
+      if (!entry) {
         return null;
+      }
 
       // Validate KV data with Zod (no type casting)
       const result = KVRateLimitEntrySchema.safeParse(entry);
@@ -226,10 +227,12 @@ function defaultKeyGenerator(c: Context<ApiEnv>): string {
     || 'fallback';
 
   // Prefer user ID, fall back to session ID, then IP
-  if (user?.id)
+  if (user?.id) {
     return `user:${user.id}`;
-  if (session?.userId)
+  }
+  if (session?.userId) {
     return `session:${session.userId}`;
+  }
 
   return `ip:${ip}`;
 }
@@ -271,12 +274,12 @@ export class RateLimiterFactory {
     const config = RATE_LIMIT_PRESETS[preset];
     return this.createCustom({
       ...config,
+      includeHeaders: true,
       keyGenerator: preset === 'ip'
         ? ipKeyGenerator
         : preset === 'organization'
           ? organizationKeyGenerator
           : defaultKeyGenerator,
-      includeHeaders: true,
     });
   }
 
@@ -325,7 +328,6 @@ export class RateLimiterFactory {
             retryAfter,
           }),
           {
-            status: HttpStatusCodes.TOO_MANY_REQUESTS,
             headers: {
               'Content-Type': 'application/json',
               'Retry-After': retryAfter.toString(),
@@ -333,6 +335,7 @@ export class RateLimiterFactory {
               'X-RateLimit-Remaining': '0',
               'X-RateLimit-Reset': entry.resetTime.toString(),
             },
+            status: HttpStatusCodes.TOO_MANY_REQUESTS,
           },
         );
 
@@ -382,7 +385,7 @@ export class RateLimiterFactory {
   /**
    * Create a composite rate limiter that applies multiple limits
    */
-  static createComposite(...configs: Array<keyof typeof RATE_LIMIT_PRESETS | RateLimitConfig>) {
+  static createComposite(...configs: (keyof typeof RATE_LIMIT_PRESETS | RateLimitConfig)[]) {
     const middlewares = configs.map((config) => {
       if (typeof config === 'string') {
         return this.create(config);
@@ -394,9 +397,9 @@ export class RateLimiterFactory {
       // Apply all rate limiters in sequence
       for (const middleware of middlewares) {
         await new Promise<void>((resolve, reject) => {
-          middleware(c, () => {
+          middleware(c, async () => {
             resolve();
-            return Promise.resolve();
+            return await Promise.resolve();
           }).catch(reject);
         });
       }
@@ -416,11 +419,11 @@ export class RateLimiterFactory {
 
       if (!preset) {
         // No rate limiting needed
-        return next();
+        return await next();
       }
 
       const limiter = this.create(preset);
-      return limiter(c, next);
+      return await limiter(c, next);
     });
   }
 
@@ -436,7 +439,7 @@ export class RateLimiterFactory {
 
       // Only check for upload operations
       if (method !== 'PUT' && method !== 'POST') {
-        return next();
+        return await next();
       }
 
       // Using user-based quotas instead of organization quotas for now

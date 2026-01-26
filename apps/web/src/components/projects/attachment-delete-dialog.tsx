@@ -14,27 +14,28 @@ type AttachmentDeleteDialogProps = {
 };
 
 export function AttachmentDeleteDialog({
-  open,
-  onOpenChange,
-  projectId,
   attachment,
+  onOpenChange,
+  open,
+  projectId,
 }: AttachmentDeleteDialogProps) {
   const t = useTranslations();
   const mutation = useRemoveAttachmentFromProjectMutation();
 
   const handleConfirm = () => {
-    if (!attachment)
+    if (!attachment) {
       return;
+    }
 
     mutation.mutate(
-      { param: { id: projectId, attachmentId: attachment.id } },
+      { param: { attachmentId: attachment.id, id: projectId } },
       {
+        onError: () => {
+          toastManager.error(t('projects.attachmentRemoveError'));
+        },
         onSuccess: () => {
           toastManager.success(t('projects.attachmentRemoved'));
           onOpenChange(false);
-        },
-        onError: () => {
-          toastManager.error(t('projects.attachmentRemoveError'));
         },
       },
     );

@@ -15,11 +15,11 @@ type CopyActionButtonProps = {
 };
 
 function CopyActionButtonComponent({
+  className,
   copied,
+  label,
   onClick,
   tooltip,
-  label,
-  className,
   variant = DEFAULT_COPY_ICON_VARIANT,
 }: CopyActionButtonProps) {
   const CopyIcon = variant === CopyIconVariants.STACK ? Icons.squareStack : Icons.copy;

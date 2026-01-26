@@ -26,28 +26,28 @@ import { messageUpload, threadUpload, upload } from './upload';
 // Chat Relations
 // ============================================================================
 
-export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
-  user: one(user, {
-    fields: [chatThread.userId],
-    references: [user.id],
-  }),
+export const chatThreadRelations = relations(chatThread, ({ many, one }) => ({
+  changelog: many(chatThreadChangelog),
+  messages: many(chatMessage),
+  participants: many(chatParticipant),
+  preSearches: many(chatPreSearch),
   project: one(chatProject, {
     fields: [chatThread.projectId],
     references: [chatProject.id],
   }),
-  participants: many(chatParticipant),
-  messages: many(chatMessage),
-  changelog: many(chatThreadChangelog),
-  preSearches: many(chatPreSearch),
   roundFeedback: many(chatRoundFeedback),
+  user: one(user, {
+    fields: [chatThread.userId],
+    references: [user.id],
+  }),
 }));
 
-export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many }) => ({
+export const chatCustomRoleRelations = relations(chatCustomRole, ({ many, one }) => ({
+  participants: many(chatParticipant),
   user: one(user, {
     fields: [chatCustomRole.userId],
     references: [user.id],
   }),
-  participants: many(chatParticipant),
 }));
 
 export const chatUserPresetRelations = relations(chatUserPreset, ({ one }) => ({
@@ -57,28 +57,28 @@ export const chatUserPresetRelations = relations(chatUserPreset, ({ one }) => ({
   }),
 }));
 
-export const chatParticipantRelations = relations(chatParticipant, ({ one, many }) => ({
-  thread: one(chatThread, {
-    fields: [chatParticipant.threadId],
-    references: [chatThread.id],
-  }),
+export const chatParticipantRelations = relations(chatParticipant, ({ many, one }) => ({
   customRole: one(chatCustomRole, {
     fields: [chatParticipant.customRoleId],
     references: [chatCustomRole.id],
   }),
   messages: many(chatMessage),
-}));
-
-export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
   thread: one(chatThread, {
-    fields: [chatMessage.threadId],
+    fields: [chatParticipant.threadId],
     references: [chatThread.id],
   }),
+}));
+
+export const chatMessageRelations = relations(chatMessage, ({ many, one }) => ({
+  messageUploads: many(messageUpload),
   participant: one(chatParticipant, {
     fields: [chatMessage.participantId],
     references: [chatParticipant.id],
   }),
-  messageUploads: many(messageUpload),
+  thread: one(chatThread, {
+    fields: [chatMessage.threadId],
+    references: [chatThread.id],
+  }),
 }));
 
 export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ one }) => ({
@@ -110,17 +110,21 @@ export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one })
 // Project Relations
 // ============================================================================
 
-export const chatProjectRelations = relations(chatProject, ({ one, many }) => ({
+export const chatProjectRelations = relations(chatProject, ({ many, one }) => ({
+  attachments: many(projectAttachment),
+  memories: many(projectMemory),
+  threads: many(chatThread),
   user: one(user, {
     fields: [chatProject.userId],
     references: [user.id],
   }),
-  threads: many(chatThread),
-  attachments: many(projectAttachment),
-  memories: many(projectMemory),
 }));
 
 export const projectAttachmentRelations = relations(projectAttachment, ({ one }) => ({
+  addedByUser: one(user, {
+    fields: [projectAttachment.addedBy],
+    references: [user.id],
+  }),
   project: one(chatProject, {
     fields: [projectAttachment.projectId],
     references: [chatProject.id],
@@ -129,13 +133,13 @@ export const projectAttachmentRelations = relations(projectAttachment, ({ one })
     fields: [projectAttachment.uploadId],
     references: [upload.id],
   }),
-  addedByUser: one(user, {
-    fields: [projectAttachment.addedBy],
-    references: [user.id],
-  }),
 }));
 
 export const projectMemoryRelations = relations(projectMemory, ({ one }) => ({
+  createdByUser: one(user, {
+    fields: [projectMemory.createdBy],
+    references: [user.id],
+  }),
   project: one(chatProject, {
     fields: [projectMemory.projectId],
     references: [chatProject.id],
@@ -144,23 +148,19 @@ export const projectMemoryRelations = relations(projectMemory, ({ one }) => ({
     fields: [projectMemory.sourceThreadId],
     references: [chatThread.id],
   }),
-  createdByUser: one(user, {
-    fields: [projectMemory.createdBy],
-    references: [user.id],
-  }),
 }));
 
 // ============================================================================
 // Upload Relations
 // ============================================================================
 
-export const uploadRelations = relations(upload, ({ one, many }) => ({
+export const uploadRelations = relations(upload, ({ many, one }) => ({
+  messageUploads: many(messageUpload),
+  threadUploads: many(threadUpload),
   user: one(user, {
     fields: [upload.userId],
     references: [user.id],
   }),
-  threadUploads: many(threadUpload),
-  messageUploads: many(messageUpload),
 }));
 
 export const threadUploadRelations = relations(threadUpload, ({ one }) => ({

@@ -32,22 +32,22 @@ const main = {
 const container = {
   backgroundColor: colors.white,
   margin: '0 auto',
-  padding: `${spacing[10]} ${spacing[5]} ${spacing[10]} ${spacing[5]}`,
   maxWidth: '465px',
+  padding: `${spacing[10]} ${spacing[5]} ${spacing[10]} ${spacing[5]}`,
 };
 
 const logoContainer = {
-  textAlign: 'center' as const,
   margin: `0 0 ${spacing[6]} 0`,
+  textAlign: 'center' as const,
 };
 
 const h1 = {
   color: colors.foreground,
   fontSize: typography.fontSize['2xl'],
   fontWeight: typography.fontWeight.bold,
+  lineHeight: '1.25',
   margin: `0 0 ${spacing[6]} 0`,
   padding: '0',
-  lineHeight: '1.25',
 };
 
 const text = {
@@ -73,12 +73,12 @@ const button = {
   backgroundColor: '#000000',
   borderRadius: '6px',
   color: '#FFFFFF',
+  display: 'inline-block',
   fontSize: typography.fontSize.sm,
   fontWeight: typography.fontWeight.medium,
-  textDecoration: 'none',
-  textAlign: 'center' as const,
-  display: 'inline-block',
   padding: `${spacing[3]} ${spacing[6]}`,
+  textAlign: 'center' as const,
+  textDecoration: 'none',
 };
 
 const hr = {
@@ -99,9 +99,9 @@ const link = {
 };
 
 export function MagicLink({
-  userName,
-  loginUrl,
   expirationTime = '15 minutes',
+  loginUrl,
+  userName,
 }: MagicLinkProps) {
   return (
     <Html>
@@ -166,7 +166,7 @@ export function MagicLink({
 }
 
 MagicLink.PreviewProps = {
-  userName: 'Alex Morgan',
-  loginUrl: 'https://example.com/magic-link?token=magic123',
   expirationTime: '15 minutes',
+  loginUrl: 'https://example.com/magic-link?token=magic123',
+  userName: 'Alex Morgan',
 } as MagicLinkProps;

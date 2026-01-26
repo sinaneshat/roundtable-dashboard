@@ -21,8 +21,8 @@ import type {
 export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getThreadMessages',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -33,18 +33,18 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // Note: Relational queries (db.query.*) don't support $withCache
     // Use select builder pattern for cacheable queries
     const messages = await db.query.chatMessage.findMany({
-      where: eq(tables.chatMessage.threadId, threadId),
       orderBy: [
         asc(tables.chatMessage.roundNumber),
         asc(tables.chatMessage.createdAt),
         asc(tables.chatMessage.id),
       ],
+      where: eq(tables.chatMessage.threadId, threadId),
       with: {
         messageUploads: {
+          orderBy: [asc(tables.messageUpload.displayOrder)],
           with: {
             upload: true,
           },
-          orderBy: [asc(tables.messageUpload.displayOrder)],
         },
       },
     });
@@ -54,10 +54,10 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     // ✅ PERF: Batch sign all attachments with single key import
     const allUploads: BatchSignOptions[] = messages.flatMap(msg =>
       (msg.messageUploads || []).map(mu => ({
+        expirationMs: 60 * 60 * 1000,
+        threadId,
         uploadId: mu.upload.id,
         userId: user.id,
-        threadId,
-        expirationMs: 60 * 60 * 1000,
       })),
     );
     const signedPaths = await generateBatchSignedPaths(c, allUploads);
@@ -65,15 +65,16 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
     const messagesWithAttachments = messages.map((message) => {
       const attachmentParts = (message.messageUploads || []).map((mu) => {
         const signedPath = signedPaths.get(mu.upload.id);
-        if (!signedPath)
+        if (!signedPath) {
           throw new Error(`Missing signed path for upload ${mu.upload.id}`);
+        }
 
         const filePartData: ExtendedFilePart = {
-          type: MessagePartTypes.FILE,
-          url: `${baseUrl}${signedPath}`,
           filename: mu.upload.filename,
           mediaType: mu.upload.mimeType,
+          type: MessagePartTypes.FILE,
           uploadId: mu.upload.id,
+          url: `${baseUrl}${signedPath}`,
         };
 
         const parseResult = ExtendedFilePartSchema.safeParse(filePartData);
@@ -104,8 +105,8 @@ export const getThreadMessagesHandler: RouteHandler<typeof getThreadMessagesRout
 export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getThreadChangelog',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -139,12 +140,12 @@ export const getThreadChangelogHandler: RouteHandler<typeof getThreadChangelogRo
 export const getThreadRoundChangelogHandler: RouteHandler<typeof getThreadRoundChangelogRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ThreadRoundParamSchema,
     operationName: 'getThreadRoundChangelog',
+    validateParams: ThreadRoundParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { threadId, roundNumber: roundNumberStr } = c.validated.params;
+    const { roundNumber: roundNumberStr, threadId } = c.validated.params;
     const roundNumber = Number.parseInt(roundNumberStr, 10);
     const db = await getDbAsync();
     await verifyThreadOwnership(threadId, user.id, db);

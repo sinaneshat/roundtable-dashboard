@@ -27,12 +27,12 @@ export function useThreadMessagesQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.threads.messages(threadId),
-    queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.threadMessages,
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
+    queryKey: queryKeys.threads.messages(threadId),
     retry: false,
+    staleTime: STALE_TIMES.threadMessages,
     throwOnError: false,
   });
 }

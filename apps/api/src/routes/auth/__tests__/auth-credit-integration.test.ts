@@ -121,12 +121,12 @@ vi.mock('@/db', async () => {
             // Credit uses onConflictDoNothing().returning()
             // Usage uses .returning() directly
             return {
-              // Support direct .returning() for usage
-              returning: vi.fn(returningHandler),
               // Support .onConflictDoNothing().returning() for credit
               onConflictDoNothing: vi.fn(() => ({
                 returning: vi.fn(returningHandler),
               })),
+              // Support direct .returning() for usage
+              returning: vi.fn(returningHandler),
             };
           };
 
@@ -331,16 +331,16 @@ describe('auth Flow Credit Integration', () => {
       const existingBalance = 3500;
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-001',
-        userId,
         balance: existingBalance,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -357,16 +357,16 @@ describe('auth Flow Credit Integration', () => {
       const balanceAfterUse = 4200;
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-002',
-        userId,
         balance: balanceAfterUse,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+        id: 'credit-002',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 2,
-        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(Date.now() - 3600 * 1000), // 1 hour ago
+        userId,
+        version: 2,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -382,16 +382,16 @@ describe('auth Flow Credit Integration', () => {
       const reserved = 500;
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-003',
-        userId,
         balance: 5000,
-        reservedCredits: reserved,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-003',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: reserved,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -410,19 +410,19 @@ describe('auth Flow Credit Integration', () => {
 
       const now = new Date();
       const existingUsage: MockUsageRecord = {
-        id: 'usage-001',
-        userId,
-        subscriptionTier: SubscriptionTiers.FREE,
-        isAnnual: false,
-        currentPeriodStart: new Date(now.getFullYear(), now.getMonth(), 1),
-        currentPeriodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59),
-        threadsCreated,
-        messagesCreated,
-        customRolesCreated: 0,
         analysisGenerated: 0,
-        version: 3,
         createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59),
+        currentPeriodStart: new Date(now.getFullYear(), now.getMonth(), 1),
+        customRolesCreated: 0,
+        id: 'usage-001',
+        isAnnual: false,
+        messagesCreated,
+        subscriptionTier: SubscriptionTiers.FREE,
+        threadsCreated,
         updatedAt: new Date(),
+        userId,
+        version: 3,
       };
 
       mockUsageRecords.set(userId, existingUsage);
@@ -456,16 +456,16 @@ describe('auth Flow Credit Integration', () => {
       const deduction = 800;
 
       const record: MockCreditRecord = {
-        id: 'credit-sync-001',
-        userId,
         balance: initialBalance - deduction,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-sync-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 2,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 2,
       };
 
       mockCreditRecords.set(userId, record);
@@ -482,16 +482,16 @@ describe('auth Flow Credit Integration', () => {
       const newReservation = 1000;
 
       const record: MockCreditRecord = {
-        id: 'credit-sync-002',
-        userId,
         balance,
-        reservedCredits: newReservation,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-sync-002',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: newReservation,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       mockCreditRecords.set(userId, record);
@@ -507,16 +507,16 @@ describe('auth Flow Credit Integration', () => {
       const userId = 'user-sync-004';
 
       const freeRecord: MockCreditRecord = {
-        id: 'credit-sync-003',
-        userId,
         balance: 5000,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-sync-003',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       mockCreditRecords.set(userId, freeRecord);
@@ -583,16 +583,16 @@ describe('auth Flow Credit Integration', () => {
       const userId = 'user-constraint-001';
 
       const _invalidRecord: MockCreditRecord = {
-        id: 'credit-invalid-001',
-        userId,
         balance: -100, // Negative balance violates constraint
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-invalid-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       // Database constraint should prevent this
@@ -604,16 +604,16 @@ describe('auth Flow Credit Integration', () => {
       const userId = 'user-version-001';
 
       const record: MockCreditRecord = {
-        id: 'credit-version-001',
-        userId,
         balance: 5000,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(),
+        id: 'credit-version-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 1,
-        createdAt: new Date(),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       // Version must be positive
@@ -627,16 +627,16 @@ describe('auth Flow Credit Integration', () => {
       const previousBalance = 2500;
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-existing-001',
-        userId,
         balance: previousBalance,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        id: 'credit-existing-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 5,
-        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        userId,
+        version: 5,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -655,19 +655,19 @@ describe('auth Flow Credit Integration', () => {
 
       const now = new Date();
       const existingUsage: MockUsageRecord = {
-        id: 'usage-existing-001',
-        userId,
-        subscriptionTier: SubscriptionTiers.FREE,
-        isAnnual: false,
-        currentPeriodStart: new Date(now.getFullYear(), now.getMonth(), 1),
-        currentPeriodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59),
-        threadsCreated: previousThreads,
-        messagesCreated: previousMessages,
-        customRolesCreated: 0,
         analysisGenerated: 0,
-        version: 10,
         createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+        currentPeriodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59),
+        currentPeriodStart: new Date(now.getFullYear(), now.getMonth(), 1),
+        customRolesCreated: 0,
+        id: 'usage-existing-001',
+        isAnnual: false,
+        messagesCreated: previousMessages,
+        subscriptionTier: SubscriptionTiers.FREE,
+        threadsCreated: previousThreads,
         updatedAt: new Date(),
+        userId,
+        version: 10,
       };
 
       mockUsageRecords.set(userId, existingUsage);
@@ -682,16 +682,16 @@ describe('auth Flow Credit Integration', () => {
       const userId = 'user-no-bonus-001';
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-no-bonus-001',
-        userId,
         balance: 1000,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+        id: 'credit-no-bonus-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: 3,
-        createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        userId,
+        version: 3,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -710,16 +710,16 @@ describe('auth Flow Credit Integration', () => {
       const monthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
 
       const paidRecord: MockCreditRecord = {
-        id: 'credit-paid-001',
-        userId,
         balance: 95_000,
-        reservedCredits: 0,
-        planType: PlanTypes.PAID,
+        createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+        id: 'credit-paid-001',
         monthlyCredits,
         nextRefillAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-        version: 1,
-        createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+        planType: PlanTypes.PAID,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: 1,
       };
 
       mockCreditRecords.set(userId, paidRecord);
@@ -736,16 +736,16 @@ describe('auth Flow Credit Integration', () => {
       const currentVersion = 15;
 
       const existingRecord: MockCreditRecord = {
-        id: 'credit-version-existing-001',
-        userId,
         balance: 3000,
-        reservedCredits: 0,
-        planType: PlanTypes.FREE,
+        createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+        id: 'credit-version-existing-001',
         monthlyCredits: 0,
         nextRefillAt: null,
-        version: currentVersion,
-        createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+        planType: PlanTypes.FREE,
+        reservedCredits: 0,
         updatedAt: new Date(),
+        userId,
+        version: currentVersion,
       };
 
       mockCreditRecords.set(userId, existingRecord);
@@ -768,13 +768,13 @@ describe('auth Flow Credit Integration', () => {
       const balance = await getUserCreditBalance(userId);
 
       const initialState = {
-        balance: balance.balance,
         available: balance.available,
-        reserved: balance.reserved,
-        planType: balance.planType,
-        monthlyCredits: balance.monthlyCredits,
+        balance: balance.balance,
         canCreateThread: balance.available >= CREDIT_CONFIG.ACTION_COSTS.threadCreation,
         canStream: balance.available >= CREDIT_CONFIG.MIN_CREDITS_FOR_STREAMING,
+        monthlyCredits: balance.monthlyCredits,
+        planType: balance.planType,
+        reserved: balance.reserved,
       };
 
       expect(initialState.balance).toBe(5000);

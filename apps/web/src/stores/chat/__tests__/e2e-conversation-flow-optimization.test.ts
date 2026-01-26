@@ -53,23 +53,23 @@ const THREAD_ID = 'thread-e2e-optimization';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: THREAD_ID,
-    userId: 'user-123',
-    title: 'Optimization Test Thread',
-    slug: 'optimization-test',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: THREAD_ID,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'optimization-test',
+    status: 'active',
+    title: 'Optimization Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
@@ -80,15 +80,15 @@ function createParticipant(
   role: string | null = null,
 ): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: THREAD_ID,
-    modelId,
-    role: role ?? `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: role ?? `Participant ${index}`,
+    settings: null,
+    threadId: THREAD_ID,
     updatedAt: new Date(),
   } as ChatParticipant;
 }
@@ -98,32 +98,32 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
   const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
     complete: MessageStatuses.COMPLETE,
     failed: MessageStatuses.FAILED,
+    pending: MessageStatuses.PENDING,
+    streaming: MessageStatuses.STREAMING,
   };
   return {
+    completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${THREAD_ID}-r${roundNumber}`,
-    threadId: THREAD_ID,
     roundNumber,
-    userQuery: `Query ${roundNumber}`,
-    status: statusMap[status],
     searchData:
       status === 'complete'
         ? {
+            failureCount: 0,
+            moderatorSummary: 'Done',
             queries: [],
             results: [],
-            moderatorSummary: 'Done',
             successCount: 1,
-            failureCount: 0,
             totalResults: 0,
             totalTime: 100,
           }
         : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    status: statusMap[status],
+    threadId: THREAD_ID,
+    userQuery: `Query ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -155,12 +155,12 @@ type MetricsSnapshot = {
 
 function createMetricsCollector(store: ReturnType<typeof createChatStore>): MetricsCollector {
   const metrics = {
-    storeUpdates: 0,
     messageArrayMutations: 0,
-    setMessagesCalls: 0,
-    setPreSearchesCalls: 0,
-    setParticipantsCalls: 0,
     screenModeChanges: 0,
+    setMessagesCalls: 0,
+    setParticipantsCalls: 0,
+    setPreSearchesCalls: 0,
+    storeUpdates: 0,
     streamingFlagToggles: 0,
   };
 
@@ -177,50 +177,32 @@ function createMetricsCollector(store: ReturnType<typeof createChatStore>): Metr
   const originalSetIsStreaming = store.getState().setIsStreaming;
 
   store.setState({
+    setIsStreaming: (isStreaming) => {
+      metrics.streamingFlagToggles++;
+      originalSetIsStreaming(isStreaming);
+    },
     setMessages: (messages) => {
       metrics.setMessagesCalls++;
       metrics.messageArrayMutations++;
       originalSetMessages(messages);
     },
-    setPreSearches: (preSearches) => {
-      metrics.setPreSearchesCalls++;
-      originalSetPreSearches(preSearches);
-    },
     setParticipants: (participants) => {
       metrics.setParticipantsCalls++;
       originalSetParticipants(participants);
+    },
+    setPreSearches: (preSearches) => {
+      metrics.setPreSearchesCalls++;
+      originalSetPreSearches(preSearches);
     },
     setScreenMode: (mode) => {
       metrics.screenModeChanges++;
       originalSetScreenMode(mode);
     },
-    setIsStreaming: (isStreaming) => {
-      metrics.streamingFlagToggles++;
-      originalSetIsStreaming(isStreaming);
-    },
   });
 
   return {
-    get storeUpdates() {
-      return metrics.storeUpdates;
-    },
     get messageArrayMutations() {
       return metrics.messageArrayMutations;
-    },
-    get setMessagesCalls() {
-      return metrics.setMessagesCalls;
-    },
-    get setPreSearchesCalls() {
-      return metrics.setPreSearchesCalls;
-    },
-    get setParticipantsCalls() {
-      return metrics.setParticipantsCalls;
-    },
-    get screenModeChanges() {
-      return metrics.screenModeChanges;
-    },
-    get streamingFlagToggles() {
-      return metrics.streamingFlagToggles;
     },
     reset: () => {
       metrics.storeUpdates = 0;
@@ -231,7 +213,25 @@ function createMetricsCollector(store: ReturnType<typeof createChatStore>): Metr
       metrics.screenModeChanges = 0;
       metrics.streamingFlagToggles = 0;
     },
+    get screenModeChanges() {
+      return metrics.screenModeChanges;
+    },
+    get setMessagesCalls() {
+      return metrics.setMessagesCalls;
+    },
+    get setParticipantsCalls() {
+      return metrics.setParticipantsCalls;
+    },
+    get setPreSearchesCalls() {
+      return metrics.setPreSearchesCalls;
+    },
     snapshot: () => ({ ...metrics }),
+    get storeUpdates() {
+      return metrics.storeUpdates;
+    },
+    get streamingFlagToggles() {
+      return metrics.streamingFlagToggles;
+    },
   };
 }
 
@@ -305,14 +305,14 @@ describe('first Round Journey - Metrics & Optimization', () => {
 
     // Participant responds
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -321,10 +321,10 @@ describe('first Round Journey - Metrics & Optimization', () => {
     store.getState().setMessages([
       ...currentMessages,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -354,30 +354,30 @@ describe('first Round Journey - Metrics & Optimization', () => {
 
     // All participants respond
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'Response 1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'Response 2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p2`,
         content: 'Response 3',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p2`,
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -385,10 +385,10 @@ describe('first Round Journey - Metrics & Optimization', () => {
     store.getState().setMessages([
       ...currentMessages,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -417,14 +417,14 @@ describe('first Round Journey - Metrics & Optimization', () => {
 
     // Participant responds
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'Response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -432,10 +432,10 @@ describe('first Round Journey - Metrics & Optimization', () => {
     store.getState().setMessages([
       ...currentMessages,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -466,28 +466,28 @@ describe('second Round Journey - Incremental Updates', () => {
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'R2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -502,7 +502,7 @@ describe('second Round Journey - Incremental Updates', () => {
     const messagesAfterPrepare = store.getState().messages;
     store.getState().setMessages([
       ...messagesAfterPrepare,
-      createTestUserMessage({ id: `${THREAD_ID}_r1_user`, content: 'Q2', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q2', id: `${THREAD_ID}_r1_user`, roundNumber: 1 }),
     ]);
 
     // Participants respond
@@ -510,20 +510,20 @@ describe('second Round Journey - Incremental Updates', () => {
     store.getState().setMessages([
       ...messagesAfterUser,
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r1_p0`,
         content: 'R3',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r1_p1`,
         content: 'R4',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
     ]);
 
@@ -532,10 +532,10 @@ describe('second Round Journey - Incremental Updates', () => {
     store.getState().setMessages([
       ...messagesAfterParticipants,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r1_moderator`,
         content: 'S2',
-        roundNumber: 1,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_moderator`,
+        roundNumber: 1,
       }),
     ]);
 
@@ -560,28 +560,28 @@ describe('second Round Journey - Incremental Updates', () => {
     const msgs1 = store.getState().messages;
     store.getState().setMessages([
       ...msgs1,
-      createTestUserMessage({ id: `${THREAD_ID}_r1_user`, content: 'Q2', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q2', id: `${THREAD_ID}_r1_user`, roundNumber: 1 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r1_p0`,
         content: 'R3',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r1_p1`,
         content: 'R4',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r1_moderator`,
         content: 'S2',
-        roundNumber: 1,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_moderator`,
+        roundNumber: 1,
       }),
     ]);
 
@@ -593,28 +593,28 @@ describe('second Round Journey - Incremental Updates', () => {
     const msgs2 = store.getState().messages;
     store.getState().setMessages([
       ...msgs2,
-      createTestUserMessage({ id: `${THREAD_ID}_r2_user`, content: 'Q3', roundNumber: 2 }),
+      createTestUserMessage({ content: 'Q3', id: `${THREAD_ID}_r2_user`, roundNumber: 2 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r2_p0`,
         content: 'R5',
-        roundNumber: 2,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r2_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 2,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r2_p1`,
         content: 'R6',
-        roundNumber: 2,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r2_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 2,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r2_moderator`,
         content: 'S3',
-        roundNumber: 2,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r2_moderator`,
+        roundNumber: 2,
       }),
     ]);
 
@@ -648,20 +648,20 @@ describe('configuration Changes - Overhead Tracking', () => {
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -751,28 +751,28 @@ describe('regeneration Flow - State Cleanup Efficiency', () => {
     store.getState().setScreenMode(ScreenModes.THREAD);
 
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'R2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -791,22 +791,22 @@ describe('regeneration Flow - State Cleanup Efficiency', () => {
 
     // New responses arrive
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'NEW R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'NEW R2',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -815,10 +815,10 @@ describe('regeneration Flow - State Cleanup Efficiency', () => {
     store.getState().setMessages([
       ...currentMessages,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'NEW S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -835,40 +835,40 @@ describe('regeneration Flow - State Cleanup Efficiency', () => {
     store.getState().startRegeneration(0);
 
     // Verify flags cleared
-    expect(store.getState().isRegenerating).toBe(true);
+    expect(store.getState().isRegenerating).toBeTruthy();
     expect(store.getState().regeneratingRoundNumber).toBe(0);
 
     // Regenerate
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'NEW',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'NEW',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'NEW',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
     store.getState().completeRegeneration();
 
     // Verify cleanup
-    expect(store.getState().isRegenerating).toBe(false);
+    expect(store.getState().isRegenerating).toBeFalsy();
     expect(store.getState().regeneratingRoundNumber).toBeNull();
 
     // Verify no duplicate IDs
@@ -902,7 +902,7 @@ describe('error Recovery - State Consistency', () => {
     // User message
     store.getState().prepareForNewMessage('Test', []);
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
     ]);
 
     // First participant succeeds
@@ -910,12 +910,12 @@ describe('error Recovery - State Consistency', () => {
     store.getState().setMessages([
       ...msgs1,
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'Success',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -924,13 +924,13 @@ describe('error Recovery - State Consistency', () => {
     store.getState().setMessages([
       ...msgs2,
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p1`,
         content: 'Error',
-        roundNumber: 0,
-        participantId: 'participant-1',
-        participantIndex: 1,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: `${THREAD_ID}_r0_p1`,
+        participantId: 'participant-1',
+        participantIndex: 1,
+        roundNumber: 0,
       }),
     ]);
 
@@ -939,10 +939,10 @@ describe('error Recovery - State Consistency', () => {
     store.getState().setMessages([
       ...msgs3,
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'Summary',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -954,7 +954,7 @@ describe('error Recovery - State Consistency', () => {
     // Verify state consistency
     const finalMessages = store.getState().messages;
     expect(finalMessages).toHaveLength(4); // user + 2 participants + moderator
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('recovers from failed moderator without blocking next round', () => {
@@ -964,21 +964,21 @@ describe('error Recovery - State Consistency', () => {
 
     // Complete round with failed moderator
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'Failed',
-        roundNumber: 0,
         finishReason: FinishReasons.ERROR,
         hasError: true,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -989,20 +989,20 @@ describe('error Recovery - State Consistency', () => {
     const msgs = store.getState().messages;
     store.getState().setMessages([
       ...msgs,
-      createTestUserMessage({ id: `${THREAD_ID}_r1_user`, content: 'Q2', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q2', id: `${THREAD_ID}_r1_user`, roundNumber: 1 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r1_p0`,
         content: 'R2',
-        roundNumber: 1,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 1,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r1_moderator`,
         content: 'S2',
-        roundNumber: 1,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r1_moderator`,
+        roundNumber: 1,
       }),
     ]);
 
@@ -1027,20 +1027,20 @@ describe('error Recovery - State Consistency', () => {
 
     // Simulate refresh - load completed messages from server
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Q1', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -1049,8 +1049,8 @@ describe('error Recovery - State Consistency', () => {
     store.getState().setCurrentParticipantIndex(null);
 
     // Verify clean state
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
     expect(store.getState().currentParticipantIndex).toBeNull();
 
     // User can submit next round without issues
@@ -1058,7 +1058,7 @@ describe('error Recovery - State Consistency', () => {
     const msgs = store.getState().messages;
     store.getState().setMessages([
       ...msgs,
-      createTestUserMessage({ id: `${THREAD_ID}_r1_user`, content: 'Q2', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q2', id: `${THREAD_ID}_r1_user`, roundNumber: 1 }),
     ]);
 
     // prepareForNewMessage may add optimistic message, then setMessages adds user msg
@@ -1095,14 +1095,14 @@ describe('stop Mid-Stream - Cleanup Verification', () => {
 
     // First participant completes
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'Response 1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ]);
 
@@ -1114,9 +1114,9 @@ describe('stop Mid-Stream - Cleanup Verification', () => {
     const snapshot = metrics.snapshot();
 
     // Verify clean stop
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
     expect(store.getState().currentParticipantIndex).toBeNull();
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
 
     // Verify partial messages saved
     expect(store.getState().messages).toHaveLength(2); // user + 1 participant
@@ -1132,7 +1132,7 @@ describe('stop Mid-Stream - Cleanup Verification', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
     ]);
 
     // Stop
@@ -1145,7 +1145,7 @@ describe('stop Mid-Stream - Cleanup Verification', () => {
 
     // Verify no dangling state (arrays may be null/undefined by default)
     const participantIds = store.getState().expectedParticipantIds;
-    expect(participantIds == null || participantIds.length === 0).toBe(true);
+    expect(participantIds === null || participantIds === undefined || participantIds.length === 0).toBeTruthy();
     expect(store.getState().nextParticipantToTrigger ?? null).toBeNull();
   });
 });
@@ -1170,20 +1170,20 @@ describe('multi-Participant Scaling - O(n) Verification', () => {
 
     store.getState().prepareForNewMessage('Test', []);
     store.getState().setMessages([
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${THREAD_ID}_r0_p0`,
         content: 'R1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ]);
 
@@ -1199,22 +1199,22 @@ describe('multi-Participant Scaling - O(n) Verification', () => {
     store.getState().prepareForNewMessage('Test', []);
 
     const allMessages = [
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       ...participants.map((_, i) =>
         createTestAssistantMessage({
-          id: `${THREAD_ID}_r0_p${i}`,
           content: `R${i + 1}`,
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: `${THREAD_ID}_r0_p${i}`,
           participantId: `participant-${i}`,
           participantIndex: i,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ];
 
@@ -1239,22 +1239,22 @@ describe('multi-Participant Scaling - O(n) Verification', () => {
     store.getState().prepareForNewMessage('Test', []);
 
     const allMessages = [
-      createTestUserMessage({ id: `${THREAD_ID}_r0_user`, content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: `${THREAD_ID}_r0_user`, roundNumber: 0 }),
       ...participants.map((_, i) =>
         createTestAssistantMessage({
-          id: `${THREAD_ID}_r0_p${i}`,
           content: `R${i + 1}`,
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: `${THREAD_ID}_r0_p${i}`,
           participantId: `participant-${i}`,
           participantIndex: i,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ),
       createTestModeratorMessage({
-        id: `${THREAD_ID}_r0_moderator`,
         content: 'S1',
-        roundNumber: 0,
         finishReason: FinishReasons.STOP,
+        id: `${THREAD_ID}_r0_moderator`,
+        roundNumber: 0,
       }),
     ];
 
@@ -1323,6 +1323,6 @@ describe('baseline Metrics Documentation', () => {
      * - If multi-participant scaling exceeds O(n) → investigate loops
      */
 
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

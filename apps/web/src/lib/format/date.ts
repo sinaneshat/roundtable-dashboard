@@ -32,9 +32,9 @@ export function formatDate(
   }
 
   const defaultOptions: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'short',
     day: 'numeric',
+    month: 'short',
+    year: 'numeric',
   };
 
   return new Intl.DateTimeFormat(locale, { ...defaultOptions, ...options }).format(dateObj);

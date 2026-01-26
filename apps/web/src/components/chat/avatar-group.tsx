@@ -19,14 +19,14 @@ type AvatarGroupProps = {
 };
 
 function AvatarGroupComponent({
-  participants,
   allModels,
-  maxVisible = 3,
-  size = AvatarSizes.SM,
   className,
-  showCount = true,
+  maxVisible = 3,
   overlap = true,
+  participants,
+  showCount = true,
   showOverflow = false,
+  size = AvatarSizes.SM,
 }: AvatarGroupProps) {
   const sizeMetadata = AvatarSizeMetadata[size];
   const visibleParticipants = participants.slice(0, maxVisible);
@@ -37,8 +37,9 @@ function AvatarGroupComponent({
     <div className={cn('flex items-center', className)}>
       {visibleParticipants.map((participant, index) => {
         const model = allModels.find(m => m.id === participant.modelId);
-        if (!model)
+        if (!model) {
           return null;
+        }
 
         const marginLeft = index === 0 ? '0px' : overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`;
 
@@ -47,8 +48,8 @@ function AvatarGroupComponent({
             key={participant.id}
             className="relative"
             style={{
-              zIndex: overlap ? index + 1 : undefined,
               marginLeft,
+              zIndex: overlap ? index + 1 : undefined,
             }}
           >
             <Avatar
@@ -74,8 +75,8 @@ function AvatarGroupComponent({
         <div
           className="relative"
           style={{
-            zIndex: overlap ? visibleParticipants.length + 1 : undefined,
             marginLeft: overlap ? `${sizeMetadata.overlapOffset}px` : `${sizeMetadata.gapSize}px`,
+            zIndex: overlap ? visibleParticipants.length + 1 : undefined,
           }}
         >
           <div

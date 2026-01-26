@@ -79,6 +79,6 @@ export async function deleteUserPresetService(data: DeleteUserPresetRequest) {
 export type UserPreset = Extract<
   ListUserPresetsResponse,
   { success: true }
-> extends { data: { items: Array<infer R> } }
+> extends { data: { items: (infer R)[] } }
   ? R
   : never;

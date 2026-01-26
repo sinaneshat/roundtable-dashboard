@@ -33,8 +33,9 @@ function getCustomerDataKey(customerId: string): string {
  */
 export async function getCachedCustomerId(userId: string): Promise<string | null> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return null;
+  }
 
   try {
     // cacheTtl enables edge caching - 5 min for rarely-changing mapping
@@ -50,8 +51,9 @@ export async function getCachedCustomerId(userId: string): Promise<string | null
  */
 export async function cacheCustomerId(userId: string, customerId: string): Promise<void> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return;
+  }
 
   try {
     await kv.put(getUserCustomerKey(userId), customerId, {
@@ -70,14 +72,16 @@ export async function getCachedSubscriptionData(
   customerId: string,
 ): Promise<SyncedSubscriptionState | null> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return null;
+  }
 
   try {
     // cacheTtl enables edge caching - 60s (min) for subscription data
-    const data = await kv.get(getCustomerDataKey(customerId), { type: 'json', cacheTtl: 60 });
-    if (data === null)
+    const data = await kv.get(getCustomerDataKey(customerId), { cacheTtl: 60, type: 'json' });
+    if (data === null) {
       return null;
+    }
     const parsed = SyncedSubscriptionStateSchema.safeParse(data);
     return parsed.success ? parsed.data : null;
   } catch {
@@ -94,8 +98,9 @@ export async function cacheSubscriptionData(
   data: SyncedSubscriptionState,
 ): Promise<void> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return;
+  }
 
   try {
     await kv.put(getCustomerDataKey(customerId), JSON.stringify(data), {
@@ -112,8 +117,9 @@ export async function cacheSubscriptionData(
  */
 export async function invalidateSubscriptionCache(customerId: string): Promise<void> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return;
+  }
 
   try {
     await kv.delete(getCustomerDataKey(customerId));
@@ -131,8 +137,9 @@ export async function invalidateUserStripeCache(
   customerId?: string,
 ): Promise<void> {
   const kv = getKVBinding();
-  if (!kv)
+  if (!kv) {
     return;
+  }
 
   try {
     await kv.delete(getUserCustomerKey(userId));

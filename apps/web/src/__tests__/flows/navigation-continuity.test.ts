@@ -42,7 +42,7 @@ describe('navigate Away During Streaming', () => {
     store.getState().setCurrentParticipantIndex(0);
 
     // User navigates away (store state preserved, but component unmounts)
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     // Server continues regardless - streaming state represents client view
     // When user returns, they'll see whatever content was generated
@@ -57,7 +57,7 @@ describe('navigate Away During Streaming', () => {
     // Simulate component unmount by not resetting state
     // Store state persists independently of component lifecycle
 
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
     expect(store.getState().streamingRoundNumber).toBe(0);
   });
 
@@ -68,7 +68,7 @@ describe('navigate Away During Streaming', () => {
     store.getState().setStreamingRoundNumber(0);
 
     // Navigation during moderator streaming
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
 
     // Server continues generating moderator response
     // User will see partial or complete content on return
@@ -88,7 +88,7 @@ describe('navigate Away During Streaming', () => {
       stopFn();
     }
 
-    expect(mockStop).toHaveBeenCalled();
+    expect(mockStop).toHaveBeenCalledWith();
   });
 });
 
@@ -108,27 +108,27 @@ describe('return to Thread After Navigation', () => {
     // Simulate completed round (server finished while away)
     const messages = [
       createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Question',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'P0 response',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p1`,
         content: 'P1 response',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: `${thread.id}_r0_moderator`,
         content: 'Summary',
+        id: `${thread.id}_r0_moderator`,
         roundNumber: 0,
       }),
     ];
@@ -139,7 +139,7 @@ describe('return to Thread After Navigation', () => {
 
     // Verify completed state on return
     expect(store.getState().messages).toHaveLength(4);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should see partial content and resume streaming when still in progress', () => {
@@ -153,23 +153,23 @@ describe('return to Thread After Navigation', () => {
     // Simulate partial content (P0 and P1 complete, P2 still streaming)
     const messages = [
       createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Question',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'P0 response',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p1`,
         content: 'P1 response',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p1`,
         participantId: 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
@@ -180,7 +180,7 @@ describe('return to Thread After Navigation', () => {
 
     // Resumption should continue from P2
     expect(store.getState().messages).toHaveLength(3);
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
     expect(store.getState().currentParticipantIndex).toBe(2);
   });
 
@@ -193,7 +193,7 @@ describe('return to Thread After Navigation', () => {
 
     const next = store.getState().nextParticipantToTrigger;
     expect(next).toBeDefined();
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 });
 
@@ -211,9 +211,9 @@ describe('navigate to New Chat Overview', () => {
     store.getState().setThread(null);
     store.getState().setMessages([]);
 
-    expect(store.getState().showInitialUI).toBe(true);
+    expect(store.getState().showInitialUI).toBeTruthy();
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
-    expect(store.getState().thread).toBe(null);
+    expect(store.getState().thread).toBeNull();
     expect(store.getState().messages).toHaveLength(0);
   });
 
@@ -228,9 +228,9 @@ describe('navigate to New Chat Overview', () => {
     store.getState().completeStreaming();
     store.getState().setShowInitialUI(true);
 
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().streamingRoundNumber).toBe(null);
-    expect(store.getState().showInitialUI).toBe(true);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().streamingRoundNumber).toBeNull();
+    expect(store.getState().showInitialUI).toBeTruthy();
   });
 
   it('should reset form state for new conversation', () => {
@@ -244,20 +244,20 @@ describe('navigate to New Chat Overview', () => {
     store.getState().resetForm();
 
     expect(store.getState().inputValue).toBe('');
-    expect(store.getState().enableWebSearch).toBe(false);
+    expect(store.getState().enableWebSearch).toBeFalsy();
   });
 
   it('should clear hasNavigated flag when on overview', () => {
     const store = createTestChatStore();
 
     store.setState({ hasNavigated: true });
-    expect(store.getState().hasNavigated).toBe(true);
+    expect(store.getState().hasNavigated).toBeTruthy();
 
     // Return to overview
     store.getState().setShowInitialUI(true);
     store.setState({ hasNavigated: false });
 
-    expect(store.getState().hasNavigated).toBe(false);
+    expect(store.getState().hasNavigated).toBeFalsy();
   });
 });
 
@@ -292,8 +292,8 @@ describe('navigate to Different Thread Slug', () => {
     // Thread 1 messages
     const thread1Messages = [
       createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'Thread 1 question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       }),
     ];
@@ -306,8 +306,8 @@ describe('navigate to Different Thread Slug', () => {
     const thread2 = createMockThread({ id: 'thread-456' });
     const thread2Messages = [
       createTestUserMessage({
-        id: 'thread-456_r0_user',
         content: 'Thread 2 question',
+        id: 'thread-456_r0_user',
         roundNumber: 0,
       }),
     ];
@@ -335,7 +335,7 @@ describe('navigate to Different Thread Slug', () => {
     store.getState().setWaitingToStartStreaming(true);
 
     expect(store.getState().thread?.id).toBe('thread-456');
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
   });
 
   it('should update effectiveThreadId for thread operations', () => {
@@ -382,7 +382,7 @@ describe('browser Back/Forward Navigation', () => {
     store.getState().setShowInitialUI(true);
     store.getState().setScreenMode(ScreenModes.OVERVIEW);
 
-    expect(store.getState().showInitialUI).toBe(true);
+    expect(store.getState().showInitialUI).toBeTruthy();
     expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
   });
 
@@ -399,7 +399,7 @@ describe('browser Back/Forward Navigation', () => {
     store.getState().setShowInitialUI(false);
     store.getState().setScreenMode(ScreenModes.THREAD);
 
-    expect(store.getState().showInitialUI).toBe(false);
+    expect(store.getState().showInitialUI).toBeFalsy();
     expect(store.getState().screenMode).toBe(ScreenModes.THREAD);
     expect(store.getState().thread).not.toBeNull();
   });
@@ -415,8 +415,8 @@ describe('browser Back/Forward Navigation', () => {
 
     const messages = [
       createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Question',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       }),
     ];
@@ -451,8 +451,8 @@ describe('navigation State Cleanup', () => {
     // Navigation reset
     store.getState().completeStreaming();
 
-    expect(store.getState().isStreaming).toBe(false);
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().isStreaming).toBeFalsy();
+    expect(store.getState().streamingRoundNumber).toBeNull();
     expect(store.getState().currentParticipantIndex).toBe(0);
   });
 
@@ -467,8 +467,8 @@ describe('navigation State Cleanup', () => {
     store.getState().setPendingMessage(null);
     store.getState().setHasSentPendingMessage(false);
 
-    expect(store.getState().pendingMessage).toBe(null);
-    expect(store.getState().hasSentPendingMessage).toBe(false);
+    expect(store.getState().pendingMessage).toBeNull();
+    expect(store.getState().hasSentPendingMessage).toBeFalsy();
   });
 
   it('should clean up pre-search state on thread change', () => {
@@ -488,12 +488,12 @@ describe('navigation State Cleanup', () => {
 
     // Mark moderator created
     store.getState().markModeratorCreated(0);
-    expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
 
     // Thread change would reset tracking
     // (In real implementation, this happens via resetThread action)
     const newStore = createTestChatStore();
-    expect(newStore.getState().hasModeratorBeenCreated(0)).toBe(false);
+    expect(newStore.getState().hasModeratorBeenCreated(0)).toBeFalsy();
   });
 });
 
@@ -518,7 +518,7 @@ describe('cross-Tab Navigation', () => {
 
     // Stores are independent
     tab1Store.getState().setIsStreaming(true);
-    expect(tab1Store.getState().isStreaming).toBe(true);
-    expect(tab2Store.getState().isStreaming).toBe(false);
+    expect(tab1Store.getState().isStreaming).toBeTruthy();
+    expect(tab2Store.getState().isStreaming).toBeFalsy();
   });
 });

@@ -16,18 +16,18 @@ import {
 import { useTranslations } from '@/lib/i18n';
 
 const AUTH_ERROR_I18N_KEYS: Record<AuthErrorType, { title: string; desc: string }> = {
-  [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
-  [AuthErrorTypes.ACCESS_DENIED]: { title: 'auth.errors.accessDenied', desc: 'auth.errors.accessDeniedDesc' },
-  [AuthErrorTypes.VERIFICATION]: { title: 'auth.errors.verification', desc: 'auth.errors.verificationDesc' },
-  [AuthErrorTypes.OAUTH_SIGNIN]: { title: 'auth.errors.oauthSignin', desc: 'auth.errors.oauthSigninDesc' },
-  [AuthErrorTypes.OAUTH_CALLBACK]: { title: 'auth.errors.oauthCallback', desc: 'auth.errors.oauthCallbackDesc' },
-  [AuthErrorTypes.OAUTH_CREATE_ACCOUNT]: { title: 'auth.errors.oauthCreateAccount', desc: 'auth.errors.oauthCreateAccountDesc' },
-  [AuthErrorTypes.EMAIL_CREATE_ACCOUNT]: { title: 'auth.errors.emailCreateAccount', desc: 'auth.errors.emailCreateAccountDesc' },
-  [AuthErrorTypes.CALLBACK]: { title: 'auth.errors.callback', desc: 'auth.errors.callbackDesc' },
-  [AuthErrorTypes.PLEASE_RESTART_PROCESS]: { title: 'auth.errors.restartProcess', desc: 'auth.errors.restartProcessDesc' },
-  [AuthErrorTypes.DOMAIN_RESTRICTED]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
-  [AuthErrorTypes.UNABLE_TO_CREATE_USER]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
-  [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
+  [AuthErrorTypes.ACCESS_DENIED]: { desc: 'auth.errors.accessDeniedDesc', title: 'auth.errors.accessDenied' },
+  [AuthErrorTypes.CALLBACK]: { desc: 'auth.errors.callbackDesc', title: 'auth.errors.callback' },
+  [AuthErrorTypes.CONFIGURATION]: { desc: 'auth.errors.configurationDesc', title: 'auth.errors.configuration' },
+  [AuthErrorTypes.DEFAULT]: { desc: 'auth.errors.defaultDesc', title: 'auth.errors.default' },
+  [AuthErrorTypes.DOMAIN_RESTRICTED]: { desc: 'auth.errors.domainRestrictedDesc', title: 'auth.errors.domainRestricted' },
+  [AuthErrorTypes.EMAIL_CREATE_ACCOUNT]: { desc: 'auth.errors.emailCreateAccountDesc', title: 'auth.errors.emailCreateAccount' },
+  [AuthErrorTypes.OAUTH_CALLBACK]: { desc: 'auth.errors.oauthCallbackDesc', title: 'auth.errors.oauthCallback' },
+  [AuthErrorTypes.OAUTH_CREATE_ACCOUNT]: { desc: 'auth.errors.oauthCreateAccountDesc', title: 'auth.errors.oauthCreateAccount' },
+  [AuthErrorTypes.OAUTH_SIGNIN]: { desc: 'auth.errors.oauthSigninDesc', title: 'auth.errors.oauthSignin' },
+  [AuthErrorTypes.PLEASE_RESTART_PROCESS]: { desc: 'auth.errors.restartProcessDesc', title: 'auth.errors.restartProcess' },
+  [AuthErrorTypes.UNABLE_TO_CREATE_USER]: { desc: 'auth.errors.domainRestrictedDesc', title: 'auth.errors.domainRestricted' },
+  [AuthErrorTypes.VERIFICATION]: { desc: 'auth.errors.verificationDesc', title: 'auth.errors.verification' },
 };
 
 const routeApi = getRouteApi('/auth/error');
@@ -45,8 +45,8 @@ function AuthErrorContent() {
   }
 
   const errorInfo = {
-    title: t(errorKeys.title),
     description: t(errorKeys.desc),
+    title: t(errorKeys.title),
   };
 
   return (

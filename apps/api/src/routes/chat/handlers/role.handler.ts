@@ -41,22 +41,22 @@ import {
 export const listCustomRolesHandler: RouteHandler<typeof listCustomRolesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: CursorPaginationQuerySchema,
     operationName: 'listCustomRoles',
+    validateQuery: CursorPaginationQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
     const query = c.validated.query;
     const db = await getDbAsync();
     const customRoles = await db.query.chatCustomRole.findMany({
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.chatCustomRole.updatedAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.chatCustomRole.updatedAt,
         query.cursor,
         'desc',
         [eq(tables.chatCustomRole.userId, user.id)],
       ),
-      orderBy: getCursorOrderBy(tables.chatCustomRole.updatedAt, 'desc'),
-      limit: query.limit + 1,
     });
     const { items, pagination } = applyCursorPagination(
       customRoles,
@@ -69,8 +69,8 @@ export const listCustomRolesHandler: RouteHandler<typeof listCustomRolesRoute, A
 export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateCustomRoleRequestSchema,
     operationName: 'createCustomRole',
+    validateBody: CreateCustomRoleRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -95,14 +95,14 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
     const [customRole] = await db
       .insert(tables.chatCustomRole)
       .values({
-        id: customRoleId,
-        userId: user.id,
-        name: body.name,
-        description: body.description ?? null,
-        systemPrompt: body.systemPrompt,
-        metadata: body.metadata ?? null,
         createdAt: now,
+        description: body.description ?? null,
+        id: customRoleId,
+        metadata: body.metadata ?? null,
+        name: body.name,
+        systemPrompt: body.systemPrompt,
         updatedAt: now,
+        userId: user.id,
       })
       .returning();
     // ✅ CREDITS: Deduct for custom role creation
@@ -115,8 +115,8 @@ export const createCustomRoleHandler: RouteHandler<typeof createCustomRoleRoute,
 export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getCustomRole',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { id } = c.validated.params;
@@ -130,9 +130,9 @@ export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEn
 export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateCustomRoleRequestSchema,
     operationName: 'updateCustomRole',
+    validateBody: UpdateCustomRoleRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -143,10 +143,10 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
     const [updatedCustomRole] = await db
       .update(tables.chatCustomRole)
       .set({
-        name: body.name,
         description: body.description ?? null,
-        systemPrompt: body.systemPrompt,
         metadata: body.metadata ?? undefined,
+        name: body.name,
+        systemPrompt: body.systemPrompt,
         updatedAt: new Date(),
       })
       .where(and(
@@ -165,8 +165,8 @@ export const updateCustomRoleHandler: RouteHandler<typeof updateCustomRoleRoute,
 export const deleteCustomRoleHandler: RouteHandler<typeof deleteCustomRoleRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteCustomRole',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();

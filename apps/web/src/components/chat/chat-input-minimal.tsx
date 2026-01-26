@@ -28,13 +28,13 @@ type ChatInputMinimalProps = {
  * when the real component hydrates.
  */
 export function ChatInputMinimal({
-  placeholder,
-  disabled = false,
-  minHeight = 72,
-  maxHeight = 200,
-  showToolbar = true,
   autoMode = true,
   className,
+  disabled = false,
+  maxHeight = 200,
+  minHeight = 72,
+  placeholder,
+  showToolbar = true,
   ...props
 }: ChatInputMinimalProps) {
   const t = useTranslations();
@@ -43,9 +43,9 @@ export function ChatInputMinimal({
 
   // Still want auto-resize to work during skeleton state
   useAutoResizeTextarea(textareaRef, {
-    value: '',
-    minHeight,
     maxHeight,
+    minHeight,
+    value: '',
   });
 
   return (

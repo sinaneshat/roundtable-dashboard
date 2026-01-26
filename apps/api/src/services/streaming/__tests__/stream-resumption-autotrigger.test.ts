@@ -126,13 +126,13 @@ describe('stream resumption auto-trigger', () => {
       const userId = 'user-456';
 
       const message = {
-        type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
         messageId: `check-${threadId}-r${roundNumber}-${Date.now()}`,
-        threadId,
-        roundNumber,
-        userId,
-        reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
         queuedAt: new Date().toISOString(),
+        reason: CheckRoundCompletionReasons.RESUME_TRIGGER,
+        roundNumber,
+        threadId,
+        type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+        userId,
       };
 
       expect(message.type).toBe(RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION);
@@ -150,13 +150,13 @@ describe('stream resumption auto-trigger', () => {
       const userId = 'user-abc';
 
       const message = {
-        type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
         messageId: `check-${threadId}-r${roundNumber}-stale-${Date.now()}`,
-        threadId,
-        roundNumber,
-        userId,
-        reason: CheckRoundCompletionReasons.STALE_STREAM,
         queuedAt: new Date().toISOString(),
+        reason: CheckRoundCompletionReasons.STALE_STREAM,
+        roundNumber,
+        threadId,
+        type: RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION,
+        userId,
       };
 
       expect(message.type).toBe(RoundOrchestrationMessageTypes.CHECK_ROUND_COMPLETION);
@@ -278,10 +278,10 @@ describe('stream resumption auto-trigger', () => {
     it('should create options combining both filters', () => {
       const options: ResumeStreamOptions = {
         filterReasoningOnReplay: true,
-        startFromChunkIndex: 25,
-        pollIntervalMs: 100,
         maxPollDurationMs: 600000,
         noNewDataTimeoutMs: 90000,
+        pollIntervalMs: 100,
+        startFromChunkIndex: 25,
       };
 
       expect(options.filterReasoningOnReplay).toBe(true);
@@ -297,12 +297,12 @@ describe('stream resumption auto-trigger', () => {
   describe('sSE metadata headers', () => {
     it('should include autoTriggerQueued in response headers when triggered', () => {
       const metadata = {
-        roundNumber: 0,
-        totalParticipants: 3,
+        autoTriggerQueued: true,
         nextParticipantIndex: 1,
         participantStatuses: { 0: 'completed' },
         roundComplete: false,
-        autoTriggerQueued: true,
+        roundNumber: 0,
+        totalParticipants: 3,
       };
 
       expect(metadata.autoTriggerQueued).toBe(true);
@@ -310,11 +310,11 @@ describe('stream resumption auto-trigger', () => {
 
     it('should not include autoTriggerQueued when not triggered', () => {
       const metadata = {
-        roundNumber: 0,
-        totalParticipants: 3,
         nextParticipantIndex: 1,
         participantStatuses: { 0: 'completed' },
         roundComplete: false,
+        roundNumber: 0,
+        totalParticipants: 3,
       };
 
       expect(metadata).not.toHaveProperty('autoTriggerQueued');

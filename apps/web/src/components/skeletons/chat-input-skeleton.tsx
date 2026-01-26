@@ -11,10 +11,10 @@ type ChatInputSkeletonProps = {
 } & ComponentProps<'div'>;
 
 export function ChatInputSkeleton({
-  showToolbar = true,
-  showHeader = false,
   autoMode = true,
   className,
+  showHeader = false,
+  showToolbar = true,
   ...props
 }: ChatInputSkeletonProps) {
   return (

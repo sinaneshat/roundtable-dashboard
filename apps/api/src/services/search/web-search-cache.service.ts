@@ -21,28 +21,28 @@ import { parseCachedSearchResult } from '@/types/web-search-cache';
 // ============================================================================
 
 export const CACHE_TTL = {
-  SEARCH_RESULTS: 60 * 60 * 24,
-  IMAGE_DESCRIPTIONS: 60 * 60 * 24 * 7,
-  ANSWER_SUMMARIES: 60 * 60 * 12,
   ANALYTICS: 60 * 60 * 24 * 30,
+  ANSWER_SUMMARIES: 60 * 60 * 12,
+  IMAGE_DESCRIPTIONS: 60 * 60 * 24 * 7,
+  SEARCH_RESULTS: 60 * 60 * 24,
 } as const;
 
 /** Cache key prefixes - single source of truth for KV key structure */
 const CACHE_KEY_PREFIX = {
-  SEARCH: 'search',
   IMAGE_DESC: 'image:desc',
+  SEARCH: 'search',
   STATS_HITS: 'stats:cache:hits',
   STATS_MISSES: 'stats:cache:misses',
 } as const;
 
 /** Cache operation scenarios for logging */
 const CACHE_SCENARIOS = {
+  HIT_TRACKING_FAILED: 'cacheHitTrackingFailed',
+  IMAGE_READ_FAILED: 'imageCacheReadFailed',
+  IMAGE_WRITE_FAILED: 'imageCacheWriteFailed',
   INVALID_DATA_FORMAT: 'invalidCacheDataFormat',
   KV_READ_FAILED: 'kvCacheReadFailed',
   KV_WRITE_FAILED: 'kvCacheWriteFailed',
-  IMAGE_READ_FAILED: 'imageCacheReadFailed',
-  IMAGE_WRITE_FAILED: 'imageCacheWriteFailed',
-  HIT_TRACKING_FAILED: 'cacheHitTrackingFailed',
   MISS_TRACKING_FAILED: 'cacheMissTrackingFailed',
 } as const;
 
@@ -86,7 +86,7 @@ export async function getCachedSearch(
   try {
     const key = generateSearchCacheKey(query, maxResults, searchDepth);
     // cacheTtl enables edge caching - 5 min for search results (24h TTL)
-    const cached = await env.KV.get(key, { type: 'json', cacheTtl: 300 });
+    const cached = await env.KV.get(key, { cacheTtl: 300, type: 'json' });
 
     if (!cached) {
       await trackCacheMiss(env, logger);
@@ -97,8 +97,8 @@ export async function getCachedSearch(
     if (!result) {
       logger?.warn('Invalid cache data format, treating as cache miss', {
         logType: LogTypes.EDGE_CASE,
-        scenario: CACHE_SCENARIOS.INVALID_DATA_FORMAT,
         query: query.substring(0, 50),
+        scenario: CACHE_SCENARIOS.INVALID_DATA_FORMAT,
       });
       await trackCacheMiss(env, logger);
       return null;
@@ -110,19 +110,19 @@ export async function getCachedSearch(
 
     const cacheAge = Date.now() - new Date(_cache.cachedAt).getTime();
     logger?.info('Cache hit for search query', {
-      logType: LogTypes.PERFORMANCE,
-      query: query.substring(0, 50),
       cacheAge,
       expiresIn: new Date(_cache.expiresAt).getTime() - Date.now(),
+      logType: LogTypes.PERFORMANCE,
+      query: query.substring(0, 50),
     });
 
     return searchResult;
   } catch (error) {
     logger?.warn('KV cache read failed', {
-      logType: LogTypes.EDGE_CASE,
-      scenario: CACHE_SCENARIOS.KV_READ_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
+      logType: LogTypes.EDGE_CASE,
       query: query.substring(0, 50),
+      scenario: CACHE_SCENARIOS.KV_READ_FAILED,
     });
     return null;
   }
@@ -155,15 +155,15 @@ export async function cacheSearchResult(
     logger?.info('Cached search result', {
       logType: LogTypes.PERFORMANCE,
       query: query.substring(0, 50),
-      ttl: CACHE_TTL.SEARCH_RESULTS,
       resultCount: result.results.length,
+      ttl: CACHE_TTL.SEARCH_RESULTS,
     });
   } catch (error) {
     logger?.warn('KV cache write failed', {
-      logType: LogTypes.EDGE_CASE,
-      scenario: CACHE_SCENARIOS.KV_WRITE_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
+      logType: LogTypes.EDGE_CASE,
       query: query.substring(0, 50),
+      scenario: CACHE_SCENARIOS.KV_WRITE_FAILED,
     });
   }
 }
@@ -176,7 +176,7 @@ export async function getCachedImageDescription(
   try {
     const key = generateImageCacheKey(imageUrl);
     // cacheTtl enables edge caching - 5 min for image descriptions (7d TTL)
-    const cached = await env.KV.get(key, { type: 'text', cacheTtl: 300 });
+    const cached = await env.KV.get(key, { cacheTtl: 300, type: 'text' });
 
     if (cached) {
       logger?.info('Image description cache hit', {
@@ -188,9 +188,9 @@ export async function getCachedImageDescription(
     return cached;
   } catch (error) {
     logger?.warn('Image cache read failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: CACHE_SCENARIOS.IMAGE_READ_FAILED,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
     return null;
   }
@@ -208,14 +208,14 @@ export async function cacheImageDescription(
 
     logger?.info('Cached image description', {
       logType: LogTypes.PERFORMANCE,
-      url: imageUrl.substring(0, 100),
       ttl: CACHE_TTL.IMAGE_DESCRIPTIONS,
+      url: imageUrl.substring(0, 100),
     });
   } catch (error) {
     logger?.warn('Image cache write failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: CACHE_SCENARIOS.IMAGE_WRITE_FAILED,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }
@@ -243,9 +243,9 @@ async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Pro
     await env.KV.put(key, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache hit tracking failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: CACHE_SCENARIOS.HIT_TRACKING_FAILED,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }
@@ -260,9 +260,9 @@ async function trackCacheMiss(env: ApiEnv['Bindings'], logger?: TypedLogger): Pr
     await env.KV.put(key, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache miss tracking failed', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: CACHE_SCENARIOS.MISS_TRACKING_FAILED,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 }

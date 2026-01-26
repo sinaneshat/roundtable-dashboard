@@ -22,10 +22,10 @@ export const AuthModeSchema = z.enum(AUTH_MODES).openapi({
 export type AuthMode = z.infer<typeof AuthModeSchema>;
 
 export const AuthModes = {
+  API_KEY: 'api-key' as const,
+  PUBLIC: 'public' as const,
   SESSION: 'session' as const,
   SESSION_OPTIONAL: 'session-optional' as const,
-  PUBLIC: 'public' as const,
-  API_KEY: 'api-key' as const,
 } as const;
 
 // ============================================================================
@@ -44,8 +44,8 @@ export const AuthStepSchema = z.enum(AUTH_STEPS).openapi({
 export type AuthStep = z.infer<typeof AuthStepSchema>;
 
 export const AuthSteps = {
-  METHOD: 'method' as const,
   EMAIL: 'email' as const,
+  METHOD: 'method' as const,
   SENT: 'sent' as const,
 } as const;
 
@@ -54,8 +54,8 @@ export const AuthSteps = {
 // ============================================================================
 
 export const AUTH_STEP_LABELS: Record<AuthStep, string> = {
-  [AuthSteps.METHOD]: 'Choose Method',
   [AuthSteps.EMAIL]: 'Enter Email',
+  [AuthSteps.METHOD]: 'Choose Method',
   [AuthSteps.SENT]: 'Check Email',
 } as const;
 
@@ -88,18 +88,18 @@ export const AuthErrorTypeSchema = z.enum(AUTH_ERROR_TYPES).openapi({
 export type AuthErrorType = z.infer<typeof AuthErrorTypeSchema>;
 
 export const AuthErrorTypes = {
-  CONFIGURATION: 'configuration' as const,
   ACCESS_DENIED: 'accessdenied' as const,
-  VERIFICATION: 'verification' as const,
-  OAUTH_SIGNIN: 'oauthsignin' as const,
+  CALLBACK: 'callback' as const,
+  CONFIGURATION: 'configuration' as const,
+  DEFAULT: 'default' as const,
+  DOMAIN_RESTRICTED: 'domain_restricted' as const,
+  EMAIL_CREATE_ACCOUNT: 'emailcreateaccount' as const,
   OAUTH_CALLBACK: 'oauthcallback' as const,
   OAUTH_CREATE_ACCOUNT: 'oauthcreateaccount' as const,
-  EMAIL_CREATE_ACCOUNT: 'emailcreateaccount' as const,
-  CALLBACK: 'callback' as const,
+  OAUTH_SIGNIN: 'oauthsignin' as const,
   PLEASE_RESTART_PROCESS: 'please_restart_the_process' as const,
-  DOMAIN_RESTRICTED: 'domain_restricted' as const,
   UNABLE_TO_CREATE_USER: 'unable_to_create_user' as const,
-  DEFAULT: 'default' as const,
+  VERIFICATION: 'verification' as const,
 } as const;
 
 // ============================================================================

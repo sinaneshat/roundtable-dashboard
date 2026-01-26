@@ -32,15 +32,15 @@ import { createChatStore } from '../store';
 function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [], // Empty parts = pending state
     metadata: {
       isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       model: MODERATOR_NAME,
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       role: UIMessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [], // Empty parts = pending state
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -57,7 +57,7 @@ function simulateIncrementalUpdate(
     msg.id === moderatorId
       ? {
           ...msg,
-          parts: [{ type: 'text' as const, text: accumulatedText }],
+          parts: [{ text: accumulatedText, type: 'text' as const }],
         }
       : msg,
   );
@@ -77,11 +77,11 @@ function simulateFinalUpdate(
     msg.id === moderatorId
       ? {
           ...msg,
-          parts: [{ type: 'text' as const, text: finalText, state: 'done' as const }],
           metadata: {
             ...(msg.metadata && typeof msg.metadata === 'object' ? msg.metadata : {}),
             finishReason: 'stop',
           },
+          parts: [{ state: 'done' as const, text: finalText, type: 'text' as const }],
         }
       : msg,
   );
@@ -103,13 +103,13 @@ describe('moderator Incremental Streaming Updates', () => {
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
       expect(messages[0]?.parts).toEqual([]);
-      expect(messages[0]?.metadata?.isModerator).toBe(true);
+      expect(messages[0]?.metadata?.isModerator).toBeTruthy();
     });
 
     it('placeholder has correct moderator metadata', () => {
       const placeholder = createModeratorPlaceholder('thread-1', 0);
 
-      expect(placeholder.metadata?.isModerator).toBe(true);
+      expect(placeholder.metadata?.isModerator).toBeTruthy();
       expect(placeholder.metadata?.roundNumber).toBe(0);
       expect(placeholder.metadata?.participantIndex).toBe(MODERATOR_PARTICIPANT_INDEX);
       expect(placeholder.metadata?.model).toBe(MODERATOR_NAME);
@@ -152,7 +152,7 @@ describe('moderator Incremental Streaming Updates', () => {
       const messages = store.getState().messages;
       expect(messages[0]?.id).toBe(moderatorId);
       expect(messages[0]?.role).toBe(UIMessageRoles.ASSISTANT);
-      expect(messages[0]?.metadata?.isModerator).toBe(true);
+      expect(messages[0]?.metadata?.isModerator).toBeTruthy();
       expect(messages[0]?.metadata?.roundNumber).toBe(0);
     });
 
@@ -213,20 +213,20 @@ describe('moderator Incremental Streaming Updates', () => {
       const initialMessages: UIMessage[] = [
         {
           id: 'user-1',
+          parts: [{ text: 'User question', type: 'text' }],
           role: UIMessageRoles.USER,
-          parts: [{ type: 'text', text: 'User question' }],
         },
         {
           id: 'thread-1_r0_p0',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Participant 1 response' }],
           metadata: { participantIndex: 0, roundNumber: 0 },
+          parts: [{ text: 'Participant 1 response', type: 'text' }],
+          role: UIMessageRoles.ASSISTANT,
         },
         {
           id: 'thread-1_r0_p1',
-          role: UIMessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Participant 2 response' }],
           metadata: { participantIndex: 1, roundNumber: 0 },
+          parts: [{ text: 'Participant 2 response', type: 'text' }],
+          role: UIMessageRoles.ASSISTANT,
         },
         createModeratorPlaceholder('thread-1', 0),
       ];
@@ -298,10 +298,10 @@ describe('moderator Streaming Race Condition Prevention', () => {
       const store = createChatStore();
 
       const initialMessages: UIMessage[] = [
-        { id: 'msg-1', role: UIMessageRoles.USER, parts: [{ type: 'text', text: '1' }] },
-        { id: 'msg-2', role: UIMessageRoles.ASSISTANT, parts: [{ type: 'text', text: '2' }] },
+        { id: 'msg-1', parts: [{ text: '1', type: 'text' }], role: UIMessageRoles.USER },
+        { id: 'msg-2', parts: [{ text: '2', type: 'text' }], role: UIMessageRoles.ASSISTANT },
         createModeratorPlaceholder('thread-1', 0),
-        { id: 'msg-4', role: UIMessageRoles.USER, parts: [{ type: 'text', text: '4' }] },
+        { id: 'msg-4', parts: [{ text: '4', type: 'text' }], role: UIMessageRoles.USER },
       ];
 
       store.getState().setMessages(initialMessages);
@@ -328,17 +328,17 @@ describe('moderator Streaming Race Condition Prevention', () => {
       // Update should not affect streaming flag
       simulateIncrementalUpdate(store, moderatorId, 'Content');
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
     });
 
     it('completeModeratorStream resets streaming flag', () => {
       const store = createChatStore();
 
       store.getState().setIsModeratorStreaming(true);
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       store.getState().completeModeratorStream();
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
     });
   });
 });
@@ -362,7 +362,7 @@ describe('moderator Placeholder Text Configuration', () => {
 
       // ModelMessageCard checks: parts.length === 0 for pending state
       const isPending = placeholder.parts.length === 0;
-      expect(isPending).toBe(true);
+      expect(isPending).toBeTruthy();
     });
 
     it('non-empty parts array indicates streaming/complete state', () => {
@@ -374,7 +374,7 @@ describe('moderator Placeholder Text Configuration', () => {
 
       const messages = store.getState().messages;
       const hasContent = (messages[0]?.parts.length ?? 0) > 0;
-      expect(hasContent).toBe(true);
+      expect(hasContent).toBeTruthy();
     });
   });
 });

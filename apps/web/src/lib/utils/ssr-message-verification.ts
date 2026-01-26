@@ -46,7 +46,7 @@ export async function verifyAndFetchFreshMessages({
   // Client-side TanStack Query will handle any stale data
   return {
     messages: transformMessages(currentMessages),
-    wasStale: false,
     retryCount: 0,
+    wasStale: false,
   };
 }

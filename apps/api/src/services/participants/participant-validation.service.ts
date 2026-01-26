@@ -27,18 +27,19 @@ import { getEnabledParticipantCount } from './participant-query.service';
  */
 function getModelForPricing(modelId: string): ModelForPricing | undefined {
   const model = getModelById(modelId);
-  if (!model)
+  if (!model) {
     return undefined;
+  }
 
   return {
+    capabilities: model.capabilities,
+    context_length: model.context_length,
+    created: model.created,
     id: model.id,
     name: model.name,
     pricing: model.pricing,
-    context_length: model.context_length,
     pricing_display: model.pricing_display,
-    created: model.created,
     provider: model.provider,
-    capabilities: model.capabilities,
   };
 }
 

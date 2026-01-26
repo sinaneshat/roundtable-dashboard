@@ -41,6 +41,6 @@ export function useMemoizedReturn<T extends object>(
 ): T {
   // JUSTIFIED: Intentionally using caller-provided deps instead of returnObject.
   // This utility allows callers to control memoization deps explicitly.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
   return useMemo(() => returnObject, deps);
 }

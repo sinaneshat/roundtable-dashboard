@@ -33,13 +33,13 @@ export type SyncInstructionMemoryParams = {
  * so it appears at the top of project context.
  */
 export async function syncInstructionMemory(params: SyncInstructionMemoryParams): Promise<void> {
-  const { db, projectId, customInstructions, userId } = params;
+  const { customInstructions, db, projectId, userId } = params;
 
   console.error('[Instruction Memory] syncInstructionMemory called', {
-    projectId,
-    userId,
     hasInstructions: !!customInstructions,
     instructionLength: customInstructions?.length ?? 0,
+    projectId,
+    userId,
   });
 
   // Find existing instruction memory for this project
@@ -51,20 +51,20 @@ export async function syncInstructionMemory(params: SyncInstructionMemoryParams)
   });
 
   console.error('[Instruction Memory] Existing memory check', {
-    projectId,
-    hasExisting: !!existingMemory,
     existingId: existingMemory?.id,
     existingIsActive: existingMemory?.isActive,
+    hasExisting: !!existingMemory,
+    projectId,
   });
 
   const now = new Date();
 
   if (!customInstructions || customInstructions.trim().length === 0) {
     // No instructions - deactivate existing memory if any
-    if (existingMemory && existingMemory.isActive) {
+    if (existingMemory?.isActive) {
       console.error('[Instruction Memory] Deactivating existing memory', {
-        projectId,
         memoryId: existingMemory.id,
+        projectId,
       });
       await db
         .update(tables.projectMemory)
@@ -81,9 +81,9 @@ export async function syncInstructionMemory(params: SyncInstructionMemoryParams)
   if (existingMemory) {
     // Update existing memory
     console.error('[Instruction Memory] Updating existing memory', {
-      projectId,
-      memoryId: existingMemory.id,
       instructionLength: customInstructions.length,
+      memoryId: existingMemory.id,
+      projectId,
     });
     await db
       .update(tables.projectMemory)
@@ -93,27 +93,27 @@ export async function syncInstructionMemory(params: SyncInstructionMemoryParams)
         updatedAt: now,
       })
       .where(eq(tables.projectMemory.id, existingMemory.id));
-    console.error('[Instruction Memory] Memory updated successfully', { projectId, memoryId: existingMemory.id });
+    console.error('[Instruction Memory] Memory updated successfully', { memoryId: existingMemory.id, projectId });
   } else {
     // Create new instruction memory
     const newMemoryId = ulid();
     console.error('[Instruction Memory] Creating new memory', {
-      projectId,
-      newMemoryId,
       instructionLength: customInstructions.length,
+      newMemoryId,
+      projectId,
     });
     await db.insert(tables.projectMemory).values({
-      id: newMemoryId,
-      projectId,
       content: customInstructions,
-      summary: INSTRUCTION_MEMORY_SUMMARY,
-      source: 'instruction',
+      createdAt: now,
+      createdBy: userId,
+      id: newMemoryId,
       importance: INSTRUCTION_MEMORY_IMPORTANCE,
       isActive: true,
-      createdBy: userId,
-      createdAt: now,
+      projectId,
+      source: 'instruction',
+      summary: INSTRUCTION_MEMORY_SUMMARY,
       updatedAt: now,
     });
-    console.error('[Instruction Memory] Memory created successfully', { projectId, newMemoryId });
+    console.error('[Instruction Memory] Memory created successfully', { newMemoryId, projectId });
   }
 }

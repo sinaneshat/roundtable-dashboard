@@ -41,29 +41,29 @@ export function getSeoHead(pageType: PageType, overrides?: SeoOverrides): HeadCo
   const robots = overrides?.noindex ? 'noindex, nofollow' : page.robots;
 
   return {
+    links: [
+      { href: `${siteUrl}${page.path}`, rel: 'canonical' },
+    ],
     meta: [
       { title },
-      { name: 'description', content: description },
+      { content: description, name: 'description' },
       // Open Graph
-      { property: 'og:title', content: title },
-      { property: 'og:description', content: description },
-      { property: 'og:type', content: SEO_DEFAULTS.ogType },
-      { property: 'og:url', content: `${siteUrl}${page.path}` },
-      { property: 'og:image', content: ogImage },
-      { property: 'og:image:width', content: SEO_DEFAULTS.ogImageWidth },
-      { property: 'og:image:height', content: SEO_DEFAULTS.ogImageHeight },
-      { property: 'og:site_name', content: SEO_DEFAULTS.siteName },
+      { content: title, property: 'og:title' },
+      { content: description, property: 'og:description' },
+      { content: SEO_DEFAULTS.ogType, property: 'og:type' },
+      { content: `${siteUrl}${page.path}`, property: 'og:url' },
+      { content: ogImage, property: 'og:image' },
+      { content: SEO_DEFAULTS.ogImageWidth, property: 'og:image:width' },
+      { content: SEO_DEFAULTS.ogImageHeight, property: 'og:image:height' },
+      { content: SEO_DEFAULTS.siteName, property: 'og:site_name' },
       // Twitter Card
-      { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:site', content: SEO_DEFAULTS.twitterHandle },
-      { name: 'twitter:title', content: title },
-      { name: 'twitter:description', content: description },
-      { name: 'twitter:image', content: ogImage },
+      { content: 'summary_large_image', name: 'twitter:card' },
+      { content: SEO_DEFAULTS.twitterHandle, name: 'twitter:site' },
+      { content: title, name: 'twitter:title' },
+      { content: description, name: 'twitter:description' },
+      { content: ogImage, name: 'twitter:image' },
       // SEO
-      { name: 'robots', content: robots },
-    ],
-    links: [
-      { rel: 'canonical', href: `${siteUrl}${page.path}` },
+      { content: robots, name: 'robots' },
     ],
   };
 }
@@ -80,8 +80,9 @@ export function getCacheControl(pageType: PageType): string | undefined {
  */
 export function getSeoHeaders(pageType: PageType): (() => Record<string, string>) | undefined {
   const cacheControl = getCacheControl(pageType);
-  if (!cacheControl)
+  if (!cacheControl) {
     return undefined;
+  }
 
   return () => ({ 'Cache-Control': cacheControl });
 }

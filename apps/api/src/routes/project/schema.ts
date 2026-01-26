@@ -24,34 +24,34 @@ import { uploadSelectSchema } from '@/db/validation/upload';
  * Create Project Request Schema
  */
 export const CreateProjectRequestSchema = z.object({
-  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).openapi({
-    description: 'Project name',
-    example: 'Q1 Marketing Strategy',
-  }),
-  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional().openapi({
-    description: 'Optional project description',
-    example: 'Knowledge base for Q1 2025 marketing planning',
+  autoragInstanceId: z.string().optional().openapi({
+    description: 'Optional AutoRAG instance ID override',
+    example: 'roundtable-rag-local',
   }),
   color: ProjectColorSchema.optional().default('blue').openapi({
     description: 'Project color for visual identification',
     example: 'blue',
   }),
-  icon: ProjectIconSchema.optional().default('briefcase').openapi({
-    description: 'Project icon for visual identification',
-    example: 'briefcase',
-  }),
   customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional().openapi({
     description: 'Custom instructions for all threads in this project (OpenAI Projects pattern)',
     example: 'Always format responses in markdown. Focus on actionable insights.',
   }),
-  autoragInstanceId: z.string().optional().openapi({
-    description: 'Optional AutoRAG instance ID override',
-    example: 'roundtable-rag-local',
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional().openapi({
+    description: 'Optional project description',
+    example: 'Knowledge base for Q1 2025 marketing planning',
+  }),
+  icon: ProjectIconSchema.optional().default('briefcase').openapi({
+    description: 'Project icon for visual identification',
+    example: 'briefcase',
+  }),
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).openapi({
+    description: 'Project name',
+    example: 'Q1 Marketing Strategy',
   }),
   settings: z.object({
+    allowedFileTypes: z.array(z.string()).optional(),
     autoIndexing: z.boolean().optional().default(true),
     maxFileSize: z.number().int().positive().optional(),
-    allowedFileTypes: z.array(z.string()).optional(),
   }).optional().openapi({
     description: 'Project settings',
   }),
@@ -62,12 +62,12 @@ export const CreateProjectRequestSchema = z.object({
  */
 export const UpdateProjectRequestSchema = chatProjectUpdateSchema
   .pick({
-    name: true,
-    description: true,
-    color: true,
-    icon: true,
-    customInstructions: true,
     autoragInstanceId: true,
+    color: true,
+    customInstructions: true,
+    description: true,
+    icon: true,
+    name: true,
     settings: true,
   })
   .partial()
@@ -108,10 +108,6 @@ export const ListProjectsQuerySchema = CursorPaginationQuerySchema.extend({
  * Users first upload files via POST /uploads, then reference them here.
  */
 export const AddUploadToProjectRequestSchema = z.object({
-  uploadId: z.string().openapi({
-    description: 'ID of an existing upload (from POST /uploads)',
-    example: '01HXYZ123456789ABCDEF',
-  }),
   context: z.string().max(1000).optional().openapi({
     description: 'Optional context hint for LLM RAG retrieval',
     example: 'Q1 2025 marketing strategy document',
@@ -121,6 +117,10 @@ export const AddUploadToProjectRequestSchema = z.object({
   }),
   tags: z.array(z.string()).optional().openapi({
     description: 'Project-specific tags for organization',
+  }),
+  uploadId: z.string().openapi({
+    description: 'ID of an existing upload (from POST /uploads)',
+    example: '01HXYZ123456789ABCDEF',
   }),
 }).openapi('AddUploadToProjectRequest');
 
@@ -139,18 +139,18 @@ export const UpdateProjectAttachmentRequestSchema = z.object({
  */
 export const ProjectAttachmentResponseSchema = projectAttachmentSelectSchema
   .extend({
+    addedByUser: z.object({
+      email: z.string().nullable(),
+      id: z.string(),
+      name: z.string().nullable(),
+    }).optional().openapi({
+      description: 'User who added this attachment to the project',
+    }),
     upload: uploadSelectSchema
       .omit({ r2Key: true }) // Don't expose internal R2 keys
       .openapi({
         description: 'The underlying uploaded file details',
       }),
-    addedByUser: z.object({
-      id: z.string(),
-      name: z.string().nullable(),
-      email: z.string().nullable(),
-    }).optional().openapi({
-      description: 'User who added this attachment to the project',
-    }),
   })
   .openapi('ProjectAttachmentResponse');
 
@@ -175,19 +175,19 @@ export const CreateProjectMemoryRequestSchema = z.object({
     description: 'Memory content text',
     example: 'The project focuses on Q1 2025 marketing strategy with emphasis on digital channels.',
   }),
-  summary: z.string().max(500).optional().openapi({
-    description: 'Optional short summary for display',
-    example: 'Q1 marketing focus: digital channels',
-  }),
-  source: ProjectMemorySourceSchema.optional().default('explicit').openapi({
-    description: 'Source of this memory entry',
-  }),
   importance: z.number().int().min(1).max(10).optional().default(5).openapi({
     description: 'Importance level (1-10) for retrieval prioritization',
     example: 7,
   }),
   metadata: ProjectMemoryMetadataSchema.optional().openapi({
     description: 'Optional metadata for categorization and extraction tracking',
+  }),
+  source: ProjectMemorySourceSchema.optional().default('explicit').openapi({
+    description: 'Source of this memory entry',
+  }),
+  summary: z.string().max(500).optional().openapi({
+    description: 'Optional short summary for display',
+    example: 'Q1 marketing focus: digital channels',
   }),
 }).openapi('CreateProjectMemoryRequest');
 
@@ -196,10 +196,10 @@ export const CreateProjectMemoryRequestSchema = z.object({
  */
 export const UpdateProjectMemoryRequestSchema = z.object({
   content: z.string().min(1).max(10000).optional(),
-  summary: z.string().max(500).optional().nullable(),
   importance: z.number().int().min(1).max(10).optional(),
   isActive: z.boolean().optional(),
   metadata: ProjectMemoryMetadataSchema.optional().nullable(),
+  summary: z.string().max(500).optional().nullable(),
 }).openapi('UpdateProjectMemoryRequest');
 
 /**
@@ -217,11 +217,11 @@ export const ProjectMemoryResponseSchema = projectMemorySelectSchema
  * List Project Memories Query Schema
  */
 export const ListProjectMemoriesQuerySchema = CursorPaginationQuerySchema.extend({
-  source: ProjectMemorySourceSchema.optional().openapi({
-    description: 'Filter by memory source',
-  }),
   isActive: BooleanStringSchema.optional().openapi({
     description: 'Filter by active status (query param string)',
+  }),
+  source: ProjectMemorySourceSchema.optional().openapi({
+    description: 'Filter by memory source',
   }),
 }).openapi('ListProjectMemoriesQuery');
 
@@ -264,10 +264,10 @@ export const ListProjectMemoriesResponseSchema = createCursorPaginatedResponseSc
  * Note: isFavorite/pin is NOT supported for project threads (only standalone threads)
  */
 export const ProjectThreadResponseSchema = z.object({
-  id: CoreSchemas.id(),
-  title: z.string(),
-  slug: z.string(),
   createdAt: z.string().datetime(),
+  id: CoreSchemas.id(),
+  slug: z.string(),
+  title: z.string(),
   updatedAt: z.string().datetime(),
 }).openapi('ProjectThread');
 
@@ -291,8 +291,8 @@ export const GetProjectMemoryResponseSchema = createApiResponseSchema(ProjectMem
  */
 export const DeleteResponseSchema = createApiResponseSchema(
   z.object({
-    id: CoreSchemas.id(),
     deleted: z.boolean(),
+    id: CoreSchemas.id(),
   }),
 );
 
@@ -301,11 +301,11 @@ export const DeleteResponseSchema = createApiResponseSchema(
  */
 export const DeleteProjectResponseSchema = createApiResponseSchema(
   z.object({
-    id: CoreSchemas.id(),
     deleted: z.boolean(),
     deletedThreadCount: z.number().int().nonnegative().openapi({
       description: 'Number of threads that were soft-deleted with this project',
     }),
+    id: CoreSchemas.id(),
   }),
 );
 
@@ -313,13 +313,13 @@ export const DeleteProjectResponseSchema = createApiResponseSchema(
  * Project Attachment Param Schema - for routes with both id and attachmentId params
  */
 export const ProjectAttachmentParamSchema = z.object({
-  id: z.string().openapi({
-    param: { name: 'id', in: 'path' },
-    description: 'Project identifier',
-  }),
   attachmentId: z.string().openapi({
-    param: { name: 'attachmentId', in: 'path' },
     description: 'Project attachment identifier',
+    param: { in: 'path', name: 'attachmentId' },
+  }),
+  id: z.string().openapi({
+    description: 'Project identifier',
+    param: { in: 'path', name: 'id' },
   }),
 }).openapi('ProjectAttachmentParam');
 
@@ -328,12 +328,12 @@ export const ProjectAttachmentParamSchema = z.object({
  */
 export const ProjectMemoryParamSchema = z.object({
   id: z.string().openapi({
-    param: { name: 'id', in: 'path' },
     description: 'Project identifier',
+    param: { in: 'path', name: 'id' },
   }),
   memoryId: z.string().openapi({
-    param: { name: 'memoryId', in: 'path' },
     description: 'Memory entry identifier',
+    param: { in: 'path', name: 'memoryId' },
   }),
 }).openapi('ProjectMemoryParam');
 
@@ -346,25 +346,25 @@ export const ProjectMemoryParamSchema = z.object({
  * Returns user's tier and project limits
  */
 export const ProjectLimitsSchema = z.object({
-  tier: SubscriptionTierSchema.openapi({
-    description: 'User subscription tier',
-    example: 'pro',
-  }),
-  maxProjects: z.number().int().openapi({
-    description: 'Maximum projects allowed for tier',
-    example: PROJECT_LIMITS.MAX_PROJECTS_PER_USER,
+  canCreateProject: z.boolean().openapi({
+    description: 'Whether user can create more projects',
+    example: true,
   }),
   currentProjects: z.number().int().openapi({
     description: 'Current number of projects',
     example: 2,
   }),
+  maxProjects: z.number().int().openapi({
+    description: 'Maximum projects allowed for tier',
+    example: PROJECT_LIMITS.MAX_PROJECTS_PER_USER,
+  }),
   maxThreadsPerProject: z.number().int().openapi({
     description: 'Maximum threads per project',
     example: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT,
   }),
-  canCreateProject: z.boolean().openapi({
-    description: 'Whether user can create more projects',
-    example: true,
+  tier: SubscriptionTierSchema.openapi({
+    description: 'User subscription tier',
+    example: 'pro',
   }),
 }).openapi('ProjectLimits');
 
@@ -384,35 +384,35 @@ export const ProjectContextResponseSchema = createApiResponseSchema(
   z.object({
     memories: z.object({
       items: z.array(z.object({
-        id: z.string(),
         content: z.string(),
-        summary: z.string().nullable(),
-        source: z.string(),
-        importance: z.number(),
-      })),
-      totalCount: z.number(),
-    }),
-    recentChats: z.object({
-      threads: z.array(z.object({
         id: z.string(),
-        title: z.string(),
-        messageExcerpt: z.string(),
-      })),
-      totalCount: z.number(),
-    }),
-    searches: z.object({
-      items: z.array(z.object({
-        threadTitle: z.string(),
-        userQuery: z.string(),
+        importance: z.number(),
+        source: z.string(),
         summary: z.string().nullable(),
       })),
       totalCount: z.number(),
     }),
     moderators: z.object({
       items: z.array(z.object({
+        moderator: z.string(),
         threadTitle: z.string(),
         userQuestion: z.string(),
-        moderator: z.string(),
+      })),
+      totalCount: z.number(),
+    }),
+    recentChats: z.object({
+      threads: z.array(z.object({
+        id: z.string(),
+        messageExcerpt: z.string(),
+        title: z.string(),
+      })),
+      totalCount: z.number(),
+    }),
+    searches: z.object({
+      items: z.array(z.object({
+        summary: z.string().nullable(),
+        threadTitle: z.string(),
+        userQuery: z.string(),
       })),
       totalCount: z.number(),
     }),

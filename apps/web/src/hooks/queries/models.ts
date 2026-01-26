@@ -29,7 +29,7 @@ type UseModelsQueryOptions = {
 export function useModelsQuery(options?: UseModelsQueryOptions) {
   return useQuery({
     ...modelsQueryOptions,
-    throwOnError: false,
     enabled: options?.enabled ?? true,
+    throwOnError: false,
   });
 }

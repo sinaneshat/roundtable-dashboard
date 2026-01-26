@@ -65,12 +65,23 @@ function getWindowSpeechAPIs(): SpeechRecognitionWindow {
 
   // Type-safe access to vendor-prefixed experimental Web APIs
   const win = window as typeof window & SpeechRecognitionWindow;
-  return {
-    SpeechRecognition: win.SpeechRecognition,
-    webkitSpeechRecognition: win.webkitSpeechRecognition,
-    AudioContext: win.AudioContext,
-    webkitAudioContext: win.webkitAudioContext,
-  };
+
+  // Build object conditionally to avoid exactOptionalPropertyTypes errors
+  const result: SpeechRecognitionWindow = {};
+  if (win.AudioContext !== undefined) {
+    result.AudioContext = win.AudioContext;
+  }
+  if (win.SpeechRecognition !== undefined) {
+    result.SpeechRecognition = win.SpeechRecognition;
+  }
+  if (win.webkitAudioContext !== undefined) {
+    result.webkitAudioContext = win.webkitAudioContext;
+  }
+  if (win.webkitSpeechRecognition !== undefined) {
+    result.webkitSpeechRecognition = win.webkitSpeechRecognition;
+  }
+
+  return result;
 }
 
 function getSpeechRecognitionConstructor(): (new () => SpeechRecognition) | null {
@@ -90,7 +101,7 @@ export type UseSpeechRecognitionOptions = {
 };
 
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
-  const { lang = 'en-US', continuous = true, enableAudioVisualization = true } = options;
+  const { continuous = true, enableAudioVisualization = true, lang = 'en-US' } = options;
 
   const [isListening, setIsListening] = useState(false);
   const isMounted = useIsMounted();
@@ -109,12 +120,14 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const isSupported = isMounted && getSpeechRecognitionConstructor() !== null;
 
   useEffect(() => {
-    if (!isSupported)
+    if (!isSupported) {
       return;
+    }
 
     const SpeechRecognitionAPI = getSpeechRecognitionConstructor();
-    if (!SpeechRecognitionAPI)
+    if (!SpeechRecognitionAPI) {
       return;
+    }
 
     const recognition = new SpeechRecognitionAPI();
     recognition.continuous = continuous;
@@ -126,8 +139,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        if (!result?.[0])
+        if (!result?.[0]) {
           continue;
+        }
 
         const transcript = result[0].transcript;
 
@@ -195,8 +209,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   }, [isSupported, continuous, lang]);
 
   useEffect(() => {
-    if (!enableAudioVisualization || !isListening || typeof window === 'undefined')
+    if (!enableAudioVisualization || !isListening || typeof window === 'undefined') {
       return;
+    }
 
     const startAudioVisualization = async () => {
       try {
@@ -219,8 +234,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         analyserRef.current = analyser;
 
         const updateAudioLevels = () => {
-          if (!analyserRef.current || !isListening)
+          if (!analyserRef.current || !isListening) {
             return;
+          }
 
           const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
           analyserRef.current.getByteFrequencyData(dataArray);
@@ -256,8 +272,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   }, [enableAudioVisualization, isListening]);
 
   const start = useCallback(() => {
-    if (!recognitionRef.current || isListening)
+    if (!recognitionRef.current || isListening) {
       return;
+    }
 
     try {
       recognitionRef.current.start();
@@ -273,8 +290,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   }, [isListening]);
 
   const stop = useCallback(() => {
-    if (!recognitionRef.current || !isListening)
+    if (!recognitionRef.current || !isListening) {
       return;
+    }
 
     isListeningRef.current = false;
 
@@ -318,15 +336,15 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   }, []);
 
   return {
+    audioLevels,
+    error,
+    finalTranscript,
+    interimTranscript,
     isListening,
     isSupported,
+    reset,
     start,
     stop,
     toggle,
-    reset,
-    audioLevels,
-    interimTranscript,
-    finalTranscript,
-    error,
   };
 }

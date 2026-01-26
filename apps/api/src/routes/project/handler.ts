@@ -79,8 +79,8 @@ import {
 export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: ListProjectsQuerySchema,
     operationName: 'listProjects',
+    validateQuery: ListProjectsQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -96,14 +96,14 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
 
     // ✅ PERF: Fetch projects with relations in single query using Drizzle relational
     const projects = await db.query.chatProject.findMany({
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.chatProject.createdAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.chatProject.createdAt,
         query.cursor,
         'desc',
         filters,
       ),
-      orderBy: getCursorOrderBy(tables.chatProject.createdAt, 'desc'),
-      limit: query.limit + 1,
       with: {
         attachments: {
           columns: { id: true },
@@ -151,8 +151,8 @@ export const getProjectLimitsHandler: RouteHandler<typeof getProjectLimitsRoute,
 
     // Get current project count
     const existingProjects = await db.query.chatProject.findMany({
-      where: eq(tables.chatProject.userId, user.id),
       columns: { id: true },
+      where: eq(tables.chatProject.userId, user.id),
     });
 
     const currentProjects = existingProjects.length;
@@ -160,11 +160,11 @@ export const getProjectLimitsHandler: RouteHandler<typeof getProjectLimitsRoute,
     const maxThreadsPerProject = tier === SubscriptionTiers.PRO ? PROJECT_LIMITS.MAX_THREADS_PER_PROJECT : 0;
 
     return Responses.ok(c, {
-      tier,
-      maxProjects,
-      currentProjects,
-      maxThreadsPerProject,
       canCreateProject: tier === SubscriptionTiers.PRO && currentProjects < maxProjects,
+      currentProjects,
+      maxProjects,
+      maxThreadsPerProject,
+      tier,
     });
   },
 );
@@ -175,8 +175,8 @@ export const getProjectLimitsHandler: RouteHandler<typeof getProjectLimitsRoute,
 export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getProject',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -198,8 +198,8 @@ export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = c
 export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateProjectRequestSchema,
     operationName: 'createProject',
+    validateBody: CreateProjectRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -217,8 +217,8 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
 
     // Check project count limit
     const existingProjects = await db.query.chatProject.findMany({
-      where: eq(tables.chatProject.userId, user.id),
       columns: { id: true },
+      where: eq(tables.chatProject.userId, user.id),
     });
 
     if (existingProjects.length >= PROJECT_LIMITS.MAX_PROJECTS_PER_USER) {
@@ -243,31 +243,31 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
     const [project] = await db
       .insert(tables.chatProject)
       .values({
-        id: projectId,
-        userId: user.id,
-        name: body.name,
-        description: body.description,
-        color: body.color || 'blue',
-        icon: body.icon || 'briefcase',
-        customInstructions: body.customInstructions,
         autoragInstanceId,
+        color: body.color || 'blue',
+        createdAt: new Date(),
+        customInstructions: body.customInstructions,
+        description: body.description,
+        icon: body.icon || 'briefcase',
+        id: projectId,
+        name: body.name,
         r2FolderPrefix,
         settings: body.settings,
-        createdAt: new Date(),
         updatedAt: new Date(),
+        userId: user.id,
       })
       .returning();
 
     // Sync custom instructions to project memory if provided
     if (body.customInstructions) {
       console.error('[Project Create] Syncing instruction memory', {
-        projectId,
         instructionLength: body.customInstructions.length,
+        projectId,
       });
       await syncInstructionMemory({
+        customInstructions: body.customInstructions,
         db,
         projectId,
-        customInstructions: body.customInstructions,
         userId: user.id,
       });
       console.error('[Project Create] Instruction memory sync complete', { projectId });
@@ -287,9 +287,9 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
 export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateProjectRequestSchema,
     operationName: 'updateProject',
+    validateBody: UpdateProjectRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -301,20 +301,27 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 
     const updateData: ChatProjectUpdate = { updatedAt: new Date() };
 
-    if (body.name !== undefined)
+    if (body.name !== undefined) {
       updateData.name = body.name;
-    if (body.description !== undefined)
+    }
+    if (body.description !== undefined) {
       updateData.description = body.description || null;
-    if (body.color !== undefined)
+    }
+    if (body.color !== undefined) {
       updateData.color = body.color ?? undefined;
-    if (body.icon !== undefined)
+    }
+    if (body.icon !== undefined) {
       updateData.icon = body.icon ?? undefined;
-    if (body.customInstructions !== undefined)
+    }
+    if (body.customInstructions !== undefined) {
       updateData.customInstructions = body.customInstructions || null;
-    if (body.autoragInstanceId !== undefined)
+    }
+    if (body.autoragInstanceId !== undefined) {
       updateData.autoragInstanceId = body.autoragInstanceId;
-    if (body.settings !== undefined)
+    }
+    if (body.settings !== undefined) {
       updateData.settings = body.settings;
+    }
 
     const [updated] = await db
       .update(tables.chatProject)
@@ -324,14 +331,14 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 
     if (body.customInstructions !== undefined) {
       console.error('[Project Update] Syncing instruction memory', {
-        projectId: id,
         instructionLength: body.customInstructions?.length ?? 0,
         isClearing: !body.customInstructions,
+        projectId: id,
       });
       await syncInstructionMemory({
+        customInstructions: body.customInstructions || null,
         db,
         projectId: id,
-        customInstructions: body.customInstructions || null,
         userId: user.id,
       });
       console.error('[Project Update] Instruction memory sync complete', { projectId: id });
@@ -364,8 +371,8 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteProject',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -380,8 +387,8 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
 
     // Get all threads with their messages for cascade deletion
     const threads = await db.query.chatThread.findMany({
+      columns: { id: true, isPublic: true, previousSlug: true, slug: true },
       where: eq(tables.chatThread.projectId, id),
-      columns: { id: true, slug: true, isPublic: true, previousSlug: true },
       with: {
         messages: {
           columns: { id: true },
@@ -513,10 +520,10 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
     }
 
     return Responses.ok(c, {
-      id,
       deleted: true,
-      deletedThreadCount: threads.length,
       deletedAttachmentCount: projectAttachments.length,
+      deletedThreadCount: threads.length,
+      id,
     });
   },
 );
@@ -531,9 +538,9 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
 export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'listProjectThreads',
     validateParams: IdParamSchema,
     validateQuery: ListProjectThreadsQuerySchema,
-    operationName: 'listProjectThreads',
   },
   async (c) => {
     const { user } = c.auth();
@@ -544,17 +551,17 @@ export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRo
     await verifyProjectOwnership(projectId, user.id, db);
 
     const threads = await db.query.chatThread.findMany({
-      where: eq(tables.chatThread.projectId, projectId),
       columns: {
-        id: true,
-        title: true,
-        slug: true,
         createdAt: true,
+        id: true,
+        slug: true,
+        title: true,
         updatedAt: true,
       },
-      orderBy: (thread, { desc }) => [desc(thread.updatedAt)],
       limit: query.limit + 1,
       offset: query.cursor ? 1 : 0,
+      orderBy: (thread, { desc }) => [desc(thread.updatedAt)],
+      where: eq(tables.chatThread.projectId, projectId),
     });
 
     const { items, pagination } = applyCursorPagination(
@@ -564,10 +571,10 @@ export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRo
     );
 
     return Responses.cursorPaginated(c, items.map(t => ({
-      id: t.id,
-      title: t.title,
-      slug: t.slug,
       createdAt: t.createdAt.toISOString(),
+      id: t.id,
+      slug: t.slug,
+      title: t.title,
       updatedAt: t.updatedAt.toISOString(),
     })), pagination);
   },
@@ -583,9 +590,9 @@ export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRo
 export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttachmentsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'listProjectAttachments',
     validateParams: IdParamSchema,
     validateQuery: ListProjectAttachmentsQuerySchema,
-    operationName: 'listProjectAttachments',
   },
   async (c) => {
     const { user } = c.auth();
@@ -601,19 +608,19 @@ export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttac
     }
 
     const attachments = await db.query.projectAttachment.findMany({
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.projectAttachment.createdAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.projectAttachment.createdAt,
         query.cursor,
         'desc',
         filters,
       ),
-      orderBy: getCursorOrderBy(tables.projectAttachment.createdAt, 'desc'),
-      limit: query.limit + 1,
       with: {
-        upload: true,
         addedByUser: {
-          columns: { id: true, name: true, email: true },
+          columns: { email: true, id: true, name: true },
         },
+        upload: true,
       },
     });
 
@@ -636,9 +643,9 @@ export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttac
 export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: AddUploadToProjectRequestSchema,
     operationName: 'addUploadToProject',
+    validateBody: AddUploadToProjectRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -681,19 +688,19 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
     const [projectAttachment] = await db
       .insert(tables.projectAttachment)
       .values({
-        id: projectAttachmentId,
-        projectId,
-        uploadId: body.uploadId,
         addedBy: user.id,
+        createdAt: new Date(),
+        id: projectAttachmentId,
         indexStatus: DEFAULT_PROJECT_INDEX_STATUS,
+        projectId,
         ragMetadata: {
           context: body.context,
           description: body.description,
-          tags: body.tags,
           projectR2Key: copyResult.success ? projectR2Key : undefined,
+          tags: body.tags,
         },
-        createdAt: new Date(),
         updatedAt: new Date(),
+        uploadId: body.uploadId,
       })
       .returning();
 
@@ -717,8 +724,8 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
 
     return Responses.created(c, {
       ...projectAttachment,
+      addedByUser: { email: user.email, id: user.id, name: user.name },
       upload: uploadWithoutR2Key,
-      addedByUser: { id: user.id, name: user.name, email: user.email },
     });
   },
 );
@@ -729,12 +736,12 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
 export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachmentRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectAttachmentParamSchema,
     operationName: 'getProjectAttachment',
+    validateParams: ProjectAttachmentParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId, attachmentId } = c.validated.params;
+    const { attachmentId, id: projectId } = c.validated.params;
     const db = await getDbAsync();
 
     await verifyProjectOwnership(projectId, user.id, db);
@@ -745,10 +752,10 @@ export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachme
         eq(tables.projectAttachment.projectId, projectId),
       ),
       with: {
-        upload: true,
         addedByUser: {
-          columns: { id: true, name: true, email: true },
+          columns: { email: true, id: true, name: true },
         },
+        upload: true,
       },
     });
 
@@ -770,13 +777,13 @@ export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachme
 export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAttachmentRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectAttachmentParamSchema,
-    validateBody: UpdateProjectAttachmentRequestSchema,
     operationName: 'updateProjectAttachment',
+    validateBody: UpdateProjectAttachmentRequestSchema,
+    validateParams: ProjectAttachmentParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId, attachmentId } = c.validated.params;
+    const { attachmentId, id: projectId } = c.validated.params;
     const body = c.validated.body;
     const db = await getDbAsync();
 
@@ -788,10 +795,10 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
         eq(tables.projectAttachment.projectId, projectId),
       ),
       with: {
-        upload: true,
         addedByUser: {
-          columns: { id: true, name: true, email: true },
+          columns: { email: true, id: true, name: true },
         },
+        upload: true,
       },
     });
 
@@ -806,12 +813,15 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
     const currentMetadata = existing.ragMetadata || {};
     const updatedMetadata: ProjectAttachmentRagMetadata = { ...currentMetadata };
 
-    if (body.context !== undefined)
+    if (body.context !== undefined) {
       updatedMetadata.context = body.context ?? undefined;
-    if (body.description !== undefined)
+    }
+    if (body.description !== undefined) {
       updatedMetadata.description = body.description ?? undefined;
-    if (body.tags !== undefined)
+    }
+    if (body.tags !== undefined) {
       updatedMetadata.tags = body.tags;
+    }
 
     const [updated] = await db
       .update(tables.projectAttachment)
@@ -823,8 +833,8 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
 
     return Responses.ok(c, {
       ...updated,
-      upload: uploadWithoutR2Key,
       addedByUser: existing.addedByUser,
+      upload: uploadWithoutR2Key,
     });
   },
 );
@@ -836,12 +846,12 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
 export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttachmentFromProjectRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectAttachmentParamSchema,
     operationName: 'removeAttachmentFromProject',
+    validateParams: ProjectAttachmentParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
-    const { id: projectId, attachmentId } = c.validated.params;
+    const { attachmentId, id: projectId } = c.validated.params;
     const db = await getDbAsync();
 
     await verifyProjectOwnership(projectId, user.id, db);
@@ -864,11 +874,11 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
     // ✅ VALIDATION: Prevent deletion of files linked to active threads
     if (projectAttachment.ragMetadata?.sourceThreadId) {
       const sourceThread = await db.query.chatThread.findFirst({
+        columns: { id: true },
         where: and(
           eq(tables.chatThread.id, projectAttachment.ragMetadata.sourceThreadId),
           eq(tables.chatThread.status, ThreadStatuses.ACTIVE),
         ),
-        columns: { id: true },
       });
 
       if (sourceThread) {
@@ -885,8 +895,9 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
           if (!result.success) {
             console.error(`[Project] Failed to delete project file copy: ${result.error}`);
           }
+          return result;
         })
-        .catch(() => {});
+        .catch(() => undefined);
 
       if (c.executionCtx) {
         c.executionCtx.waitUntil(deleteTask);
@@ -895,7 +906,7 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
 
     await db.delete(tables.projectAttachment).where(eq(tables.projectAttachment.id, attachmentId));
 
-    return Responses.ok(c, { id: attachmentId, deleted: true });
+    return Responses.ok(c, { deleted: true, id: attachmentId });
   },
 );
 
@@ -909,9 +920,9 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
 export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemoriesRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
+    operationName: 'listProjectMemories',
     validateParams: IdParamSchema,
     validateQuery: ListProjectMemoriesQuerySchema,
-    operationName: 'listProjectMemories',
   },
   async (c) => {
     const { user } = c.auth();
@@ -930,14 +941,14 @@ export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemories
     }
 
     const memories = await db.query.projectMemory.findMany({
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.projectMemory.createdAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.projectMemory.createdAt,
         query.cursor,
         'desc',
         filters,
       ),
-      orderBy: getCursorOrderBy(tables.projectMemory.createdAt, 'desc'),
-      limit: query.limit + 1,
       with: {
         sourceThread: { columns: { id: true, title: true } },
       },
@@ -964,9 +975,9 @@ export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemories
 export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemoryRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: CreateProjectMemoryRequestSchema,
     operationName: 'createProjectMemory',
+    validateBody: CreateProjectMemoryRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -980,16 +991,16 @@ export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemory
     const [memory] = await db
       .insert(tables.projectMemory)
       .values({
-        id: memoryId,
-        projectId,
         content: body.content,
-        summary: body.summary,
-        source: body.source || 'explicit',
+        createdAt: new Date(),
+        createdBy: user.id,
+        id: memoryId,
         importance: body.importance || 5,
         isActive: true,
         metadata: body.metadata,
-        createdBy: user.id,
-        createdAt: new Date(),
+        projectId,
+        source: body.source || 'explicit',
+        summary: body.summary,
         updatedAt: new Date(),
       })
       .returning();
@@ -1004,8 +1015,8 @@ export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemory
 export const getProjectMemoryHandler: RouteHandler<typeof getProjectMemoryRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectMemoryParamSchema,
     operationName: 'getProjectMemory',
+    validateParams: ProjectMemoryParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1043,9 +1054,9 @@ export const getProjectMemoryHandler: RouteHandler<typeof getProjectMemoryRoute,
 export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemoryRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectMemoryParamSchema,
-    validateBody: UpdateProjectMemoryRequestSchema,
     operationName: 'updateProjectMemory',
+    validateBody: UpdateProjectMemoryRequestSchema,
+    validateParams: ProjectMemoryParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1071,16 +1082,21 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
     }
 
     const updateData: ProjectMemoryUpdate = { updatedAt: new Date() };
-    if (body.content !== undefined)
+    if (body.content !== undefined) {
       updateData.content = body.content;
-    if (body.summary !== undefined)
+    }
+    if (body.summary !== undefined) {
       updateData.summary = body.summary;
-    if (body.importance !== undefined)
+    }
+    if (body.importance !== undefined) {
       updateData.importance = body.importance;
-    if (body.isActive !== undefined)
+    }
+    if (body.isActive !== undefined) {
       updateData.isActive = body.isActive;
-    if (body.metadata !== undefined)
+    }
+    if (body.metadata !== undefined) {
       updateData.metadata = body.metadata;
+    }
 
     const [updated] = await db
       .update(tables.projectMemory)
@@ -1099,8 +1115,8 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
     let sourceThreadTitle: string | null = null;
     if (updated.sourceThreadId) {
       const thread = await db.query.chatThread.findFirst({
-        where: eq(tables.chatThread.id, updated.sourceThreadId),
         columns: { title: true },
+        where: eq(tables.chatThread.id, updated.sourceThreadId),
       });
       sourceThreadTitle = thread?.title || null;
     }
@@ -1115,8 +1131,8 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
 export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemoryRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: ProjectMemoryParamSchema,
     operationName: 'deleteProjectMemory',
+    validateParams: ProjectMemoryParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1142,7 +1158,7 @@ export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemory
 
     await db.delete(tables.projectMemory).where(eq(tables.projectMemory.id, memoryId));
 
-    return Responses.ok(c, { id: memoryId, deleted: true });
+    return Responses.ok(c, { deleted: true, id: memoryId });
   },
 );
 
@@ -1157,8 +1173,8 @@ export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemory
 export const getProjectContextHandler: RouteHandler<typeof getProjectContextRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getProjectContext',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -1168,46 +1184,46 @@ export const getProjectContextHandler: RouteHandler<typeof getProjectContextRout
     await verifyProjectOwnership(projectId, user.id, db);
 
     const context = await getAggregatedProjectContext({
-      projectId,
       currentThreadId: '',
-      userQuery: '',
       db,
+      projectId,
+      userQuery: '',
     });
 
     return Responses.ok(c, {
       memories: {
         items: context.memories.memories.map(m => ({
-          id: m.id,
           content: m.content,
-          summary: m.summary,
-          source: m.source,
+          id: m.id,
           importance: m.importance,
+          source: m.source,
+          summary: m.summary,
         })),
         totalCount: context.memories.totalCount,
+      },
+      moderators: {
+        items: context.moderators.moderators.map(m => ({
+          moderator: m.moderator,
+          threadTitle: m.threadTitle,
+          userQuestion: m.userQuestion,
+        })),
+        totalCount: context.moderators.totalCount,
       },
       recentChats: {
         threads: context.chats.threads.map(t => ({
           id: t.id,
-          title: t.title,
           messageExcerpt: t.messages[0]?.content.slice(0, 200) || '',
+          title: t.title,
         })),
         totalCount: context.chats.totalThreads,
       },
       searches: {
         items: context.searches.searches.map(s => ({
+          summary: s.summary,
           threadTitle: s.threadTitle,
           userQuery: s.userQuery,
-          summary: s.summary,
         })),
         totalCount: context.searches.totalCount,
-      },
-      moderators: {
-        items: context.moderators.moderators.map(m => ({
-          threadTitle: m.threadTitle,
-          userQuestion: m.userQuestion,
-          moderator: m.moderator,
-        })),
-        totalCount: context.moderators.totalCount,
       },
     });
   },

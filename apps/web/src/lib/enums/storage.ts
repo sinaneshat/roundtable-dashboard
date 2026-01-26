@@ -24,8 +24,8 @@ export const DEFAULT_STORAGE_TYPE: StorageType = 'local';
 
 // 5. CONSTANT OBJECT
 export const StorageTypes = {
-  SESSION: 'session' as const,
   LOCAL: 'local' as const,
+  SESSION: 'session' as const,
 } as const;
 
 // 6. TYPE GUARD (uses Zod safeParse - no type cast)
@@ -41,6 +41,6 @@ export function parseStorageType(value: unknown): StorageType | undefined {
 
 // 8. DISPLAY LABELS
 export const STORAGE_TYPE_LABELS: Record<StorageType, string> = {
-  [StorageTypes.SESSION]: 'Session Storage',
   [StorageTypes.LOCAL]: 'Local Storage',
+  [StorageTypes.SESSION]: 'Session Storage',
 } as const;

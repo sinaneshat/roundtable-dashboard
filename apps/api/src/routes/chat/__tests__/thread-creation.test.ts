@@ -64,9 +64,9 @@ describe('thread Creation Credit Enforcement', () => {
   describe('free User Single Round Enforcement', () => {
     it('blocks free users by freeRoundUsed flag', () => {
       const freeUserState = {
-        planType: PlanTypes.FREE,
-        freeRoundUsed: true,
         creditBalance: 0,
+        freeRoundUsed: true,
+        planType: PlanTypes.FREE,
       };
 
       const isBlocked = freeUserState.freeRoundUsed;
@@ -80,9 +80,9 @@ describe('thread Creation Credit Enforcement', () => {
 
     it('paid users not affected by freeRoundUsed flag', () => {
       const paidUserState = {
-        planType: PlanTypes.PAID,
-        freeRoundUsed: false,
         creditBalance: 0,
+        freeRoundUsed: false,
+        planType: PlanTypes.PAID,
       };
 
       const isBlockedByRound = paidUserState.planType !== PlanTypes.PAID && paidUserState.freeRoundUsed;

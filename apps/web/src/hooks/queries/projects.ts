@@ -48,7 +48,9 @@ export function useProjectsQuery(search?: string) {
   const isSearchQuery = Boolean(search);
 
   return useInfiniteQuery({
-    queryKey: queryKeys.projects.lists(search),
+    // Only gate search queries - non-search are SSR prefetched
+    enabled: isSearchQuery ? isAuthenticated : undefined,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: async ({ pageParam }) => {
       // ✅ Use centralized limits - clean semantic names
       const limit = search
@@ -58,24 +60,25 @@ export function useProjectsQuery(search?: string) {
           : LIMITS.INITIAL_PAGE; // 50 for initial sidebar load
 
       const params: { cursor?: string; search?: string; limit: number } = { limit };
-      if (pageParam)
+      if (pageParam) {
         params.cursor = pageParam;
-      if (search)
+      }
+      if (search) {
         params.search = search;
+      }
 
       return listProjectsService({ query: params });
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    // Only gate search queries - non-search are SSR prefetched
-    enabled: isSearchQuery ? isAuthenticated : undefined,
-    staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryKey: queryKeys.projects.lists(search),
     retry: false,
+    staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
     throwOnError: false,
   });
 }
@@ -165,10 +168,11 @@ export function useProjectAttachmentsQuery(
   options?: UseProjectAttachmentsOptions,
 ) {
   const { isAuthenticated } = useAuthCheck();
-  const { indexStatus, enabled, initialData } = options ?? {};
+  const { enabled, indexStatus, initialData } = options ?? {};
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.projects.attachments(projectId), indexStatus],
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: async ({ pageParam }) => {
       const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
 
@@ -183,17 +187,17 @@ export function useProjectAttachmentsQuery(
         query,
       });
     },
+    initialData,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
-    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
-    initialData,
+    queryKey: [...queryKeys.projects.attachments(projectId), indexStatus],
     retry: false,
+    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
     throwOnError: false,
   });
 }
@@ -217,10 +221,11 @@ export function useProjectMemoriesQuery(
   options?: UseProjectMemoriesOptions,
 ) {
   const { isAuthenticated } = useAuthCheck();
-  const { source, isActive, enabled, initialData } = options ?? {};
+  const { enabled, initialData, isActive, source } = options ?? {};
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.projects.memories(projectId), source, isActive],
+    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
     queryFn: async ({ pageParam }) => {
       const limit = pageParam ? LIMITS.STANDARD_PAGE : LIMITS.INITIAL_PAGE;
 
@@ -236,17 +241,17 @@ export function useProjectMemoriesQuery(
         query,
       });
     },
+    initialData,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.success)
+      if (!lastPage.success) {
         return undefined;
+      }
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
-    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
-    initialData,
+    queryKey: [...queryKeys.projects.memories(projectId), source, isActive],
     retry: false,
+    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
     throwOnError: false,
   });
 }
@@ -272,9 +277,9 @@ export function useProjectThreadsQuery(
 ) {
   const { enabled, initialData } = options ?? {};
   return useThreadsQuery({
-    projectId,
     enabled: enabled !== undefined ? enabled : !!projectId,
     initialData,
+    projectId,
   });
 }
 
@@ -293,11 +298,11 @@ export function useProjectContextQuery(
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.projects.context(projectId),
-    queryFn: () => getProjectContextService({ param: { id: projectId } }),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
+    queryFn: () => getProjectContextService({ param: { id: projectId } }),
+    queryKey: queryKeys.projects.context(projectId),
     retry: false,
+    staleTime: STALE_TIMES.threadDetail, // 10 seconds
     throwOnError: false,
   });
 }
@@ -311,12 +316,12 @@ export function useProjectLimitsQuery() {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.projects.limits(),
-    queryFn: () => getProjectLimitsService(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: GC_TIMES.STANDARD,
     enabled: isAuthenticated,
+    gcTime: GC_TIMES.STANDARD,
+    queryFn: () => getProjectLimitsService(),
+    queryKey: queryKeys.projects.limits(),
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
     throwOnError: false,
   });
 }

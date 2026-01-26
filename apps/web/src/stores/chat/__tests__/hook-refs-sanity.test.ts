@@ -24,7 +24,7 @@ type HookRefs = {
 
   // Round state refs
   currentRoundRef: number;
-  roundParticipantsRef: Array<{ id: string; modelId: string }>;
+  roundParticipantsRef: { id: string; modelId: string }[];
   currentIndexRef: number;
 
   // Queue and triggering refs
@@ -45,22 +45,22 @@ type HookRefs = {
   prevThreadIdRef: string;
 };
 
-function createInitialRefs(threadId: string = ''): HookRefs {
+function createInitialRefs(threadId = ''): HookRefs {
   return {
-    respondedParticipantsRef: new Set(),
-    regenerateRoundNumberRef: null,
-    currentRoundRef: 0,
-    roundParticipantsRef: [],
     currentIndexRef: 0,
-    participantIndexQueue: [],
-    lastUsedParticipantIndex: null,
-    isTriggeringRef: false,
-    isStreamingRef: false,
-    queuedParticipantsThisRoundRef: new Set(),
-    triggeredNextForRef: new Set(),
-    processedMessageIdsRef: new Set(),
+    currentRoundRef: 0,
     hasHydratedRef: false,
+    isStreamingRef: false,
+    isTriggeringRef: false,
+    lastUsedParticipantIndex: null,
+    participantIndexQueue: [],
     prevThreadIdRef: threadId,
+    processedMessageIdsRef: new Set(),
+    queuedParticipantsThisRoundRef: new Set(),
+    regenerateRoundNumberRef: null,
+    respondedParticipantsRef: new Set(),
+    roundParticipantsRef: [],
+    triggeredNextForRef: new Set(),
   };
 }
 
@@ -83,31 +83,31 @@ function simulateNavigationResetEffect(
   if ((wasValidThread && isNowEmpty) || isNowDifferentThread) {
     return {
       ...refs,
-      // Reset participant tracking refs
-      respondedParticipantsRef: new Set(),
-      regenerateRoundNumberRef: null,
-
+      currentIndexRef: 0,
       // Reset round state refs
       currentRoundRef: 0,
-      roundParticipantsRef: [],
-      currentIndexRef: 0,
-
-      // Reset queue and triggering refs
-      participantIndexQueue: [],
-      lastUsedParticipantIndex: null,
-      isTriggeringRef: false,
-      isStreamingRef: false,
-      queuedParticipantsThisRoundRef: new Set(),
-
-      // ✅ BUG FIX: These are now cleared
-      triggeredNextForRef: new Set(),
-      processedMessageIdsRef: new Set(),
 
       // Reset hydration
       hasHydratedRef: false,
+      isStreamingRef: false,
+      isTriggeringRef: false,
 
+      lastUsedParticipantIndex: null,
+      // Reset queue and triggering refs
+      participantIndexQueue: [],
       // Update prev thread
       prevThreadIdRef: currentThreadId,
+      processedMessageIdsRef: new Set(),
+      queuedParticipantsThisRoundRef: new Set(),
+
+      regenerateRoundNumberRef: null,
+      // Reset participant tracking refs
+      respondedParticipantsRef: new Set(),
+
+      roundParticipantsRef: [],
+
+      // ✅ BUG FIX: These are now cleared
+      triggeredNextForRef: new Set(),
     };
   }
 
@@ -123,21 +123,21 @@ function simulateNavigationResetEffect(
  */
 function simulateStartRound(
   refs: HookRefs,
-  participants: Array<{ id: string; modelId: string }>,
+  participants: { id: string; modelId: string }[],
   roundNumber: number,
 ): HookRefs {
   return {
     ...refs,
     currentIndexRef: 0,
-    roundParticipantsRef: participants,
     currentRoundRef: roundNumber,
-    lastUsedParticipantIndex: null,
-    queuedParticipantsThisRoundRef: new Set(),
-    participantIndexQueue: [],
-    // ✅ BUG FIX: Clear phantom guard at start of each round
-    triggeredNextForRef: new Set(),
     isStreamingRef: true,
     isTriggeringRef: true,
+    lastUsedParticipantIndex: null,
+    participantIndexQueue: [],
+    queuedParticipantsThisRoundRef: new Set(),
+    roundParticipantsRef: participants,
+    // ✅ BUG FIX: Clear phantom guard at start of each round
+    triggeredNextForRef: new Set(),
   };
 }
 
@@ -154,9 +154,9 @@ function simulateOnFinish(refs: HookRefs, participantIndex: number): HookRefs {
 
   return {
     ...refs,
-    triggeredNextForRef: newTriggeredNextFor,
-    processedMessageIdsRef: newProcessedIds,
     currentIndexRef: participantIndex + 1,
+    processedMessageIdsRef: newProcessedIds,
+    triggeredNextForRef: newTriggeredNextFor,
   };
 }
 
@@ -180,9 +180,9 @@ describe('hook Refs Sanity Tests', () => {
 
       expect(refs.currentRoundRef).toBe(0);
       expect(refs.currentIndexRef).toBe(0);
-      expect(refs.isTriggeringRef).toBe(false);
-      expect(refs.isStreamingRef).toBe(false);
-      expect(refs.hasHydratedRef).toBe(false);
+      expect(refs.isTriggeringRef).toBeFalsy();
+      expect(refs.isStreamingRef).toBeFalsy();
+      expect(refs.hasHydratedRef).toBeFalsy();
     });
   });
 
@@ -205,7 +205,7 @@ describe('hook Refs Sanity Tests', () => {
       expect(resetRefs.processedMessageIdsRef.size).toBe(0);
       expect(resetRefs.currentRoundRef).toBe(0);
       expect(resetRefs.currentIndexRef).toBe(0);
-      expect(resetRefs.isStreamingRef).toBe(false);
+      expect(resetRefs.isStreamingRef).toBeFalsy();
     });
 
     it('should reset refs when transitioning between different threads', () => {
@@ -234,7 +234,7 @@ describe('hook Refs Sanity Tests', () => {
 
       // No reset because wasValidThread is false
       expect(result.triggeredNextForRef.size).toBe(1);
-      expect(result.triggeredNextForRef.has('r0_p0')).toBe(true);
+      expect(result.triggeredNextForRef.has('r0_p0')).toBeTruthy();
     });
 
     it('should reset refs when transitioning from empty to valid then back to empty', () => {
@@ -265,7 +265,7 @@ describe('hook Refs Sanity Tests', () => {
       refs = simulateOnFinish(refs, 0);
 
       expect(refs.triggeredNextForRef.size).toBe(1);
-      expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
 
       // Start round 1 - should clear
       refs = simulateStartRound(refs, [{ id: 'p1', modelId: 'm1' }], 1);
@@ -282,8 +282,8 @@ describe('hook Refs Sanity Tests', () => {
         0,
       );
 
-      expect(afterStart.isStreamingRef).toBe(true);
-      expect(afterStart.isTriggeringRef).toBe(true);
+      expect(afterStart.isStreamingRef).toBeTruthy();
+      expect(afterStart.isTriggeringRef).toBeTruthy();
       expect(afterStart.currentIndexRef).toBe(0);
       expect(afterStart.roundParticipantsRef).toHaveLength(2);
     });
@@ -296,7 +296,7 @@ describe('hook Refs Sanity Tests', () => {
 
       refs = simulateOnFinish(refs, 0);
 
-      expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
     });
 
     it('should add entries to processedMessageIdsRef', () => {
@@ -305,7 +305,7 @@ describe('hook Refs Sanity Tests', () => {
 
       refs = simulateOnFinish(refs, 0);
 
-      expect(refs.processedMessageIdsRef.has('msg_0_0')).toBe(true);
+      expect(refs.processedMessageIdsRef.has('msg_0_0')).toBeTruthy();
     });
 
     it('should increment currentIndexRef', () => {
@@ -350,10 +350,10 @@ describe('hook Refs Sanity Tests', () => {
 
       // Both participants should complete without blocking
       refs = simulateOnFinish(refs, 0);
-      expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
 
       refs = simulateOnFinish(refs, 1);
-      expect(refs.triggeredNextForRef.has('r0_p1')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r0_p1')).toBeTruthy();
 
       // Verify all 2 participants triggered
       expect(refs.triggeredNextForRef.size).toBe(2);
@@ -373,7 +373,7 @@ describe('hook Refs Sanity Tests', () => {
       refs = simulateOnFinish(refs, 0);
 
       expect(refs.triggeredNextForRef.size).toBe(1); // Only round 1 entries
-      expect(refs.triggeredNextForRef.has('r1_p0')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r1_p0')).toBeTruthy();
 
       // User clicks "New Chat" from thread screen
       refs = simulateNavigationResetEffect(refs, 'thread-1', '');
@@ -386,7 +386,7 @@ describe('hook Refs Sanity Tests', () => {
       refs = simulateStartRound(refs, [{ id: 'p2', modelId: 'm2' }], 0);
       refs = simulateOnFinish(refs, 0);
 
-      expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
+      expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
     });
   });
 });
@@ -404,8 +404,8 @@ describe('bug Prevention Tests', () => {
     refs = simulateOnFinish(refs, 1);
 
     // Verify phantom guard has entries
-    expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
-    expect(refs.triggeredNextForRef.has('r0_p1')).toBe(true);
+    expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
+    expect(refs.triggeredNextForRef.has('r0_p1')).toBeTruthy();
 
     // ============================================
     // NAVIGATE TO NEW CHAT
@@ -427,14 +427,14 @@ describe('bug Prevention Tests', () => {
     // First participant completes - should NOT be blocked
     const triggerKey = 'r0_p0';
     const isBlocked = refs.triggeredNextForRef.has(triggerKey);
-    expect(isBlocked).toBe(false); // ✅ NOT BLOCKED
+    expect(isBlocked).toBeFalsy(); // ✅ NOT BLOCKED
 
     refs = simulateOnFinish(refs, 0);
-    expect(refs.triggeredNextForRef.has('r0_p0')).toBe(true);
+    expect(refs.triggeredNextForRef.has('r0_p0')).toBeTruthy();
 
     // Second participant completes
     refs = simulateOnFinish(refs, 1);
-    expect(refs.triggeredNextForRef.has('r0_p1')).toBe(true);
+    expect(refs.triggeredNextForRef.has('r0_p1')).toBeTruthy();
 
     // All participants completed
     expect(refs.triggeredNextForRef.size).toBe(2);

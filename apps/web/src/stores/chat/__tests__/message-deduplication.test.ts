@@ -167,28 +167,28 @@ describe('message Deduplication - Participant Trigger Filtering', () => {
   it('sHOULD filter out participant trigger messages', () => {
     const messages = [
       createTestUserMessage({
-        id: 'user-1',
         content: 'Real user message',
+        id: 'user-1',
         roundNumber: 0,
       }),
       {
         ...createTestUserMessage({
-          id: 'trigger-1',
           content: 'Participant trigger',
+          id: 'trigger-1',
           roundNumber: 0,
         }),
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 0,
-          isParticipantTrigger: true,
         },
       },
       createTestAssistantMessage({
-        id: 'assistant-1',
         content: 'Response',
-        roundNumber: 0,
+        id: 'assistant-1',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -207,22 +207,22 @@ describe('message Deduplication - Participant Trigger Filtering', () => {
     const messages = [
       {
         ...createTestUserMessage({
-          id: 'trigger-only',
           content: 'Only this trigger exists',
+          id: 'trigger-only',
           roundNumber: 0,
         }),
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 0,
-          isParticipantTrigger: true,
         },
       },
       createTestAssistantMessage({
-        id: 'assistant-1',
         content: 'Response',
-        roundNumber: 0,
+        id: 'assistant-1',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -241,20 +241,20 @@ describe('message Deduplication - Participant Trigger Filtering', () => {
   it('sHOULD preserve normal user message when both trigger and normal exist', () => {
     const messages = [
       createTestUserMessage({
-        id: 'normal-user',
         content: 'Normal message',
+        id: 'normal-user',
         roundNumber: 0,
       }),
       {
         ...createTestUserMessage({
-          id: 'trigger',
           content: 'Trigger message',
+          id: 'trigger',
           roundNumber: 0,
         }),
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 0,
-          isParticipantTrigger: true,
         },
       },
     ];
@@ -275,13 +275,13 @@ describe('message Deduplication - User Messages', () => {
   it('sHOULD deduplicate user messages by round number', () => {
     const messages = [
       createTestUserMessage({
-        id: 'optimistic-user-0',
         content: 'Question',
+        id: 'optimistic-user-0',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'db-user-0',
         content: 'Question',
+        id: 'db-user-0',
         roundNumber: 0,
       }),
     ];
@@ -296,13 +296,13 @@ describe('message Deduplication - User Messages', () => {
   it('sHOULD prefer deterministic IDs over optimistic IDs', () => {
     const messages = [
       createTestUserMessage({
-        id: 'optimistic-user-12345',
         content: 'Question',
+        id: 'optimistic-user-12345',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'thread_abc123_r0_user',
         content: 'Question',
+        id: 'thread_abc123_r0_user',
         roundNumber: 0,
       }),
     ];
@@ -317,13 +317,13 @@ describe('message Deduplication - User Messages', () => {
   it('sHOULD allow same user in different rounds', () => {
     const messages = [
       createTestUserMessage({
-        id: 'user-r0',
         content: 'Question 0',
+        id: 'user-r0',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'user-r1',
         content: 'Question 1',
+        id: 'user-r1',
         roundNumber: 1,
       }),
     ];
@@ -341,13 +341,13 @@ describe('message Deduplication - User Messages', () => {
   it('sHOULD skip optimistic when DB message already exists', () => {
     const messages = [
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Question',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'optimistic-user-67890',
         content: 'Question',
+        id: 'optimistic-user-67890',
         roundNumber: 0,
       }),
     ];
@@ -368,18 +368,18 @@ describe('message Deduplication - Assistant Messages', () => {
   it('sHOULD deduplicate by (roundNumber, participantIndex)', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'temp-gen-123',
         content: 'Streaming...',
-        roundNumber: 0,
+        id: 'temp-gen-123',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Complete',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -393,18 +393,18 @@ describe('message Deduplication - Assistant Messages', () => {
   it('sHOULD deduplicate by (roundNumber, participantId) when available', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'temp-1',
         content: 'Temp',
-        roundNumber: 0,
+        id: 'temp-1',
         participantId: 'unique-p-id-123',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p0', // Deterministic ID pattern
         content: 'DB',
-        roundNumber: 0,
+        id: 'thread_r0_p0', // Deterministic ID pattern
         participantId: 'unique-p-id-123',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -418,18 +418,18 @@ describe('message Deduplication - Assistant Messages', () => {
   it('sHOULD allow same participant in different rounds', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Round 0',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r1_p0',
         content: 'Round 1',
-        roundNumber: 1,
+        id: 'thread_r1_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 
@@ -446,18 +446,18 @@ describe('message Deduplication - Assistant Messages', () => {
   it('sHOULD allow different participants in same round', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Participant 0',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'Participant 1',
-        roundNumber: 0,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
@@ -471,29 +471,29 @@ describe('message Deduplication - Assistant Messages', () => {
     const messages = [
       {
         id: 'temp-model',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text' as const, text: 'Temp' }],
         metadata: {
+          finishReason: FinishReasons.UNKNOWN,
+          hasError: false,
+          model: 'gpt-4',
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          model: 'gpt-4',
-          finishReason: FinishReasons.UNKNOWN,
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          hasError: false,
+          usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
         },
+        parts: [{ text: 'Temp', type: 'text' as const }],
+        role: MessageRoles.ASSISTANT,
       },
       {
         id: 'thread_r0_p0', // Deterministic ID pattern
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text' as const, text: 'DB' }],
         metadata: {
+          finishReason: FinishReasons.STOP,
+          hasError: false,
+          model: 'gpt-4',
           role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          model: 'gpt-4',
-          finishReason: FinishReasons.STOP,
-          usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-          hasError: false,
+          usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
         },
+        parts: [{ text: 'DB', type: 'text' as const }],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
@@ -507,18 +507,18 @@ describe('message Deduplication - Assistant Messages', () => {
   it('sHOULD prefer temp ID when deterministic ID arrives first', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Deterministic first',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'gen-temp-123',
         content: 'Temp second',
-        roundNumber: 0,
+        id: 'gen-temp-123',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
@@ -538,13 +538,13 @@ describe('message Deduplication - Moderator Messages', () => {
   it('sHOULD deduplicate moderator messages by round number', () => {
     const messages = [
       createTestModeratorMessage({
-        id: 'gen-temp-mod-123',
         content: 'Streaming...',
+        id: 'gen-temp-mod-123',
         roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Complete',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       }),
     ];
@@ -559,13 +559,13 @@ describe('message Deduplication - Moderator Messages', () => {
   it('sHOULD allow moderator in different rounds', () => {
     const messages = [
       createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Summary 0',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: 'thread_r1_moderator',
         content: 'Summary 1',
+        id: 'thread_r1_moderator',
         roundNumber: 1,
       }),
     ];
@@ -579,15 +579,15 @@ describe('message Deduplication - Moderator Messages', () => {
   it('sHOULD NOT confuse moderator with participant messages', () => {
     const messages = [
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Participant',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: 'thread_r0_moderator',
         content: 'Moderator',
+        id: 'thread_r0_moderator',
         roundNumber: 0,
       }),
     ];
@@ -608,51 +608,51 @@ describe('message Deduplication - Complex Scenarios', () => {
     const messages = [
       // Round 0
       createTestUserMessage({
-        id: 'optimistic-u0',
         content: 'Q0',
+        id: 'optimistic-u0',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'thread_abc_r0_user',
         content: 'Q0',
+        id: 'thread_abc_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'gen-p0-r0',
         content: 'Streaming...',
-        roundNumber: 0,
+        id: 'gen-p0-r0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r0_p0',
         content: 'Complete',
-        roundNumber: 0,
+        id: 'thread_abc_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-      }),
-      createTestModeratorMessage({
-        id: 'gen-mod-r0',
-        content: 'Moderating...',
         roundNumber: 0,
       }),
       createTestModeratorMessage({
-        id: 'thread_abc_r0_moderator',
+        content: 'Moderating...',
+        id: 'gen-mod-r0',
+        roundNumber: 0,
+      }),
+      createTestModeratorMessage({
         content: 'Summary 0',
+        id: 'thread_abc_r0_moderator',
         roundNumber: 0,
       }),
       // Round 1
       createTestUserMessage({
-        id: 'thread_abc_r1_user',
         content: 'Q1',
+        id: 'thread_abc_r1_user',
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'thread_abc_r1_p0',
         content: 'Response',
-        roundNumber: 1,
+        id: 'thread_abc_r1_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 
@@ -677,27 +677,27 @@ describe('message Deduplication - Complex Scenarios', () => {
     // Scenario: Page refresh during streaming, resumed stream creates new temp IDs
     const messages = [
       createTestUserMessage({
-        id: 'thread_r0_user',
         content: 'Question',
+        id: 'thread_r0_user',
         roundNumber: 0,
       }),
       // DB message from before refresh
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Original DB message',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       // Resumed stream creates temp ID
       createTestAssistantMessage({
-        id: 'gen-resumed-abc123',
         content: 'Resumed streaming...',
-        roundNumber: 0,
+        finishReason: FinishReasons.UNKNOWN,
+        id: 'gen-resumed-abc123',
         participantId: 'p0',
         participantIndex: 0,
-        finishReason: FinishReasons.UNKNOWN,
+        roundNumber: 0,
       }),
     ];
 
@@ -713,29 +713,29 @@ describe('message Deduplication - Complex Scenarios', () => {
     const messages = [
       // Round 0 - fully resolved
       createTestUserMessage({
-        id: 'thread_r0_user',
         content: 'Q0',
+        id: 'thread_r0_user',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'A0',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       // Round 1 - has optimistic
       createTestUserMessage({
-        id: 'optimistic-u1',
         content: 'Q1',
+        id: 'optimistic-u1',
         roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'gen-temp-p0',
         content: 'Streaming...',
-        roundNumber: 1,
+        id: 'gen-temp-p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 
@@ -745,11 +745,11 @@ describe('message Deduplication - Complex Scenarios', () => {
 
     // Round 0 should have deterministic IDs
     const round0 = deduplicated.filter(m => getRoundNumber(m.metadata) === 0);
-    expect(round0.every(m => !m.id.startsWith('optimistic-') && !m.id.startsWith('gen-'))).toBe(true);
+    expect(round0.every(m => !m.id.startsWith('optimistic-') && !m.id.startsWith('gen-'))).toBeTruthy();
 
     // Round 1 should have optimistic/temp IDs
     const round1 = deduplicated.filter(m => getRoundNumber(m.metadata) === 1);
-    expect(round1.some(m => m.id.startsWith('optimistic-'))).toBe(true);
+    expect(round1.some(m => m.id.startsWith('optimistic-'))).toBeTruthy();
   });
 });
 
@@ -766,15 +766,15 @@ describe('message Deduplication - Edge Cases', () => {
   it('sHOULD handle messages with missing metadata', () => {
     const messages = [
       createTestUserMessage({
-        id: 'valid-user',
         content: 'Valid',
+        id: 'valid-user',
         roundNumber: 0,
       }),
       {
         id: 'missing-meta',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text' as const, text: 'Missing metadata' }],
         metadata: {} as UIMessage['metadata'],
+        parts: [{ text: 'Missing metadata', type: 'text' as const }],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
@@ -788,13 +788,13 @@ describe('message Deduplication - Edge Cases', () => {
   it('sHOULD handle duplicate message IDs (seenMessageIds check)', () => {
     const messages = [
       createTestUserMessage({
-        id: 'duplicate-id',
         content: 'First',
+        id: 'duplicate-id',
         roundNumber: 0,
       }),
       createTestUserMessage({
-        id: 'duplicate-id',
         content: 'Second',
+        id: 'duplicate-id',
         roundNumber: 0,
       }),
     ];
@@ -810,13 +810,13 @@ describe('message Deduplication - Edge Cases', () => {
     const messages = [
       {
         id: 'no-round',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text' as const, text: 'No round' }],
         metadata: { role: MessageRoles.USER },
+        parts: [{ text: 'No round', type: 'text' as const }],
+        role: MessageRoles.USER,
       },
       createTestUserMessage({
-        id: 'with-round',
         content: 'With round',
+        id: 'with-round',
         roundNumber: 0,
       }),
     ];
@@ -834,34 +834,34 @@ describe('message Deduplication - Edge Cases', () => {
     for (let round = 0; round < 100; round++) {
       messages.push(
         createTestUserMessage({
-          id: `opt-u${round}`,
           content: `Q${round}`,
+          id: `opt-u${round}`,
           roundNumber: round,
         }),
       );
       messages.push(
         createTestUserMessage({
-          id: `db-u${round}`,
           content: `Q${round}`,
+          id: `db-u${round}`,
           roundNumber: round,
         }),
       );
       messages.push(
         createTestAssistantMessage({
-          id: `temp-p0-r${round}`,
           content: `Temp ${round}`,
-          roundNumber: round,
+          id: `temp-p0-r${round}`,
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: round,
         }),
       );
       messages.push(
         createTestAssistantMessage({
-          id: `db-p0-r${round}`,
           content: `DB ${round}`,
-          roundNumber: round,
+          id: `db-p0-r${round}`,
           participantId: 'p0',
           participantIndex: 0,
+          roundNumber: round,
         }),
       );
     }
@@ -886,29 +886,29 @@ describe('message Deduplication - Edge Cases', () => {
       // Round 0 - only participant trigger
       {
         ...createTestUserMessage({
-          id: 'trigger-r0',
           content: 'Participant trigger only',
+          id: 'trigger-r0',
           roundNumber: 0,
         }),
         metadata: {
+          isParticipantTrigger: true,
           role: MessageRoles.USER,
           roundNumber: 0,
-          isParticipantTrigger: true,
         },
       },
       createTestAssistantMessage({
-        id: 'thread_r0_p0',
         content: 'Response to trigger',
-        roundNumber: 0,
+        id: 'thread_r0_p0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread_r0_p1',
         content: 'Another response',
-        roundNumber: 0,
+        id: 'thread_r0_p1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 

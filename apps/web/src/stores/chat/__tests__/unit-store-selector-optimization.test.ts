@@ -43,11 +43,11 @@ describe('selector referential equality - object stability', () => {
     // Now actually change messages
     store.getState().setMessages([
       {
-        id: 'msg-1',
-        role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
-        metadata: { roundNumber: 0 },
         createdAt: new Date(),
+        id: 'msg-1',
+        metadata: { roundNumber: 0 },
+        parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER,
       },
     ]);
 
@@ -74,14 +74,14 @@ describe('selector referential equality - object stability', () => {
     // Actually change participants
     const newParticipants: ChatParticipant[] = [
       {
+        createdAt: new Date(),
+        customRoleId: null,
+        disabled: false,
         id: 'p-1',
-        threadId: 't-1',
         modelId: 'gpt-4',
         priority: 0,
         role: null,
-        customRoleId: null,
-        disabled: false,
-        createdAt: new Date(),
+        threadId: 't-1',
         updatedAt: new Date(),
       },
     ];
@@ -112,8 +112,8 @@ describe('selector referential equality - object stability', () => {
       {
         id: 'gpt-4',
         modelId: 'gpt-4',
-        role: null,
         priority: 0,
+        role: null,
       },
     ];
 
@@ -140,13 +140,13 @@ describe('selector referential equality - object stability', () => {
 
     // Set thread
     const newThread: ChatThread = {
+      createdAt: new Date(),
+      enableWebSearch: false,
       id: 't-1',
-      userId: 'u-1',
       mode: 'council',
       title: 'Test Thread',
-      enableWebSearch: false,
-      createdAt: new Date(),
       updatedAt: new Date(),
+      userId: 'u-1',
     };
 
     store.getState().setThread(newThread);
@@ -173,10 +173,10 @@ describe('selector referential equality - object stability', () => {
 
     // Add presearch
     store.getState().addPreSearch({
-      threadId: 't-1',
+      createdAt: new Date(),
       roundNumber: 0,
       status: MessageStatuses.PENDING,
-      createdAt: new Date(),
+      threadId: 't-1',
     });
 
     const preSearchesAfterActualChange = store.getState().preSearches;
@@ -192,8 +192,8 @@ describe('selector referential equality - primitive batching with shallow', () =
 
     const selector = (s: ReturnType<typeof store.getState>) => ({
       isStreaming: s.isStreaming,
-      roundNumber: s.streamingRoundNumber,
       participantIndex: s.currentParticipantIndex,
+      roundNumber: s.streamingRoundNumber,
     });
 
     const result1 = selector(store.getState());
@@ -204,7 +204,7 @@ describe('selector referential equality - primitive batching with shallow', () =
     const result2 = selector(store.getState());
 
     // shallow comparison should return true (no change)
-    expect(shallow(result1, result2)).toBe(true);
+    expect(shallow(result1, result2)).toBeTruthy();
 
     // Objects are not the same reference (new object created by selector)
     expect(result1).not.toBe(result2);
@@ -218,8 +218,8 @@ describe('selector referential equality - primitive batching with shallow', () =
 
     const selector = (s: ReturnType<typeof store.getState>) => ({
       isStreaming: s.isStreaming,
-      roundNumber: s.streamingRoundNumber,
       participantIndex: s.currentParticipantIndex,
+      roundNumber: s.streamingRoundNumber,
     });
 
     const result1 = selector(store.getState());
@@ -230,21 +230,21 @@ describe('selector referential equality - primitive batching with shallow', () =
     const result2 = selector(store.getState());
 
     // shallow comparison should detect change
-    expect(shallow(result1, result2)).toBe(false);
+    expect(shallow(result1, result2)).toBeFalsy();
 
     // Values are different
-    expect(result1.isStreaming).toBe(false);
-    expect(result2.isStreaming).toBe(true);
+    expect(result1.isStreaming).toBeFalsy();
+    expect(result2.isStreaming).toBeTruthy();
   });
 
   it('batching streaming state selectors with shallow prevents unnecessary re-renders', () => {
     const store = createChatStore();
 
     const streamingStateSelector = (s: ReturnType<typeof store.getState>) => ({
-      isStreaming: s.isStreaming,
       isModeratorStreaming: s.isModeratorStreaming,
-      roundNumber: s.streamingRoundNumber,
+      isStreaming: s.isStreaming,
       participantIndex: s.currentParticipantIndex,
+      roundNumber: s.streamingRoundNumber,
       waitingToStartStreaming: s.waitingToStartStreaming,
     });
 
@@ -258,7 +258,7 @@ describe('selector referential equality - primitive batching with shallow', () =
     const state2 = streamingStateSelector(store.getState());
 
     // Shallow equality should be true (no streaming state changed)
-    expect(shallow(state1, state2)).toBe(true);
+    expect(shallow(state1, state2)).toBeTruthy();
 
     // Now change streaming state
     store.getState().setIsStreaming(true);
@@ -267,17 +267,17 @@ describe('selector referential equality - primitive batching with shallow', () =
     const state3 = streamingStateSelector(store.getState());
 
     // Should detect change
-    expect(shallow(state2, state3)).toBe(false);
+    expect(shallow(state2, state3)).toBeFalsy();
   });
 
   it('batching form state selectors prevents re-renders on unrelated changes', () => {
     const store = createChatStore();
 
     const formStateSelector = (s: ReturnType<typeof store.getState>) => ({
-      inputValue: s.inputValue,
-      selectedMode: s.selectedMode,
       enableWebSearch: s.enableWebSearch,
+      inputValue: s.inputValue,
       modelOrder: s.modelOrder,
+      selectedMode: s.selectedMode,
     });
 
     const form1 = formStateSelector(store.getState());
@@ -290,7 +290,7 @@ describe('selector referential equality - primitive batching with shallow', () =
     const form2 = formStateSelector(store.getState());
 
     // Should be equal
-    expect(shallow(form1, form2)).toBe(true);
+    expect(shallow(form1, form2)).toBeTruthy();
 
     // Change form state
     store.getState().setInputValue('Hello');
@@ -298,7 +298,7 @@ describe('selector referential equality - primitive batching with shallow', () =
     const form3 = formStateSelector(store.getState());
 
     // Should detect change
-    expect(shallow(form2, form3)).toBe(false);
+    expect(shallow(form2, form3)).toBeFalsy();
   });
 });
 
@@ -325,7 +325,7 @@ describe('selector referential equality - array and object stability in batches'
     expect(result2.preSearches).toBe(result1.preSearches);
 
     // shallow should detect no change
-    expect(shallow(result1, result2)).toBe(true);
+    expect(shallow(result1, result2)).toBeTruthy();
   });
 
   it('batched selector detects array changes correctly', () => {
@@ -341,11 +341,11 @@ describe('selector referential equality - array and object stability in batches'
     // Change one array
     store.getState().setMessages([
       {
-        id: 'msg-1',
-        role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-        metadata: { roundNumber: 0 },
         createdAt: new Date(),
+        id: 'msg-1',
+        metadata: { roundNumber: 0 },
+        parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER,
       },
     ]);
 
@@ -358,7 +358,7 @@ describe('selector referential equality - array and object stability in batches'
     expect(result2.participants).toBe(result1.participants);
 
     // shallow should detect change (messages changed)
-    expect(shallow(result1, result2)).toBe(false);
+    expect(shallow(result1, result2)).toBeFalsy();
   });
 
   it('batched selector with mixed primitives and arrays works correctly', () => {
@@ -367,10 +367,10 @@ describe('selector referential equality - array and object stability in batches'
     const selector = (s: ReturnType<typeof store.getState>) => ({
       // Primitives
       isStreaming: s.isStreaming,
-      roundNumber: s.streamingRoundNumber,
       // Arrays
       messages: s.messages,
       participants: s.participants,
+      roundNumber: s.streamingRoundNumber,
     });
 
     const result1 = selector(store.getState());
@@ -386,16 +386,16 @@ describe('selector referential equality - array and object stability in batches'
     expect(result2.participants).toBe(result1.participants);
 
     // shallow detects change
-    expect(shallow(result1, result2)).toBe(false);
+    expect(shallow(result1, result2)).toBeFalsy();
 
     // Change array
     store.getState().setMessages([
       {
-        id: 'msg-1',
-        role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-        metadata: { roundNumber: 0 },
         createdAt: new Date(),
+        id: 'msg-1',
+        metadata: { roundNumber: 0 },
+        parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER,
       },
     ]);
 
@@ -405,7 +405,7 @@ describe('selector referential equality - array and object stability in batches'
     expect(result3.messages).not.toBe(result2.messages);
 
     // shallow detects change
-    expect(shallow(result2, result3)).toBe(false);
+    expect(shallow(result2, result3)).toBeFalsy();
   });
 });
 
@@ -441,11 +441,11 @@ describe('action function stability', () => {
     const store = createChatStore();
 
     const actionSelector = (s: ReturnType<typeof store.getState>) => ({
+      completeStreaming: s.completeStreaming,
       setInputValue: s.setInputValue,
       setIsStreaming: s.setIsStreaming,
-      setThread: s.setThread,
       setMessages: s.setMessages,
-      completeStreaming: s.completeStreaming,
+      setThread: s.setThread,
     });
 
     const actions1 = actionSelector(store.getState());
@@ -464,18 +464,18 @@ describe('action function stability', () => {
     expect(actions2.completeStreaming).toBe(actions1.completeStreaming);
 
     // shallow should detect no change (same function references)
-    expect(shallow(actions1, actions2)).toBe(true);
+    expect(shallow(actions1, actions2)).toBeTruthy();
   });
 
   it('complex operation actions maintain stability', () => {
     const store = createChatStore();
 
     const ops1 = {
+      completeStreaming: store.getState().completeStreaming,
       initializeThread: store.getState().initializeThread,
       prepareForNewMessage: store.getState().prepareForNewMessage,
-      completeStreaming: store.getState().completeStreaming,
-      startRegeneration: store.getState().startRegeneration,
       resetToNewChat: store.getState().resetToNewChat,
+      startRegeneration: store.getState().startRegeneration,
     };
 
     // Make various changes
@@ -484,11 +484,11 @@ describe('action function stability', () => {
     store.getState().setMessages([]);
 
     const ops2 = {
+      completeStreaming: store.getState().completeStreaming,
       initializeThread: store.getState().initializeThread,
       prepareForNewMessage: store.getState().prepareForNewMessage,
-      completeStreaming: store.getState().completeStreaming,
-      startRegeneration: store.getState().startRegeneration,
       resetToNewChat: store.getState().resetToNewChat,
+      startRegeneration: store.getState().startRegeneration,
     };
 
     // All should be stable
@@ -550,14 +550,14 @@ describe('derived state computation efficiency', () => {
     // Add participant
     store.getState().setParticipants([
       {
+        createdAt: new Date(),
+        customRoleId: null,
+        disabled: false,
         id: 'p-1',
-        threadId: 't-1',
         modelId: 'gpt-4',
         priority: 0,
         role: null,
-        customRoleId: null,
-        disabled: false,
-        createdAt: new Date(),
+        threadId: 't-1',
         updatedAt: new Date(),
       },
     ]);
@@ -575,8 +575,9 @@ describe('derived state computation efficiency', () => {
     // Derived: last message round number
     const getLastRoundNumber = (s: ReturnType<typeof store.getState>) => {
       const messages = s.messages;
-      if (messages.length === 0)
+      if (messages.length === 0) {
         return null;
+      }
       const lastMsg = messages[messages.length - 1];
       return (lastMsg?.metadata as { roundNumber?: number })?.roundNumber ?? null;
     };
@@ -595,11 +596,11 @@ describe('derived state computation efficiency', () => {
     // Add message
     store.getState().setMessages([
       {
-        id: 'msg-1',
-        role: MessageRoles.USER,
-        parts: [{ type: MessagePartTypes.TEXT, text: 'Test' }],
-        metadata: { roundNumber: 0 },
         createdAt: new Date(),
+        id: 'msg-1',
+        metadata: { roundNumber: 0 },
+        parts: [{ text: 'Test', type: MessagePartTypes.TEXT }],
+        role: MessageRoles.USER,
       },
     ]);
 
@@ -621,7 +622,7 @@ describe('derived state computation efficiency', () => {
     const isStreamingRound0 = getIsStreamingForRound(0);
 
     const streaming1 = isStreamingRound0(store.getState());
-    expect(streaming1).toBe(false);
+    expect(streaming1).toBeFalsy();
 
     // Change unrelated state
     store.getState().setInputValue('test');
@@ -634,14 +635,14 @@ describe('derived state computation efficiency', () => {
     store.getState().setStreamingRoundNumber(0);
 
     const streaming3 = isStreamingRound0(store.getState());
-    expect(streaming3).toBe(true);
+    expect(streaming3).toBeTruthy();
     expect(streaming3).not.toBe(streaming1);
 
     // Change to different round
     store.getState().setStreamingRoundNumber(1);
 
     const streaming4 = isStreamingRound0(store.getState());
-    expect(streaming4).toBe(false);
+    expect(streaming4).toBeFalsy();
   });
 });
 
@@ -678,8 +679,8 @@ describe('selector subscription efficiency patterns', () => {
     // Verify batching works correctly
     const batchedSelector = (s: ReturnType<typeof store.getState>) => ({
       isStreaming: s.isStreaming,
-      roundNumber: s.streamingRoundNumber,
       participantIndex: s.currentParticipantIndex,
+      roundNumber: s.streamingRoundNumber,
     });
 
     let renderCount = 0;
@@ -796,29 +797,29 @@ describe('selector subscription efficiency patterns', () => {
      */
 
     const chatViewSelector = (s: ReturnType<typeof store.getState>) => ({
-      messages: s.messages,
-      isStreaming: s.isStreaming,
-      currentParticipantIndex: s.currentParticipantIndex,
       contextParticipants: s.participants,
-      preSearches: s.preSearches,
-      thread: s.thread,
       createdThreadId: s.createdThreadId,
-      isModeratorStreaming: s.isModeratorStreaming,
-      streamingRoundNumber: s.streamingRoundNumber,
-      waitingToStartStreaming: s.waitingToStartStreaming,
-      isCreatingThread: s.isCreatingThread,
-      pendingMessage: s.pendingMessage,
+      currentParticipantIndex: s.currentParticipantIndex,
+      enableWebSearch: s.enableWebSearch,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
-      preSearchResumption: s.preSearchResumption,
+      inputValue: s.inputValue,
+      isCreatingThread: s.isCreatingThread,
+      isModeratorStreaming: s.isModeratorStreaming,
+      isStreaming: s.isStreaming,
+      messages: s.messages,
+      modelOrder: s.modelOrder,
       moderatorResumption: s.moderatorResumption,
+      pendingMessage: s.pendingMessage,
+      preSearches: s.preSearches,
+      preSearchResumption: s.preSearchResumption,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
-      inputValue: s.inputValue,
       setInputValue: s.setInputValue,
-      setSelectedParticipants: s.setSelectedParticipants,
-      enableWebSearch: s.enableWebSearch,
-      modelOrder: s.modelOrder,
       setModelOrder: s.setModelOrder,
+      setSelectedParticipants: s.setSelectedParticipants,
+      streamingRoundNumber: s.streamingRoundNumber,
+      thread: s.thread,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     });
 
     let renderCount = 0;
@@ -862,9 +863,9 @@ describe('selector memoization cache behavior', () => {
         result += i;
       }
       return {
-        participants: s.participants,
         count: s.participants.length,
         expensiveResult: result,
+        participants: s.participants,
       };
     };
 
@@ -894,25 +895,25 @@ describe('selector memoization cache behavior', () => {
     // Add participants
     store.getState().setParticipants([
       {
+        createdAt: new Date(),
+        customRoleId: null,
+        disabled: false,
         id: 'p-1',
-        threadId: 't-1',
         modelId: 'gpt-4',
         priority: 0,
         role: null,
-        customRoleId: null,
-        disabled: false,
-        createdAt: new Date(),
+        threadId: 't-1',
         updatedAt: new Date(),
       },
       {
+        createdAt: new Date(),
+        customRoleId: null,
+        disabled: true, // Disabled
         id: 'p-2',
-        threadId: 't-1',
         modelId: 'claude-3',
         priority: 1,
         role: null,
-        customRoleId: null,
-        disabled: true, // Disabled
-        createdAt: new Date(),
+        threadId: 't-1',
         updatedAt: new Date(),
       },
     ]);

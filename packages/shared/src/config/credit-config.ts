@@ -19,14 +19,31 @@ import {
 } from '../enums';
 
 export const CREDIT_CONFIG = {
-  TOKENS_PER_CREDIT: 1000,
-  SIGNUP_CREDITS: SIGNUP_BONUS_CREDITS,
+  ACTION_COSTS: {
+    analysisGeneration: 2000,
+    autoModeAnalysis: 500,
+    customRoleCreation: 50,
+    fileReading: 100,
+    // Project feature costs
+    memoryExtraction: 100,
+    projectFileLink: 25,
+    projectStoragePer10MB: 10,
+    ragQuery: 150,
+    threadCreation: 100,
+    webSearchQuery: 500,
+  },
+  DEFAULT_ESTIMATED_INPUT_TOKENS: 500,
 
+  DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE: 2000,
+
+  DEFAULT_MODEL_TIER: ModelPricingTiers.STANDARD,
+
+  MIN_CREDITS_FOR_STREAMING: 10,
   PLANS: {
     [PlanTypes.PAID]: {
-      signupCredits: 0,
       monthlyCredits: TIER_MONTHLY_CREDITS[SubscriptionTiers.PRO],
       priceInCents: TIER_PRICE_CENTS[SubscriptionTiers.PRO],
+      signupCredits: 0,
     },
   } satisfies Record<Exclude<PlanType, 'free'>, {
     signupCredits: number;
@@ -34,29 +51,12 @@ export const CREDIT_CONFIG = {
     priceInCents: number;
   }>,
 
-  ACTION_COSTS: {
-    threadCreation: 100,
-    webSearchQuery: 500,
-    fileReading: 100,
-    analysisGeneration: 2000,
-    customRoleCreation: 50,
-    autoModeAnalysis: 500,
-    // Project feature costs
-    memoryExtraction: 100,
-    ragQuery: 150,
-    projectFileLink: 25,
-    projectStoragePer10MB: 10,
-  },
-
   RESERVATION_MULTIPLIER: 1.5,
-  MIN_CREDITS_FOR_STREAMING: 10,
-
-  DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE: 2000,
-  DEFAULT_ESTIMATED_INPUT_TOKENS: 500,
+  SIGNUP_CREDITS: SIGNUP_BONUS_CREDITS,
 
   TIER_MULTIPLIERS: MODEL_TIER_CREDIT_MULTIPLIERS,
 
-  DEFAULT_MODEL_TIER: ModelPricingTiers.STANDARD,
+  TOKENS_PER_CREDIT: 1000,
 } as const;
 
 export const PLAN_NAMES: Record<PlanType, string> = {

@@ -64,7 +64,7 @@ function executeAction(
     dispatch: (event: RoundFlowEvent, payload?: EventPayload) => void;
   },
 ): void {
-  const { store, chat, dispatch } = deps;
+  const { chat, dispatch, store } = deps;
 
   switch (action.type) {
     case 'CREATE_PRE_SEARCH':
@@ -167,13 +167,13 @@ function executeAction(
 // ============================================================================
 
 export function useRoundOrchestrator({
-  store,
   chat,
   effectiveThreadId,
+  store,
 }: UseRoundOrchestratorParams): RoundOrchestratorResult {
   // Track dispatch to prevent re-entrancy
   const isDispatchingRef = useRef(false);
-  const pendingEventsRef = useRef<Array<{ event: RoundFlowEvent; payload?: EventPayload }>>([]);
+  const pendingEventsRef = useRef<{ event: RoundFlowEvent; payload?: EventPayload }[]>([]);
 
   // Subscribe to FSM state from store
   const flowState = useStore(store, useShallow(s => s.flowState));
@@ -186,48 +186,48 @@ export function useRoundOrchestrator({
 
     // Map store state to StoreSnapshot interface
     const storeSnapshot = {
-      thread: state.thread,
       createdThreadId: state.createdThreadId,
-      currentRoundNumber: state.currentRoundNumber,
-      streamingRoundNumber: state.streamingRoundNumber,
-      enableWebSearch: state.enableWebSearch,
-      participants: state.participants.map((p, idx) => ({
-        id: p.id,
-        participantIndex: idx,
-        enabled: true, // Participants in store are enabled
-      })),
       currentParticipantIndex: state.flowParticipantIndex,
+      currentResumptionPhase: state.currentResumptionPhase,
+      currentRoundNumber: state.currentRoundNumber,
+      enableWebSearch: state.enableWebSearch,
+      error: state.flowLastError,
       messages: state.messages.map(m => ({
         id: m.id,
-        role: m.role,
         metadata: m.metadata as {
           roundNumber?: number;
           participantIndex?: number;
           isModerator?: boolean;
         } | undefined,
+        role: m.role,
       })),
-      preSearches: state.preSearches.map(ps => ({
-        roundNumber: ps.roundNumber,
-        status: ps.status,
-        id: ps.id,
-      })),
-      streamResumptionPrefilled: state.streamResumptionPrefilled,
-      currentResumptionPhase: state.currentResumptionPhase,
-      resumptionRoundNumber: state.resumptionRoundNumber,
-      nextParticipantToTrigger: state.nextParticipantToTrigger as [number, number] | null,
-      preSearchResumption: state.preSearchResumption?.streamId
-        ? { streamId: state.preSearchResumption.streamId }
-        : null,
       moderatorResumption: state.moderatorResumption?.streamId
         ? { streamId: state.moderatorResumption.streamId }
         : null,
-      error: state.flowLastError,
+      nextParticipantToTrigger: state.nextParticipantToTrigger as [number, number] | null,
+      participants: state.participants.map((p, idx) => ({
+        enabled: true, // Participants in store are enabled
+        id: p.id,
+        participantIndex: idx,
+      })),
+      preSearches: state.preSearches.map(ps => ({
+        id: ps.id,
+        roundNumber: ps.roundNumber,
+        status: ps.status,
+      })),
+      preSearchResumption: state.preSearchResumption?.streamId
+        ? { streamId: state.preSearchResumption.streamId }
+        : null,
+      resumptionRoundNumber: state.resumptionRoundNumber,
+      streamingRoundNumber: state.streamingRoundNumber,
+      streamResumptionPrefilled: state.streamResumptionPrefilled,
+      thread: state.thread,
     };
 
     // Get AI SDK state from chat hook
     const aiSdkSnapshot = {
-      isStreaming: chat.isStreaming,
       isReady: chat.isReady,
+      isStreaming: chat.isStreaming,
     };
 
     return buildContext(storeSnapshot, aiSdkSnapshot);
@@ -270,10 +270,10 @@ export function useRoundOrchestrator({
       // Execute actions
       for (const action of result.actions) {
         executeAction(action, {
-          store,
           chat,
-          effectiveThreadId,
           dispatch,
+          effectiveThreadId,
+          store,
         });
       }
     } finally {

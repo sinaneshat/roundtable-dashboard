@@ -19,8 +19,8 @@ import { Icons } from '@/components/icons';
 export const ChatModeMetadataSchema = z.object({
   color: z.string(),
   description: z.string(),
-  systemPromptHint: z.string(),
   placeholder: z.string(),
+  systemPromptHint: z.string(),
 });
 
 // Non-serializable fields that can't be in Zod schema
@@ -32,11 +32,11 @@ export type ChatModeMetadata = z.infer<typeof ChatModeMetadataSchema> & ChatMode
 
 export const ChatModeConfigSchema = z.object({
   id: ChatModeSchema,
-  label: z.string(),
-  value: ChatModeSchema,
   isEnabled: z.boolean(),
-  order: z.number().int(),
+  label: z.string(),
   metadata: ChatModeMetadataSchema,
+  order: z.number().int(),
+  value: ChatModeSchema,
 });
 
 // Non-serializable fields that can't be in Zod schema
@@ -53,64 +53,64 @@ export type ChatModeConfig = z.infer<typeof ChatModeConfigSchema> & ChatModeConf
 
 export const CHAT_MODE_CONFIGS: readonly ChatModeConfig[] = [
   {
-    id: ChatModes.BRAINSTORMING,
-    label: 'Brainstorming',
-    value: ChatModes.BRAINSTORMING,
     icon: Icons.lightbulb,
+    id: ChatModes.BRAINSTORMING,
     isEnabled: true,
-    order: 1,
+    label: 'Brainstorming',
     metadata: {
-      icon: Icons.lightbulb,
       color: '#F59E0B',
       description: 'AI models spark off each other\'s ideas, building and branching in real-time',
-      systemPromptHint: 'Creative ideation with multiple perspectives',
+      icon: Icons.lightbulb,
       placeholder: 'What problem needs fresh perspectives?',
+      systemPromptHint: 'Creative ideation with multiple perspectives',
     },
+    order: 1,
+    value: ChatModes.BRAINSTORMING,
   },
   {
-    id: ChatModes.ANALYZING,
-    label: 'Analyzing',
-    value: ChatModes.ANALYZING,
     icon: Icons.search,
+    id: ChatModes.ANALYZING,
     isEnabled: true,
-    order: 2,
+    label: 'Analyzing',
     metadata: {
-      icon: Icons.search,
       color: '#3B82F6',
       description: 'Models examine the question from different angles, challenging each other\'s framings',
-      systemPromptHint: 'Detailed analysis from multiple angles',
+      icon: Icons.search,
       placeholder: 'What topic would benefit from multiple angles?',
+      systemPromptHint: 'Detailed analysis from multiple angles',
     },
+    order: 2,
+    value: ChatModes.ANALYZING,
   },
   {
-    id: ChatModes.DEBATING,
-    label: 'Debating',
-    value: ChatModes.DEBATING,
     icon: Icons.scale,
+    id: ChatModes.DEBATING,
     isEnabled: true,
-    order: 3,
+    label: 'Debating',
     metadata: {
-      icon: Icons.scale,
       color: '#EF4444',
       description: 'Models surface genuine disagreement—and explain why they see things differently',
-      systemPromptHint: 'Critical discussion with opposing viewpoints',
+      icon: Icons.scale,
       placeholder: 'What question has reasonable people disagreeing?',
+      systemPromptHint: 'Critical discussion with opposing viewpoints',
     },
+    order: 3,
+    value: ChatModes.DEBATING,
   },
   {
-    id: ChatModes.SOLVING,
-    label: 'Problem Solving',
-    value: ChatModes.SOLVING,
     icon: Icons.target,
+    id: ChatModes.SOLVING,
     isEnabled: true,
-    order: 4,
+    label: 'Problem Solving',
     metadata: {
-      icon: Icons.target,
       color: '#10B981',
       description: 'Models build on each other\'s proposals to move toward actionable recommendations',
-      systemPromptHint: 'Collaborative problem solving with action plans',
+      icon: Icons.target,
       placeholder: 'What decision needs different viewpoints weighed?',
+      systemPromptHint: 'Collaborative problem solving with action plans',
     },
+    order: 4,
+    value: ChatModes.SOLVING,
   },
 ] as const;
 
@@ -145,8 +145,8 @@ export function getDefaultChatMode(): ChatMode {
 // ============================================================================
 
 export const ChatModeOptionSchema = z.object({
-  value: ChatModeSchema,
   label: z.string(),
+  value: ChatModeSchema,
 });
 
 // Non-serializable fields that can't be in Zod schema
@@ -158,8 +158,8 @@ export type ChatModeOption = z.infer<typeof ChatModeOptionSchema> & ChatModeOpti
 
 export function getChatModeOptions(): ChatModeOption[] {
   return getEnabledChatModes().map(mode => ({
-    value: mode.value,
-    label: mode.label,
     icon: mode.icon,
+    label: mode.label,
+    value: mode.value,
   }));
 }

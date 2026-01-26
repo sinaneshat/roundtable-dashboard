@@ -32,7 +32,7 @@ function getStoreState(store: ChatStoreApi) {
 
 describe('requestAnimationFrame Patterns', () => {
   describe('triple RAF Pattern (streamingJustCompleted)', () => {
-    let rafCallbacks: Array<FrameRequestCallback>;
+    let rafCallbacks: FrameRequestCallback[];
     let rafId: number;
 
     beforeEach(() => {
@@ -180,7 +180,7 @@ describe('requestAnimationFrame Patterns', () => {
       expect(currentRafId).toBeNull();
 
       // Verify cancelAnimationFrame was called
-      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalled();
+      expect(vi.mocked(cancelAnimationFrame)).toHaveBeenCalledWith();
     });
 
     it('should handle rapid RAF rescheduling without leaking IDs', () => {
@@ -344,7 +344,7 @@ describe('setTimeout/setInterval Cleanup', () => {
       // Clean up before completion
       cleanup();
       expect(animationRef).toBeNull();
-      expect(clearTimeoutSpy).toHaveBeenCalled();
+      expect(clearTimeoutSpy).toHaveBeenCalledWith();
     });
 
     it('should handle rapid title changes without leaking timers', () => {
@@ -652,9 +652,9 @@ describe('animation State Management', () => {
       const { pendingAnimations } = getStoreState(store);
 
       expect(pendingAnimations.size).toBe(3);
-      expect(pendingAnimations.has(0)).toBe(true);
-      expect(pendingAnimations.has(1)).toBe(true);
-      expect(pendingAnimations.has(2)).toBe(true);
+      expect(pendingAnimations.has(0)).toBeTruthy();
+      expect(pendingAnimations.has(1)).toBeTruthy();
+      expect(pendingAnimations.has(2)).toBeTruthy();
     });
 
     it('should prevent duplicate registrations automatically', () => {
@@ -668,11 +668,11 @@ describe('animation State Management', () => {
 
       // Set automatically deduplicates
       expect(pendingAnimations.size).toBe(1);
-      expect(pendingAnimations.has(0)).toBe(true);
+      expect(pendingAnimations.has(0)).toBeTruthy();
     });
 
     it('should complete animation efficiently using Set.delete()', () => {
-      const { registerAnimation, completeAnimation } = getStoreState(store);
+      const { completeAnimation, registerAnimation } = getStoreState(store);
 
       registerAnimation(0);
       registerAnimation(1);
@@ -684,9 +684,9 @@ describe('animation State Management', () => {
       const { pendingAnimations } = getStoreState(store);
 
       expect(pendingAnimations.size).toBe(2);
-      expect(pendingAnimations.has(0)).toBe(true);
-      expect(pendingAnimations.has(1)).toBe(false);
-      expect(pendingAnimations.has(2)).toBe(true);
+      expect(pendingAnimations.has(0)).toBeTruthy();
+      expect(pendingAnimations.has(1)).toBeFalsy();
+      expect(pendingAnimations.has(2)).toBeTruthy();
     });
 
     it('should handle completing non-existent animation gracefully', () => {
@@ -713,7 +713,7 @@ describe('animation State Management', () => {
 
       // Set.has() is O(1)
       const start = performance.now();
-      expect(pendingAnimations.has(50)).toBe(true);
+      expect(pendingAnimations.has(50)).toBeTruthy();
       const duration = performance.now() - start;
 
       // Should be extremely fast
@@ -723,7 +723,7 @@ describe('animation State Management', () => {
 
   describe('animationResolvers Map Operations', () => {
     it('should store resolver functions in Map for O(1) access', async () => {
-      const { registerAnimation, waitForAnimation, completeAnimation } = getStoreState(store);
+      const { completeAnimation, registerAnimation, waitForAnimation } = getStoreState(store);
 
       registerAnimation(0);
 
@@ -732,7 +732,7 @@ describe('animation State Management', () => {
 
       const { animationResolvers } = getStoreState(store);
       expect(animationResolvers.size).toBe(1);
-      expect(animationResolvers.has(0)).toBe(true);
+      expect(animationResolvers.has(0)).toBeTruthy();
 
       // Complete animation resolves promise
       completeAnimation(0);
@@ -741,7 +741,7 @@ describe('animation State Management', () => {
     });
 
     it('should clean up resolver after animation completes', async () => {
-      const { registerAnimation, waitForAnimation, completeAnimation } = getStoreState(store);
+      const { completeAnimation, registerAnimation, waitForAnimation } = getStoreState(store);
 
       registerAnimation(0);
       const promise = waitForAnimation(0);
@@ -754,7 +754,7 @@ describe('animation State Management', () => {
 
       // Resolver removed from Map
       expect(animationResolvers.size).toBe(0);
-      expect(animationResolvers.has(0)).toBe(false);
+      expect(animationResolvers.has(0)).toBeFalsy();
     });
 
     it('should resolve immediately if animation not pending', async () => {
@@ -773,7 +773,7 @@ describe('animation State Management', () => {
     });
 
     it('should handle multiple waiters for same animation', async () => {
-      const { registerAnimation, waitForAnimation, completeAnimation } = getStoreState(store);
+      const { completeAnimation, registerAnimation, waitForAnimation } = getStoreState(store);
 
       registerAnimation(0);
 
@@ -801,7 +801,7 @@ describe('animation State Management', () => {
     // Now animations complete via explicit completeAnimation() calls
 
     it('should resolve immediately when no animations pending', async () => {
-      const { waitForAllAnimations, pendingAnimations } = getStoreState(store);
+      const { pendingAnimations, waitForAllAnimations } = getStoreState(store);
 
       expect(pendingAnimations.size).toBe(0);
 
@@ -813,7 +813,7 @@ describe('animation State Management', () => {
     });
 
     it('should resolve when all animations complete', async () => {
-      const { registerAnimation, completeAnimation, waitForAllAnimations } = getStoreState(store);
+      const { completeAnimation, registerAnimation, waitForAllAnimations } = getStoreState(store);
 
       registerAnimation(0);
       registerAnimation(1);
@@ -832,7 +832,7 @@ describe('animation State Management', () => {
     });
 
     it('should wait for all animations before resolving', async () => {
-      const { registerAnimation, completeAnimation, waitForAllAnimations } = getStoreState(store);
+      const { completeAnimation, registerAnimation, waitForAllAnimations } = getStoreState(store);
 
       registerAnimation(0);
       registerAnimation(1);
@@ -851,20 +851,20 @@ describe('animation State Management', () => {
       await Promise.resolve();
 
       // Should NOT be resolved yet (one animation still pending)
-      expect(resolved).toBe(false);
+      expect(resolved).toBeFalsy();
 
       // Complete last animation
       completeAnimation(2);
 
       // Now it should resolve
       await promise;
-      expect(resolved).toBe(true);
+      expect(resolved).toBeTruthy();
     });
   });
 
   describe('animation State Cleanup', () => {
     it('should clear all animations on completeStreaming', () => {
-      const { registerAnimation, completeStreaming } = getStoreState(store);
+      const { completeStreaming, registerAnimation } = getStoreState(store);
 
       // Register multiple animations
       registerAnimation(0);
@@ -876,7 +876,7 @@ describe('animation State Management', () => {
       // Complete streaming clears animations
       completeStreaming();
 
-      const { pendingAnimations, animationResolvers } = getStoreState(store);
+      const { animationResolvers, pendingAnimations } = getStoreState(store);
       expect(pendingAnimations.size).toBe(0);
       expect(animationResolvers.size).toBe(0);
     });
@@ -889,7 +889,7 @@ describe('animation State Management', () => {
 
       resetForThreadNavigation();
 
-      const { pendingAnimations, animationResolvers } = getStoreState(store);
+      const { animationResolvers, pendingAnimations } = getStoreState(store);
       expect(pendingAnimations.size).toBe(0);
       expect(animationResolvers.size).toBe(0);
     });
@@ -911,7 +911,7 @@ describe('animation State Management', () => {
     });
 
     it('should create new Set/Map when clearing non-empty collections', () => {
-      const { registerAnimation, completeStreaming } = getStoreState(store);
+      const { completeStreaming, registerAnimation } = getStoreState(store);
 
       registerAnimation(0);
 
@@ -1069,7 +1069,7 @@ describe('memory Leak Prevention', () => {
 
   describe('uncleaned Timers Detection', () => {
     it('should detect setTimeout leaks when cleanup not called', () => {
-      const activeTimers: Array<ReturnType<typeof setTimeout>> = [];
+      const activeTimers: ReturnType<typeof setTimeout>[] = [];
 
       const createTimer = () => {
         const id = setTimeout(() => {
@@ -1118,7 +1118,7 @@ describe('memory Leak Prevention', () => {
     });
 
     it('should detect setInterval leaks', () => {
-      const activeIntervals: Array<ReturnType<typeof setInterval>> = [];
+      const activeIntervals: ReturnType<typeof setInterval>[] = [];
 
       const startInterval = () => {
         const id = setInterval(() => {
@@ -1144,7 +1144,7 @@ describe('memory Leak Prevention', () => {
   describe('unresolved Promise Detection', () => {
     it('should document that unresolved promises need manual cleanup', () => {
       const store = createChatStore();
-      const { registerAnimation, waitForAnimation, clearAnimations } = store.getState();
+      const { clearAnimations, registerAnimation, waitForAnimation } = store.getState();
 
       registerAnimation(0);
 
@@ -1158,7 +1158,7 @@ describe('memory Leak Prevention', () => {
       clearAnimations();
 
       // After clearing, pendingAnimations should be empty
-      const { pendingAnimations, animationResolvers } = store.getState();
+      const { animationResolvers, pendingAnimations } = store.getState();
       expect(pendingAnimations.size).toBe(0);
       expect(animationResolvers.size).toBe(0);
 
@@ -1167,7 +1167,7 @@ describe('memory Leak Prevention', () => {
     });
 
     it('should resolve all promises on cleanup', async () => {
-      const { registerAnimation, waitForAnimation, clearAnimations } = createChatStore().getState();
+      const { clearAnimations, registerAnimation, waitForAnimation } = createChatStore().getState();
 
       registerAnimation(0);
       registerAnimation(1);
@@ -1328,7 +1328,7 @@ describe('startTransition Batching Patterns', () => {
   });
 
   it('should batch state updates via startTransition', () => {
-    const { setInputValue, setSelectedMode, setEnableWebSearch } = getStoreState(store);
+    const { setEnableWebSearch, setInputValue, setSelectedMode } = getStoreState(store);
 
     // Multiple state updates
     setInputValue('Hello');
@@ -1340,7 +1340,7 @@ describe('startTransition Batching Patterns', () => {
     // All updates applied
     expect(state.inputValue).toBe('Hello');
     expect(state.selectedMode).toBe('chat');
-    expect(state.enableWebSearch).toBe(true);
+    expect(state.enableWebSearch).toBeTruthy();
   });
 
   it('should prevent re-entry during startTransition via ref guards', () => {
@@ -1390,10 +1390,10 @@ describe('startTransition Batching Patterns', () => {
     updateState();
 
     // Ref updated immediately
-    expect(refValue).toBe(true);
+    expect(refValue).toBeTruthy();
 
     // State not updated yet
-    expect(stateValue).toBe(false);
+    expect(stateValue).toBeFalsy();
   });
 
   it('should verify state batching reduces re-renders', () => {
@@ -1475,7 +1475,7 @@ describe('integration: Multiple Timer Patterns', () => {
   });
 
   it('should verify no memory leaks in complex timer flow', async () => {
-    const cleanupFns: Array<() => void> = [];
+    const cleanupFns: (() => void)[] = [];
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let rafId: number | null = null;
     let cleanupExecuted = false;
@@ -1504,7 +1504,7 @@ describe('integration: Multiple Timer Patterns', () => {
     cleanupFns.forEach(fn => fn());
 
     // Verify cleanup was executed
-    expect(cleanupExecuted).toBe(true);
+    expect(cleanupExecuted).toBeTruthy();
     expect(rafId).not.toBeNull(); // RAF ID was set
   });
 });

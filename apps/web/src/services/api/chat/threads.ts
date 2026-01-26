@@ -284,11 +284,12 @@ export type ChatThreadChangelog = ApiChangelog;
 
 /**
  * ChatThreadChangelogFlexible - Partial changelog with required fields
+ * Uses DbChangelogData (derived from ApiChangelog) for type-safe changeData
  */
 export type ChatThreadChangelogFlexible = {
   id: string;
   changeType: string;
-  changeData: Record<string, unknown>;
+  changeData: DbChangelogData;
 } & Partial<ChatThreadChangelog>;
 
 /**
@@ -297,7 +298,7 @@ export type ChatThreadChangelogFlexible = {
 export type ChatSidebarItem = Extract<
   ListSidebarThreadsResponse,
   { success: true }
-> extends { data: { items: Array<infer T> } }
+> extends { data: { items: (infer T)[] } }
   ? T
   : never;
 
@@ -334,10 +335,17 @@ export type DbMessageMetadata = NonNullable<ApiMessage['metadata']>;
 export type DbUserMessageMetadata = Extract<DbMessageMetadata, { role: 'user' }>;
 
 /**
- * Assistant message metadata type (discriminated union member)
- * Excludes moderator messages
+ * Base assistant message metadata extracted from discriminated union
  */
-export type DbAssistantMessageMetadata = Extract<DbMessageMetadata, { role: 'assistant'; participantId: string }> & { isModerator?: never };
+type BaseAssistantMessageMetadata = Extract<DbMessageMetadata, { role: 'assistant'; participantId: string }>;
+
+/**
+ * Assistant message metadata type (discriminated union member)
+ * Excludes moderator messages - isModerator must not be true
+ */
+export type DbAssistantMessageMetadata = BaseAssistantMessageMetadata & {
+  isModerator?: never;
+};
 
 /**
  * Pre-search message metadata type (discriminated union member)

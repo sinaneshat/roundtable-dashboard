@@ -38,7 +38,7 @@ function checkVersionUpdate(): { shouldShow: boolean; version: string } {
 
 export function VersionUpdateModal() {
   const t = useTranslations();
-  const { updateAvailable, applyUpdate } = useServiceWorker();
+  const { applyUpdate, updateAvailable } = useServiceWorker();
   const [state] = useState(() => checkVersionUpdate());
   const [open, setOpen] = useState(state.shouldShow || updateAvailable);
 
@@ -62,12 +62,13 @@ export function VersionUpdateModal() {
   };
 
   // Show if either app version changed OR SW update available
-  if (!open && !updateAvailable)
+  if (!open && !updateAvailable) {
     return null;
+  }
 
   return (
     <Dialog open={open || updateAvailable} onOpenChange={setOpen}>
-      <DialogContent glass={true} className="max-w-md">
+      <DialogContent glass className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icons.sparkles className="size-5 text-blue-400" />

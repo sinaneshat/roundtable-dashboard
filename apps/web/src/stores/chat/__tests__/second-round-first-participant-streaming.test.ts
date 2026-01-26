@@ -37,12 +37,12 @@ import { createChatStore } from '../store';
 function createMockUserMessage(roundNumber: number, content = 'Test message'): UIMessage {
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: content }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text: content, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -54,53 +54,53 @@ function createMockAssistantMessage(
 ): UIMessage {
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: content }],
     metadata: {
+      modelId,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      modelId,
     },
+    parts: [{ text: content, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createMockParticipant(index: number, modelId: string) {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId,
-    role: `Role ${index}`,
-    priority: index,
-    isEnabled: true,
     createdAt: new Date(),
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: `Role ${index}`,
+    threadId: 'thread-123',
   };
 }
 
 function createMockThread(enableWebSearch = false) {
   return {
+    createdAt: new Date(),
+    enableWebSearch,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: 'debating' as const,
     status: 'active' as const,
-    enableWebSearch,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
   };
 }
 
 function createPlaceholderPreSearch(roundNumber: number): StoredPreSearch {
   return {
-    id: `placeholder-presearch-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    userQuery: 'Test query',
-    status: MessageStatuses.PENDING,
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `placeholder-presearch-r${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status: MessageStatuses.PENDING,
+    threadId: 'thread-123',
+    userQuery: 'Test query',
   } as StoredPreSearch;
 }
 
@@ -290,12 +290,12 @@ describe('second round first participant streaming', () => {
       store.getState().prepareForNewMessage('Round 1 question', []);
 
       // Initially not streaming
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // When streaming starts
       store.getState().setIsStreaming(true);
 
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(1);
     });
 
@@ -338,7 +338,7 @@ describe('second round first participant streaming', () => {
       ]);
 
       // Verify state during first participant streaming
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(1);
       expect(store.getState().currentParticipantIndex).toBe(0);
 
@@ -353,7 +353,7 @@ describe('second round first participant streaming', () => {
       ]);
 
       expect(store.getState().currentParticipantIndex).toBe(1);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
   });
 
@@ -511,7 +511,7 @@ describe('second round first participant streaming', () => {
       const store = createChatStore();
 
       store.getState().setHasEarlyOptimisticMessage(true);
-      expect(store.getState().hasEarlyOptimisticMessage).toBe(true);
+      expect(store.getState().hasEarlyOptimisticMessage).toBeTruthy();
     });
 
     it('should clear hasEarlyOptimisticMessage when prepareForNewMessage is called', () => {
@@ -520,7 +520,7 @@ describe('second round first participant streaming', () => {
       store.getState().setHasEarlyOptimisticMessage(true);
       store.getState().prepareForNewMessage('Test', []);
 
-      expect(store.getState().hasEarlyOptimisticMessage).toBe(false);
+      expect(store.getState().hasEarlyOptimisticMessage).toBeFalsy();
     });
 
     it('should preserve streamingRoundNumber when hasEarlyOptimisticMessage was true', () => {
@@ -561,7 +561,7 @@ describe('second round first participant streaming', () => {
         if (index === 1) {
           return {
             ...msg,
-            parts: [{ type: MessagePartTypes.TEXT as const, text: 'Starting... more content...' }],
+            parts: [{ text: 'Starting... more content...', type: MessagePartTypes.TEXT as const }],
           };
         }
         return msg;
@@ -592,7 +592,7 @@ describe('second round first participant streaming', () => {
         ]);
 
         // Streaming state should persist
-        expect(store.getState().isStreaming).toBe(true);
+        expect(store.getState().isStreaming).toBeTruthy();
         expect(store.getState().streamingRoundNumber).toBe(1);
         expect(store.getState().currentParticipantIndex).toBe(0);
       }
@@ -624,7 +624,7 @@ describe('second round first participant streaming', () => {
       store.getState().completeStreaming();
 
       // Verify round 0 complete
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().messages).toHaveLength(3);
 
       // === ROUND 1 ===
@@ -645,7 +645,7 @@ describe('second round first participant streaming', () => {
       store.getState().completeStreaming();
 
       // Verify round 1 complete (3 from r0 + 1 optimistic user + 2 assistant = 6)
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().messages).toHaveLength(6);
 
       // === ROUND 2 ===
@@ -664,7 +664,7 @@ describe('second round first participant streaming', () => {
       store.getState().completeStreaming();
 
       // Verify full conversation (6 + 1 optimistic user + 2 assistant = 9)
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().messages).toHaveLength(9);
 
       // Verify message ordering - filter out optimistic messages for cleaner assertions

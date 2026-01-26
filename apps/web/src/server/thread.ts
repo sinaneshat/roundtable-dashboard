@@ -31,7 +31,7 @@ type GetThreadsByProjectResult = ListThreadsResponse | ServerFnErrorResponse;
 
 export const getThreadBySlug = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(slugSchema))
-  .handler(async ({ data, context }): Promise<GetThreadBySlugResult> => {
+  .handler(async ({ context, data }): Promise<GetThreadBySlugResult> => {
     return await getThreadBySlugService(
       { param: { slug: data } },
       { cookieHeader: context.cookieHeader },
@@ -40,7 +40,7 @@ export const getThreadBySlug = createServerFn({ method: 'GET' })
 
 export const getStreamResumptionState = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<GetStreamResumptionStateResult> => {
+  .handler(async ({ context, data }): Promise<GetStreamResumptionStateResult> => {
     return await getThreadStreamResumptionStateService(
       { param: { threadId: data } },
       { cookieHeader: context.cookieHeader },
@@ -49,7 +49,7 @@ export const getStreamResumptionState = createServerFn({ method: 'GET' })
 
 export const getThreadChangelog = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<GetThreadChangelogResult> => {
+  .handler(async ({ context, data }): Promise<GetThreadChangelogResult> => {
     return await getThreadChangelogService(
       { param: { id: data } },
       { cookieHeader: context.cookieHeader },
@@ -58,7 +58,7 @@ export const getThreadChangelog = createServerFn({ method: 'GET' })
 
 export const getThreadFeedback = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<GetThreadFeedbackResult> => {
+  .handler(async ({ context, data }): Promise<GetThreadFeedbackResult> => {
     return await getThreadFeedbackService(
       { param: { id: data } },
       { cookieHeader: context.cookieHeader },
@@ -67,7 +67,7 @@ export const getThreadFeedback = createServerFn({ method: 'GET' })
 
 export const getThreadPreSearches = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data, context }): Promise<GetThreadPreSearchesResult> => {
+  .handler(async ({ context, data }): Promise<GetThreadPreSearchesResult> => {
     return await getThreadPreSearchesService(
       { param: { id: data } },
       { cookieHeader: context.cookieHeader },
@@ -83,9 +83,9 @@ export const getThreadPreSearches = createServerFn({ method: 'GET' })
  */
 export const getThreadsByProject = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
-  .handler(async ({ data: projectId, context }): Promise<GetThreadsByProjectResult> => {
+  .handler(async ({ context, data: projectId }): Promise<GetThreadsByProjectResult> => {
     return await listThreadsService(
-      { query: { projectId, limit: LIMITS.INITIAL_PAGE } as { projectId: string; limit: number } },
+      { query: { limit: LIMITS.INITIAL_PAGE, projectId } as { projectId: string; limit: number } },
       { cookieHeader: context.cookieHeader },
     );
   });

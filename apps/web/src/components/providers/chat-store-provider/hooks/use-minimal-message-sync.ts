@@ -33,13 +33,15 @@ import type { ChatStoreApi } from '@/stores/chat';
  */
 function isMessageIdMetadataConsistent(msg: UIMessage): boolean {
   // Only check assistant messages (user messages don't follow the pattern)
-  if (msg.role !== MessageRoles.ASSISTANT)
+  if (msg.role !== MessageRoles.ASSISTANT) {
     return true;
+  }
 
   // Parse round/participant from ID pattern: {threadId}_r{round}_p{participant}
   const idMatch = msg.id?.match(/_r(\d+)_p(\d+)$/);
-  if (!idMatch || !idMatch[1] || !idMatch[2])
-    return true; // Can't parse ID, assume OK
+  if (!idMatch || !idMatch[1] || !idMatch[2]) {
+    return true;
+  } // Can't parse ID, assume OK
 
   const roundFromId = Number.parseInt(idMatch[1], 10);
   const participantFromId = Number.parseInt(idMatch[2], 10);
@@ -49,8 +51,9 @@ function isMessageIdMetadataConsistent(msg: UIMessage): boolean {
   const participantFromMeta = getParticipantIndex(msg.metadata);
 
   // If metadata is missing, assume OK (will be filled later)
-  if (roundFromMeta === null || participantFromMeta === null)
+  if (roundFromMeta === null || participantFromMeta === null) {
     return true;
+  }
 
   // Check for mismatch
   return roundFromId === roundFromMeta && participantFromId === participantFromMeta;
@@ -71,11 +74,13 @@ const STREAM_SYNC_THROTTLE_MS = 50;
 // ✅ FIX: Get a content fingerprint for the last message during streaming
 // This detects content changes even when array reference stays the same
 function getLastMessageContentKey(messages: UIMessage[]): string {
-  if (messages.length === 0)
+  if (messages.length === 0) {
     return '';
+  }
   const lastMsg = messages[messages.length - 1];
-  if (!lastMsg)
+  if (!lastMsg) {
     return '';
+  }
   const textPart = lastMsg.parts?.find(p => p.type === 'text');
   const text = textPart && 'text' in textPart ? textPart.text : '';
   // Return a fingerprint that changes when content changes
@@ -90,7 +95,7 @@ function getLastMessageContentKey(messages: UIMessage[]): string {
  *
  * ✅ PERF FIX: Uses stable throttle with trailing edge instead of interval polling
  */
-export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncParams) {
+export function useMinimalMessageSync({ chat, store }: UseMinimalMessageSyncParams) {
   const lastSyncRef = useRef<number>(0);
   const prevMessagesRef = useRef<UIMessage[]>([]);
   const hasHydratedRef = useRef<string | null>(null);
@@ -102,7 +107,7 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
   const threadId = useStore(store, s => s.thread?.id);
   const isStreaming = useStore(store, s => s.isStreaming);
 
-  const { messages: chatMessages, isStreaming: chatIsStreaming } = chat;
+  const { isStreaming: chatIsStreaming, messages: chatMessages } = chat;
 
   // ✅ FIX: Keep a ref to chat for interval-based sync to avoid stale closures
   const chatRef = useRef(chat);
@@ -131,8 +136,9 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       // Filter out trigger messages
       if (m.role === MessageRoles.USER) {
         const userMeta = getUserMetadata(m.metadata);
-        if (userMeta?.isParticipantTrigger)
+        if (userMeta?.isParticipantTrigger) {
           return false;
+        }
       }
       // ✅ FIX: Filter out messages with mismatched ID/metadata
       // These are corrupt messages from AI SDK auto-resume to wrong round
@@ -160,10 +166,12 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       if (inconsistentChatMessageIds.has(m.id)) {
         return true;
       }
-      if (chatMessageIds.has(m.id))
+      if (chatMessageIds.has(m.id)) {
         return false;
-      if (isModeratorMessage(m))
+      }
+      if (isModeratorMessage(m)) {
         return true;
+      }
       if (m.role === MessageRoles.USER) {
         const userMeta = getUserMetadata(m.metadata);
         if (!userMeta?.isParticipantTrigger) {
@@ -188,10 +196,12 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
 
   // Hydration: On mount or thread change
   useEffect(() => {
-    if (!threadId)
+    if (!threadId) {
       return;
-    if (hasHydratedRef.current === threadId)
+    }
+    if (hasHydratedRef.current === threadId) {
       return;
+    }
 
     const storeMessages = store.getState().messages;
     // Only hydrate if store has messages and AI SDK doesn't
@@ -238,8 +248,9 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       }
     }
 
-    if (!messagesChanged && !contentChanged && !chatIsStreaming)
+    if (!messagesChanged && !contentChanged && !chatIsStreaming) {
       return;
+    }
 
     const now = Date.now();
     const timeSinceLastSync = now - lastSyncRef.current;
@@ -291,8 +302,9 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
   // This ensures UI updates as chunks arrive
   // Uses chatRef to avoid stale closures - reads fresh messages each interval tick
   useEffect(() => {
-    if (!chatIsStreaming)
+    if (!chatIsStreaming) {
       return;
+    }
 
     const intervalId = setInterval(() => {
       // Read current messages from ref to avoid stale closure
@@ -310,8 +322,9 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
         const filteredChatMessages = currentMessages.filter((m) => {
           if (m.role === MessageRoles.USER) {
             const userMeta = getUserMetadata(m.metadata);
-            if (userMeta?.isParticipantTrigger)
+            if (userMeta?.isParticipantTrigger) {
               return false;
+            }
           }
           // ✅ FIX: Filter out messages with mismatched ID/metadata
           if (!isMessageIdMetadataConsistent(m)) {
@@ -334,10 +347,12 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
           if (inconsistentChatMessageIds.has(m.id)) {
             return true;
           }
-          if (chatMessageIds.has(m.id))
+          if (chatMessageIds.has(m.id)) {
             return false;
-          if (isModeratorMessage(m))
+          }
+          if (isModeratorMessage(m)) {
             return true;
+          }
           if (m.role === MessageRoles.USER) {
             const userMeta = getUserMetadata(m.metadata);
             if (!userMeta?.isParticipantTrigger) {

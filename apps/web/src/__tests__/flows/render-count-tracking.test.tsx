@@ -44,7 +44,7 @@ describe('render Count Tracking - Subscription Patterns', () => {
      * - 1 currentParticipantIndex change
      * = 13 re-renders (3 unnecessary)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents scoped subscription reduces re-renders', () => {
@@ -63,7 +63,7 @@ describe('render Count Tracking - Subscription Patterns', () => {
      * - 10 message updates
      * = 10 re-renders (optimal for message-only component)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents useShallow batching prevents object reference re-renders', () => {
@@ -87,7 +87,7 @@ describe('render Count Tracking - Subscription Patterns', () => {
      * - 2 isStreaming changes (true, false)
      * = 12 re-renders (vs. 13+ without useShallow)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -118,7 +118,7 @@ describe('render Count Tracking - Store Update Simulation', () => {
      * - 3 unrelated changes: 3 (all trigger re-render)
      * Total: 14 renders (suboptimal)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents batched subscription pattern with useShallow', () => {
@@ -155,7 +155,7 @@ describe('render Count Tracking - Store Update Simulation', () => {
      * - Re-renders even when values haven't changed
      * Total: 9+ renders (suboptimal)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents useShallow prevents object reference re-renders', () => {
@@ -177,7 +177,7 @@ describe('render Count Tracking - Store Update Simulation', () => {
      * - Critical for components that select multiple primitives
      * - Essential for high-frequency updates (streaming)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -210,7 +210,7 @@ describe('render Count Tracking - Streaming Performance', () => {
      * Note: React may batch setState calls in same frame
      * Actual renders may be 4-6 depending on batching
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents batched state updates for minimal re-renders', () => {
@@ -235,7 +235,7 @@ describe('render Count Tracking - Streaming Performance', () => {
      * - Use completeStreaming, prepareForNewMessage, etc. for atomic updates
      * - Avoid sequential setter calls for related state
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -262,7 +262,7 @@ describe('render Count Tracking - Message Updates', () => {
      * - Use stable message IDs (don't regenerate on each update)
      * - Batch message additions when possible
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 
   it('documents streaming chunk render efficiency', () => {
@@ -288,7 +288,7 @@ describe('render Count Tracking - Message Updates', () => {
      * - Batch multiple chunks into single setMessages call
      * - Balance: smooth UX vs. performance
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -317,7 +317,7 @@ describe('render Count Tracking - Pre-Search Performance', () => {
      * - No optimization needed - status changes are meaningful
      * - Component should render when status changes
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });
 
@@ -367,6 +367,6 @@ describe('render Count Tracking - Performance Baselines', () => {
      * POTENTIAL OPTIMIZED TOTAL:
      * 1 + 1 + 3 + (13 × 3) + 20 = 64 renders (~40% reduction)
      */
-    expect(true).toBe(true);
+    expect(true).toBeTruthy();
   });
 });

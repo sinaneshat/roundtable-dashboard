@@ -35,15 +35,15 @@ import {
 
 function createParticipant(id: string, index: number, enabled = true): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: enabled,
-    settings: null,
     createdAt: new Date('2024-01-01'),
+    customRoleId: null,
+    id,
+    isEnabled: enabled,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date('2024-01-01'),
   };
 }
@@ -59,27 +59,27 @@ function createAssistantMessage(
   } = {},
 ): UIMessage {
   const {
-    partState = TextPartStates.DONE,
-    hasText = true,
     finishReason = FinishReasons.STOP,
+    hasText = true,
     participantIndex = 0,
+    partState = TextPartStates.DONE,
   } = options;
 
   return {
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: hasText
-      ? [{ type: 'text', text: 'Response content', state: partState }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: finishReason ?? undefined,
+      model: `model-${participantIndex}`,
       participantId,
       participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: finishReason ?? undefined,
-      usage: finishReason ? { promptTokens: 100, completionTokens: 50, totalTokens: 150 } : undefined,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: finishReason ? { completionTokens: 50, promptTokens: 100, totalTokens: 150 } : undefined,
     },
+    parts: hasText
+      ? [{ state: partState, text: 'Response content', type: 'text' }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -90,31 +90,31 @@ function createAssistantMessage(
 describe('isMessageComplete', () => {
   it('returns false when message has streaming parts', () => {
     const message = createAssistantMessage('p1', 1, { partState: TextPartStates.STREAMING });
-    expect(isMessageComplete(message)).toBe(false);
+    expect(isMessageComplete(message)).toBeFalsy();
   });
 
   it('returns true when message has done parts with content', () => {
-    const message = createAssistantMessage('p1', 1, { partState: TextPartStates.DONE, hasText: true });
-    expect(isMessageComplete(message)).toBe(true);
+    const message = createAssistantMessage('p1', 1, { hasText: true, partState: TextPartStates.DONE });
+    expect(isMessageComplete(message)).toBeTruthy();
   });
 
   it('returns true when message has both text content AND finishReason', () => {
     // A complete message should have both content and finishReason
     const message = createAssistantMessage('p1', 1, {
-      partState: TextPartStates.DONE,
-      hasText: true,
       finishReason: FinishReasons.STOP,
+      hasText: true,
+      partState: TextPartStates.DONE,
     });
-    expect(isMessageComplete(message)).toBe(true);
+    expect(isMessageComplete(message)).toBeTruthy();
   });
 
   it('returns false when message has no content and no finishReason', () => {
     const message = createAssistantMessage('p1', 1, {
-      partState: TextPartStates.DONE,
-      hasText: false,
       finishReason: null,
+      hasText: false,
+      partState: TextPartStates.DONE,
     });
-    expect(isMessageComplete(message)).toBe(false);
+    expect(isMessageComplete(message)).toBeFalsy();
   });
 
   it('returns false when parts is undefined', () => {
@@ -122,11 +122,11 @@ describe('isMessageComplete', () => {
     // This can happen during message creation before parts are populated
     const message = {
       id: 'msg-1',
-      role: MessageRoles.ASSISTANT,
-      parts: undefined,
       metadata: { role: MessageRoles.ASSISTANT, roundNumber: 1 },
+      parts: undefined,
+      role: MessageRoles.ASSISTANT,
     } as UIMessage;
-    expect(isMessageComplete(message)).toBe(false);
+    expect(isMessageComplete(message)).toBeFalsy();
   });
 });
 
@@ -138,7 +138,7 @@ describe('getParticipantCompletionStatus', () => {
   describe('basic completion checks', () => {
     it('returns allComplete: false when no participants', () => {
       const status = getParticipantCompletionStatus([], [], 1);
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.expectedCount).toBe(0);
     });
 
@@ -148,7 +148,7 @@ describe('getParticipantCompletionStatus', () => {
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.expectedCount).toBe(1);
       expect(status.completedCount).toBe(0);
       expect(status.streamingCount).toBe(1);
@@ -162,12 +162,12 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.DONE }),
-        createAssistantMessage('p2', 1, { partState: TextPartStates.DONE, participantIndex: 1 }),
+        createAssistantMessage('p2', 1, { participantIndex: 1, partState: TextPartStates.DONE }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.expectedCount).toBe(2);
       expect(status.completedCount).toBe(2);
       expect(status.streamingCount).toBe(0);
@@ -182,12 +182,12 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.DONE }),
-        createAssistantMessage('p2', 1, { partState: TextPartStates.STREAMING, participantIndex: 1 }),
+        createAssistantMessage('p2', 1, { participantIndex: 1, partState: TextPartStates.STREAMING }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('p2');
@@ -202,13 +202,13 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.DONE }),
-        createAssistantMessage('p2', 1, { partState: TextPartStates.DONE, participantIndex: 1 }),
-        createAssistantMessage('p3', 1, { partState: TextPartStates.STREAMING, participantIndex: 2 }),
+        createAssistantMessage('p2', 1, { participantIndex: 1, partState: TextPartStates.DONE }),
+        createAssistantMessage('p3', 1, { participantIndex: 2, partState: TextPartStates.STREAMING }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.streamingParticipantIds).toContain('p3');
     });
 
@@ -219,12 +219,12 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.STREAMING }),
-        createAssistantMessage('p2', 1, { partState: TextPartStates.STREAMING, participantIndex: 1 }),
+        createAssistantMessage('p2', 1, { participantIndex: 1, partState: TextPartStates.STREAMING }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.streamingCount).toBe(2);
     });
   });
@@ -238,12 +238,12 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.DONE }),
-        createAssistantMessage('p3', 1, { partState: TextPartStates.DONE, participantIndex: 2 }),
+        createAssistantMessage('p3', 1, { participantIndex: 2, partState: TextPartStates.DONE }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.expectedCount).toBe(2); // Only enabled participants
     });
   });
@@ -258,11 +258,11 @@ describe('getParticipantCompletionStatus', () => {
 
       // Round 0 should be complete
       const round0Status = getParticipantCompletionStatus(messages, participants, 0);
-      expect(round0Status.allComplete).toBe(true);
+      expect(round0Status.allComplete).toBeTruthy();
 
       // Round 1 should NOT be complete
       const round1Status = getParticipantCompletionStatus(messages, participants, 1);
-      expect(round1Status.allComplete).toBe(false);
+      expect(round1Status.allComplete).toBeFalsy();
     });
   });
 
@@ -274,7 +274,7 @@ describe('getParticipantCompletionStatus', () => {
       ];
       const messages: UIMessage[] = [
         createAssistantMessage('p1', 1, { partState: TextPartStates.DONE }),
-        createAssistantMessage('p2', 1, { partState: TextPartStates.STREAMING, participantIndex: 1 }),
+        createAssistantMessage('p2', 1, { participantIndex: 1, partState: TextPartStates.STREAMING }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
@@ -282,14 +282,14 @@ describe('getParticipantCompletionStatus', () => {
       expect(status.debugInfo).toHaveLength(2);
 
       const p1Info = status.debugInfo.find(d => d.participantId === 'p1');
-      expect(p1Info?.hasMessage).toBe(true);
-      expect(p1Info?.hasStreamingParts).toBe(false);
-      expect(p1Info?.isComplete).toBe(true);
+      expect(p1Info?.hasMessage).toBeTruthy();
+      expect(p1Info?.hasStreamingParts).toBeFalsy();
+      expect(p1Info?.isComplete).toBeTruthy();
 
       const p2Info = status.debugInfo.find(d => d.participantId === 'p2');
-      expect(p2Info?.hasMessage).toBe(true);
-      expect(p2Info?.hasStreamingParts).toBe(true);
-      expect(p2Info?.isComplete).toBe(false);
+      expect(p2Info?.hasMessage).toBeTruthy();
+      expect(p2Info?.hasStreamingParts).toBeTruthy();
+      expect(p2Info?.isComplete).toBeFalsy();
     });
   });
 });
@@ -303,14 +303,14 @@ describe('areAllParticipantsCompleteForRound', () => {
     const participants = [createParticipant('p1', 0)];
     const messages = [createAssistantMessage('p1', 1, { partState: TextPartStates.DONE })];
 
-    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBe(true);
+    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBeTruthy();
   });
 
   it('returns false when any streaming', () => {
     const participants = [createParticipant('p1', 0)];
     const messages = [createAssistantMessage('p1', 1, { partState: TextPartStates.STREAMING })];
 
-    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBe(false);
+    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBeFalsy();
   });
 });
 
@@ -324,61 +324,61 @@ describe('finishReason: unknown handling', () => {
       // finishReason: 'unknown' indicates interrupted stream, BUT if content exists,
       // the message can still be displayed. Content alone is sufficient for completion.
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: true, // Has content
         finishReason: FinishReasons.UNKNOWN,
+        hasText: true, // Has content
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns false when finishReason is "unknown" and NO content', () => {
       // finishReason: 'unknown' with no content = definitely incomplete
       // This is the key case we're trying to catch - interrupted before any content
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: false, // No content!
         finishReason: FinishReasons.UNKNOWN,
+        hasText: false, // No content!
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(false);
+      expect(isMessageComplete(message)).toBeFalsy();
     });
 
     it('returns true when finishReason is "stop" (valid completion)', () => {
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: true,
         finishReason: FinishReasons.STOP,
+        hasText: true,
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns true when finishReason is "length" (valid completion)', () => {
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: true,
         finishReason: FinishReasons.LENGTH,
+        hasText: true,
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns true when message has content but no finishReason', () => {
       // Content alone is sufficient for completion
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: true,
         finishReason: null,
+        hasText: true,
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
 
     it('returns true when message has valid finishReason but no content (error case)', () => {
       // Failed streams with finishReason but no content should be complete
       // (e.g., timeout, error before any content was generated)
       const message = createAssistantMessage('p1', 1, {
-        partState: TextPartStates.DONE,
-        hasText: false,
         finishReason: FinishReasons.ERROR,
+        hasText: false,
+        partState: TextPartStates.DONE,
       });
-      expect(isMessageComplete(message)).toBe(true);
+      expect(isMessageComplete(message)).toBeTruthy();
     });
   });
 
@@ -390,18 +390,18 @@ describe('finishReason: unknown handling', () => {
         createParticipant('p2', 1),
       ];
       const messages: UIMessage[] = [
-        createAssistantMessage('p1', 1, { partState: TextPartStates.DONE, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 1, { finishReason: FinishReasons.STOP, partState: TextPartStates.DONE }),
         createAssistantMessage('p2', 1, {
-          partState: TextPartStates.DONE,
-          hasText: false, // No content!
           finishReason: FinishReasons.UNKNOWN, // Interrupted stream
+          hasText: false, // No content!
           participantIndex: 1,
+          partState: TextPartStates.DONE,
         }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(1);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('p2');
@@ -416,19 +416,19 @@ describe('finishReason: unknown handling', () => {
         createParticipant('p2', 1),
       ];
       const messages: UIMessage[] = [
-        createAssistantMessage('p1', 1, { partState: TextPartStates.DONE, finishReason: FinishReasons.STOP }),
+        createAssistantMessage('p1', 1, { finishReason: FinishReasons.STOP, partState: TextPartStates.DONE }),
         createAssistantMessage('p2', 1, {
-          partState: TextPartStates.DONE,
-          hasText: true, // Has content!
           finishReason: FinishReasons.UNKNOWN, // Unknown but has content
+          hasText: true, // Has content!
           participantIndex: 1,
+          partState: TextPartStates.DONE,
         }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 1);
 
       // p2 is complete because it has content (regardless of finishReason)
-      expect(status.allComplete).toBe(true);
+      expect(status.allComplete).toBeTruthy();
       expect(status.completedCount).toBe(2);
       expect(status.streamingCount).toBe(0);
     });
@@ -448,21 +448,21 @@ describe('finishReason: unknown handling', () => {
       ];
 
       const messages: UIMessage[] = [
-        createAssistantMessage('gemini', 0, { partState: TextPartStates.DONE, finishReason: FinishReasons.STOP }),
-        createAssistantMessage('gpt-nano', 0, { partState: TextPartStates.DONE, finishReason: FinishReasons.STOP, participantIndex: 1 }),
-        createAssistantMessage('claude-opus', 0, { partState: TextPartStates.DONE, finishReason: FinishReasons.STOP, participantIndex: 2 }),
+        createAssistantMessage('gemini', 0, { finishReason: FinishReasons.STOP, partState: TextPartStates.DONE }),
+        createAssistantMessage('gpt-nano', 0, { finishReason: FinishReasons.STOP, participantIndex: 1, partState: TextPartStates.DONE }),
+        createAssistantMessage('claude-opus', 0, { finishReason: FinishReasons.STOP, participantIndex: 2, partState: TextPartStates.DONE }),
         createAssistantMessage('grok-fast', 0, {
-          partState: TextPartStates.DONE, // Parts might show done after state reset
-          hasText: false, // NO content - interrupted before generating any
           finishReason: FinishReasons.UNKNOWN, // finishReason indicates interruption
+          hasText: false, // NO content - interrupted before generating any
           participantIndex: 3,
+          partState: TextPartStates.DONE, // Parts might show done after state reset
         }),
       ];
 
       const status = getParticipantCompletionStatus(messages, participants, 0);
 
       // MUST be false - grok-fast has finishReason: 'unknown' and NO content
-      expect(status.allComplete).toBe(false);
+      expect(status.allComplete).toBeFalsy();
       expect(status.completedCount).toBe(3);
       expect(status.streamingCount).toBe(1);
       expect(status.streamingParticipantIds).toContain('grok-fast');
@@ -488,20 +488,20 @@ describe('race Condition Prevention Scenarios', () => {
 
     const messages: UIMessage[] = [
       createAssistantMessage('gpt-4-1', 1, {
-        partState: TextPartStates.DONE,
         finishReason: FinishReasons.STOP,
+        partState: TextPartStates.DONE,
       }),
       createAssistantMessage('claude-sonnet-4', 1, {
-        partState: TextPartStates.STREAMING, // Still streaming!
         finishReason: null, // No finish reason yet
         participantIndex: 1,
+        partState: TextPartStates.STREAMING, // Still streaming!
       }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // MUST be false - summarizer should NOT proceed
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingParticipantIds).toContain('claude-sonnet-4');
   });
 
@@ -520,22 +520,22 @@ describe('race Condition Prevention Scenarios', () => {
       // p2 message was persisted but with streaming state
       {
         id: 'msg-p2-r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Partial response...', state: TextPartStates.STREAMING }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 1,
+          finishReason: undefined, // No finish reason
           participantId: 'p2',
           participantIndex: 1,
-          finishReason: undefined, // No finish reason
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
         },
+        parts: [{ state: TextPartStates.STREAMING, text: 'Partial response...', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // MUST be false - even with persisted data, streaming state should block
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
   });
 
   it('sCENARIO: All participants finished but parts not yet updated to done', () => {
@@ -547,22 +547,22 @@ describe('race Condition Prevention Scenarios', () => {
     const messages: UIMessage[] = [
       {
         id: 'msg-p1-r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Complete response', state: TextPartStates.STREAMING }], // Parts say streaming
         metadata: {
-          role: MessageRoles.ASSISTANT,
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP, // But finishReason is set
           participantId: 'p1',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP, // But finishReason is set
+          role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
         },
+        parts: [{ state: TextPartStates.STREAMING, text: 'Complete response', type: 'text' }], // Parts say streaming
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // MUST be false - parts state takes precedence for visual consistency
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
   });
 
   it('sCENARIO: Participant message exists but is empty placeholder', () => {
@@ -571,20 +571,20 @@ describe('race Condition Prevention Scenarios', () => {
     const messages: UIMessage[] = [
       {
         id: 'msg-p1-r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [], // Empty parts
         metadata: {
+          finishReason: undefined, // No finish reason
+          participantId: 'p1',
           role: MessageRoles.ASSISTANT,
           roundNumber: 1,
-          participantId: 'p1',
-          finishReason: undefined, // No finish reason
         },
+        parts: [], // Empty parts
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // MUST be false - empty message is not complete
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
   });
 });

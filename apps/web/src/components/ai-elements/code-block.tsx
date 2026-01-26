@@ -23,11 +23,11 @@ type CodeBlockContextType = {
 const CodeBlockContext = createContext<CodeBlockContextType | null>(null);
 
 function CodeBlockComponent({
+  children,
+  className,
   code,
   language,
   showLineNumbers = false,
-  className,
-  children,
   ...props
 }: CodeBlockProps) {
   const [html, setHtml] = useState<string>('');
@@ -110,11 +110,11 @@ type CodeBlockCopyButtonProps = {
 } & Omit<ComponentProps<typeof Button>, 'onClick' | 'size' | 'variant' | 'className' | 'children'>;
 
 export function CodeBlockCopyButton({
+  children,
+  className,
   onCopy,
   onError,
   timeout = 2000,
-  children,
-  className,
   ...props
 }: CodeBlockCopyButtonProps) {
   const t = useTranslations();
@@ -174,7 +174,7 @@ type InlineCodeProps = {
   readonly children?: React.ReactNode;
 } & Omit<ComponentProps<'code'>, 'className' | 'children'>;
 
-export function InlineCode({ className, children, ...props }: InlineCodeProps) {
+export function InlineCode({ children, className, ...props }: InlineCodeProps) {
   return (
     <code
       className={cn('bg-muted px-1.5 py-0.5 rounded-md text-sm font-mono text-foreground/90', className)}

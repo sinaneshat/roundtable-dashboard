@@ -28,12 +28,12 @@ type PreSearchCardProps = {
 };
 
 export function PreSearchCard({
-  threadId,
-  preSearch,
   className,
-  streamingRoundNumber,
   demoOpen,
   demoShowContent,
+  preSearch,
+  streamingRoundNumber,
+  threadId,
 }: PreSearchCardProps) {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -41,10 +41,10 @@ export function PreSearchCard({
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
   const storeData = useChatStoreOptional(
     useShallow(s => ({
-      updatePreSearchStatus: s.updatePreSearchStatus,
-      updatePreSearchData: s.updatePreSearchData,
-      registerAnimation: s.registerAnimation,
       completeAnimation: s.completeAnimation,
+      registerAnimation: s.registerAnimation,
+      updatePreSearchData: s.updatePreSearchData,
+      updatePreSearchStatus: s.updatePreSearchStatus,
     })),
   );
 
@@ -59,7 +59,7 @@ export function PreSearchCard({
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
   const isManualControlValid = useMemo(() => {
-    if (!manualControl || (streamingRoundNumber != null && streamingRoundNumber > manualControl.round)) {
+    if (!manualControl || (streamingRoundNumber !== null && streamingRoundNumber !== undefined && streamingRoundNumber > manualControl.round)) {
       return false;
     }
     return true;
@@ -97,8 +97,9 @@ export function PreSearchCard({
   }, [preSearch.status, completeAnimation]);
 
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
-    if (!completedData)
+    if (!completedData) {
       return;
+    }
 
     updatePreSearchData(preSearch.roundNumber, completedData);
     updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.COMPLETE);
@@ -112,8 +113,9 @@ export function PreSearchCard({
   const hasError = preSearch.status === MessageStatuses.FAILED;
 
   const totalSources = useMemo(() => {
-    if (!preSearch.searchData?.results)
+    if (!preSearch.searchData?.results) {
       return 0;
+    }
     return preSearch.searchData.results.reduce(
       (sum: number, r: PreSearchResult) => sum + (r.results?.length || 0),
       0,
@@ -121,16 +123,19 @@ export function PreSearchCard({
   }, [preSearch.searchData]);
 
   const handleOpenChange = useCallback((open: boolean) => {
-    setManualControl({ round: preSearch.roundNumber, open });
+    setManualControl({ open, round: preSearch.roundNumber });
   }, [preSearch.roundNumber]);
 
   const isOpen = useMemo(() => {
-    if (demoOpen !== undefined)
+    if (demoOpen !== undefined) {
       return demoOpen;
-    if (isManualControlValid && manualControl)
+    }
+    if (isManualControlValid && manualControl) {
       return manualControl.open;
-    if (isStreamingOrPending)
+    }
+    if (isStreamingOrPending) {
       return true;
+    }
     return false;
   }, [demoOpen, isStreamingOrPending, isManualControlValid, manualControl]);
 

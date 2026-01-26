@@ -67,9 +67,9 @@ type ChatThreadScreenProps = {
 };
 
 function useThreadHeaderUpdater({
-  thread,
-  slug,
   onDeleteClick,
+  slug,
+  thread,
 }: {
   thread: ChatThread;
   slug: string;
@@ -95,15 +95,15 @@ function useThreadHeaderUpdater({
 }
 
 export default function ChatThreadScreen({
-  thread,
-  participants,
-  initialMessages,
-  slug,
-  user,
-  streamResumptionState,
-  initialPreSearches,
   initialChangelog,
   initialFeedback: _initialFeedback,
+  initialMessages,
+  initialPreSearches,
+  participants,
+  slug,
+  streamResumptionState,
+  thread,
+  user,
 }: ChatThreadScreenProps) {
   const t = useTranslations();
   const isDeleteDialogOpen = useBoolean(false);
@@ -122,47 +122,47 @@ export default function ChatThreadScreen({
   // ✅ SSR HYDRATION: Hydrate store synchronously BEFORE any useChatStore calls
   // This ensures first paint has content - no loading flash
   useSyncHydrateStore({
-    mode: 'thread',
-    thread,
-    participants,
-    initialMessages: uiMessages,
-    streamResumptionState,
-    initialPreSearches,
     initialChangelog,
+    initialMessages: uiMessages,
+    initialPreSearches,
+    mode: 'thread',
+    participants,
+    streamResumptionState,
+    thread,
   });
 
   // 🔍 DEBUG: Log props vs what useSyncHydrateStore received
   rlog.init('screen-props', `t=${thread.id?.slice(-8)} slug=${thread.slug} msgs=${uiMessages.length} parts=${participants.length}`);
 
-  useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });
+  useThreadHeaderUpdater({ onDeleteClick: isDeleteDialogOpen.onTrue, slug, thread });
 
   const { setSelectedModelIds } = useModelPreferencesStore(useShallow(s => ({
     setSelectedModelIds: s.setSelectedModelIds,
   })));
 
   const {
-    isStreaming,
+    inputValue,
     isModeratorStreaming,
+    isStreaming,
+    messages,
     pendingMessage,
     selectedMode,
-    inputValue,
     selectedParticipants,
-    messages,
     setSelectedParticipants,
-    waitingToStartStreaming,
     storeThread,
+    waitingToStartStreaming,
   } = useChatStore(
     useShallow(s => ({
-      isStreaming: s.isStreaming,
+      inputValue: s.inputValue,
       isModeratorStreaming: s.isModeratorStreaming,
+      isStreaming: s.isStreaming,
+      messages: s.messages,
       pendingMessage: s.pendingMessage,
       selectedMode: s.selectedMode,
-      inputValue: s.inputValue,
       selectedParticipants: s.selectedParticipants,
-      messages: s.messages,
       setSelectedParticipants: s.setSelectedParticipants,
-      waitingToStartStreaming: s.waitingToStartStreaming,
       storeThread: s.thread,
+      waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
 
@@ -178,7 +178,7 @@ export default function ChatThreadScreen({
   }, [modelsData]);
 
   // ✅ GRANULAR: Track vision (image) and file (document) incompatibilities separately
-  const { incompatibleModelIds, visionIncompatibleModelIds, fileIncompatibleModelIds } = useMemo(() => {
+  const { fileIncompatibleModelIds, incompatibleModelIds, visionIncompatibleModelIds } = useMemo(() => {
     const incompatible = new Set<string>();
 
     // Add inaccessible models (tier restrictions)
@@ -203,7 +203,7 @@ export default function ChatThreadScreen({
     const hasDocuments = existingDocumentFiles || newDocumentFiles;
 
     // Build file list for capability checking
-    const files: Array<{ mimeType: string }> = [];
+    const files: { mimeType: string }[] = [];
     if (hasImages) {
       files.push({ mimeType: 'image/png' }); // Representative image type
     }
@@ -214,16 +214,16 @@ export default function ChatThreadScreen({
     // Get detailed incompatibility info
     // Map models to the shape expected by getDetailedIncompatibleModelIds
     const modelsWithCapabilities = allEnabledModels.map((m: Model) => ({
-      id: m.id,
       capabilities: {
-        vision: m.supports_vision,
         file: m.supports_file,
+        vision: m.supports_vision,
       },
+      id: m.id,
     }));
     const {
+      fileIncompatibleIds,
       incompatibleIds,
       visionIncompatibleIds,
-      fileIncompatibleIds,
     } = getDetailedIncompatibleModelIds(modelsWithCapabilities, files);
 
     // Merge with tier-restricted models
@@ -232,9 +232,9 @@ export default function ChatThreadScreen({
     }
 
     return {
+      fileIncompatibleModelIds: fileIncompatibleIds,
       incompatibleModelIds: incompatible,
       visionIncompatibleModelIds: visionIncompatibleIds,
-      fileIncompatibleModelIds: fileIncompatibleIds,
     };
   }, [messages, chatAttachments.attachments, allEnabledModels]);
 
@@ -324,28 +324,30 @@ export default function ChatThreadScreen({
   );
 
   const chatMode = useMemo(() => {
-    if (selectedMode)
+    if (selectedMode) {
       return selectedMode;
+    }
     const parsed = ChatModeSchema.safeParse(thread.mode);
     return parsed.success ? parsed.data : undefined;
   }, [selectedMode, thread.mode]);
 
   useScreenInitialization({
-    mode: 'thread',
-    thread,
-    participants,
-    initialMessages: uiMessages,
     chatMode,
-    isRegeneration: regeneratingRoundNumber !== null,
-    regeneratingRoundNumber,
     enableOrchestrator: !isRegenerating && !isModeratorStreaming,
-    streamResumptionState,
+    initialMessages: uiMessages,
     initialPreSearches,
+    isRegeneration: regeneratingRoundNumber !== null,
+    mode: 'thread',
+    participants,
+    regeneratingRoundNumber,
+    streamResumptionState,
+    thread,
   });
 
   const isAwaitingModerator = useMemo(() => {
-    if (messages.length === 0 || participants.length === 0)
+    if (messages.length === 0 || participants.length === 0) {
       return false;
+    }
 
     const currentRound = getCurrentRoundNumber(messages);
     const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
@@ -359,12 +361,14 @@ export default function ChatThreadScreen({
 
   useEffect(() => {
     // Only poll for project threads
-    if (!thread.projectId)
+    if (!thread.projectId) {
       return;
+    }
 
     const currentRound = getCurrentRoundNumber(messages);
-    if (currentRound === 0)
+    if (currentRound === 0) {
       return;
+    }
 
     // Check if moderator message exists and is complete for this round
     const moderatorMessage = getModeratorMessageForRound(messages, currentRound);
@@ -383,10 +387,11 @@ export default function ChatThreadScreen({
       && !prevState.complete;
 
     // Update ref for next check
-    previousModeratorCompleteRef.current = { round: currentRound, complete: moderatorComplete };
+    previousModeratorCompleteRef.current = { complete: moderatorComplete, round: currentRound };
 
-    if (!moderatorJustCompleted)
+    if (!moderatorJustCompleted) {
       return;
+    }
 
     rlog.resume('memory-poll', `r${currentRound} moderator complete, polling for memory events`);
 
@@ -402,9 +407,9 @@ export default function ChatThreadScreen({
           // Store memory events for inline display under user messages
           type MemoryItem = NonNullable<GetThreadMemoryEventsResponse>['memories'][number];
           const memoryEvents: MemoryEvent[] = response.memories.map((m: MemoryItem) => ({
+            content: m.content ?? m.summary,
             id: m.id,
             summary: m.summary,
-            content: m.content ?? m.summary,
           }));
 
           setMemoryEventsByRound((prev) => {
@@ -446,10 +451,10 @@ export default function ChatThreadScreen({
             throw new Error('Upload ID is required for completed attachments');
           }
           return {
-            uploadId: att.uploadId,
             filename: att.file.name,
             mimeType: att.file.type,
             previewUrl: att.preview?.url,
+            uploadId: att.uploadId,
           };
         });
       await formActions.handleUpdateThreadAndSend(thread.id, attachmentIds, attachmentInfos);
@@ -464,8 +469,9 @@ export default function ChatThreadScreen({
   // Handler to delete a memory and remove from local state
   const handleDeleteMemory = useCallback(
     async (memoryId: string, roundNumber: number) => {
-      if (!thread.projectId)
+      if (!thread.projectId) {
         return;
+      }
 
       try {
         await deleteMemoryMutation.mutateAsync({
@@ -521,7 +527,7 @@ export default function ChatThreadScreen({
         threadId={thread.id}
         threadSlug={slug}
         projectId={thread.projectId ?? undefined}
-        redirectIfCurrent={true}
+        redirectIfCurrent
       />
     </>
   );

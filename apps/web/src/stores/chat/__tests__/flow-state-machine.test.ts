@@ -103,18 +103,19 @@ function determineFlowState(context: FlowContext): FlowState {
  * Pure function that checks if all participants responded - mirrors flow-state-machine.ts
  */
 function calculateAllParticipantsResponded(
-  messages: Array<{
+  messages: {
     role: string;
     metadata?: unknown;
-    parts?: Array<{ type: string; text?: string }>;
-  }>,
-  participants: Array<{ id: string; isEnabled: boolean }>,
+    parts?: { type: string; text?: string }[];
+  }[],
+  participants: { id: string; isEnabled: boolean }[],
   currentRound: number,
 ): boolean {
   // Filter assistant messages for current round
   const participantMessagesInRound = messages.filter((m) => {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
+    }
     const metadata = m.metadata as { roundNumber?: number } | undefined;
     return metadata?.roundNumber === currentRound;
   });
@@ -125,21 +126,24 @@ function calculateAllParticipantsResponded(
     const hasStreamingParts = m.parts?.some(
       p => 'state' in p && p.state === 'streaming',
     ) ?? false;
-    if (hasStreamingParts)
+    if (hasStreamingParts) {
       return false;
+    }
 
     // Check for text content
     const hasTextContent = m.parts?.some(
       p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
     );
-    if (hasTextContent)
+    if (hasTextContent) {
       return true;
+    }
 
     // Check for finishReason - accept any (including 'unknown')
     const metadata = m.metadata as { finishReason?: string } | undefined;
     const finishReason = metadata?.finishReason;
-    if (finishReason)
+    if (finishReason) {
       return true;
+    }
 
     return false;
   });
@@ -155,20 +159,20 @@ function calculateAllParticipantsResponded(
 
 function createDefaultContext(): FlowContext {
   return {
-    threadId: 'thread-123',
-    threadSlug: 'test-thread',
-    hasAiGeneratedTitle: false,
-    currentRound: 0,
-    hasMessages: false,
-    participantCount: 2,
     allParticipantsResponded: false,
-    moderatorStatus: null,
-    moderatorExists: false,
+    currentRound: 0,
+    hasAiGeneratedTitle: false,
+    hasMessages: false,
+    hasNavigated: false,
     isAiSdkStreaming: false,
     isCreatingThread: false,
     isModeratorStreaming: false,
-    hasNavigated: false,
+    moderatorExists: false,
+    moderatorStatus: null,
+    participantCount: 2,
     screenMode: ScreenModes.OVERVIEW,
+    threadId: 'thread-123',
+    threadSlug: 'test-thread',
   };
 }
 
@@ -346,68 +350,68 @@ describe('participant Completion Detection', () => {
   describe('no Messages', () => {
     it('returns false when no messages exist', () => {
       const result = calculateAllParticipantsResponded([], twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when only user message exists', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
   describe('partial Responses', () => {
     it('returns false when only one participant responded', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hi there!' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hi there!', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when one message is empty (placeholder)', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hi!' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [] }, // Empty placeholder
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hi!', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { roundNumber: 0 }, parts: [], role: MessageRoles.ASSISTANT }, // Empty placeholder
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('returns false when message has empty text', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hi!' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: '' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hi!', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { roundNumber: 0 }, parts: [{ text: '', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
   describe('complete Responses', () => {
     it('returns true when all participants have text content', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 2' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 2', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('returns true when message has finishReason even without text', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, finishReason: FinishReasons.STOP }, parts: [] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { finishReason: FinishReasons.STOP, roundNumber: 0 }, parts: [], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('dOES count messages with UNKNOWN finishReason (stream ended)', () => {
@@ -415,24 +419,24 @@ describe('participant Completion Detection', () => {
       // For moderator trigger purposes, we should accept any finishReason
       // The message has finished streaming, even if abnormally
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, finishReason: FinishReasons.UNKNOWN }, parts: [] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { finishReason: FinishReasons.UNKNOWN, roundNumber: 0 }, parts: [], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(true); // 'unknown' counts as completed
+      expect(result).toBeTruthy(); // 'unknown' counts as completed
     });
 
     it('does NOT count messages with streaming parts', () => {
       // ✅ CRITICAL: Messages with state:'streaming' parts are still in-flight
       // Do NOT count them as completed even if they have content
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0, finishReason: FinishReasons.UNKNOWN }, parts: [{ type: MessagePartTypes.TEXT, text: 'Partial', state: 'streaming' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { finishReason: FinishReasons.UNKNOWN, roundNumber: 0 }, parts: [{ state: 'streaming', text: 'Partial', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false); // streaming parts = not complete
+      expect(result).toBeFalsy(); // streaming parts = not complete
     });
   });
 
@@ -440,28 +444,28 @@ describe('participant Completion Detection', () => {
     it('only counts messages from the current round', () => {
       const messages = [
         // Round 0 messages
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'R0 P1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'R0 P2' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'R0 P1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'R0 P2', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
         // Round 1 messages - only one participant
-        { role: MessageRoles.USER, metadata: { roundNumber: 1 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Follow up' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 1 }, parts: [{ type: MessagePartTypes.TEXT, text: 'R1 P1' }] },
+        { metadata: { roundNumber: 1 }, parts: [{ text: 'Follow up', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 1 }, parts: [{ text: 'R1 P1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
 
       // Round 0 should be complete
-      expect(calculateAllParticipantsResponded(messages, twoParticipants, 0)).toBe(true);
+      expect(calculateAllParticipantsResponded(messages, twoParticipants, 0)).toBeTruthy();
       // Round 1 should NOT be complete
-      expect(calculateAllParticipantsResponded(messages, twoParticipants, 1)).toBe(false);
+      expect(calculateAllParticipantsResponded(messages, twoParticipants, 1)).toBeFalsy();
     });
 
     it('ignores messages without roundNumber metadata', () => {
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: {}, parts: [{ type: MessagePartTypes.TEXT, text: 'No round' }] }, // No roundNumber
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: {}, parts: [{ text: 'No round', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT }, // No roundNumber
       ];
       const result = calculateAllParticipantsResponded(messages, twoParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
   });
 
@@ -472,10 +476,10 @@ describe('participant Completion Detection', () => {
         { id: 'p2', isEnabled: false },
       ];
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
       ];
       const result = calculateAllParticipantsResponded(messages, disabledParticipants, 0);
-      expect(result).toBe(false);
+      expect(result).toBeFalsy();
     });
 
     it('only counts enabled participants', () => {
@@ -485,23 +489,23 @@ describe('participant Completion Detection', () => {
         { id: 'p3', isEnabled: true },
       ];
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 1' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response 2' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 1', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response 2', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       // Should be true because only 2 enabled participants and we have 2 responses
       const result = calculateAllParticipantsResponded(messages, mixedParticipants, 0);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
 
     it('handles single participant correctly', () => {
       const oneParticipant = [{ id: 'p1', isEnabled: true }];
       const messages = [
-        { role: MessageRoles.USER, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }] },
-        { role: MessageRoles.ASSISTANT, metadata: { roundNumber: 0 }, parts: [{ type: MessagePartTypes.TEXT, text: 'Response' }] },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }], role: MessageRoles.USER },
+        { metadata: { roundNumber: 0 }, parts: [{ text: 'Response', type: MessagePartTypes.TEXT }], role: MessageRoles.ASSISTANT },
       ];
       const result = calculateAllParticipantsResponded(messages, oneParticipant, 0);
-      expect(result).toBe(true);
+      expect(result).toBeTruthy();
     });
   });
 });

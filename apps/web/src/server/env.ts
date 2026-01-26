@@ -35,11 +35,11 @@ export const getPublicEnv = createServerFn({ method: 'GET' }).handler(
 
     // Build raw env object from CF binding or process.env fallback
     const rawEnv = {
-      VITE_WEBAPP_ENV: cfEnv?.VITE_WEBAPP_ENV ?? process.env.VITE_WEBAPP_ENV ?? 'local',
-      VITE_POSTHOG_API_KEY: cfEnv?.VITE_POSTHOG_API_KEY ?? process.env.VITE_POSTHOG_API_KEY ?? '',
       VITE_MAINTENANCE: cfEnv?.VITE_MAINTENANCE ?? process.env.VITE_MAINTENANCE ?? 'false',
-      VITE_TURNSTILE_SITE_KEY: cfEnv?.VITE_TURNSTILE_SITE_KEY ?? process.env.VITE_TURNSTILE_SITE_KEY ?? '',
+      VITE_POSTHOG_API_KEY: cfEnv?.VITE_POSTHOG_API_KEY ?? process.env.VITE_POSTHOG_API_KEY ?? '',
       VITE_STRIPE_PUBLISHABLE_KEY: cfEnv?.VITE_STRIPE_PUBLISHABLE_KEY ?? process.env.VITE_STRIPE_PUBLISHABLE_KEY ?? '',
+      VITE_TURNSTILE_SITE_KEY: cfEnv?.VITE_TURNSTILE_SITE_KEY ?? process.env.VITE_TURNSTILE_SITE_KEY ?? '',
+      VITE_WEBAPP_ENV: cfEnv?.VITE_WEBAPP_ENV ?? process.env.VITE_WEBAPP_ENV ?? 'local',
     };
 
     // Validate and return typed result

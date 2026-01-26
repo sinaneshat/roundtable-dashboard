@@ -18,12 +18,12 @@ type ChatThreadMenuItemsProps = {
 };
 
 export function ChatThreadMenuItems({
-  onRename,
-  onPin,
-  onShare,
-  onDelete,
   isFavorite,
   isPinPending = false,
+  onDelete,
+  onPin,
+  onRename,
+  onShare,
 }: ChatThreadMenuItemsProps) {
   const t = useTranslations();
 

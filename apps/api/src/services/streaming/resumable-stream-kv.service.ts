@@ -99,7 +99,7 @@ export async function setThreadActiveStream(
 
     let participantStatuses: Record<number, ParticipantStreamStatus> = {};
 
-    if (existing && existing.roundNumber === roundNumber) {
+    if (existing?.roundNumber === roundNumber) {
       // Same round - preserve existing participant statuses
       participantStatuses = { ...existing.participantStatuses };
     }
@@ -108,14 +108,14 @@ export async function setThreadActiveStream(
     participantStatuses[participantIndex] = ParticipantStreamStatuses.ACTIVE;
 
     const activeStream: ThreadActiveStream = {
-      streamId,
-      roundNumber,
-      participantIndex,
-      createdAt: existing?.roundNumber === roundNumber ? existing.createdAt : new Date().toISOString(),
-      totalParticipants,
-      participantStatuses,
       // ✅ FIX: Store attachmentIds - preserve from existing if not provided (for P1+)
       attachmentIds: attachmentIds ?? existing?.attachmentIds,
+      createdAt: existing?.roundNumber === roundNumber ? existing.createdAt : new Date().toISOString(),
+      participantIndex,
+      participantStatuses,
+      roundNumber,
+      streamId,
+      totalParticipants,
     };
 
     await env.KV.put(
@@ -128,21 +128,21 @@ export async function setThreadActiveStream(
       logger.info('Set thread active stream', {
         logType: LogTypes.OPERATION,
         operationName: 'setThreadActiveStream',
-        threadId,
-        streamId,
-        roundNumber,
         participantIndex,
-        totalParticipants,
         participantStatuses,
+        roundNumber,
+        streamId,
+        threadId,
+        totalParticipants,
       });
     }
   } catch (error) {
     if (logger) {
       logger.warn('Failed to set thread active stream', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'setThreadActiveStream_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     // Don't throw - tracking failures shouldn't break streaming
@@ -180,10 +180,10 @@ export async function getThreadActiveStream(
       logger.info('Retrieved thread active stream', {
         logType: LogTypes.OPERATION,
         operationName: 'getThreadActiveStream',
-        threadId,
-        streamId: activeStream.streamId,
-        roundNumber: activeStream.roundNumber,
         participantIndex: activeStream.participantIndex,
+        roundNumber: activeStream.roundNumber,
+        streamId: activeStream.streamId,
+        threadId,
       });
     }
 
@@ -191,10 +191,10 @@ export async function getThreadActiveStream(
   } catch (error) {
     if (logger) {
       logger.error('Failed to get thread active stream', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'getThreadActiveStream_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     return null;
@@ -234,10 +234,10 @@ export async function updateParticipantStatus(
     if (!existing) {
       logger?.warn('No active stream to update participant status', {
         logType: LogTypes.EDGE_CASE,
+        participantIndex,
+        roundNumber,
         scenario: 'updateParticipantStatus_noActiveStream',
         threadId,
-        roundNumber,
-        participantIndex,
       });
       return false;
     }
@@ -259,10 +259,10 @@ export async function updateParticipantStatus(
       logger?.info('All participants finished - cleared thread active stream', {
         logType: LogTypes.OPERATION,
         operationName: 'updateParticipantStatus_allFinished',
-        threadId,
-        roundNumber,
-        totalParticipants: existing.totalParticipants,
         participantStatuses,
+        roundNumber,
+        threadId,
+        totalParticipants: existing.totalParticipants,
       });
       return true;
     }
@@ -280,23 +280,23 @@ export async function updateParticipantStatus(
     );
 
     logger?.info('Updated participant status', {
+      finishedCount,
       logType: LogTypes.OPERATION,
       operationName: 'updateParticipantStatus',
-      threadId,
-      roundNumber,
       participantIndex,
+      roundNumber,
       status,
-      finishedCount,
+      threadId,
       totalParticipants: existing.totalParticipants,
     });
 
     return false;
   } catch (error) {
     logger?.warn('Failed to update participant status', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: 'updateParticipantStatus_failed',
       threadId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
     return false;
   }
@@ -332,8 +332,8 @@ export async function getNextParticipantToStream(
       const status = existing.participantStatuses[i];
       if (status === ParticipantStreamStatuses.ACTIVE || status === undefined) {
         return {
-          roundNumber: existing.roundNumber,
           participantIndex: i,
+          roundNumber: existing.roundNumber,
           totalParticipants: existing.totalParticipants,
         };
       }
@@ -343,10 +343,10 @@ export async function getNextParticipantToStream(
     return null;
   } catch (error) {
     logger?.error('Failed to get next participant to stream', {
+      error: error instanceof Error ? error.message : 'Unknown error',
       logType: LogTypes.EDGE_CASE,
       scenario: 'getNextParticipantToStream_failed',
       threadId,
-      error: error instanceof Error ? error.message : 'Unknown error',
     });
     return null;
   }
@@ -386,10 +386,10 @@ export async function clearThreadActiveStream(
   } catch (error) {
     if (logger) {
       logger.warn('Failed to clear thread active stream', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'clearThreadActiveStream_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -420,17 +420,17 @@ export async function markStreamActive(
   try {
     const now = new Date().toISOString();
     const state: StreamState = {
-      threadId,
-      roundNumber,
-      participantIndex,
-      status: StreamStatuses.ACTIVE,
-      messageId: null,
-      createdAt: now,
+      chunkCount: 0,
       completedAt: null,
+      createdAt: now,
       errorMessage: null,
       // ✅ HEARTBEAT: Initialize liveness tracking (Phase 1.3)
       lastHeartbeatAt: now,
-      chunkCount: 0,
+      messageId: null,
+      participantIndex,
+      roundNumber,
+      status: StreamStatuses.ACTIVE,
+      threadId,
     };
 
     await env.KV.put(
@@ -443,18 +443,18 @@ export async function markStreamActive(
       logger.info('Marked stream as active', {
         logType: LogTypes.OPERATION,
         operationName: 'markStreamActive',
-        threadId,
-        roundNumber,
         participantIndex,
+        roundNumber,
+        threadId,
       });
     }
   } catch (error) {
     if (logger) {
       logger.warn('Failed to mark stream as active', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'markStreamActive_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     // Don't throw - tracking failures shouldn't break streaming
@@ -491,16 +491,16 @@ export async function markStreamCompleted(
     const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
 
     const state: StreamState = {
-      threadId,
-      roundNumber,
-      participantIndex,
-      status: StreamStatuses.COMPLETED,
-      messageId,
-      createdAt: existingState?.createdAt || now,
+      chunkCount: existingState?.chunkCount || 0,
       completedAt: now,
+      createdAt: existingState?.createdAt || now,
       errorMessage: null,
       lastHeartbeatAt: now,
-      chunkCount: existingState?.chunkCount || 0,
+      messageId,
+      participantIndex,
+      roundNumber,
+      status: StreamStatuses.COMPLETED,
+      threadId,
     };
 
     await env.KV.put(
@@ -512,20 +512,20 @@ export async function markStreamCompleted(
     if (logger) {
       logger.info('Marked stream as completed', {
         logType: LogTypes.OPERATION,
-        operationName: 'markStreamCompleted',
-        threadId,
-        roundNumber,
-        participantIndex,
         messageId,
+        operationName: 'markStreamCompleted',
+        participantIndex,
+        roundNumber,
+        threadId,
       });
     }
   } catch (error) {
     if (logger) {
       logger.warn('Failed to mark stream as completed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'markStreamCompleted_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -561,16 +561,16 @@ export async function markStreamFailed(
     const existingState = await getStreamState(threadId, roundNumber, participantIndex, env);
 
     const state: StreamState = {
-      threadId,
-      roundNumber,
-      participantIndex,
-      status: StreamStatuses.FAILED,
-      messageId: null,
-      createdAt: existingState?.createdAt || now,
+      chunkCount: existingState?.chunkCount || 0,
       completedAt: now,
+      createdAt: existingState?.createdAt || now,
       errorMessage,
       lastHeartbeatAt: now,
-      chunkCount: existingState?.chunkCount || 0,
+      messageId: null,
+      participantIndex,
+      roundNumber,
+      status: StreamStatuses.FAILED,
+      threadId,
     };
 
     await env.KV.put(
@@ -581,21 +581,21 @@ export async function markStreamFailed(
 
     if (logger) {
       logger.info('Marked stream as failed', {
+        errorMessage,
         logType: LogTypes.OPERATION,
         operationName: 'markStreamFailed',
-        threadId,
-        roundNumber,
         participantIndex,
-        errorMessage,
+        roundNumber,
+        threadId,
       });
     }
   } catch (error) {
     if (logger) {
       logger.warn('Failed to mark stream as failed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'markStreamFailed_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -634,10 +634,10 @@ export async function getStreamState(
       logger.info('Retrieved stream state', {
         logType: LogTypes.OPERATION,
         operationName: 'getStreamState',
-        threadId,
-        roundNumber,
         participantIndex,
+        roundNumber,
         status: state.status,
+        threadId,
       });
     }
 
@@ -645,10 +645,10 @@ export async function getStreamState(
   } catch (error) {
     if (logger) {
       logger.error('Failed to get stream state', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'getStreamState_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     return null;
@@ -684,18 +684,18 @@ export async function clearStreamState(
       logger.info('Cleared stream state', {
         logType: LogTypes.OPERATION,
         operationName: 'clearStreamState',
-        threadId,
-        roundNumber,
         participantIndex,
+        roundNumber,
+        threadId,
       });
     }
   } catch (error) {
     if (logger) {
       logger.warn('Failed to clear stream state', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
         scenario: 'clearStreamState_failed',
         threadId,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -754,12 +754,12 @@ export async function updateStreamHeartbeat(
   } catch (error) {
     if (logger) {
       logger.warn('Failed to update stream heartbeat', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
+        participantIndex,
+        roundNumber,
         scenario: 'updateStreamHeartbeat_failed',
         threadId,
-        roundNumber,
-        participantIndex,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -807,12 +807,12 @@ export async function incrementStreamChunkCount(
   } catch (error) {
     if (logger) {
       logger.warn('Failed to increment stream chunk count', {
+        error: error instanceof Error ? error.message : 'Unknown error',
         logType: LogTypes.EDGE_CASE,
+        participantIndex,
+        roundNumber,
         scenario: 'incrementStreamChunkCount_failed',
         threadId,
-        roundNumber,
-        participantIndex,
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }

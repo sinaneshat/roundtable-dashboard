@@ -49,7 +49,7 @@ async function processMessage(
   message: TitleGenerationQueueMessage,
   env: CloudflareEnv,
 ): Promise<void> {
-  const { threadId, firstMessage, userId } = message;
+  const { firstMessage, threadId, userId } = message;
 
   // Dynamic import to lazy-load AI SDK (prevents startup memory overflow)
   const { generateTitleFromMessage, updateThreadTitleAndSlug } = await import(
@@ -58,8 +58,8 @@ async function processMessage(
 
   // ✅ BILLING: Pass billing context for title generation credit deduction
   const title = await generateTitleFromMessage(firstMessage, env, {
-    userId,
     threadId,
+    userId,
   });
   await updateThreadTitleAndSlug(threadId, title);
 }

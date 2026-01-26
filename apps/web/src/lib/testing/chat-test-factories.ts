@@ -14,12 +14,12 @@ import { createBaseMockParticipant, createBaseMockThread } from './api-mocks';
 
 export function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return createBaseMockThread({
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: ChatModes.DEBATING,
     status: ThreadStatuses.ACTIVE,
-    enableWebSearch: false,
+    title: 'Test Thread',
+    userId: 'user-123',
     ...overrides,
   });
 }
@@ -28,10 +28,10 @@ export function createMockParticipant(index: number, overrides?: Partial<ChatPar
   const models = ['gpt-4o', 'claude-3-opus', 'gemini-pro', 'mistral-large'] as const;
   return createBaseMockParticipant({
     id: `participant-${index}`,
-    threadId: 'thread-123',
     modelId: models[index % models.length],
-    role: `Role ${index}`,
     priority: index,
+    role: `Role ${index}`,
+    threadId: 'thread-123',
     ...overrides,
   });
 }
@@ -44,8 +44,8 @@ export function createParticipantConfig(index: number, overrides?: Partial<Parti
   return {
     id: `participant-${index}`,
     modelId: `model-${index}`,
-    role: `Role ${index}`,
     priority: index,
+    role: `Role ${index}`,
     ...overrides,
   };
 }
@@ -62,25 +62,25 @@ export function createMockStoredPreSearch(
   const isComplete = status === MessageStatuses.COMPLETE;
 
   return {
+    completedAt: isComplete ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    status,
-    userQuery: 'Test query',
     searchData: isComplete
       ? {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Summary',
           successCount: 1,
-          failureCount: 0,
+          summary: 'Summary',
           totalResults: 3,
           totalTime: 1000,
         }
       : undefined,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: isComplete ? new Date() : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Test query',
     ...overrides,
   } as StoredPreSearch;
 }
@@ -103,12 +103,12 @@ export function createStreamKVEntry(
 ) {
   const streamId = generateStreamId(threadId, roundNumber, participantIndex);
   return {
+    createdAt: new Date().toISOString(),
+    participantIndex,
+    roundNumber,
+    status,
     streamId,
     threadId,
-    roundNumber,
-    participantIndex,
-    status,
-    createdAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -130,33 +130,33 @@ export function createInitialStoreState(overrides?: {
   triggeredModeratorIds?: Set<string>;
 }) {
   return {
-    isStreaming: false,
-    waitingToStartStreaming: false,
-    streamingRoundNumber: null,
+    createdModeratorRounds: new Set(),
     currentParticipantIndex: 0,
     currentRoundNumber: null,
-    isModeratorStreaming: false,
-    isWaitingForChangelog: false,
-    hasSentPendingMessage: false,
     error: null,
+    hasSentPendingMessage: false,
+    isModeratorStreaming: false,
+    isStreaming: false,
+    isWaitingForChangelog: false,
     preSearches: [],
-    triggeredPreSearchRounds: new Set(),
-    createdModeratorRounds: new Set(),
-    triggeredModeratorRounds: new Set(),
+    streamingRoundNumber: null,
     triggeredModeratorIds: new Set(),
+    triggeredModeratorRounds: new Set(),
+    triggeredPreSearchRounds: new Set(),
+    waitingToStartStreaming: false,
     ...overrides,
   };
 }
 
 export function createOptimisticTestMessage(content: string, tempId: string) {
   return {
-    id: tempId,
-    tempId,
-    role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
+    id: tempId,
     isOptimistic: true as const,
+    role: UIMessageRoles.USER,
     status: MessageStatuses.PENDING,
+    tempId,
   };
 }
 
@@ -167,14 +167,14 @@ export function createConfirmedTestMessage(
   roundNumber: number,
 ) {
   return {
-    id: serverId,
-    serverId,
-    role: UIMessageRoles.USER,
     content,
     createdAt: new Date(),
+    id: serverId,
     isOptimistic: false as const,
-    threadId,
+    role: UIMessageRoles.USER,
     roundNumber,
+    serverId,
+    threadId,
   };
 }
 
@@ -187,26 +187,26 @@ export function createTestStreamState(overrides?: {
   pendingParticipants?: string[];
   preSearchComplete?: boolean;
   moderatorComplete?: boolean;
-  messages?: Array<{
+  messages?: {
     id: string;
     participantId: string;
     content: string;
     status: 'streaming' | 'complete' | 'error';
-  }>;
+  }[];
   lastEventId?: string;
   timestamp?: number;
 }) {
   return {
-    streamId: 'stream-123',
-    threadId: 'thread-123',
-    roundNumber: 0,
-    currentParticipantIndex: 0,
     completedParticipants: [],
+    currentParticipantIndex: 0,
+    lastEventId: '',
+    messages: [],
+    moderatorComplete: false,
     pendingParticipants: ['participant-0', 'participant-1'],
     preSearchComplete: false,
-    moderatorComplete: false,
-    messages: [],
-    lastEventId: '',
+    roundNumber: 0,
+    streamId: 'stream-123',
+    threadId: 'thread-123',
     timestamp: Date.now(),
     ...overrides,
   };
@@ -215,12 +215,12 @@ export function createTestStreamState(overrides?: {
 export function createTestKVStreamData(
   state?: Parameters<typeof createTestStreamState>[0],
   overrides?: {
-    events?: Array<{
+    events?: {
       id: string;
       type: string;
       data: unknown;
       timestamp: number;
-    }>;
+    }[];
     metadata?: {
       version: string;
       createdAt: number;
@@ -230,13 +230,13 @@ export function createTestKVStreamData(
 ) {
   const now = Date.now();
   return {
-    state: createTestStreamState(state),
     events: [],
     metadata: {
-      version: '1.0',
       createdAt: now,
       updatedAt: now,
+      version: '1.0',
     },
+    state: createTestStreamState(state),
     ...overrides,
   };
 }
@@ -248,10 +248,10 @@ export function createMockModeratorMetrics(overrides?: {
   clarity?: number;
 }) {
   return {
-    engagement: 85,
-    insight: 78,
     balance: 82,
     clarity: 90,
+    engagement: 85,
+    insight: 78,
     ...overrides,
   };
 }
@@ -261,8 +261,8 @@ export function createMockModeratorPayload(overrides?: {
   metrics?: ReturnType<typeof createMockModeratorMetrics>;
 }) {
   return {
-    summary: 'The participants provided diverse perspectives on the topic, reaching consensus on key factors.',
     metrics: createMockModeratorMetrics(),
+    summary: 'The participants provided diverse perspectives on the topic, reaching consensus on key factors.',
     ...overrides,
   };
 }

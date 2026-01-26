@@ -14,12 +14,12 @@ import type { getDbAsync } from '@/db';
 // ============================================================================
 
 export const ProjectMemoryItemSchema = z.object({
-  id: z.string().min(1),
   content: z.string(),
-  summary: z.string().nullable(),
-  source: z.string(),
+  id: z.string().min(1),
   importance: z.number().int().nonnegative(),
+  source: z.string(),
   sourceThreadId: z.string().nullable(),
+  summary: z.string().nullable(),
 });
 
 export type ProjectMemoryItem = z.infer<typeof ProjectMemoryItemSchema>;
@@ -36,8 +36,8 @@ export type ProjectMemoryContext = z.infer<typeof ProjectMemoryContextSchema>;
 // ============================================================================
 
 export const ProjectChatMessageSchema = z.object({
-  role: z.string(),
   content: z.string(),
+  role: z.string(),
   roundNumber: z.number().int().nonnegative(),
 });
 
@@ -45,8 +45,8 @@ export type ProjectChatMessage = z.infer<typeof ProjectChatMessageSchema>;
 
 export const ProjectChatThreadSchema = z.object({
   id: z.string().min(1),
-  title: z.string(),
   messages: z.array(ProjectChatMessageSchema),
+  title: z.string(),
 });
 
 export type ProjectChatThread = z.infer<typeof ProjectChatThreadSchema>;
@@ -63,19 +63,19 @@ export type ProjectChatContext = z.infer<typeof ProjectChatContextSchema>;
 // ============================================================================
 
 export const ProjectSearchResultSchema = z.object({
-  query: z.string(),
   answer: z.string().nullable(),
+  query: z.string(),
 });
 
 export type ProjectSearchResult = z.infer<typeof ProjectSearchResultSchema>;
 
 export const ProjectSearchItemSchema = z.object({
+  results: z.array(ProjectSearchResultSchema),
+  roundNumber: z.number().int().nonnegative(),
+  summary: z.string().nullable(),
   threadId: z.string().min(1),
   threadTitle: z.string(),
-  roundNumber: z.number().int().nonnegative(),
   userQuery: z.string(),
-  summary: z.string().nullable(),
-  results: z.array(ProjectSearchResultSchema),
 });
 
 export type ProjectSearchItem = z.infer<typeof ProjectSearchItemSchema>;
@@ -92,13 +92,13 @@ export type ProjectSearchContext = z.infer<typeof ProjectSearchContextSchema>;
 // ============================================================================
 
 export const ProjectModeratorItemSchema = z.object({
-  threadId: z.string().min(1),
-  threadTitle: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-  userQuestion: z.string(),
+  keyThemes: z.string().nullable(),
   moderator: z.string(),
   recommendations: z.array(z.string()),
-  keyThemes: z.string().nullable(),
+  roundNumber: z.number().int().nonnegative(),
+  threadId: z.string().min(1),
+  threadTitle: z.string(),
+  userQuestion: z.string(),
 });
 
 export type ProjectModeratorItem = z.infer<typeof ProjectModeratorItemSchema>;
@@ -115,15 +115,15 @@ export type ProjectModeratorContext = z.infer<typeof ProjectModeratorContextSche
 // ============================================================================
 
 export const ProjectAttachmentItemSchema = z.object({
-  id: z.string().min(1),
   filename: z.string(),
-  mimeType: z.string(),
   fileSize: z.number().int().nonnegative(),
+  id: z.string().min(1),
+  mimeType: z.string(),
   r2Key: z.string(),
-  threadId: z.string().nullable(),
-  threadTitle: z.string().nullable(),
   source: z.enum(['project', 'thread']),
   textContent: z.string().nullable(),
+  threadId: z.string().nullable(),
+  threadTitle: z.string().nullable(),
 });
 
 export type ProjectAttachmentItem = z.infer<typeof ProjectAttachmentItemSchema>;
@@ -140,11 +140,11 @@ export type ProjectAttachmentContext = z.infer<typeof ProjectAttachmentContextSc
 // ============================================================================
 
 export const AggregatedProjectContextSchema = z.object({
-  memories: ProjectMemoryContextSchema,
-  chats: ProjectChatContextSchema,
-  searches: ProjectSearchContextSchema,
-  moderators: ProjectModeratorContextSchema,
   attachments: ProjectAttachmentContextSchema,
+  chats: ProjectChatContextSchema,
+  memories: ProjectMemoryContextSchema,
+  moderators: ProjectModeratorContextSchema,
+  searches: ProjectSearchContextSchema,
 });
 
 export type AggregatedProjectContext = z.infer<typeof AggregatedProjectContextSchema>;
@@ -154,15 +154,15 @@ export type AggregatedProjectContext = z.infer<typeof AggregatedProjectContextSc
 // ============================================================================
 
 export const ProjectContextParamsSchema = z.object({
-  projectId: z.string().min(1),
   currentThreadId: z.string().min(1),
-  userQuery: z.string(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   maxMemories: z.number().int().positive().optional(),
   maxMessagesPerThread: z.number().int().positive().optional(),
-  maxSearchResults: z.number().int().positive().optional(),
   maxModerators: z.number().int().positive().optional(),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  maxSearchResults: z.number().int().positive().optional(),
+  projectId: z.string().min(1),
   r2Bucket: z.custom<R2Bucket>().optional(),
+  userQuery: z.string(),
 });
 
 export type ProjectContextParams = z.infer<typeof ProjectContextParamsSchema>;
@@ -172,12 +172,23 @@ export type ProjectContextParams = z.infer<typeof ProjectContextParamsSchema>;
 // ============================================================================
 
 export const ProjectRagContextParamsSchema = z.object({
-  projectId: z.string().min(1),
-  query: z.string().min(1),
   ai: z.custom<Ai | undefined>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   maxResults: z.number().int().positive().optional(),
+  projectId: z.string().min(1),
+  query: z.string().min(1),
   userId: z.string().min(1).optional(),
 });
 
 export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSchema>;
+
+// ============================================================================
+// Citable Context Params Schema
+// ============================================================================
+
+export const CitableContextParamsSchema = ProjectContextParamsSchema.extend({
+  baseUrl: z.string().min(1).describe('Base URL for generating absolute download URLs'),
+  includeAttachments: z.boolean().optional(),
+});
+
+export type CitableContextParams = z.infer<typeof CitableContextParamsSchema>;

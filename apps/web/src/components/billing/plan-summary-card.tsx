@@ -15,11 +15,11 @@ type PlanOverviewCardProps = {
 };
 
 export function PlanOverviewCard({
-  tierName,
-  description,
-  status,
-  stats,
   activeUntil,
+  description,
+  stats,
+  status,
+  tierName,
 }: PlanOverviewCardProps) {
   const t = useTranslations();
 

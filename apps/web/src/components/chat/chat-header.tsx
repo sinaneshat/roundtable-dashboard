@@ -35,10 +35,10 @@ const BREADCRUMB_PATHS = ['/chat', '/chat/pricing', '/admin/impersonate', '/admi
 type BreadcrumbPath = (typeof BREADCRUMB_PATHS)[number];
 
 const BREADCRUMB_MAP: Record<BreadcrumbPath, { titleKey: string; parent?: string }> = {
+  '/admin/impersonate': { parent: '/chat', titleKey: 'admin.impersonate.title' },
+  '/admin/jobs': { parent: '/chat', titleKey: 'admin.jobs.title' },
   '/chat': { titleKey: 'navigation.chat' },
-  '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
-  '/admin/impersonate': { titleKey: 'admin.impersonate.title', parent: '/chat' },
-  '/admin/jobs': { titleKey: 'admin.jobs.title', parent: '/chat' },
+  '/chat/pricing': { parent: '/chat', titleKey: 'navigation.pricing' },
 };
 
 function isBreadcrumbPath(path: string): path is BreadcrumbPath {
@@ -47,17 +47,37 @@ function isBreadcrumbPath(path: string): path is BreadcrumbPath {
 
 const RouteThreadSchema = z.object({
   id: z.string(),
-  title: z.string().nullish().transform(v => v ?? undefined),
-  isPublic: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
+  title: z.string().nullish().transform(v => v ?? undefined),
 });
+
+/**
+ * Build a ChatThreadFlexible-compatible thread object from route data.
+ * Only includes optional properties when they have defined values
+ * (required for exactOptionalPropertyTypes: true).
+ */
+function buildThreadFromRoute(route: z.output<typeof RouteThreadSchema>): { id: string; title?: string; isFavorite?: boolean; isPublic?: boolean } {
+  const result: { id: string; title?: string; isFavorite?: boolean; isPublic?: boolean } = { id: route.id };
+  if (route.title !== undefined) {
+    result.title = route.title;
+  }
+  if (route.isFavorite !== undefined) {
+    result.isFavorite = route.isFavorite;
+  }
+  if (route.isPublic !== undefined) {
+    result.isPublic = route.isPublic;
+  }
+  return result;
+}
+
 type RouteThread = z.output<typeof RouteThreadSchema>;
 
 const ThreadLoaderDataSchema = z.object({
-  threadTitle: z.string().nullish(),
   threadData: z.object({
     thread: RouteThreadSchema,
   }).nullish(),
+  threadTitle: z.string().nullish(),
 });
 
 const RouteParamsSchema = z.object({
@@ -66,64 +86,68 @@ const RouteParamsSchema = z.object({
 
 // Project route schemas
 const ProjectLoaderDataSchema = z.object({
-  projectName: z.string().nullish(),
   project: z.object({ name: z.string() }).nullish(),
+  projectName: z.string().nullish(),
 });
 
 function extractProjectName(loaderData: unknown): string | null {
   const result = ProjectLoaderDataSchema.safeParse(loaderData);
-  if (!result.success)
+  if (!result.success) {
     return null;
+  }
   // Prefer explicit projectName, fall back to project.name
   return result.data.projectName ?? result.data.project?.name ?? null;
 }
 
 function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
-  if (!result.success)
+  if (!result.success) {
     return null;
+  }
   return result.data.threadData?.thread ?? null;
 }
 
 function extractThreadTitle(loaderData: unknown): string | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
-  if (!result.success)
+  if (!result.success) {
     return null;
+  }
   return result.data.threadTitle ?? null;
 }
 
 function extractSlugFromParams(params: unknown): string | null {
   const result = RouteParamsSchema.safeParse(params);
-  if (!result.success)
+  if (!result.success) {
     return null;
+  }
   return result.data.slug;
 }
 
 function NavigationHeaderComponent({
   className,
-  threadTitle: threadTitleProp,
-  threadActions: threadActionsProp,
-  showSidebarTrigger = true,
-  showLogo = false,
   maxWidth = false,
+  showLogo = false,
   showScrollButton = false,
+  showSidebarTrigger = true,
+  threadActions: threadActionsProp,
+  threadTitle: threadTitleProp,
 }: NavigationHeaderProps = {}) {
   const { pathname } = useLocation();
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
 
-  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId, animatingThreadId, animationNewTitle, animationPhase, displayedTitle } = useChatStore(
+  const { animatingThreadId, animationNewTitle, animationPhase, createdThreadId, displayedTitle, showInitialUI, storeThreadId, storeThreadTitle, thread } = useChatStore(
     useShallow(s => ({
-      storeThreadTitle: s.thread?.title ?? null,
-      storeThreadId: s.thread?.id ?? null,
-      showInitialUI: s.showInitialUI,
-      createdThreadId: s.createdThreadId,
-      thread: s.thread,
       animatingThreadId: s.animatingThreadId,
       animationNewTitle: s.newTitle,
       animationPhase: s.animationPhase,
+      createdThreadId: s.createdThreadId,
       displayedTitle: s.displayedTitle,
+      showInitialUI: s.showInitialUI,
+      storeThreadId: s.thread?.id ?? null,
+      storeThreadTitle: s.thread?.title ?? null,
+      thread: s.thread,
     })),
   );
 
@@ -200,7 +224,7 @@ function NavigationHeaderComponent({
 
   const contextThreadActions = showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null;
   const ssrThreadActions = routeThread && routeSlug && !contextThreadActions
-    ? <ChatThreadActions thread={routeThread} slug={routeSlug} />
+    ? <ChatThreadActions thread={buildThreadFromRoute(routeThread)} slug={routeSlug} />
     : null;
   const threadActions = threadActionsProp ?? contextThreadActions ?? ssrThreadActions;
 
@@ -215,11 +239,11 @@ function NavigationHeaderComponent({
 
   // Priority: Project thread > Project index > Thread page > Static routes
   const currentPage = isOnProjectThreadPage
-    ? { titleKey: threadTitle ?? '', isDynamic: true as const }
+    ? { isDynamic: true as const, titleKey: threadTitle ?? '' }
     : showProjectBreadcrumb
-      ? { titleKey: routeProjectName, isDynamic: true as const }
+      ? { isDynamic: true as const, titleKey: routeProjectName }
       : showThreadBreadcrumb
-        ? { titleKey: threadTitle, isDynamic: true as const }
+        ? { isDynamic: true as const, titleKey: threadTitle }
         : pathname ? BREADCRUMB_MAP[pathname as keyof typeof BREADCRUMB_MAP] : undefined;
   return (
     <header
@@ -354,17 +378,17 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   const hasSidebar = sidebarContext !== null;
 
   const {
-    showInitialUI,
-    isStreaming,
     isCreatingThread,
-    waitingToStartStreaming,
     isModeratorStreaming,
+    isStreaming,
+    showInitialUI,
+    waitingToStartStreaming,
   } = useChatStore(useShallow(s => ({
-    showInitialUI: s.showInitialUI,
-    isStreaming: s.isStreaming,
     isCreatingThread: s.isCreatingThread,
-    waitingToStartStreaming: s.waitingToStartStreaming,
     isModeratorStreaming: s.isModeratorStreaming,
+    isStreaming: s.isStreaming,
+    showInitialUI: s.showInitialUI,
+    waitingToStartStreaming: s.waitingToStartStreaming,
   })));
 
   const isThreadFlowActive = isStreaming || isCreatingThread || waitingToStartStreaming || isModeratorStreaming;
@@ -404,29 +428,29 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
 export const MinimalHeader = memo(MinimalHeaderComponent);
 
 export function PageHeader({
-  title,
-  description,
   action,
   children,
+  className,
+  description,
   showSeparator = true,
   size = 'md',
-  className,
+  title,
 }: PageHeaderProps) {
   const sizeConfig = {
-    sm: {
-      title: 'text-lg font-semibold tracking-tight',
-      description: 'text-xs text-muted-foreground',
-      spacing: 'space-y-3',
-    },
-    md: {
-      title: 'text-2xl font-semibold tracking-tight',
-      description: 'text-sm text-muted-foreground',
-      spacing: 'space-y-6',
-    },
     lg: {
-      title: 'text-3xl font-bold tracking-tight',
       description: 'text-base text-muted-foreground',
       spacing: 'space-y-8',
+      title: 'text-3xl font-bold tracking-tight',
+    },
+    md: {
+      description: 'text-sm text-muted-foreground',
+      spacing: 'space-y-6',
+      title: 'text-2xl font-semibold tracking-tight',
+    },
+    sm: {
+      description: 'text-xs text-muted-foreground',
+      spacing: 'space-y-3',
+      title: 'text-lg font-semibold tracking-tight',
     },
   } as const;
   const config = sizeConfig[size];
@@ -448,14 +472,15 @@ export function PageHeader({
 }
 
 export function ChatPageHeader({
-  title,
-  description,
   action,
-  size = 'md',
   className,
+  description,
+  size = 'md',
+  title,
 }: ChatPageHeaderProps) {
+  const chatSectionProps = className !== undefined ? { className } : {};
   return (
-    <ChatSection className={className}>
+    <ChatSection {...chatSectionProps}>
       <div className="mx-auto px-5 md:px-6">
         <div className="flex items-center justify-between">
           <PageHeader

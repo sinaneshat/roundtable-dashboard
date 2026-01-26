@@ -57,8 +57,8 @@ function createMockModel(
   file: boolean,
 ): { id: string; capabilities: ModelFileCapabilities } {
   return {
+    capabilities: { file, vision },
     id,
-    capabilities: { vision, file },
   };
 }
 
@@ -68,8 +68,8 @@ function createMockModel(
 function createMockMessage(mediaTyes: string[]): { parts?: unknown[] } {
   return {
     parts: mediaTyes.map(mediaType => ({
-      type: 'file',
       mediaType,
+      type: 'file',
     })),
   };
 }
@@ -278,17 +278,17 @@ describe('filesHaveDocuments', () => {
 describe('isModelCompatibleWithFiles', () => {
   describe('empty files array', () => {
     it('should be compatible with model that has no vision and no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, [])).toBe(true);
     });
 
     it('should be compatible with model that has vision but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, [])).toBe(true);
     });
 
     it('should be compatible with model that has both vision and file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, [])).toBe(true);
     });
   });
@@ -300,17 +300,17 @@ describe('isModelCompatibleWithFiles', () => {
     ];
 
     it('should be incompatible with model without vision support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, imageFiles)).toBe(false);
     });
 
     it('should be compatible with model with vision support but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, imageFiles)).toBe(true);
     });
 
     it('should be compatible with model with both vision and file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, imageFiles)).toBe(true);
     });
   });
@@ -319,21 +319,21 @@ describe('isModelCompatibleWithFiles', () => {
     const documentFiles = [createMockFile('application/pdf')];
 
     it('should be incompatible with model without file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, documentFiles)).toBe(
         false,
       );
     });
 
     it('should be incompatible with model with vision but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, documentFiles)).toBe(
         false,
       );
     });
 
     it('should be compatible with model with both vision and file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, documentFiles)).toBe(
         true,
       );
@@ -347,22 +347,22 @@ describe('isModelCompatibleWithFiles', () => {
     ];
 
     it('should be incompatible with model without vision or file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, mixedFiles)).toBe(false);
     });
 
     it('should be incompatible with model with vision but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, mixedFiles)).toBe(false);
     });
 
     it('should be incompatible with model with file support but no vision', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, mixedFiles)).toBe(false);
     });
 
     it('should be compatible with model with both vision and file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(isModelCompatibleWithFiles(capabilities, mixedFiles)).toBe(true);
     });
   });
@@ -371,14 +371,14 @@ describe('isModelCompatibleWithFiles', () => {
     const textFiles = [createMockFile('text/plain')];
 
     it('should be compatible with model without vision or file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(isModelCompatibleWithFiles(capabilities, textFiles)).toBe(true);
     });
 
     it('should be compatible with any model capabilities', () => {
-      const capabilities1: ModelFileCapabilities = { vision: true, file: false };
-      const capabilities2: ModelFileCapabilities = { vision: false, file: true };
-      const capabilities3: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities1: ModelFileCapabilities = { file: false, vision: true };
+      const capabilities2: ModelFileCapabilities = { file: true, vision: false };
+      const capabilities3: ModelFileCapabilities = { file: true, vision: true };
 
       expect(isModelCompatibleWithFiles(capabilities1, textFiles)).toBe(true);
       expect(isModelCompatibleWithFiles(capabilities2, textFiles)).toBe(true);
@@ -394,12 +394,12 @@ describe('isModelCompatibleWithFiles', () => {
 describe('getIncompatibilityReason', () => {
   describe('empty files array', () => {
     it('should return null for model with no capabilities', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(getIncompatibilityReason(capabilities, [])).toBeNull();
     });
 
     it('should return null for model with all capabilities', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(getIncompatibilityReason(capabilities, [])).toBeNull();
     });
   });
@@ -411,14 +411,14 @@ describe('getIncompatibilityReason', () => {
     ];
 
     it('should return NO_VISION for model without vision support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(getIncompatibilityReason(capabilities, imageFiles)).toBe(
         IncompatibilityReasons.NO_VISION,
       );
     });
 
     it('should return null for model with vision support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(getIncompatibilityReason(capabilities, imageFiles)).toBeNull();
     });
   });
@@ -427,21 +427,21 @@ describe('getIncompatibilityReason', () => {
     const documentFiles = [createMockFile('application/pdf')];
 
     it('should return NO_FILE_SUPPORT for model without file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(getIncompatibilityReason(capabilities, documentFiles)).toBe(
         IncompatibilityReasons.NO_FILE_SUPPORT,
       );
     });
 
     it('should return NO_FILE_SUPPORT for model with vision but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(getIncompatibilityReason(capabilities, documentFiles)).toBe(
         IncompatibilityReasons.NO_FILE_SUPPORT,
       );
     });
 
     it('should return null for model with file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(getIncompatibilityReason(capabilities, documentFiles)).toBeNull();
     });
   });
@@ -453,28 +453,28 @@ describe('getIncompatibilityReason', () => {
     ];
 
     it('should return NO_VISION for model without vision (prioritizes vision check)', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(getIncompatibilityReason(capabilities, mixedFiles)).toBe(
         IncompatibilityReasons.NO_VISION,
       );
     });
 
     it('should return NO_FILE_SUPPORT for model with vision but no file support', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: true };
       expect(getIncompatibilityReason(capabilities, mixedFiles)).toBe(
         IncompatibilityReasons.NO_FILE_SUPPORT,
       );
     });
 
     it('should return NO_VISION for model with file support but no vision', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: false };
       expect(getIncompatibilityReason(capabilities, mixedFiles)).toBe(
         IncompatibilityReasons.NO_VISION,
       );
     });
 
     it('should return null for model with both capabilities', () => {
-      const capabilities: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities: ModelFileCapabilities = { file: true, vision: true };
       expect(getIncompatibilityReason(capabilities, mixedFiles)).toBeNull();
     });
   });
@@ -483,14 +483,14 @@ describe('getIncompatibilityReason', () => {
     const textFiles = [createMockFile('text/plain')];
 
     it('should return null for model without any capabilities', () => {
-      const capabilities: ModelFileCapabilities = { vision: false, file: false };
+      const capabilities: ModelFileCapabilities = { file: false, vision: false };
       expect(getIncompatibilityReason(capabilities, textFiles)).toBeNull();
     });
 
     it('should return null for model with any capabilities', () => {
-      const capabilities1: ModelFileCapabilities = { vision: true, file: false };
-      const capabilities2: ModelFileCapabilities = { vision: false, file: true };
-      const capabilities3: ModelFileCapabilities = { vision: true, file: true };
+      const capabilities1: ModelFileCapabilities = { file: false, vision: true };
+      const capabilities2: ModelFileCapabilities = { file: true, vision: false };
+      const capabilities3: ModelFileCapabilities = { file: true, vision: true };
 
       expect(getIncompatibilityReason(capabilities1, textFiles)).toBeNull();
       expect(getIncompatibilityReason(capabilities2, textFiles)).toBeNull();
@@ -710,8 +710,8 @@ describe('threadHasImageFiles', () => {
     const messages = [
       {
         parts: [
-          { type: 'text', content: 'Hello' },
-          { type: 'file', mediaType: 'image/png' },
+          { content: 'Hello', type: 'text' },
+          { mediaType: 'image/png', type: 'file' },
         ],
       },
     ];
@@ -723,7 +723,7 @@ describe('threadHasImageFiles', () => {
       {
         parts: [
           { type: 'file' }, // missing mediaType
-          { type: 'text', content: 'Hello' },
+          { content: 'Hello', type: 'text' },
         ],
       },
     ];
@@ -775,8 +775,8 @@ describe('threadHasDocumentFiles', () => {
     const messages = [
       {
         parts: [
-          { type: 'text', content: 'Hello' },
-          { type: 'file', mediaType: 'application/pdf' },
+          { content: 'Hello', type: 'text' },
+          { mediaType: 'application/pdf', type: 'file' },
         ],
       },
     ];
@@ -788,7 +788,7 @@ describe('threadHasDocumentFiles', () => {
       {
         parts: [
           { type: 'file' }, // missing mediaType
-          { type: 'text', content: 'Hello' },
+          { content: 'Hello', type: 'text' },
         ],
       },
     ];
@@ -862,14 +862,14 @@ describe('edge cases', () => {
       const messages = [
         {
           parts: [
-            { type: 'text', content: 'Hello' },
-            { type: 'file', mediaType: 'image/png' },
-            { type: 'text', content: 'World' },
+            { content: 'Hello', type: 'text' },
+            { mediaType: 'image/png', type: 'file' },
+            { content: 'World', type: 'text' },
           ],
         },
         {
           parts: [
-            { type: 'file', mediaType: 'application/pdf' },
+            { mediaType: 'application/pdf', type: 'file' },
           ],
         },
       ];

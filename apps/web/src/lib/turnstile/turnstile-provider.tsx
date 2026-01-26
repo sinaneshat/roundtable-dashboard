@@ -76,8 +76,9 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
   // Initialize Turnstile
   useEffect(() => {
     // Skip on server
-    if (typeof window === 'undefined')
+    if (typeof window === 'undefined') {
       return;
+    }
 
     // Skip if no site key - Turnstile is optional
     if (!resolvedSiteKey) {
@@ -94,8 +95,9 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
     }
 
     const initWidget = () => {
-      if (!window.turnstile || !containerRef.current)
+      if (!window.turnstile || !containerRef.current) {
         return;
+      }
 
       window.turnstile.ready(() => {
         if (widgetIdRef.current) {
@@ -103,21 +105,22 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
         }
 
         const container = containerRef.current;
-        if (!container)
+        if (!container) {
           return;
+        }
 
         const options: TurnstileRenderOptions = {
-          'sitekey': resolvedSiteKey,
+          'appearance': 'interaction-only', // Only show when needed
           'callback': handleSuccess,
           'error-callback': handleError,
-          'expired-callback': handleExpired,
-          'timeout-callback': handleExpired,
-          'theme': 'dark',
-          'appearance': 'interaction-only', // Only show when needed
           'execution': 'render', // Run automatically
+          'expired-callback': handleExpired,
           'refresh-expired': 'auto', // Auto-refresh expired tokens
           'retry': 'auto',
           'retry-interval': 5000,
+          'sitekey': resolvedSiteKey,
+          'theme': 'dark',
+          'timeout-callback': handleExpired,
         };
 
         const widgetId = window.turnstile?.render(container, options);
@@ -179,12 +182,12 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
   }, [resolvedSiteKey, handleSuccess, handleError, handleExpired, refreshToken, token]);
 
   const value: TurnstileContextValue = {
-    token,
-    isReady,
-    isLoading,
     error,
-    refreshToken,
     getToken,
+    isLoading,
+    isReady,
+    refreshToken,
+    token,
   };
 
   return (

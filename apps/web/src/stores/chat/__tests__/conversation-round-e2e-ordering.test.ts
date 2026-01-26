@@ -37,38 +37,38 @@ import { createChatStore } from '../store';
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: true,
+    id: 'thread-123',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createMockParticipant(index: number, threadId = 'thread-123'): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId,
-    modelId: `provider/model-${index}`,
-    role: null,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `provider/model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId,
     updatedAt: new Date(),
   } as ChatParticipant;
 }
@@ -79,10 +79,22 @@ function createMockPreSearch(
   threadId = 'thread-123',
 ): StoredPreSearch {
   return {
+    completedAt: status === 'complete' ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-${threadId}-r${roundNumber}`,
-    threadId,
     roundNumber,
-    userQuery: `Query for round ${roundNumber}`,
+    searchData: status === 'complete'
+      ? {
+          failureCount: 0,
+          moderatorSummary: 'Search moderator summary',
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic' as const, total: 1 }],
+          results: [],
+          successCount: 1,
+          totalResults: 0,
+          totalTime: 100,
+        }
+      : null,
     status: status === 'pending'
       ? MessageStatuses.PENDING
       : status === 'streaming'
@@ -90,46 +102,34 @@ function createMockPreSearch(
         : status === 'complete'
           ? MessageStatuses.COMPLETE
           : MessageStatuses.FAILED,
-    searchData: status === 'complete'
-      ? {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic' as const, index: 0, total: 1 }],
-          results: [],
-          moderatorSummary: 'Search moderator summary',
-          successCount: 1,
-          failureCount: 0,
-          totalResults: 0,
-          totalTime: 100,
-        }
-      : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === 'complete' ? new Date() : null,
+    threadId,
+    userQuery: `Query for round ${roundNumber}`,
   } as StoredPreSearch;
 }
 
 function createMockChangelog(
   roundNumber: number,
-  changes: Array<{
+  changes: {
     type: 'added' | 'removed' | 'modified' | 'reordered' | 'mode_change';
     participantId?: string;
     modelId?: string;
-  }>,
+  }[],
   threadId = 'thread-123',
 ): ChatThreadChangelog {
   return {
-    id: `changelog-${threadId}-r${roundNumber}`,
-    threadId,
-    roundNumber,
-    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
-    changeType: 'participant_change',
     changeData: {
       changes: changes.map(c => ({
-        type: c.type,
-        participantId: c.participantId,
         modelId: c.modelId,
+        participantId: c.participantId,
+        type: c.type,
       })),
     },
+    changeType: 'participant_change',
     createdAt: new Date(),
+    id: `changelog-${threadId}-r${roundNumber}`,
+    previousRoundNumber: roundNumber > 0 ? roundNumber - 1 : null,
+    roundNumber,
+    threadId,
   } as ChatThreadChangelog;
 }
 
@@ -138,10 +138,10 @@ function createModeratorMsg(
   content = `Moderator for round ${roundNumber}`,
 ): ApiMessage {
   return createTestModeratorMessage({
-    id: `thread-123_r${roundNumber}_moderator`,
     content,
-    roundNumber,
     finishReason: FinishReasons.STOP,
+    id: `thread-123_r${roundNumber}_moderator`,
+    roundNumber,
   });
 }
 
@@ -160,8 +160,8 @@ describe('round Start Behavior', () => {
 
       // User sends message - this starts round 0
       const userMessage = createTestUserMessage({
-        id: 'thread-123_r0_user',
         content: 'First question',
+        id: 'thread-123_r0_user',
         roundNumber: 0,
       });
 
@@ -182,21 +182,21 @@ describe('round Start Behavior', () => {
 
       // Round 0 complete
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
       // User sends round 1 message
       const round1Message = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Follow-up question',
+        id: 'thread-123_r1_user',
         roundNumber: 1,
       });
 
@@ -230,7 +230,7 @@ describe('web Search Blocking Behavior', () => {
 
       // User message exists
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
       ]);
 
       // Pre-search is pending - participants should be blocked
@@ -251,7 +251,7 @@ describe('web Search Blocking Behavior', () => {
       store.getState().addPreSearch(createMockPreSearch(0, 'streaming'));
 
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
       ]);
 
       // Pre-search is streaming - participants should be blocked
@@ -272,14 +272,14 @@ describe('web Search Blocking Behavior', () => {
       store.getState().addPreSearch(createMockPreSearch(0, 'complete'));
 
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'Response from participant 0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -301,14 +301,14 @@ describe('web Search Blocking Behavior', () => {
       store.getState().addPreSearch(createMockPreSearch(0, 'failed'));
 
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'Response without search data',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -334,14 +334,14 @@ describe('web Search Blocking Behavior', () => {
 
       // User message and immediate participant response
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'Immediate response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -369,30 +369,30 @@ describe('participant Response Order', () => {
       store.getState().initializeThread(thread, participants, []);
 
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'First response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p1',
           content: 'Second response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p2',
           content: 'Third response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p2',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -412,23 +412,23 @@ describe('participant Response Order', () => {
 
       // During streaming: participant 0 is streaming (no finishReason)
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         {
           id: 'a0p0',
-          role: MessageRoles.ASSISTANT,
-          parts: [{ type: 'text', text: 'Streaming...' }],
           metadata: {
-            role: MessageRoles.ASSISTANT,
-            roundNumber: 0,
-            participantId: 'participant-0',
-            participantIndex: 0,
-            model: 'provider/model-0',
             finishReason: null, // Still streaming
-            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
             hasError: false,
             isTransient: false,
+            model: 'provider/model-0',
+            participantId: 'participant-0',
+            participantIndex: 0,
             participantRole: null,
+            role: MessageRoles.ASSISTANT,
+            roundNumber: 0,
+            usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
           },
+          parts: [{ text: 'Streaming...', type: 'text' }],
+          role: MessageRoles.ASSISTANT,
         } as ApiMessage,
       ]);
 
@@ -450,30 +450,30 @@ describe('round Moderator Position', () => {
       // ✅ UNIFIED: Moderator now renders inline with participants in messages
       // Not as a separate timeline item
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p1',
           content: 'P1 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createModeratorMsg(0, 'Round 0 summary'),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -493,22 +493,22 @@ describe('round Moderator Position', () => {
 
     it('moderator MUST NOT appear while participants are still streaming', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Participant 1 is still streaming (no finishReason in a real scenario)
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -523,22 +523,22 @@ describe('round Moderator Position', () => {
     it('moderator with complete status always appears in messages', () => {
       // ✅ UNIFIED: Moderator is now included in messages, not as separate summary
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'P0 response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createModeratorMsg(0, 'Round 0 summary'),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -566,38 +566,38 @@ describe('changelog Position in Subsequent Rounds', () => {
     it('changelog MUST appear BEFORE messages in the same round', () => {
       const messages = [
         // Round 0 - no config change
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 - config changed
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1p0',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p0',
           participantId: 'new-participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
       const changelog = [
         createMockChangelog(1, [
-          { type: 'removed', participantId: 'participant-0', modelId: 'provider/model-0' },
-          { type: 'added', participantId: 'new-participant-0', modelId: 'provider/new-model-0' },
+          { modelId: 'provider/model-0', participantId: 'participant-0', type: 'removed' },
+          { modelId: 'provider/new-model-0', participantId: 'new-participant-0', type: 'added' },
         ]),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -618,30 +618,30 @@ describe('changelog Position in Subsequent Rounds', () => {
     it('changelog persists after new round is submitted', () => {
       const messages = [
         // Round 1 with config change
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1p0',
           content: 'R1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         // Round 2 - same config
-        createTestUserMessage({ id: 'u2', content: 'Q2', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Q2', id: 'u2', roundNumber: 2 }),
         createTestAssistantMessage({
-          id: 'a2p0',
           content: 'R2',
-          roundNumber: 2,
+          finishReason: FinishReasons.STOP,
+          id: 'a2p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 2,
         }),
       ];
 
       const changelog = [
         createMockChangelog(1, [
-          { type: 'added', participantId: 'participant-0', modelId: 'provider/model-0' },
+          { modelId: 'provider/model-0', participantId: 'participant-0', type: 'added' },
         ]),
       ];
 
@@ -649,8 +649,8 @@ describe('changelog Position in Subsequent Rounds', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -666,21 +666,21 @@ describe('changelog Position in Subsequent Rounds', () => {
 
     it('no changelog shown for round 0 (first round has no previous config)', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -703,22 +703,22 @@ describe('complete Round Timeline Order', () => {
     it('round with all elements in correct order', () => {
       // ✅ UNIFIED: Moderator is now included in messages, not as separate summary
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p1',
           content: 'P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createModeratorMsg(0, 'Round 0 summary'),
       ];
@@ -727,8 +727,8 @@ describe('complete Round Timeline Order', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -750,31 +750,31 @@ describe('complete Round Timeline Order', () => {
     it('multi-round conversation maintains correct order per round', () => {
       const messages = [
         // Round 0
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'R0P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 with config change
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1p0',
           content: 'R1P0',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p0',
           participantId: 'new-participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
       ];
 
       const changelog = [
         createMockChangelog(1, [
-          { type: 'removed', participantId: 'participant-0' },
-          { type: 'added', participantId: 'new-participant-0', modelId: 'new-model' },
+          { participantId: 'participant-0', type: 'removed' },
+          { modelId: 'new-model', participantId: 'new-participant-0', type: 'added' },
         ]),
       ];
 
@@ -782,8 +782,8 @@ describe('complete Round Timeline Order', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -794,12 +794,12 @@ describe('complete Round Timeline Order', () => {
       // Round 0: messages
       // Round 1: changelog, messages
       const expectedOrder = [
-        { type: 'messages', roundNumber: 0 },
-        { type: 'changelog', roundNumber: 1 },
-        { type: 'messages', roundNumber: 1 },
+        { roundNumber: 0, type: 'messages' },
+        { roundNumber: 1, type: 'changelog' },
+        { roundNumber: 1, type: 'messages' },
       ];
 
-      expect(timeline.map(item => ({ type: item.type, roundNumber: item.roundNumber }))).toEqual(expectedOrder);
+      expect(timeline.map(item => ({ roundNumber: item.roundNumber, type: item.type }))).toEqual(expectedOrder);
     });
   });
 
@@ -807,14 +807,14 @@ describe('complete Round Timeline Order', () => {
     it('pre-search renders at timeline level when no messages exist for round', () => {
       const messages = [
         // Round 0 complete
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'R0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         // Round 1 has NO messages yet (page refresh during web search)
       ];
@@ -826,8 +826,8 @@ describe('complete Round Timeline Order', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -854,69 +854,69 @@ describe('race Condition Prevention', () => {
 
       // First trigger should succeed
       const firstTrigger = store.getState().tryMarkPreSearchTriggered(0);
-      expect(firstTrigger).toBe(true);
+      expect(firstTrigger).toBeTruthy();
 
       // Second trigger should fail (already triggered)
       const secondTrigger = store.getState().tryMarkPreSearchTriggered(0);
-      expect(secondTrigger).toBe(false);
+      expect(secondTrigger).toBeFalsy();
 
       // Different round should succeed
       const round1Trigger = store.getState().tryMarkPreSearchTriggered(1);
-      expect(round1Trigger).toBe(true);
+      expect(round1Trigger).toBeTruthy();
     });
 
     it('moderator trigger is idempotent (only triggers once per round)', () => {
       const store = createChatStore();
 
       // First check - not triggered yet
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeFalsy();
 
       // Mark as triggered
       store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
       // Second check - should be blocked
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeTruthy();
 
       // Different round should not be blocked
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-456', 1)).toBe(false);
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-456', 1)).toBeFalsy();
     });
   });
 
   describe('message Ordering During Concurrent Updates', () => {
     it('messages maintain correct order even when added out of sequence', () => {
       const messages = [
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         // Intentionally out of order (simulating race condition)
         createTestAssistantMessage({
-          id: 'a0p2',
           content: 'P2',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p2',
           participantId: 'participant-2',
           participantIndex: 2,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'participant-0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p1',
           content: 'P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p1',
           participantId: 'participant-1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ];
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -959,60 +959,60 @@ describe('multi-Round E2E Scenarios', () => {
     it('maintains correct timeline through 3 rounds with config changes', () => {
       const messages = [
         // Round 0: 2 participants
-        createTestUserMessage({ id: 'u0', content: 'Initial question', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Initial question', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'Response from P0',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'a0p1',
           content: 'Response from P1',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
 
         // Round 1: Same config
-        createTestUserMessage({ id: 'u1', content: 'Follow-up 1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Follow-up 1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1p0',
           content: 'R1 from P0',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'a1p1',
           content: 'R1 from P1',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p1',
           participantId: 'p1',
           participantIndex: 1,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
 
         // Round 2: Config changed - only 1 participant
-        createTestUserMessage({ id: 'u2', content: 'Follow-up 2', roundNumber: 2 }),
+        createTestUserMessage({ content: 'Follow-up 2', id: 'u2', roundNumber: 2 }),
         createTestAssistantMessage({
-          id: 'a2p0',
           content: 'R2 from new P0',
-          roundNumber: 2,
+          finishReason: FinishReasons.STOP,
+          id: 'a2p0',
           participantId: 'new-p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 2,
         }),
       ];
 
       const changelog = [
         createMockChangelog(2, [
-          { type: 'removed', participantId: 'p0' },
-          { type: 'removed', participantId: 'p1' },
-          { type: 'added', participantId: 'new-p0', modelId: 'new-model' },
+          { participantId: 'p0', type: 'removed' },
+          { participantId: 'p1', type: 'removed' },
+          { modelId: 'new-model', participantId: 'new-p0', type: 'added' },
         ]),
       ];
 
@@ -1020,8 +1020,8 @@ describe('multi-Round E2E Scenarios', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog,
+          messages,
           preSearches: [],
         }),
       );
@@ -1035,14 +1035,14 @@ describe('multi-Round E2E Scenarios', () => {
       expect(timeline).toHaveLength(4);
 
       // Round 0
-      expect(timeline[0]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 0 }));
+      expect(timeline[0]).toEqual(expect.objectContaining({ roundNumber: 0, type: 'messages' }));
 
       // Round 1
-      expect(timeline[1]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 1 }));
+      expect(timeline[1]).toEqual(expect.objectContaining({ roundNumber: 1, type: 'messages' }));
 
       // Round 2 (with changelog)
-      expect(timeline[2]).toEqual(expect.objectContaining({ type: 'changelog', roundNumber: 2 }));
-      expect(timeline[3]).toEqual(expect.objectContaining({ type: 'messages', roundNumber: 2 }));
+      expect(timeline[2]).toEqual(expect.objectContaining({ roundNumber: 2, type: 'changelog' }));
+      expect(timeline[3]).toEqual(expect.objectContaining({ roundNumber: 2, type: 'messages' }));
     });
   });
 
@@ -1051,26 +1051,26 @@ describe('multi-Round E2E Scenarios', () => {
       // ✅ UNIFIED: Moderator is now included in messages, not as separate item
       const messages = [
         // Round 0: Web search enabled
-        createTestUserMessage({ id: 'u0', content: 'Q0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'u0', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a0p0',
           content: 'R0 with search context',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a0p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
         createModeratorMsg(0, 'Round 0 moderator'),
 
         // Round 1: Web search disabled
-        createTestUserMessage({ id: 'u1', content: 'Q1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'u1', roundNumber: 1 }),
         createTestAssistantMessage({
-          id: 'a1p0',
           content: 'R1 without search',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'a1p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         createModeratorMsg(1, 'Round 1 moderator'),
       ];
@@ -1081,8 +1081,8 @@ describe('multi-Round E2E Scenarios', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches,
         }),
       );
@@ -1090,9 +1090,9 @@ describe('multi-Round E2E Scenarios', () => {
       const timeline = result.current;
 
       // ✅ UNIFIED: Only 'messages' items now (moderator inside each round's messages)
-      expect(timeline.map(item => ({ type: item.type, roundNumber: item.roundNumber }))).toEqual([
-        { type: 'messages', roundNumber: 0 },
-        { type: 'messages', roundNumber: 1 },
+      expect(timeline.map(item => ({ roundNumber: item.roundNumber, type: item.type }))).toEqual([
+        { roundNumber: 0, type: 'messages' },
+        { roundNumber: 1, type: 'messages' },
       ]);
 
       // Verify moderator is last in each round

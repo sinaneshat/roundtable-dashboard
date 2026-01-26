@@ -28,12 +28,12 @@ export type PlaceholderPrefix = z.infer<typeof PlaceholderPrefixSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const PlaceholderPrefixes = {
-  /** Value should come from conversation/request context */
-  FROM_CONTEXT: 'FROM_CONTEXT' as const,
   /** Value should be computed/analyzed from responses */
   COMPUTE: 'COMPUTE' as const,
   /** Value should be extracted from participant responses */
   EXTRACT: 'EXTRACT' as const,
+  /** Value should come from conversation/request context */
+  FROM_CONTEXT: 'FROM_CONTEXT' as const,
   /** Optional value - may be null/undefined if not applicable */
   OPTIONAL: 'OPTIONAL' as const,
 } as const;

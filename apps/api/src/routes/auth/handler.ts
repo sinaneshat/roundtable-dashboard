@@ -23,12 +23,12 @@ export const secureMeHandler: RouteHandler<typeof secureMeRoute, ApiEnv> = creat
 
     // Return user object directly - matches SecureMePayloadSchema shape
     return Responses.ok(c, {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      emailVerified: user.emailVerified,
-      image: user.image,
       createdAt: user.createdAt,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      id: user.id,
+      image: user.image,
+      name: user.name,
       updatedAt: user.updatedAt,
     });
   },

@@ -17,7 +17,7 @@ type QuickStartSkeletonProps = {
  * @param props.count - Number of quick start items to render
  * @param props.className - Optional CSS class names
  */
-export function QuickStartSkeleton({ count = 3, className, ...props }: QuickStartSkeletonProps) {
+export function QuickStartSkeleton({ className, count = 3, ...props }: QuickStartSkeletonProps) {
   return (
     <div className={cn('flex flex-col', className)} {...props}>
       {Array.from({ length: count }, (_, i) => (

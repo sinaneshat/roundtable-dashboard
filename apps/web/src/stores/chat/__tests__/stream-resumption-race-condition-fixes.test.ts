@@ -11,23 +11,17 @@ import type { ChatStore } from '../store-schemas';
 const mockStore = vi.hoisted(() => {
   let storeState: Partial<ChatStore> = {};
   const actions = {
-    setNextParticipantToTrigger: vi.fn((value: number | null) => {
-      storeState.nextParticipantToTrigger = value;
-    }),
-    setStreamingRoundNumber: vi.fn((value: number | null) => {
-      storeState.streamingRoundNumber = value;
-    }),
+    clearStreamResumption: vi.fn(),
+    prepareForNewMessage: vi.fn(),
     setCurrentParticipantIndex: vi.fn((value: number) => {
       storeState.currentParticipantIndex = value;
     }),
-    setWaitingToStartStreaming: vi.fn((value: boolean) => {
-      storeState.waitingToStartStreaming = value;
-    }),
+    setExpectedParticipantIds: vi.fn(),
+    setIsModeratorStreaming: vi.fn(),
     setIsStreaming: vi.fn((value: boolean) => {
       storeState.isStreaming = value;
     }),
-    prepareForNewMessage: vi.fn(),
-    setExpectedParticipantIds: vi.fn(),
+    setIsWaitingForChangelog: vi.fn(),
     setMessages: vi.fn((messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
       if (typeof messages === 'function') {
         storeState.messages = messages(storeState.messages || []);
@@ -35,18 +29,22 @@ const mockStore = vi.hoisted(() => {
         storeState.messages = messages;
       }
     }),
-    setIsWaitingForChangelog: vi.fn(),
-    clearStreamResumption: vi.fn(),
-    setIsModeratorStreaming: vi.fn(),
-    transitionToParticipantsPhase: vi.fn(),
+    setNextParticipantToTrigger: vi.fn((value: number | null) => {
+      storeState.nextParticipantToTrigger = value;
+    }),
+    setStreamingRoundNumber: vi.fn((value: number | null) => {
+      storeState.streamingRoundNumber = value;
+    }),
+    setWaitingToStartStreaming: vi.fn((value: boolean) => {
+      storeState.waitingToStartStreaming = value;
+    }),
     transitionToModeratorPhase: vi.fn(),
+    transitionToParticipantsPhase: vi.fn(),
   };
 
   return {
+    actions,
     getState: () => ({ ...storeState, ...actions }),
-    setState: (newState: Partial<ChatStore>) => {
-      storeState = { ...storeState, ...newState };
-    },
     reset: () => {
       storeState = {};
       Object.values(actions).forEach((action) => {
@@ -55,7 +53,9 @@ const mockStore = vi.hoisted(() => {
         }
       });
     },
-    actions,
+    setState: (newState: Partial<ChatStore>) => {
+      storeState = { ...storeState, ...newState };
+    },
     subscribe: vi.fn(),
   };
 });
@@ -73,29 +73,29 @@ vi.mock('@/components/providers/chat-store-provider', async (importOriginal) => 
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
     mode: ChatModes.ANALYZING,
     status: ThreadStatuses.ACTIVE,
-    enableWebSearch: false,
-    createdAt: new Date(),
+    title: 'Test Thread',
     updatedAt: new Date(),
+    userId: 'user-123',
     ...overrides,
   } as ChatThread;
 }
 
-function createMockParticipants(count: number = 3): ChatParticipant[] {
+function createMockParticipants(count = 3): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: 'gpt-4',
-    role: '',
-    customRoleId: null,
-    isEnabled: true,
-    priority: i,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: 'gpt-4',
+    priority: i,
+    role: '',
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   })) as ChatParticipant[];
 }
@@ -106,8 +106,8 @@ function createIncompleteRoundMessages(
 ): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: `User message for round ${roundNumber}`,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -115,12 +115,12 @@ function createIncompleteRoundMessages(
   for (let i = 0; i < respondedParticipantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Assistant ${i} response`,
-        roundNumber,
+        finishReason: 'stop',
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: 'stop',
+        roundNumber,
       }),
     );
   }
@@ -131,35 +131,35 @@ function createIncompleteRoundMessages(
 function setupIncompleteRound(
   roundNumber: number,
   respondedCount: number,
-  totalParticipants: number = 3,
+  totalParticipants = 3,
 ) {
   const thread = createMockThread();
   const participants = createMockParticipants(totalParticipants);
   const messages = createIncompleteRoundMessages(roundNumber, respondedCount);
 
   mockStore.setState({
-    thread,
-    participants,
-    messages,
-    preSearches: [],
-    isStreaming: false,
-    waitingToStartStreaming: false,
-    pendingMessage: null,
-    hasSentPendingMessage: false,
-    hasEarlyOptimisticMessage: false,
-    enableWebSearch: false,
-    currentResumptionPhase: null,
-    preSearchResumption: null,
-    moderatorResumption: null,
-    resumptionRoundNumber: null,
-    streamResumptionPrefilled: false,
-    isModeratorStreaming: false,
-    nextParticipantToTrigger: null,
-    streamingRoundNumber: null,
     currentParticipantIndex: 0,
+    currentResumptionPhase: null,
+    enableWebSearch: false,
+    hasEarlyOptimisticMessage: false,
+    hasSentPendingMessage: false,
+    isModeratorStreaming: false,
+    isStreaming: false,
+    messages,
+    moderatorResumption: null,
+    nextParticipantToTrigger: null,
+    participants,
+    pendingMessage: null,
+    preSearches: [],
+    preSearchResumption: null,
+    resumptionRoundNumber: null,
+    streamingRoundNumber: null,
+    streamResumptionPrefilled: false,
+    thread,
+    waitingToStartStreaming: false,
   });
 
-  return { thread, participants, messages };
+  return { messages, participants, thread };
 }
 
 describe('double Trigger Prevention', () => {
@@ -171,15 +171,15 @@ describe('double Trigger Prevention', () => {
   it('should trigger resume only once when incomplete round detected', async () => {
     setupIncompleteRound(1, 1, 3);
 
-    const { result, rerender } = renderHook(() =>
+    const { rerender, result } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
     await waitFor(() => {
-      expect(result.current.isIncomplete).toBe(true);
+      expect(result.current.isIncomplete).toBeTruthy();
       expect(result.current.nextParticipantIndex).toBe(1);
     });
 
@@ -209,8 +209,8 @@ describe('double Trigger Prevention', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -253,8 +253,8 @@ describe('double Trigger Prevention', () => {
 
     const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -282,8 +282,8 @@ describe('double Trigger Prevention', () => {
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -304,20 +304,20 @@ describe('double Trigger Prevention', () => {
     const messagesWithP0P1Complete = [
       createTestUserMessage({ roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'thread-123_r1_p0',
         content: 'Assistant 0 response',
-        roundNumber: 1,
+        finishReason: 'stop',
+        id: 'thread-123_r1_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: 'stop',
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'thread-123_r1_p1',
         content: 'Assistant 1 response',
-        roundNumber: 1,
+        finishReason: 'stop',
+        id: 'thread-123_r1_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: 'stop',
+        roundNumber: 1,
       }),
     ];
 
@@ -325,31 +325,31 @@ describe('double Trigger Prevention', () => {
     const participants = createMockParticipants(3);
 
     mockStore.setState({
-      thread,
-      participants,
-      messages: messagesWithP0P1Complete,
-      preSearches: [],
-      isStreaming: false,
-      waitingToStartStreaming: false,
-      pendingMessage: null,
-      hasSentPendingMessage: false,
-      hasEarlyOptimisticMessage: false,
-      enableWebSearch: false,
-      currentResumptionPhase: null,
-      preSearchResumption: null,
-      moderatorResumption: null,
-      resumptionRoundNumber: null,
-      streamResumptionPrefilled: false,
-      isModeratorStreaming: false,
-      nextParticipantToTrigger: null,
-      streamingRoundNumber: null,
       currentParticipantIndex: 0,
+      currentResumptionPhase: null,
+      enableWebSearch: false,
+      hasEarlyOptimisticMessage: false,
+      hasSentPendingMessage: false,
+      isModeratorStreaming: false,
+      isStreaming: false,
+      messages: messagesWithP0P1Complete,
+      moderatorResumption: null,
+      nextParticipantToTrigger: null,
+      participants,
+      pendingMessage: null,
+      preSearches: [],
+      preSearchResumption: null,
+      resumptionRoundNumber: null,
+      streamingRoundNumber: null,
+      streamResumptionPrefilled: false,
+      thread,
+      waitingToStartStreaming: false,
     });
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -371,21 +371,21 @@ describe('aI SDK Resume Blocking', () => {
   it('should block AI SDK resume when streamResumptionPrefilled=true with non-participant phase', async () => {
     setupIncompleteRound(1, 1, 3);
     mockStore.setState({
-      streamResumptionPrefilled: true,
       currentResumptionPhase: 'pre_search',
       resumptionRoundNumber: 1,
+      streamResumptionPrefilled: true,
     });
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
     await waitFor(() => {
       const state = mockStore.getState();
-      expect(state.streamResumptionPrefilled).toBe(true);
+      expect(state.streamResumptionPrefilled).toBeTruthy();
       expect(state.currentResumptionPhase).toBe('pre_search');
     });
 
@@ -402,13 +402,13 @@ describe('aI SDK Resume Blocking', () => {
 
     const { result } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
     await waitFor(() => {
-      expect(result.current.isIncomplete).toBe(true);
+      expect(result.current.isIncomplete).toBeTruthy();
     });
 
     await waitFor(() => {
@@ -419,15 +419,15 @@ describe('aI SDK Resume Blocking', () => {
   it('should not interfere with custom resumption when prefilled', async () => {
     setupIncompleteRound(1, 1, 3);
     mockStore.setState({
-      streamResumptionPrefilled: true,
       currentResumptionPhase: 'participants',
       resumptionRoundNumber: 1,
+      streamResumptionPrefilled: true,
     });
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -437,7 +437,7 @@ describe('aI SDK Resume Blocking', () => {
 
     const state = mockStore.getState();
     expect(state.currentResumptionPhase).toBe('participants');
-    expect(state.streamResumptionPrefilled).toBe(true);
+    expect(state.streamResumptionPrefilled).toBeTruthy();
   });
 });
 
@@ -452,8 +452,8 @@ describe('retry Toggle Timeout', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -496,8 +496,8 @@ describe('retry Toggle Timeout', () => {
 
     const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -526,8 +526,8 @@ describe('retry Toggle Timeout', () => {
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -542,8 +542,8 @@ describe('retry Toggle Timeout', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -589,8 +589,8 @@ describe('retry Toggle Timeout', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -628,8 +628,8 @@ describe('retry Toggle Timeout', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -684,8 +684,8 @@ describe('integration Tests', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -728,25 +728,25 @@ describe('integration Tests', () => {
 
     // Verify P1 was triggered correctly
     const calls = mockStore.actions.setNextParticipantToTrigger.mock.calls;
-    expect(calls.some(call => call[0] === 1)).toBe(true);
+    expect(calls.some(call => call[0] === 1)).toBeTruthy();
 
     // P1 completes - this hook does NOT trigger P2 (that's handled by use-multi-participant-chat)
     const messagesAfterStreaming = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
-        id: 'thread-123_r1_p1',
         content: 'Assistant 1 response',
-        roundNumber: 1,
+        finishReason: 'stop',
+        id: 'thread-123_r1_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: 'stop',
+        roundNumber: 1,
       }),
     ];
 
     act(() => {
       mockStore.setState({
-        messages: messagesAfterStreaming,
         isStreaming: false,
+        messages: messagesAfterStreaming,
       });
     });
     rerender();
@@ -769,8 +769,8 @@ describe('integration Tests', () => {
 
     const { rerender, unmount } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -799,8 +799,8 @@ describe('integration Tests', () => {
 
     renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -815,8 +815,8 @@ describe('integration Tests', () => {
 
     const { rerender } = renderHook(() =>
       useIncompleteRoundResumption({
-        threadId: 'thread-123',
         enabled: true,
+        threadId: 'thread-123',
       }),
     );
 
@@ -831,19 +831,19 @@ describe('integration Tests', () => {
     const messagesWithP2Complete = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
-        id: 'thread-123_r1_p2',
         content: 'Assistant 2 response',
-        roundNumber: 1,
+        finishReason: 'stop',
+        id: 'thread-123_r1_p2',
         participantId: 'participant-2',
         participantIndex: 2,
-        finishReason: 'stop',
+        roundNumber: 1,
       }),
     ];
 
     act(() => {
       mockStore.setState({
-        messages: messagesWithP2Complete,
         isStreaming: false,
+        messages: messagesWithP2Complete,
         waitingToStartStreaming: false,
       });
     });
@@ -856,8 +856,8 @@ describe('integration Tests', () => {
     const round2Messages = [
       ...messagesWithP2Complete,
       createTestUserMessage({
-        id: 'thread-123_r2_user',
         content: 'User message for round 2',
+        id: 'thread-123_r2_user',
         roundNumber: 2,
       }),
     ];

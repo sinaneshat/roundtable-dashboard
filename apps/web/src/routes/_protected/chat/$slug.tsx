@@ -23,11 +23,7 @@ import type {
 import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
-  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
-  staleTime: 30_000,
-  pendingMs: 300,
-
+  component: ChatThreadRoute,
   loader: async ({ params, context }) => {
     const { queryClient } = context;
 
@@ -110,7 +106,7 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 
         streamResumption = streamResult?.success ? streamResult.data : undefined;
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
+        feedback = feedbackResult?.success ? feedbackResult.data : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
       } else {
         // On client, check cache first, then prefetch missing data
@@ -132,13 +128,15 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
 
         streamResumption = cachedStream?.success ? cachedStream.data : undefined;
-        feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
+        feedback = cachedFeedback?.success ? cachedFeedback.data : undefined;
 
         // Prefetch missing auxiliary data in background
-        if (!cachedStream)
+        if (!cachedStream) {
           queryClient.prefetchQuery(streamOptions).catch(() => {});
-        if (!cachedFeedback)
+        }
+        if (!cachedFeedback) {
           queryClient.prefetchQuery(feedbackOptions).catch(() => {});
+        }
       }
     }
 
@@ -183,8 +181,12 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     };
   },
 
-  component: ChatThreadRoute,
   pendingComponent: ThreadContentSkeleton,
+
+  pendingMs: 300,
+  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
+  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
+  staleTime: 30_000,
 });
 
 function ChatThreadRoute() {
@@ -197,11 +199,11 @@ function ChatThreadRoute() {
 
   // Use loaderData.threadData as initialData for seamless SSR hydration
   const hasLoaderData = Boolean(loaderData?.threadData);
-  const { data: queryData, isError, error, isFetching } = useQuery({
+  const { data: queryData, error, isError, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
     enabled: Boolean(slug) && !isInCreationFlow,
     initialData: hasLoaderData && loaderData.threadData
-      ? { success: true as const, data: loaderData.threadData }
+      ? { data: loaderData.threadData, success: true as const }
       : undefined,
     staleTime: hasLoaderData ? 10_000 : 0,
   });
@@ -217,8 +219,8 @@ function ChatThreadRoute() {
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
-    name: session?.user?.name || 'You',
     image: session?.user?.image || null,
+    name: session?.user?.name || 'You',
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
   // Show skeleton while fetching and no data yet
@@ -252,7 +254,7 @@ function ChatThreadRoute() {
     );
   }
 
-  const { thread, participants, messages } = threadResponse;
+  const { messages, participants, thread } = threadResponse;
 
   rlog.init('route-pass', `thread=${thread.slug}(${thread.id?.slice(-8)}) msgs=${messages.length} parts=${participants.length}`);
 

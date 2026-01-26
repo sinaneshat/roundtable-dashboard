@@ -37,17 +37,21 @@ export type BatchableOperation<TSchema extends Record<string, unknown> = EmptySc
     | ReturnType<DrizzleD1Database<TSchema>['select']>;
 
 export const D1BatchPatterns = {
+  conditionalBatch: `
+const handler = createHandlerWithBatch({ auth: 'session' }, async (c, batch) => {
+  await batch.db.insert(users).values(newUser);
+
+  if (needsCustomer) {
+    await batch.db.insert(customers).values(customer);
+  }
+
+  await batch.db.update(metadata).set({ synced: true });
+});`,
+
   insertAndUpdate: `
 await db.batch([
   db.insert(customers).values(newCustomer).returning(),
   db.update(users).set({ hasCustomer: true }).where(eq(users.id, userId))
-]);`,
-
-  multipleInserts: `
-await db.batch([
-  db.insert(subscriptions).values(newSub),
-  db.insert(invoices).values(newInvoice),
-  db.insert(webhookEvents).values(eventLog)
 ]);`,
 
   insertWithUpsert: `
@@ -59,26 +63,15 @@ await db.batch([
   db.insert(subscriptions).values(subscription)
 ]);`,
 
-  conditionalBatch: `
-const handler = createHandlerWithBatch({ auth: 'session' }, async (c, batch) => {
-  await batch.db.insert(users).values(newUser);
-
-  if (needsCustomer) {
-    await batch.db.insert(customers).values(customer);
-  }
-
-  await batch.db.update(metadata).set({ synced: true });
-});`,
+  multipleInserts: `
+await db.batch([
+  db.insert(subscriptions).values(newSub),
+  db.insert(invoices).values(newInvoice),
+  db.insert(webhookEvents).values(eventLog)
+]);`,
 } as const;
 
 export const TransactionMigrationGuide = {
-  transactionPattern: `
-await db.transaction(async (tx) => {
-  await tx.insert(users).values(newUser);
-  await tx.update(users).set({ verified: true }).where(eq(users.id, userId));
-  await tx.delete(users).where(eq(users.inactive, true));
-});`,
-
   batchPattern: `
 await db.batch([
   db.insert(users).values(newUser),
@@ -91,6 +84,13 @@ export const handler = createHandlerWithBatch({ auth: 'session' }, async (c, bat
   await batch.db.insert(users).values(newUser);
   await batch.db.update(users).set({ verified: true }).where(eq(users.id, userId));
   await batch.db.delete(users).where(eq(users.inactive, true));
+});`,
+
+  transactionPattern: `
+await db.transaction(async (tx) => {
+  await tx.insert(users).values(newUser);
+  await tx.update(users).set({ verified: true }).where(eq(users.id, userId));
+  await tx.delete(users).where(eq(users.inactive, true));
 });`,
 } as const;
 

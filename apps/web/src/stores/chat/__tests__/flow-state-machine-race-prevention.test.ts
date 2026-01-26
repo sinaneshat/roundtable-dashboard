@@ -29,15 +29,15 @@ import {
 
 function createParticipant(id: string, index: number): ChatParticipant {
   return {
-    id,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date('2024-01-01'),
+    customRoleId: null,
+    id,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date('2024-01-01'),
   };
 }
@@ -45,9 +45,9 @@ function createParticipant(id: string, index: number): ChatParticipant {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: 'Question' }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: 'Question', type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -57,22 +57,22 @@ function createAssistantMessage(
   participantIndex: number,
   options: { streaming?: boolean; hasContent?: boolean; finishReason?: string } = {},
 ): UIMessage {
-  const { streaming = false, hasContent = true, finishReason = 'stop' } = options;
+  const { finishReason = 'stop', hasContent = true, streaming = false } = options;
 
   return {
     id: `msg-${participantId}-r${roundNumber}`,
-    role: MessageRoles.ASSISTANT,
-    parts: hasContent
-      ? [{ type: 'text', text: 'Response', state: streaming ? 'streaming' as const : 'done' as const }]
-      : [],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: streaming ? undefined : finishReason,
+      model: `model-${participantIndex}`,
       participantId,
       participantIndex,
-      model: `model-${participantIndex}`,
-      finishReason: streaming ? undefined : finishReason,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: hasContent
+      ? [{ state: streaming ? 'streaming' as const : 'done' as const, text: 'Response', type: 'text' }]
+      : [],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -98,19 +98,31 @@ function createMockStore() {
 
   return {
     actionLog,
-    getModeratorCreatedRound: () => moderatorCreatedForRound,
-    resetLog: () => {
-      actionLog.length = 0;
-      moderatorCreatedForRound = null;
+    // Simulates completeStreaming
+    completeStreaming: () => {
+      actionLog.push({
+        action: 'completeStreaming',
+        timestamp: Date.now(),
+      });
     },
-
     // Simulates createPendingModerator
     createPendingModerator: (params: { roundNumber: number }) => {
       actionLog.push({
         action: 'createPendingModerator',
-        timestamp: Date.now(),
         params,
+        timestamp: Date.now(),
       });
+    },
+
+    getActionCount: (actionName: string): number => {
+      return actionLog.filter(a => a.action === actionName).length;
+    },
+
+    getModeratorCreatedRound: () => moderatorCreatedForRound,
+
+    resetLog: () => {
+      actionLog.length = 0;
+      moderatorCreatedForRound = null;
     },
 
     // Simulates tryMarkModeratorCreated (atomic check)
@@ -121,22 +133,10 @@ function createMockStore() {
       moderatorCreatedForRound = roundNumber;
       actionLog.push({
         action: 'tryMarkModeratorCreated',
-        timestamp: Date.now(),
         params: { roundNumber, success: true },
+        timestamp: Date.now(),
       });
       return true;
-    },
-
-    // Simulates completeStreaming
-    completeStreaming: () => {
-      actionLog.push({
-        action: 'completeStreaming',
-        timestamp: Date.now(),
-      });
-    },
-
-    getActionCount: (actionName: string): number => {
-      return actionLog.filter(a => a.action === actionName).length;
     },
   };
 }
@@ -194,7 +194,7 @@ function simulateModeratorGate(
 ): { created: boolean; blockedReason?: string } {
   // Gate 1: Check isStreaming flag
   if (isStreaming) {
-    return { created: false, blockedReason: 'isStreaming=true' };
+    return { blockedReason: 'isStreaming=true', created: false };
   }
 
   // Gate 2: Strict completion check using participant-completion-gate
@@ -206,14 +206,14 @@ function simulateModeratorGate(
 
   if (!completionStatus.allComplete) {
     return {
-      created: false,
       blockedReason: `participants not complete: ${completionStatus.streamingParticipantIds.join(', ')}`,
+      created: false,
     };
   }
 
   // Gate 3: Atomic check to prevent duplicate creation
   if (!store.tryMarkModeratorCreated(roundNumber)) {
-    return { created: false, blockedReason: 'already created' };
+    return { blockedReason: 'already created', created: false };
   }
 
   // All gates passed - create moderator
@@ -250,7 +250,7 @@ describe('flow State Machine Race Prevention', () => {
         store,
       );
 
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
       expect(result.blockedReason).toBe('isStreaming=true');
       expect(store.getActionCount('createPendingModerator')).toBe(0);
     });
@@ -270,7 +270,7 @@ describe('flow State Machine Race Prevention', () => {
         store,
       );
 
-      expect(result.created).toBe(true);
+      expect(result.created).toBeTruthy();
       expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
@@ -288,7 +288,7 @@ describe('flow State Machine Race Prevention', () => {
 
       const result = simulateModeratorGate(messages, participants, 0, false, store);
 
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
       expect(result.blockedReason).toContain('p1');
     });
 
@@ -307,7 +307,7 @@ describe('flow State Machine Race Prevention', () => {
 
       const result = simulateModeratorGate(messages, participants, 0, false, store);
 
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
       expect(result.blockedReason).toContain('p3');
       expect(store.getActionCount('createPendingModerator')).toBe(0);
     });
@@ -327,7 +327,7 @@ describe('flow State Machine Race Prevention', () => {
 
       const result = simulateModeratorGate(messages, participants, 0, false, store);
 
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
       expect(result.blockedReason).toContain('p2');
     });
 
@@ -344,7 +344,7 @@ describe('flow State Machine Race Prevention', () => {
 
       const result = simulateModeratorGate(messages, participants, 0, false, store);
 
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
       expect(result.blockedReason).toContain('p2');
     });
 
@@ -363,7 +363,7 @@ describe('flow State Machine Race Prevention', () => {
 
       const result = simulateModeratorGate(messages, participants, 0, false, store);
 
-      expect(result.created).toBe(true);
+      expect(result.created).toBeTruthy();
       expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
@@ -378,12 +378,12 @@ describe('flow State Machine Race Prevention', () => {
 
       // First call succeeds
       const result1 = simulateModeratorGate(messages, participants, 0, false, store);
-      expect(result1.created).toBe(true);
+      expect(result1.created).toBeTruthy();
       expect(store.getActionCount('createPendingModerator')).toBe(1);
 
       // Second call is blocked by atomic check
       const result2 = simulateModeratorGate(messages, participants, 0, false, store);
-      expect(result2.created).toBe(false);
+      expect(result2.created).toBeFalsy();
       expect(result2.blockedReason).toBe('already created');
       expect(store.getActionCount('createPendingModerator')).toBe(1); // Still 1
     });
@@ -399,11 +399,11 @@ describe('flow State Machine Race Prevention', () => {
 
       // Round 0
       const result0 = simulateModeratorGate(messages, participants, 0, false, store);
-      expect(result0.created).toBe(true);
+      expect(result0.created).toBeTruthy();
 
       // Round 1 (separate atomic check)
       const result1 = simulateModeratorGate(messages, participants, 1, false, store);
-      expect(result1.created).toBe(true);
+      expect(result1.created).toBeTruthy();
 
       expect(store.getActionCount('createPendingModerator')).toBe(2);
     });
@@ -419,12 +419,12 @@ describe('flow State Machine Race Prevention', () => {
 
       const context: FlowContext = {
         allParticipantsResponded: true,
+        isAiSdkStreaming: false,
+        isModeratorStreaming: false,
         moderatorExists: false,
         moderatorStatus: null,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        isModeratorStreaming: false,
         participantCount: 2,
+        streamingJustCompleted: false,
       };
 
       expect(determineFlowState(context)).toBe(FlowStates.CREATING_MODERATOR);
@@ -433,12 +433,12 @@ describe('flow State Machine Race Prevention', () => {
     it('stays at STREAMING_PARTICIPANTS when isAiSdkStreaming is true', () => {
       const context: FlowContext = {
         allParticipantsResponded: true, // Even if all responded...
+        isAiSdkStreaming: true, // ...streaming flag blocks
+        isModeratorStreaming: false,
         moderatorExists: false,
         moderatorStatus: null,
-        isAiSdkStreaming: true, // ...streaming flag blocks
-        streamingJustCompleted: false,
-        isModeratorStreaming: false,
         participantCount: 2,
+        streamingJustCompleted: false,
       };
 
       expect(determineFlowState(context)).toBe(FlowStates.STREAMING_PARTICIPANTS);
@@ -447,12 +447,12 @@ describe('flow State Machine Race Prevention', () => {
     it('stays at IDLE when streamingJustCompleted is true', () => {
       const context: FlowContext = {
         allParticipantsResponded: true,
+        isAiSdkStreaming: false,
+        isModeratorStreaming: false,
         moderatorExists: false,
         moderatorStatus: null,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: true, // Delay window blocks
-        isModeratorStreaming: false,
         participantCount: 2,
+        streamingJustCompleted: true, // Delay window blocks
       };
 
       // Won't be CREATING_MODERATOR due to streamingJustCompleted
@@ -463,12 +463,12 @@ describe('flow State Machine Race Prevention', () => {
     it('does not transition when allParticipantsResponded is false', () => {
       const context: FlowContext = {
         allParticipantsResponded: false, // Not all responded
+        isAiSdkStreaming: false,
+        isModeratorStreaming: false,
         moderatorExists: false,
         moderatorStatus: null,
-        isAiSdkStreaming: false,
-        streamingJustCompleted: false,
-        isModeratorStreaming: false,
         participantCount: 2,
+        streamingJustCompleted: false,
       };
 
       expect(determineFlowState(context)).toBe(FlowStates.IDLE);
@@ -501,7 +501,7 @@ describe('real-World Timing Scenarios', () => {
       ];
 
       let result = simulateModeratorGate(messages, participants, 0, true, store);
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
 
       // Step 2: Fast model completes while slow is still streaming
       messages = [
@@ -511,7 +511,7 @@ describe('real-World Timing Scenarios', () => {
       ];
 
       result = simulateModeratorGate(messages, participants, 0, true, store);
-      expect(result.created).toBe(false);
+      expect(result.created).toBeFalsy();
 
       // Step 3: Slow model completes
       messages = [
@@ -521,7 +521,7 @@ describe('real-World Timing Scenarios', () => {
       ];
 
       result = simulateModeratorGate(messages, participants, 0, false, store);
-      expect(result.created).toBe(true);
+      expect(result.created).toBeTruthy();
       expect(store.getActionCount('createPendingModerator')).toBe(1);
     });
   });
@@ -568,11 +568,11 @@ describe('real-World Timing Scenarios', () => {
 
       // If code uses stale messages, it would block
       const staleResult = simulateModeratorGate(staleMessages, participants, 0, false, store);
-      expect(staleResult.created).toBe(false);
+      expect(staleResult.created).toBeFalsy();
 
       // Fresh messages should allow
       const freshResult = simulateModeratorGate(freshMessages, participants, 0, false, store);
-      expect(freshResult.created).toBe(true);
+      expect(freshResult.created).toBeTruthy();
     });
   });
 });
@@ -659,8 +659,8 @@ describe('multi-Round Isolation', () => {
       createAssistantMessage('p2', 1, 1, { streaming: true }),
     ];
 
-    expect(areAllParticipantsCompleteForRound(messages, participants, 0)).toBe(true);
-    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBe(false);
+    expect(areAllParticipantsCompleteForRound(messages, participants, 0)).toBeTruthy();
+    expect(areAllParticipantsCompleteForRound(messages, participants, 1)).toBeFalsy();
   });
 
   it('moderator gate uses correct round for checks', () => {
@@ -675,11 +675,11 @@ describe('multi-Round Isolation', () => {
 
     // Round 0 should succeed
     const result0 = simulateModeratorGate(messages, participants, 0, false, store);
-    expect(result0.created).toBe(true);
+    expect(result0.created).toBeTruthy();
 
     // Round 1 should block (streaming)
     const result1 = simulateModeratorGate(messages, participants, 1, false, store);
-    expect(result1.created).toBe(false);
+    expect(result1.created).toBeFalsy();
   });
 });
 
@@ -699,7 +699,7 @@ describe('edge Cases', () => {
 
     const result = simulateModeratorGate(messages, [], 0, false, store);
 
-    expect(result.created).toBe(false);
+    expect(result.created).toBeFalsy();
   });
 
   it('handles empty messages list', () => {
@@ -707,7 +707,7 @@ describe('edge Cases', () => {
 
     const result = simulateModeratorGate([], participants, 0, false, store);
 
-    expect(result.created).toBe(false);
+    expect(result.created).toBeFalsy();
   });
 
   it('handles single participant correctly', () => {
@@ -719,7 +719,7 @@ describe('edge Cases', () => {
       createAssistantMessage('p1', 0, 0, { streaming: true }),
     ];
     let result = simulateModeratorGate(messages, participants, 0, true, store);
-    expect(result.created).toBe(false);
+    expect(result.created).toBeFalsy();
 
     // Complete
     messages = [
@@ -727,7 +727,7 @@ describe('edge Cases', () => {
       createAssistantMessage('p1', 0, 0, { streaming: false }),
     ];
     result = simulateModeratorGate(messages, participants, 0, false, store);
-    expect(result.created).toBe(true);
+    expect(result.created).toBeTruthy();
   });
 
   it('handles many participants (stress test)', () => {
@@ -752,7 +752,7 @@ describe('edge Cases', () => {
     ];
 
     const result1 = simulateModeratorGate(messagesWithStreaming, participants, 0, false, store);
-    expect(result1.created).toBe(false);
+    expect(result1.created).toBeFalsy();
 
     // All complete
     const messagesAllComplete: UIMessage[] = [
@@ -763,6 +763,6 @@ describe('edge Cases', () => {
     ];
 
     const result2 = simulateModeratorGate(messagesAllComplete, participants, 0, false, store);
-    expect(result2.created).toBe(true);
+    expect(result2.created).toBeTruthy();
   });
 });

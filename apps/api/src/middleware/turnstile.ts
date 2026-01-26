@@ -49,9 +49,9 @@ type TurnstileMiddlewareOptions = {
  */
 export function turnstileMiddleware(options: TurnstileMiddlewareOptions = {}) {
   const {
-    skipInDevelopment = true,
-    optional = false,
     errorMessage = 'Bot protection verification failed',
+    optional = false,
+    skipInDevelopment = true,
     ...validationOptions
   } = options;
 
@@ -103,8 +103,8 @@ export function turnstileMiddleware(options: TurnstileMiddlewareOptions = {}) {
 export function strictTurnstileMiddleware(options: Omit<TurnstileMiddlewareOptions, 'skipInDevelopment' | 'optional'> = {}) {
   return turnstileMiddleware({
     ...options,
-    skipInDevelopment: false,
     optional: false,
+    skipInDevelopment: false,
   });
 }
 

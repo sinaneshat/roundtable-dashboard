@@ -10,18 +10,22 @@ const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorm
 
 // Validate search params (redirect for post-auth navigation, toast/message for user feedback)
 const signInSearchSchema = z.object({
-  redirect: z.string().optional(),
-  toast: z.string().optional(),
-  message: z.string().optional(),
   action: z.string().optional(),
   from: z.string().optional(),
+  message: z.string().optional(),
+  redirect: z.string().optional(),
+  toast: z.string().optional(),
+  utm_campaign: z.string().optional(),
+  utm_medium: z.string().optional(),
   // UTM tracking params (passthrough)
   utm_source: z.string().optional(),
-  utm_medium: z.string().optional(),
-  utm_campaign: z.string().optional(),
 });
 
 export const Route = createFileRoute('/auth/sign-in')({
+  // ✅ ISR: Static shell - cache for 1h at CDN, serve stale for 24h
+  // beforeLoad runs server-side so redirects work, but HTML shell is cacheable
+  validateSearch: signInSearchSchema,
+  component: SignInPage,
   // Use session from root context - NO duplicate API call
   beforeLoad: async ({ context }) => {
     const { session } = context;
@@ -31,13 +35,6 @@ export const Route = createFileRoute('/auth/sign-in')({
       throw redirect({ to: '/chat' });
     }
   },
-  validateSearch: signInSearchSchema,
-  component: SignInPage,
-  // ✅ ISR: Static shell - cache for 1h at CDN, serve stale for 24h
-  // beforeLoad runs server-side so redirects work, but HTML shell is cacheable
-  headers: () => ({
-    'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
-  }),
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -67,6 +64,9 @@ export const Route = createFileRoute('/auth/sign-in')({
       ],
     };
   },
+  headers: () => ({
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+  }),
 });
 
 function SignInPage() {

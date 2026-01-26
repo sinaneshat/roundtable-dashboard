@@ -52,8 +52,8 @@ function calculateShouldShowPendingCards(
   isModeratorStreaming: boolean,
   roundNumber: number,
   streamingRoundNumber: number | null,
-  preSearchActive: boolean = false,
-  preSearchComplete: boolean = false,
+  preSearchActive = false,
+  preSearchComplete = false,
 ): boolean {
   const isAnyStreamingActive = calculateIsAnyStreamingActive(
     isStreaming,
@@ -87,17 +87,17 @@ describe('participant Completion Flash Detection', () => {
           roundNumber,
           s.streamingRoundNumber,
         );
-        pendingCardStates.push({ step, shouldShow });
+        pendingCardStates.push({ shouldShow, step });
         return shouldShow;
       }
 
       // Step 1: Initial streaming state
       state.setStreamingRoundNumber(roundNumber);
       state.setIsStreaming(true);
-      expect(recordState('1-streaming')).toBe(true);
+      expect(recordState('1-streaming')).toBeTruthy();
 
       // Step 2: Streaming in progress
-      expect(recordState('2-still-streaming')).toBe(true);
+      expect(recordState('2-still-streaming')).toBeTruthy();
 
       // Step 3: isStreaming becomes false (participants done)
       state.setIsStreaming(false);
@@ -105,15 +105,15 @@ describe('participant Completion Flash Detection', () => {
 
       // Step 4: isModeratorStreaming becomes true
       state.setIsModeratorStreaming(true);
-      expect(recordState('4-moderator-starting')).toBe(true);
+      expect(recordState('4-moderator-starting')).toBeTruthy();
 
       // ✅ CRITICAL: At step 3, shouldShowPendingCards should STILL be true
       // because streamingRoundNumber is still set
-      expect(afterStreamingFalse).toBe(true);
+      expect(afterStreamingFalse).toBeTruthy();
 
       // Verify no flash occurred
       const hadFlash = pendingCardStates.some(s => !s.shouldShow);
-      expect(hadFlash).toBe(false);
+      expect(hadFlash).toBeFalsy();
     });
 
     it('should detect flash when completeStreaming is called too early', () => {
@@ -132,18 +132,18 @@ describe('participant Completion Flash Detection', () => {
           roundNumber,
           s.streamingRoundNumber,
         );
-        pendingCardStates.push({ step, shouldShow });
+        pendingCardStates.push({ shouldShow, step });
         return shouldShow;
       }
 
       // Setup: Streaming in progress
       state.setStreamingRoundNumber(roundNumber);
       state.setIsStreaming(true);
-      expect(recordState('1-streaming')).toBe(true);
+      expect(recordState('1-streaming')).toBeTruthy();
 
       // Participants done
       state.setIsStreaming(false);
-      expect(recordState('2-streaming-false')).toBe(true);
+      expect(recordState('2-streaming-false')).toBeTruthy();
 
       // ❌ BUG SCENARIO: completeStreaming is called BEFORE moderator starts
       // This clears streamingRoundNumber to null
@@ -157,15 +157,15 @@ describe('participant Completion Flash Detection', () => {
       // This causes shouldShowPendingCards = false → FLASH
 
       // Verify the flash scenario is detected
-      expect(afterCompleteStreaming).toBe(false);
+      expect(afterCompleteStreaming).toBeFalsy();
 
       // Now moderator starts (too late - flash already happened)
       state.setIsModeratorStreaming(true);
-      expect(recordState('4-moderator-starting')).toBe(true);
+      expect(recordState('4-moderator-starting')).toBeTruthy();
 
       // Confirm flash was detected
       const hadFlash = pendingCardStates.some(s => !s.shouldShow);
-      expect(hadFlash).toBe(true);
+      expect(hadFlash).toBeTruthy();
     });
 
     it('should NOT flash when streamingRoundNumber is preserved correctly', () => {
@@ -184,29 +184,29 @@ describe('participant Completion Flash Detection', () => {
           roundNumber,
           s.streamingRoundNumber,
         );
-        pendingCardStates.push({ step, shouldShow });
+        pendingCardStates.push({ shouldShow, step });
         return shouldShow;
       }
 
       // Setup: Streaming in progress
       state.setStreamingRoundNumber(roundNumber);
       state.setIsStreaming(true);
-      expect(recordState('1-streaming')).toBe(true);
+      expect(recordState('1-streaming')).toBeTruthy();
 
       // Participants done
       state.setIsStreaming(false);
-      expect(recordState('2-streaming-false')).toBe(true);
+      expect(recordState('2-streaming-false')).toBeTruthy();
 
       // ✅ CORRECT: Moderator starts BEFORE streamingRoundNumber is cleared
       state.setIsModeratorStreaming(true);
-      expect(recordState('3-moderator-starting')).toBe(true);
+      expect(recordState('3-moderator-starting')).toBeTruthy();
 
       // Moderator streams...
-      expect(recordState('4-moderator-streaming')).toBe(true);
+      expect(recordState('4-moderator-streaming')).toBeTruthy();
 
       // Moderator completes
       state.setIsModeratorStreaming(false);
-      expect(recordState('5-moderator-done')).toBe(true); // Still true due to streamingRoundNumber
+      expect(recordState('5-moderator-done')).toBeTruthy(); // Still true due to streamingRoundNumber
 
       // Only NOW should completeStreaming be called
       state.completeStreaming();
@@ -217,7 +217,7 @@ describe('participant Completion Flash Detection', () => {
       const earlyFlash = pendingCardStates
         .slice(0, 5) // Steps 1-5 should all show pending cards
         .some(s => !s.shouldShow);
-      expect(earlyFlash).toBe(false);
+      expect(earlyFlash).toBeFalsy();
     });
   });
 
@@ -242,7 +242,7 @@ describe('participant Completion Flash Detection', () => {
         roundNumber,
         s.streamingRoundNumber,
       );
-      expect(isAnyActive).toBe(true); // Should be true due to streamingRoundNumber
+      expect(isAnyActive).toBeTruthy(); // Should be true due to streamingRoundNumber
 
       // Batch 2: Moderator starts
       state.setIsModeratorStreaming(true);
@@ -254,7 +254,7 @@ describe('participant Completion Flash Detection', () => {
         roundNumber,
         s2.streamingRoundNumber,
       );
-      expect(isAnyActive2).toBe(true);
+      expect(isAnyActive2).toBeTruthy();
     });
 
     it('should detect when isStreaming and streamingRoundNumber are cleared together', () => {
@@ -287,7 +287,7 @@ describe('participant Completion Flash Detection', () => {
         roundNumber,
         afterClear.streamingRoundNumber,
       );
-      expect(isAnyActive).toBe(false); // This is the flash state!
+      expect(isAnyActive).toBeFalsy(); // This is the flash state!
     });
 
     it('should track state through full participant→moderator lifecycle', () => {
@@ -314,11 +314,11 @@ describe('participant Completion Flash Detection', () => {
           s.streamingRoundNumber,
         );
         snapshots.push({
-          step,
-          isStreaming: s.isStreaming,
-          isModeratorStreaming: s.isModeratorStreaming,
-          streamingRoundNumber: s.streamingRoundNumber,
           isAnyStreamingActive,
+          isModeratorStreaming: s.isModeratorStreaming,
+          isStreaming: s.isStreaming,
+          step,
+          streamingRoundNumber: s.streamingRoundNumber,
         });
       }
 
@@ -348,7 +348,7 @@ describe('participant Completion Flash Detection', () => {
       const activeSteps = snapshots.slice(1, 6); // steps 1-5
       const flashDuringLifecycle = activeSteps.some(s => !s.isAnyStreamingActive);
 
-      expect(flashDuringLifecycle).toBe(false);
+      expect(flashDuringLifecycle).toBeFalsy();
     });
   });
 
@@ -371,8 +371,8 @@ describe('participant Completion Flash Detection', () => {
       function calculateIsLatestRound(
         roundNumber: number,
         streamingRoundNumber: number | null,
-        preSearchActive: boolean = false,
-        preSearchComplete: boolean = false,
+        preSearchActive = false,
+        preSearchComplete = false,
       ): boolean {
         const isStreamingRound = roundNumber === streamingRoundNumber;
         // For simplicity, assume isActuallyLatestRound is always true
@@ -390,33 +390,33 @@ describe('participant Completion Flash Detection', () => {
           false, // No web search
           false, // No web search
         );
-        renderStates.push({ step, isLatestRound });
+        renderStates.push({ isLatestRound, step });
         return isLatestRound;
       }
 
       // Setup streaming
       state.setStreamingRoundNumber(roundNumber);
       state.setIsStreaming(true);
-      expect(recordRender('1-streaming')).toBe(true);
+      expect(recordRender('1-streaming')).toBeTruthy();
 
       // Participants done
       state.setIsStreaming(false);
-      expect(recordRender('2-streaming-false')).toBe(true); // Still true due to streamingRoundNumber
+      expect(recordRender('2-streaming-false')).toBeTruthy(); // Still true due to streamingRoundNumber
 
       // BUG: If completeStreaming is called here, streamingRoundNumber becomes null
       state.completeStreaming();
       const afterCompleteStreaming = recordRender('3-after-complete');
-      expect(afterCompleteStreaming).toBe(false); // FLASH! Returns null, unmounts
+      expect(afterCompleteStreaming).toBeFalsy(); // FLASH! Returns null, unmounts
 
       // Moderator starts (too late)
       state.setIsModeratorStreaming(true);
       // Note: setIsModeratorStreaming doesn't restore streamingRoundNumber!
       // So isLatestRound is STILL false
-      expect(recordRender('4-moderator-start')).toBe(false); // Still unmounted!
+      expect(recordRender('4-moderator-start')).toBeFalsy(); // Still unmounted!
 
       // This proves: completeStreaming before moderator start causes persistent unmount
       const flashOccurred = renderStates.some(r => !r.isLatestRound);
-      expect(flashOccurred).toBe(true);
+      expect(flashOccurred).toBeTruthy();
     });
 
     it('should NOT flash when streamingRoundNumber is preserved through transition', () => {
@@ -437,38 +437,38 @@ describe('participant Completion Flash Detection', () => {
       function recordRender(step: string) {
         const s = getStoreState(store);
         const isLatestRound = calculateIsLatestRound(roundNumber, s.streamingRoundNumber);
-        renderStates.push({ step, isLatestRound });
+        renderStates.push({ isLatestRound, step });
         return isLatestRound;
       }
 
       // Setup streaming
       state.setStreamingRoundNumber(roundNumber);
       state.setIsStreaming(true);
-      expect(recordRender('1-streaming')).toBe(true);
+      expect(recordRender('1-streaming')).toBeTruthy();
 
       // Participants done - streamingRoundNumber still set
       state.setIsStreaming(false);
-      expect(recordRender('2-streaming-false')).toBe(true);
+      expect(recordRender('2-streaming-false')).toBeTruthy();
 
       // Moderator starts - streamingRoundNumber still set
       state.setIsModeratorStreaming(true);
-      expect(recordRender('3-moderator-start')).toBe(true);
+      expect(recordRender('3-moderator-start')).toBeTruthy();
 
       // Moderator streaming
-      expect(recordRender('4-moderator-streaming')).toBe(true);
+      expect(recordRender('4-moderator-streaming')).toBeTruthy();
 
       // Moderator done - streamingRoundNumber still set
       state.setIsModeratorStreaming(false);
-      expect(recordRender('5-moderator-done')).toBe(true);
+      expect(recordRender('5-moderator-done')).toBeTruthy();
 
       // Only NOW complete the streaming (clears streamingRoundNumber)
       state.completeStreaming();
-      expect(recordRender('6-complete')).toBe(false); // OK to be false now - round is done
+      expect(recordRender('6-complete')).toBeFalsy(); // OK to be false now - round is done
 
       // Verify no flash during active phase (steps 1-5)
       const activePhase = renderStates.slice(0, 5);
       const flashDuringActive = activePhase.some(r => !r.isLatestRound);
-      expect(flashDuringActive).toBe(false);
+      expect(flashDuringActive).toBeFalsy();
     });
   });
 
@@ -610,7 +610,7 @@ describe('participant Completion Flash Detection', () => {
 
       // Find the flash
       const flashEvent = stateHistory.find(e => e.event === 'early-complete-streaming');
-      expect(flashEvent?.shouldShowPendingCards).toBe(false); // This IS the flash
+      expect(flashEvent?.shouldShowPendingCards).toBeFalsy(); // This IS the flash
 
       // Total flashes
       const flashCount = stateHistory.filter(e => !e.shouldShowPendingCards).length;

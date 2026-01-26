@@ -37,42 +37,42 @@ describe('non-initial round placeholder disappearance', () => {
 
     // Create thread and participants
     const thread: ChatThread = {
+      createdAt: new Date(),
+      enableWebSearch: true,
       id: threadId,
-      userId: 'user-1',
-      title: 'Test Thread',
-      slug: 'test-thread',
-      mode: 'debate',
-      status: 'active',
+      isAiGeneratedTitle: false,
       isFavorite: false,
       isPublic: false,
-      isAiGeneratedTitle: false,
-      enableWebSearch: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       lastMessageAt: new Date(),
+      mode: 'debate',
+      slug: 'test-thread',
+      status: 'active',
+      title: 'Test Thread',
+      updatedAt: new Date(),
+      userId: 'user-1',
     };
 
     const participants: ChatParticipant[] = [
       {
-        id: 'p-1',
-        threadId,
-        modelId: 'gpt-4',
-        role: 'analyst',
-        customRoleId: null,
-        priority: 0,
-        isEnabled: true,
         createdAt: new Date(),
+        customRoleId: null,
+        id: 'p-1',
+        isEnabled: true,
+        modelId: 'gpt-4',
+        priority: 0,
+        role: 'analyst',
+        threadId,
         updatedAt: new Date(),
       },
       {
-        id: 'p-2',
-        threadId,
-        modelId: 'claude-3',
-        role: 'critic',
-        customRoleId: null,
-        priority: 1,
-        isEnabled: true,
         createdAt: new Date(),
+        customRoleId: null,
+        id: 'p-2',
+        isEnabled: true,
+        modelId: 'claude-3',
+        priority: 1,
+        role: 'critic',
+        threadId,
         updatedAt: new Date(),
       },
     ];
@@ -81,55 +81,55 @@ describe('non-initial round placeholder disappearance', () => {
     store.getState().initializeThread(thread, participants, [
       {
         id: `${threadId}_r0_user`,
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Initial question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Initial question', type: 'text' }],
+        role: MessageRoles.USER,
       },
       {
         id: `${threadId}_r0_p0`,
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'GPT-4 response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
+          finishReason: 'stop',
           model: 'gpt-4',
           participantIndex: 0,
+          role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          finishReason: 'stop',
         },
+        parts: [{ text: 'GPT-4 response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
       {
         id: `${threadId}_r0_p1`,
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Claude response' }],
         metadata: {
-          role: MessageRoles.ASSISTANT,
+          finishReason: 'stop',
           model: 'claude-3',
           participantIndex: 1,
+          role: MessageRoles.ASSISTANT,
           roundNumber: 0,
-          finishReason: 'stop',
         },
+        parts: [{ text: 'Claude response', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
       {
         id: `${threadId}_r0_moderator`,
-        role: MessageRoles.ASSISTANT,
-        parts: [{ type: 'text', text: 'Summary' }],
         metadata: {
-          role: 'moderator',
-          isModerator: true,
-          roundNumber: 0,
           finishReason: 'stop',
+          isModerator: true,
+          role: 'moderator',
+          roundNumber: 0,
         },
+        parts: [{ text: 'Summary', type: 'text' }],
+        role: MessageRoles.ASSISTANT,
       },
     ]);
 
     store.getState().setScreenMode(ScreenModes.THREAD);
 
-    return { store, thread, participants };
+    return { participants, store, thread };
   }
 
   describe('bug reproduction: placeholder disappearance on re-initialization', () => {
     it('should NOT reset streamingRoundNumber when initializeThread is called during active submission', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
 
       // Simulate form submission for round 1 (handleUpdateThreadAndSend flow)
       const nextRoundNumber = 1;
@@ -140,27 +140,27 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up question' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: nextRoundNumber,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Follow-up question', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
       // Step 2: Add pre-search placeholder if web search enabled
       store.getState().addPreSearch({
-        id: `placeholder-presearch-${thread.id}-${nextRoundNumber}`,
-        threadId: thread.id,
-        roundNumber: nextRoundNumber,
-        userQuery: 'Follow-up question',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `placeholder-presearch-${thread.id}-${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: thread.id,
+        userQuery: 'Follow-up question',
       } as StoredPreSearch);
 
       // Step 3: Set configChangeRoundNumber to block streaming until PATCH
@@ -173,7 +173,7 @@ describe('non-initial round placeholder disappearance', () => {
       // Verify state before PATCH
       expect(store.getState().streamingRoundNumber).toBe(nextRoundNumber);
       expect(store.getState().configChangeRoundNumber).toBe(nextRoundNumber);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
       expect(store.getState().preSearches).toHaveLength(1);
 
       // Step 5: Simulate PATCH completing
@@ -202,26 +202,26 @@ describe('non-initial round placeholder disappearance', () => {
       expect(store.getState().streamingRoundNumber).toBe(nextRoundNumber);
 
       // Also verify other streaming state is preserved
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
       expect(store.getState().nextParticipantToTrigger).toBe(0);
     });
 
     it('should preserve placeholder visibility flags when initializeThread is called during submission', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Setup submission state
       store.getState().setStreamingRoundNumber(nextRoundNumber);
       store.getState().addPreSearch({
-        id: `placeholder-presearch-${thread.id}-${nextRoundNumber}`,
-        threadId: thread.id,
-        roundNumber: nextRoundNumber,
-        userQuery: 'Follow-up',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `placeholder-presearch-${thread.id}-${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: thread.id,
+        userQuery: 'Follow-up',
       } as StoredPreSearch);
       store.getState().setWaitingToStartStreaming(true);
       store.getState().setNextParticipantToTrigger(0);
@@ -239,30 +239,30 @@ describe('non-initial round placeholder disappearance', () => {
         const isAnyStreamingActive = s.isStreaming || s.isModeratorStreaming || isStreamingRound;
         const isRoundComplete = false; // No moderator finishReason yet
         const shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive);
-        return { shouldShowPendingCards, isStreamingRound, isAnyStreamingActive };
+        return { isAnyStreamingActive, isStreamingRound, shouldShowPendingCards };
       };
 
       // Before "PATCH completion" - placeholders should show
-      expect(renderingState().shouldShowPendingCards).toBe(true);
+      expect(renderingState().shouldShowPendingCards).toBeTruthy();
 
       // Simulate PATCH completion - isWaitingForChangelog is always set to true
       // (this is the fix - we no longer clear configChangeRoundNumber immediately)
       store.getState().setIsWaitingForChangelog(true);
 
       // After PATCH but before initializeThread - placeholders should still show
-      expect(renderingState().shouldShowPendingCards).toBe(true);
+      expect(renderingState().shouldShowPendingCards).toBeTruthy();
 
       // Simulate initializeThread being called during this window
       store.getState().initializeThread(thread, participants, store.getState().messages);
 
       // CRITICAL: After initializeThread, placeholders should STILL show
       // This is the bug - if streamingRoundNumber is reset, shouldShowPendingCards becomes false
-      expect(renderingState().shouldShowPendingCards).toBe(true);
-      expect(renderingState().isStreamingRound).toBe(true);
+      expect(renderingState().shouldShowPendingCards).toBeTruthy();
+      expect(renderingState().isStreamingRound).toBeTruthy();
     });
 
     it('should preserve state when isWaitingForChangelog is true (after PATCH completion)', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Setup: Submission in progress
@@ -279,9 +279,9 @@ describe('non-initial round placeholder disappearance', () => {
 
       // Call initializeThread - it should detect active submission and preserve state
       const beforeState = {
+        nextParticipantToTrigger: store.getState().nextParticipantToTrigger,
         streamingRoundNumber: store.getState().streamingRoundNumber,
         waitingToStartStreaming: store.getState().waitingToStartStreaming,
-        nextParticipantToTrigger: store.getState().nextParticipantToTrigger,
       };
 
       store.getState().initializeThread(thread, participants, store.getState().messages);
@@ -311,13 +311,13 @@ describe('non-initial round placeholder disappearance', () => {
 
       // After complete, streamingRoundNumber should be null
       expect(store.getState().streamingRoundNumber).toBeNull();
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
   describe('initializeThread guard during active submission', () => {
     it('should NOT call initializeThread when configChangeRoundNumber is set', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Simulate the EXACT order of operations in handleUpdateThreadAndSend:
@@ -327,9 +327,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
+          metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'Round 1 question', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -344,7 +344,7 @@ describe('non-initial round placeholder disappearance', () => {
       // At this point, hasActiveFormSubmission should be true
       const state = store.getState();
       const hasActiveFormSubmission = state.configChangeRoundNumber !== null || state.isWaitingForChangelog;
-      expect(hasActiveFormSubmission).toBe(true);
+      expect(hasActiveFormSubmission).toBeTruthy();
 
       // Verify user message is present
       expect(store.getState().messages).toHaveLength(5);
@@ -363,7 +363,7 @@ describe('non-initial round placeholder disappearance', () => {
     });
 
     it('should NOT call initializeThread when isWaitingForChangelog is true', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Add optimistic message
@@ -372,9 +372,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
+          metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'Round 1 question', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -385,7 +385,7 @@ describe('non-initial round placeholder disappearance', () => {
 
       // hasActiveFormSubmission should be true
       const state = store.getState();
-      expect(state.isWaitingForChangelog).toBe(true);
+      expect(state.isWaitingForChangelog).toBeTruthy();
 
       // initializeThread should preserve messages
       const serverMessages = store.getState().messages.slice(0, 4);
@@ -396,7 +396,7 @@ describe('non-initial round placeholder disappearance', () => {
     });
 
     it('should preserve messages when NEITHER flag is set but store has newer round', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Add optimistic message WITHOUT setting any flags
@@ -405,9 +405,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
+          metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'Round 1 question', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Round 1 question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -425,7 +425,7 @@ describe('non-initial round placeholder disappearance', () => {
 
   describe('user message visibility after submission', () => {
     it('should preserve optimistic user message when initializeThread is called with server messages', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Get the initial round 0 messages (what server would return)
@@ -438,13 +438,13 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Follow-up question for round 1' }],
           metadata: {
+            isOptimistic: true,
             role: MessageRoles.USER,
             roundNumber: nextRoundNumber,
-            isOptimistic: true,
           },
+          parts: [{ text: 'Follow-up question for round 1', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ]);
 
@@ -452,7 +452,7 @@ describe('non-initial round placeholder disappearance', () => {
       expect(store.getState().messages).toHaveLength(5);
       const userMsgBeforeInit = store.getState().messages.find(m => m.id === optimisticUserId);
       expect(userMsgBeforeInit).toBeDefined();
-      expect(userMsgBeforeInit?.parts[0]).toEqual({ type: 'text', text: 'Follow-up question for round 1' });
+      expect(userMsgBeforeInit?.parts[0]).toEqual({ text: 'Follow-up question for round 1', type: 'text' });
 
       // Step 2: Set up streaming state (as handleUpdateThreadAndSend does)
       store.getState().setStreamingRoundNumber(nextRoundNumber);
@@ -471,11 +471,11 @@ describe('non-initial round placeholder disappearance', () => {
       expect(store.getState().messages).toHaveLength(5);
       const userMsgAfterInit = store.getState().messages.find(m => m.id === optimisticUserId);
       expect(userMsgAfterInit).toBeDefined();
-      expect(userMsgAfterInit?.parts[0]).toEqual({ type: 'text', text: 'Follow-up question for round 1' });
+      expect(userMsgAfterInit?.parts[0]).toEqual({ text: 'Follow-up question for round 1', type: 'text' });
     });
 
     it('should NOT lose user message when initializeThread called WITHOUT hasActiveFormSubmission flags', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Get server messages (round 0 only)
@@ -487,9 +487,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
+          metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'Second round question', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Second round question' }],
-          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -516,7 +516,7 @@ describe('non-initial round placeholder disappearance', () => {
     });
 
     it('should keep user message when server returns same messages after PATCH', () => {
-      const { store, thread, participants } = createStoreWithCompletedRound0();
+      const { participants, store, thread } = createStoreWithCompletedRound0();
       const nextRoundNumber = 1;
 
       // Add optimistic user message
@@ -525,9 +525,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...msgs,
         {
           id: optimisticUserId,
+          metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'My follow-up', type: 'text' }],
           role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'My follow-up' }],
-          metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber, isOptimistic: true },
         },
       ]);
 
@@ -541,9 +541,9 @@ describe('non-initial round placeholder disappearance', () => {
         ...store.getState().messages.filter(m => m.id !== optimisticUserId),
         {
           id: `persisted-user-r${nextRoundNumber}`, // Different ID from optimistic
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'My follow-up' }],
           metadata: { role: MessageRoles.USER, roundNumber: nextRoundNumber },
+          parts: [{ text: 'My follow-up', type: 'text' }],
+          role: MessageRoles.USER,
         },
       ];
 
@@ -571,15 +571,15 @@ describe('non-initial round placeholder disappearance', () => {
       // Setup
       store.getState().setStreamingRoundNumber(nextRoundNumber);
       store.getState().addPreSearch({
-        id: `presearch-${thread.id}-${nextRoundNumber}`,
-        threadId: thread.id,
-        roundNumber: nextRoundNumber,
-        userQuery: 'Test',
-        status: MessageStatuses.PENDING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: `presearch-${thread.id}-${nextRoundNumber}`,
+        roundNumber: nextRoundNumber,
+        searchData: null,
+        status: MessageStatuses.PENDING,
+        threadId: thread.id,
+        userQuery: 'Test',
       } as StoredPreSearch);
       store.getState().setWaitingToStartStreaming(true);
 
@@ -598,8 +598,8 @@ describe('non-initial round placeholder disappearance', () => {
         ps => ps.roundNumber === nextRoundNumber,
       )?.status === MessageStatuses.COMPLETE;
 
-      expect(isStreamingRound).toBe(true);
-      expect(preSearchComplete).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
+      expect(preSearchComplete).toBeTruthy();
 
       // shouldShowPendingCards depends on isAnyStreamingActive
       // isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound
@@ -607,7 +607,7 @@ describe('non-initial round placeholder disappearance', () => {
         || store.getState().isModeratorStreaming
         || isStreamingRound;
 
-      expect(isAnyStreamingActive).toBe(true); // Because isStreamingRound is true
+      expect(isAnyStreamingActive).toBeTruthy(); // Because isStreamingRound is true
     });
   });
 });

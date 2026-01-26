@@ -13,10 +13,10 @@ type ProjectIconColorPickerProps = {
 };
 
 export function ProjectIconColorPicker({
-  icon,
   color,
-  onIconChange,
+  icon,
   onColorChange,
+  onIconChange,
 }: ProjectIconColorPickerProps) {
   return (
     <div className="space-y-4">
@@ -82,18 +82,18 @@ type ProjectIconBadgeProps = {
   iconClassName?: string;
 };
 
-export function ProjectIconBadge({ icon, color, size = 'md', className, iconClassName }: ProjectIconBadgeProps) {
+export function ProjectIconBadge({ className, color, icon, iconClassName, size = 'md' }: ProjectIconBadgeProps) {
   const IconComponent = getProjectIconComponent(icon);
   const sizeClasses = {
-    sm: 'size-5 rounded', // 20px - sidebar
-    md: 'size-6 rounded-md', // 24px - default
     lg: 'size-8 rounded-md', // 32px - medium displays
+    md: 'size-6 rounded-md', // 24px - default
+    sm: 'size-5 rounded', // 20px - sidebar
     xl: 'size-12 rounded-lg', // 48px - page headers
   };
   const iconSizeClasses = {
-    sm: 'size-3', // 12px
-    md: 'size-3.5', // 14px
     lg: 'size-4', // 16px
+    md: 'size-3.5', // 14px
+    sm: 'size-3', // 12px
     xl: 'size-6', // 24px
   };
 

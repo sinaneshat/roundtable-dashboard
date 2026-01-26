@@ -9,9 +9,9 @@ type NavUserSkeletonProps = {
 } & ComponentProps<'div'>;
 
 export function NavUserSkeleton({
-  showChevron = true,
-  collapsed = false,
   className,
+  collapsed = false,
+  showChevron = true,
   ...props
 }: NavUserSkeletonProps) {
   if (collapsed) {

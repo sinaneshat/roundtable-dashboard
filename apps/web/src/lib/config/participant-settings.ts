@@ -25,22 +25,6 @@ import { z } from '@hono/zod-openapi';
 export const ParticipantSettingsSchema = z
   .object({
     /**
-     * Temperature setting for AI model creativity
-     * @minimum 0
-     * @maximum 2
-     * @default 0.7
-     */
-    temperature: z
-      .number()
-      .min(0, 'Temperature must be at least 0')
-      .max(2, 'Temperature must be at most 2')
-      .optional()
-      .openapi({
-        description: 'Controls randomness in model responses (0 = deterministic, 2 = very creative)',
-        example: 0.7,
-      }),
-
-    /**
      * Maximum tokens in model response
      * @minimum 1
      * @maximum 100000
@@ -69,13 +53,29 @@ export const ParticipantSettingsSchema = z
         description: 'Custom system instructions to guide model behavior',
         example: 'You are a helpful assistant specializing in technical support.',
       }),
+
+    /**
+     * Temperature setting for AI model creativity
+     * @minimum 0
+     * @maximum 2
+     * @default 0.7
+     */
+    temperature: z
+      .number()
+      .min(0, 'Temperature must be at least 0')
+      .max(2, 'Temperature must be at most 2')
+      .optional()
+      .openapi({
+        description: 'Controls randomness in model responses (0 = deterministic, 2 = very creative)',
+        example: 0.7,
+      }),
   })
   .strict() // Reject unknown fields for type safety
   .nullable() // Allow null values
   .optional() // Allow undefined
   .openapi({
-    title: 'ParticipantSettings',
     description: 'Configuration settings for AI model participants',
+    title: 'ParticipantSettings',
   });
 
 /**
@@ -92,9 +92,9 @@ export type ParticipantSettings = z.infer<typeof ParticipantSettingsSchema>;
  * - No custom system prompt
  */
 export const DEFAULT_PARTICIPANT_SETTINGS: Required<NonNullable<ParticipantSettings>> = {
-  temperature: 0.7,
   maxTokens: 1024,
   systemPrompt: '',
+  temperature: 0.7,
 } as const;
 
 /**
@@ -137,8 +137,8 @@ export function normalizeParticipantSettings(
 
   // Merge parsed settings with defaults
   return {
-    temperature: parsed.data.temperature ?? DEFAULT_PARTICIPANT_SETTINGS.temperature,
     maxTokens: parsed.data.maxTokens ?? DEFAULT_PARTICIPANT_SETTINGS.maxTokens,
     systemPrompt: parsed.data.systemPrompt ?? DEFAULT_PARTICIPANT_SETTINGS.systemPrompt,
+    temperature: parsed.data.temperature ?? DEFAULT_PARTICIPANT_SETTINGS.temperature,
   };
 }

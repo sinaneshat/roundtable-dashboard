@@ -34,8 +34,8 @@ import {
 export const listUserPresetsHandler: RouteHandler<typeof listUserPresetsRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateQuery: CursorPaginationQuerySchema,
     operationName: 'listUserPresets',
+    validateQuery: CursorPaginationQuerySchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -45,14 +45,14 @@ export const listUserPresetsHandler: RouteHandler<typeof listUserPresetsRoute, A
     // Note: Relational queries (db.query.*) don't support $withCache
     // Would need select builder pattern for caching, but query is already simple and fast
     const userPresets = await db.query.chatUserPreset.findMany({
+      limit: query.limit + 1,
+      orderBy: getCursorOrderBy(tables.chatUserPreset.updatedAt, 'desc'),
       where: buildCursorWhereWithFilters(
         tables.chatUserPreset.updatedAt,
         query.cursor,
         'desc',
         [eq(tables.chatUserPreset.userId, user.id)],
       ),
-      orderBy: getCursorOrderBy(tables.chatUserPreset.updatedAt, 'desc'),
-      limit: query.limit + 1,
     });
 
     const { items, pagination } = applyCursorPagination(
@@ -68,8 +68,8 @@ export const listUserPresetsHandler: RouteHandler<typeof listUserPresetsRoute, A
 export const createUserPresetHandler: RouteHandler<typeof createUserPresetRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateBody: CreateUserPresetRequestSchema,
     operationName: 'createUserPreset',
+    validateBody: CreateUserPresetRequestSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -81,14 +81,14 @@ export const createUserPresetHandler: RouteHandler<typeof createUserPresetRoute,
     const [preset] = await db
       .insert(tables.chatUserPreset)
       .values({
-        id: presetId,
-        userId: user.id,
-        name: body.name,
-        modelRoles: body.modelRoles,
-        mode: body.mode,
-        metadata: null,
         createdAt: now,
+        id: presetId,
+        metadata: null,
+        mode: body.mode,
+        modelRoles: body.modelRoles,
+        name: body.name,
         updatedAt: now,
+        userId: user.id,
       })
       .returning();
 
@@ -101,8 +101,8 @@ export const createUserPresetHandler: RouteHandler<typeof createUserPresetRoute,
 export const getUserPresetHandler: RouteHandler<typeof getUserPresetRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'getUserPreset',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -129,9 +129,9 @@ export const getUserPresetHandler: RouteHandler<typeof getUserPresetRoute, ApiEn
 export const updateUserPresetHandler: RouteHandler<typeof updateUserPresetRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
-    validateBody: UpdateUserPresetRequestSchema,
     operationName: 'updateUserPreset',
+    validateBody: UpdateUserPresetRequestSchema,
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();
@@ -142,9 +142,9 @@ export const updateUserPresetHandler: RouteHandler<typeof updateUserPresetRoute,
     const [updatedPreset] = await db
       .update(tables.chatUserPreset)
       .set({
-        name: body.name,
-        modelRoles: body.modelRoles,
         mode: body.mode,
+        modelRoles: body.modelRoles,
+        name: body.name,
         updatedAt: new Date(),
       })
       .where(and(
@@ -166,8 +166,8 @@ export const updateUserPresetHandler: RouteHandler<typeof updateUserPresetRoute,
 export const deleteUserPresetHandler: RouteHandler<typeof deleteUserPresetRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
-    validateParams: IdParamSchema,
     operationName: 'deleteUserPreset',
+    validateParams: IdParamSchema,
   },
   async (c) => {
     const { user } = c.auth();

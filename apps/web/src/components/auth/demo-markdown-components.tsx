@@ -26,11 +26,10 @@ function parseSimpleMarkdown(text: string): ReactNode[] {
   // Match **bold**, *italic*, or `code`
   const regex = /\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`/g;
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
   let key = 0;
 
-  // eslint-disable-next-line no-cond-assign -- Standard regex exec loop pattern
-  while ((match = regex.exec(text)) !== null) {
+  let match = regex.exec(text);
+  while (match !== null) {
     // Add text before match
     if (match.index > lastIndex) {
       nodes.push(text.slice(lastIndex, match.index));
@@ -53,6 +52,7 @@ function parseSimpleMarkdown(text: string): ReactNode[] {
     }
 
     lastIndex = regex.lastIndex;
+    match = regex.exec(text);
   }
 
   // Add remaining text

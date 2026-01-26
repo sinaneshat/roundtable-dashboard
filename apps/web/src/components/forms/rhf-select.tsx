@@ -29,13 +29,13 @@ type RHFSelectProps<TFieldValues extends FieldValues = FieldValues> = {
 };
 
 export function RHFSelect<TFieldValues extends FieldValues = FieldValues>({
+  description,
+  disabled,
   name,
   options,
   placeholder,
-  title,
-  description,
   required,
-  disabled,
+  title,
 }: RHFSelectProps<TFieldValues>) {
   const { control } = useFormContext<TFieldValues>();
 

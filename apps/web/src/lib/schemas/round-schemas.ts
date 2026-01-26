@@ -131,9 +131,9 @@ export function calculateNextRound(maxRound: RoundNumberWithSentinel): RoundNumb
   const result = RoundNumberSchema.safeParse(next);
   if (!result.success) {
     console.error('[calculateNextRound] Invalid round calculation:', {
+      error: result.error.issues,
       maxRound,
       next,
-      error: result.error.issues,
     });
     // This should never happen with valid input, but fallback to 0 for safety
     return DEFAULT_ROUND_NUMBER;

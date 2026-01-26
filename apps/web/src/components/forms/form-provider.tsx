@@ -11,9 +11,9 @@ type FormProviderProps<TFieldValues extends FieldValues = FieldValues> = {
 
 export function FormProvider<TFieldValues extends FieldValues = FieldValues>({
   children,
-  onSubmit,
-  methods,
   className,
+  methods,
+  onSubmit,
 }: FormProviderProps<TFieldValues>) {
   return (
     <RHFFormProvider {...methods}>

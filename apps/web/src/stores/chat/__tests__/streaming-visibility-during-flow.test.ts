@@ -41,38 +41,38 @@ import { createChatStore } from '../store';
 
 function createMockThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORM,
-    status: 'active',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.BRAINSTORM,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   };
 }
 
 function createMockParticipants(count = 2): ChatParticipant[] {
   return Array.from({ length: count }, (_, i) => ({
-    id: `participant-${i}`,
-    threadId: 'thread-123',
-    modelId: `model-${i}`,
-    role: `Role ${i}`,
-    customRoleId: null,
-    priority: i,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${i}`,
+    isEnabled: true,
+    modelId: `model-${i}`,
+    priority: i,
+    role: `Role ${i}`,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   }));
 }
@@ -84,23 +84,23 @@ function createUserMessage(roundNumber: number, text: string): ApiMessage {
   };
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
   };
 }
 
 function createOptimisticUserMessage(roundNumber: number, text: string): ApiMessage {
   const metadata: DbUserMessageMetadata = {
+    isOptimistic: true,
     role: MessageRoles.USER,
     roundNumber,
-    isOptimistic: true,
   };
   return {
     id: `optimistic-user-r${roundNumber}-${Date.now()}`,
-    role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -111,47 +111,47 @@ function createAssistantMessage(
   isComplete = true,
 ): ApiMessage {
   const metadata: DbAssistantMessageMetadata = {
-    role: MessageRoles.ASSISTANT,
-    roundNumber,
+    finishReason: isComplete ? 'stop' : null,
+    hasError: false,
+    isPartialResponse: !isComplete,
+    isTransient: false,
+    model: `model-${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
     participantRole: `Role ${participantIndex}`,
-    model: `model-${participantIndex}`,
-    finishReason: isComplete ? 'stop' : null,
-    usage: isComplete ? { promptTokens: 100, completionTokens: 50, totalTokens: 150 } : null,
-    hasError: false,
-    isTransient: false,
-    isPartialResponse: !isComplete,
+    role: MessageRoles.ASSISTANT,
+    roundNumber,
+    usage: isComplete ? { completionTokens: 50, promptTokens: 100, totalTokens: 150 } : null,
   };
   return {
     id: `assistant-msg-r${roundNumber}-p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text }],
     metadata,
+    parts: [{ text, type: MessagePartTypes.TEXT }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
 function createPreSearch(roundNumber: number, status: string = MessageStatuses.PENDING): StoredPreSearch {
   return {
+    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
     id: `presearch-r${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    userQuery: `Query for round ${roundNumber}`,
-    status,
     searchData: status === MessageStatuses.COMPLETE
       ? {
-          queries: [{ query: 'test', rationale: 'test', searchDepth: 'basic', index: 0, total: 1 }],
-          results: [],
-          summary: 'test summary',
-          successCount: 1,
           failureCount: 0,
+          queries: [{ index: 0, query: 'test', rationale: 'test', searchDepth: 'basic', total: 1 }],
+          results: [],
+          successCount: 1,
+          summary: 'test summary',
           totalResults: 0,
           totalTime: 100,
         }
       : null,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: `Query for round ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -225,7 +225,7 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL ASSERTION: User message is visible DURING streaming
       const state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(0);
 
       const userMessages = state.messages.filter(
@@ -233,8 +233,9 @@ describe('streaming visibility during flow', () => {
       );
       expect(userMessages).toHaveLength(1);
       const firstUserMsg = userMessages[0];
-      if (!firstUserMsg)
+      if (!firstUserMsg) {
         throw new Error('Expected user message');
+      }
       expect(firstUserMsg.parts[0]).toHaveProperty('text', 'What is AI?');
     });
 
@@ -246,8 +247,8 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: streamingRoundNumber + participants array enables placeholder rendering
       verifyStreamingVisibilityState(store, 0, {
-        expectUserMessage: true,
         expectPlaceholders: true,
+        expectUserMessage: true,
         participantCount: 2,
       });
 
@@ -256,8 +257,9 @@ describe('streaming visibility during flow', () => {
       expect(state.participants).toHaveLength(2);
       const participant0 = state.participants[0];
       const participant1 = state.participants[1];
-      if (!participant0 || !participant1)
+      if (!participant0 || !participant1) {
         throw new Error('Expected participants');
+      }
       expect(participant0.modelId).toBeDefined();
       expect(participant1.modelId).toBeDefined();
     });
@@ -275,14 +277,15 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Partial message is visible DURING streaming
       let state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       const assistantMessages = state.messages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
       );
       expect(assistantMessages).toHaveLength(1);
       const firstAssistantMsg = assistantMessages[0];
-      if (!firstAssistantMsg)
+      if (!firstAssistantMsg) {
         throw new Error('Expected assistant message');
+      }
       expect(firstAssistantMsg.parts[0]).toHaveProperty('text', 'Hello');
 
       // Update with more content (simulating streaming chunks)
@@ -293,13 +296,14 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Updated content is visible DURING streaming
       state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       const updatedMessages = state.messages.filter(
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 0,
       );
       const firstUpdatedMsg = updatedMessages[0];
-      if (!firstUpdatedMsg)
+      if (!firstUpdatedMsg) {
         throw new Error('Expected updated message');
+      }
       expect(firstUpdatedMsg.parts[0]).toHaveProperty('text', 'Hello world');
     });
 
@@ -314,9 +318,9 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Pre-search placeholder is visible DURING streaming
       verifyStreamingVisibilityState(store, 0, {
-        expectUserMessage: true,
         expectPlaceholders: true,
         expectPreSearch: true,
+        expectUserMessage: true,
         participantCount: 2,
       });
 
@@ -356,10 +360,11 @@ describe('streaming visibility during flow', () => {
       );
       expect(round1UserMessages).toHaveLength(1);
       const round1UserMsg = round1UserMessages[0];
-      if (!round1UserMsg)
+      if (!round1UserMsg) {
         throw new Error('Expected round 1 user message');
+      }
       expect(round1UserMsg.parts[0]).toHaveProperty('text', 'Second question');
-      expect(round1UserMsg.metadata.isOptimistic).toBe(true);
+      expect(round1UserMsg.metadata.isOptimistic).toBeTruthy();
     });
 
     it('should show placeholders for all participants IMMEDIATELY in round 1', () => {
@@ -370,14 +375,14 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Placeholders can render BEFORE streaming actually starts
       verifyStreamingVisibilityState(store, 1, {
-        expectUserMessage: true,
         expectPlaceholders: true,
+        expectUserMessage: true,
         participantCount: 2,
       });
 
       const state = store.getState();
-      expect(state.waitingToStartStreaming).toBe(true);
-      expect(state.isStreaming).toBe(false); // Not yet streaming, but placeholders visible
+      expect(state.waitingToStartStreaming).toBeTruthy();
+      expect(state.isStreaming).toBeFalsy(); // Not yet streaming, but placeholders visible
     });
 
     it('should maintain visibility when streaming starts in round 1', () => {
@@ -400,15 +405,16 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: User message still visible AFTER streaming starts
       state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
 
       const afterStreamingUserMsgs = state.messages.filter(
         m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === 1,
       );
       expect(afterStreamingUserMsgs).toHaveLength(1);
       const afterStreamingUserMsg = afterStreamingUserMsgs[0];
-      if (!afterStreamingUserMsg)
+      if (!afterStreamingUserMsg) {
         throw new Error('Expected after streaming user message');
+      }
       expect(afterStreamingUserMsg.id).toBe(optimisticMsg.id);
     });
 
@@ -426,7 +432,7 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Partial message visible DURING streaming in round 1
       let state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.currentParticipantIndex).toBe(0);
 
       const round1AssistantMsgs = state.messages.filter(
@@ -434,8 +440,9 @@ describe('streaming visibility during flow', () => {
       );
       expect(round1AssistantMsgs).toHaveLength(1);
       const round1AssistantMsg = round1AssistantMsgs[0];
-      if (!round1AssistantMsg)
+      if (!round1AssistantMsg) {
         throw new Error('Expected round 1 assistant message');
+      }
       expect(round1AssistantMsg.parts[0]).toHaveProperty('text', 'Starting to answer');
 
       // Update with more content
@@ -450,8 +457,9 @@ describe('streaming visibility during flow', () => {
         m => m.role === MessageRoles.ASSISTANT && getRoundNumber(m.metadata) === 1,
       );
       const updatedAssistantMsg = updatedAssistantMsgs[0];
-      if (!updatedAssistantMsg)
+      if (!updatedAssistantMsg) {
         throw new Error('Expected updated assistant message');
+      }
       expect(updatedAssistantMsg.parts[0]).toHaveProperty('text', 'Starting to answer... here is more');
     });
 
@@ -502,8 +510,9 @@ describe('streaming visibility during flow', () => {
       );
       expect(beforePatchMsgs).toHaveLength(1);
       const beforePatchMsg = beforePatchMsgs[0];
-      if (!beforePatchMsg)
+      if (!beforePatchMsg) {
         throw new Error('Expected before patch message');
+      }
       expect(beforePatchMsg.id).toBe(optimisticId);
 
       // Simulate PATCH response: Replace optimistic with persisted message
@@ -521,8 +530,9 @@ describe('streaming visibility during flow', () => {
       );
       expect(afterPatchMsgs).toHaveLength(1);
       const afterPatchMsg = afterPatchMsgs[0];
-      if (!afterPatchMsg)
+      if (!afterPatchMsg) {
         throw new Error('Expected after patch message');
+      }
       expect(afterPatchMsg.id).toBe('thread_r1_user');
       expect(afterPatchMsg.parts[0]).toHaveProperty('text', 'Question');
     });
@@ -579,7 +589,7 @@ describe('streaming visibility during flow', () => {
       expect(state.messages.filter(m => getRoundNumber(m.metadata) === 0)).toHaveLength(3);
       expect(state.messages.filter(m => getRoundNumber(m.metadata) === 1)).toHaveLength(3);
       expect(state.messages.filter(m => getRoundNumber(m.metadata) === 2)).toHaveLength(1);
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.streamingRoundNumber).toBe(2);
     });
   });
@@ -620,7 +630,7 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: streamingRoundNumber maintained throughout
       expect(store.getState().streamingRoundNumber).toBe(1);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
     });
 
     it('should not clear streamingRoundNumber when configChangeRoundNumber is set', () => {
@@ -670,8 +680,9 @@ describe('streaming visibility during flow', () => {
       const round1Messages = state.messages.filter(m => getRoundNumber(m.metadata) === 1);
       expect(round1Messages).toHaveLength(1);
       const round1Msg = round1Messages[0];
-      if (!round1Msg)
+      if (!round1Msg) {
         throw new Error('Expected round 1 message');
+      }
       expect(round1Msg.role).toBe(MessageRoles.USER);
     });
   });
@@ -697,7 +708,7 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: User message should still be visible
       const state = store.getState();
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
       expect(state.configChangeRoundNumber).toBe(1);
 
       const userMessages = state.messages.filter(
@@ -753,9 +764,9 @@ describe('streaming visibility during flow', () => {
 
       // CRITICAL: Pre-search and user message both visible
       verifyStreamingVisibilityState(store, 1, {
-        expectUserMessage: true,
         expectPlaceholders: true,
         expectPreSearch: true,
+        expectUserMessage: true,
         participantCount: 2,
       });
     });

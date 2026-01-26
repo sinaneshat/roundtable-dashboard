@@ -56,9 +56,9 @@ type TestModeratorInput = {
 function isCouncilModeratorCompleted(
   moderator: TestModeratorInput,
   now: number = Date.now(),
-  isCurrentlyStreaming: boolean = false,
+  isCurrentlyStreaming = false,
 ): boolean {
-  const { status, createdAt } = moderator;
+  const { createdAt, status } = moderator;
 
   // Layer 1: Normal completion
   if (status === MessageStatuses.COMPLETE) {
@@ -93,7 +93,7 @@ function createMockModerator(
   status: typeof MessageStatuses[keyof typeof MessageStatuses],
   createdAt: Date,
 ): Pick<StoredModeratorData, 'status' | 'createdAt'> {
-  return { status, createdAt };
+  return { createdAt, status };
 }
 
 // ============================================================================
@@ -109,7 +109,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 1000), // Created 1 second ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should detect completion when status is "complete" regardless of elapsed time', () => {
@@ -119,7 +119,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 120000), // Created 2 minutes ago (beyond timeout)
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should detect completion when status is "complete" even if just created', () => {
@@ -129,7 +129,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now), // Created now (0ms elapsed)
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
   });
 
@@ -141,7 +141,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 61000), // Created 61 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should detect completion when streaming AND elapsed exactly 60s', () => {
@@ -152,7 +152,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // Timeout is >, not >=, so exactly 60s should NOT trigger
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('should NOT detect completion when streaming AND elapsed < 60s', () => {
@@ -162,7 +162,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 59000), // Created 59 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('should detect completion at 60.001 seconds (just over timeout)', () => {
@@ -172,7 +172,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 60001), // Created 60.001 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should NOT detect completion at 59.999 seconds (just under timeout)', () => {
@@ -182,7 +182,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 59999), // Created 59.999 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('should detect completion when streaming AND elapsed >> 60s (stuck stream)', () => {
@@ -192,7 +192,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 300000), // Created 5 minutes ago (way over timeout)
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
   });
 
@@ -204,7 +204,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 61000), // Created 61 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeTruthy();
     });
 
     it('should NOT detect completion when pending AND isStreaming (even if elapsed > 60s)', () => {
@@ -215,7 +215,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // When isCurrentlyStreaming = true, pending timeout does NOT apply
-      expect(isCouncilModeratorCompleted(moderator, now, true)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now, true)).toBeFalsy();
     });
 
     it('should NOT detect completion when pending AND !isStreaming AND elapsed < 60s', () => {
@@ -225,7 +225,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 59000), // Created 59 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeFalsy();
     });
 
     it('should detect completion at exactly 60.001 seconds for pending', () => {
@@ -235,7 +235,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 60001), // Created 60.001 seconds ago
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeTruthy();
     });
 
     it('should NOT detect completion at exactly 60 seconds for pending', () => {
@@ -246,7 +246,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // Timeout is >, not >=
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeFalsy();
     });
   });
 
@@ -259,7 +259,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       const canNavigate = isCouncilModeratorCompleted(moderator, now);
-      expect(canNavigate).toBe(true);
+      expect(canNavigate).toBeTruthy();
     });
 
     it('should allow navigation after 60s timeout even if moderator stuck streaming', () => {
@@ -270,7 +270,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       const canNavigate = isCouncilModeratorCompleted(moderator, now);
-      expect(canNavigate).toBe(true);
+      expect(canNavigate).toBeTruthy();
     });
 
     it('should allow navigation after 60s timeout even if moderator stuck pending', () => {
@@ -281,7 +281,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       const canNavigate = isCouncilModeratorCompleted(moderator, now, false);
-      expect(canNavigate).toBe(true);
+      expect(canNavigate).toBeTruthy();
     });
 
     it('should NOT allow navigation if moderator streaming < 60s', () => {
@@ -292,7 +292,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       const canNavigate = isCouncilModeratorCompleted(moderator, now);
-      expect(canNavigate).toBe(false);
+      expect(canNavigate).toBeFalsy();
     });
 
     it('should NOT allow navigation if moderator pending and still streaming', () => {
@@ -304,7 +304,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
 
       // When isCurrentlyStreaming = true, timeout does not apply
       const canNavigate = isCouncilModeratorCompleted(moderator, now, true);
-      expect(canNavigate).toBe(false);
+      expect(canNavigate).toBeFalsy();
     });
   });
 
@@ -316,7 +316,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 59000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('60 seconds - should NOT complete (boundary is >60s, not >=)', () => {
@@ -326,7 +326,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 60000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('61 seconds - should complete', () => {
@@ -336,7 +336,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 61000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('59999ms - should NOT complete', () => {
@@ -346,7 +346,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 59999),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('60000ms - should NOT complete', () => {
@@ -356,7 +356,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 60000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('60001ms - should complete', () => {
@@ -366,7 +366,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 60001),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
   });
 
@@ -378,7 +378,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 1000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('should NOT detect completion when failed even if elapsed > 60s', () => {
@@ -388,7 +388,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 70000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
   });
 
@@ -402,29 +402,29 @@ describe('council moderator completion detection with 60-second timeout', () => 
 
     it('should NOT apply timeout when createdAt is null', () => {
       const moderator: ModeratorWithNullableCreatedAt = {
-        status: MessageStatuses.STREAMING,
         createdAt: null,
+        status: MessageStatuses.STREAMING,
       };
 
-      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBeFalsy();
     });
 
     it('should NOT apply timeout when createdAt is undefined', () => {
       const moderator: ModeratorWithNullableCreatedAt = {
-        status: MessageStatuses.STREAMING,
         createdAt: undefined,
+        status: MessageStatuses.STREAMING,
       };
 
-      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBeFalsy();
     });
 
     it('should still detect completion when status is complete without createdAt', () => {
       const moderator: ModeratorWithNullableCreatedAt = {
-        status: MessageStatuses.COMPLETE,
         createdAt: null,
+        status: MessageStatuses.COMPLETE,
       };
 
-      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, Date.now())).toBeTruthy();
     });
   });
 
@@ -437,7 +437,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // Even though elapsed > 60s, isCurrentlyStreaming = true prevents timeout
-      expect(isCouncilModeratorCompleted(moderator, now, true)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now, true)).toBeFalsy();
     });
 
     it('should timeout pending if isCurrentlyStreaming = false', () => {
@@ -448,7 +448,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // isCurrentlyStreaming = false allows timeout to apply
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeTruthy();
     });
 
     it('should always timeout streaming regardless of isCurrentlyStreaming', () => {
@@ -459,8 +459,8 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // Streaming timeout applies regardless of isCurrentlyStreaming
-      expect(isCouncilModeratorCompleted(moderator, now, true)).toBe(true);
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now, true)).toBeTruthy();
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeTruthy();
     });
   });
 
@@ -472,7 +472,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 2000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('moderator completes in 30 seconds (normal path)', () => {
@@ -482,7 +482,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 30000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('moderator streaming for 45 seconds (still in progress)', () => {
@@ -492,7 +492,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 45000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(false);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeFalsy();
     });
 
     it('moderator streaming for 90 seconds (timeout triggered)', () => {
@@ -502,7 +502,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 90000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('moderator stuck pending for 2 minutes (timeout triggered)', () => {
@@ -512,7 +512,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 120000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now, false)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now, false)).toBeTruthy();
     });
   });
 
@@ -524,18 +524,18 @@ describe('council moderator completion detection with 60-second timeout', () => 
         new Date(now - 70000),
       );
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should handle string createdAt (ISO format)', () => {
       const now = Date.now();
       // ISO string is valid per schema - no cast needed
       const moderator: TestModeratorInput = {
-        status: MessageStatuses.STREAMING,
         createdAt: new Date(now - 70000).toISOString(),
+        status: MessageStatuses.STREAMING,
       };
 
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
 
     it('should calculate elapsed time correctly with Date object', () => {
@@ -547,7 +547,7 @@ describe('council moderator completion detection with 60-second timeout', () => 
       );
 
       // 60.5 seconds elapsed → should complete
-      expect(isCouncilModeratorCompleted(moderator, now)).toBe(true);
+      expect(isCouncilModeratorCompleted(moderator, now)).toBeTruthy();
     });
   });
 });

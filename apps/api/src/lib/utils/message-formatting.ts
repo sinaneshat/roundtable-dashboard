@@ -16,10 +16,12 @@ export function getParticipantFromMessage(
 }
 
 export function getParticipantDisplayName(participant: ChatParticipant | undefined): string {
-  if (!participant)
+  if (!participant) {
     return 'Assistant';
-  if (participant.role)
+  }
+  if (participant.role) {
     return participant.role;
+  }
 
   const modelName = participant.modelId.split('/').pop() ?? participant.modelId;
   return modelName
@@ -60,8 +62,9 @@ export function formatRoundAsMarkdown(
 
   for (const message of messages) {
     const content = getMessageTextContent(message);
-    if (!content.trim())
+    if (!content.trim()) {
       continue;
+    }
 
     if (message.role === MessageRoles.USER) {
       lines.push('### User');
@@ -146,8 +149,9 @@ export function formatThreadAsMarkdown(
     // User messages
     for (const message of userMessages) {
       const content = getMessageTextContent(message);
-      if (!content.trim())
+      if (!content.trim()) {
         continue;
+      }
       lines.push('### User');
       lines.push('');
       lines.push(content);
@@ -157,8 +161,9 @@ export function formatThreadAsMarkdown(
     // Participant messages
     for (const message of participantMessages) {
       const content = getMessageTextContent(message);
-      if (!content.trim())
+      if (!content.trim()) {
         continue;
+      }
       const participant = getParticipantFromMessage(message, participants);
       const displayName = getParticipantDisplayName(participant);
       lines.push(`### ${displayName}`);
@@ -173,8 +178,9 @@ export function formatThreadAsMarkdown(
     // Moderator message
     for (const message of moderatorMessages) {
       const content = getMessageTextContent(message);
-      if (!content.trim())
+      if (!content.trim()) {
         continue;
+      }
       lines.push('### Council Summary');
       lines.push('');
       lines.push(content);

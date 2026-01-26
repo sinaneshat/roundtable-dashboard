@@ -8,22 +8,22 @@ export type ParticipantHeaderProps = {
   avatarSrc: string;
   avatarName: string;
   displayName: string;
-  role?: string | null;
-  requiredTierName?: string;
-  isAccessible?: boolean;
-  isStreaming?: boolean;
-  hasError?: boolean;
+  role?: string | null | undefined;
+  requiredTierName?: string | undefined;
+  isAccessible?: boolean | undefined;
+  isStreaming?: boolean | undefined;
+  hasError?: boolean | undefined;
 };
 
 export const ParticipantHeader = memo(({
-  avatarSrc,
   avatarName,
+  avatarSrc,
   displayName,
-  role,
-  requiredTierName,
+  hasError = false,
   isAccessible = true,
   isStreaming = false,
-  hasError = false,
+  requiredTierName,
+  role,
 }: ParticipantHeaderProps) => {
   const t = useTranslations();
 

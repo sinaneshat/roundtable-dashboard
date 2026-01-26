@@ -16,11 +16,11 @@ import { adminClearUserCacheService, adminSearchUserService } from '@/services/a
  */
 export function useAdminSearchUsers(query: string, limit = 5) {
   return useQuery({
-    queryKey: ['admin', 'users', 'search', query, limit],
-    queryFn: () => adminSearchUserService({ query: { q: query, limit } }),
     enabled: query.length >= 3,
-    staleTime: 30_000,
     gcTime: 60_000,
+    queryFn: () => adminSearchUserService({ query: { limit, q: query } }),
+    queryKey: ['admin', 'users', 'search', query, limit],
+    staleTime: 30_000,
   });
 }
 

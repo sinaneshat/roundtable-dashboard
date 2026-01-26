@@ -20,10 +20,10 @@ type LimitReachedDialogProps = {
 };
 
 export function LimitReachedDialog({
-  open,
-  onOpenChange,
-  type,
   max,
+  onOpenChange,
+  open,
+  type,
 }: LimitReachedDialogProps) {
   const t = useTranslations();
 

@@ -27,45 +27,45 @@ import * as z from 'zod';
  * Backend's structureAIProviderError returns additional fields that we passthrough.
  */
 export const ErrorMetadataSchema = z.object({
-  // Core error identification
-  errorName: z.string().optional(),
-  errorType: z.string().optional(),
+  // ✅ Explicit catch-all for external API fields (replaces passthrough)
+  additionalProviderFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown())])).optional(),
   errorCategory: ErrorCategorySchema.optional(),
   errorMessage: z.string().optional(),
+  // Core error identification
+  errorName: z.string().optional(),
 
-  // HTTP details
-  statusCode: z.number().int().min(100).max(599).optional(),
+  errorType: z.string().optional(),
 
-  // Raw error messages (for debugging)
-  rawErrorMessage: z.string().optional(),
-  providerMessage: z.string().optional(),
+  // Retry behavior
+  isTransient: z.boolean().optional(),
+  // Participant context
+  modelId: z.string().optional(),
 
+  openRouterCode: z.union([z.string(), z.number()]).optional(),
   // OpenRouter-specific fields
   openRouterError: z
     .union([z.string(), z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))])
     .optional(),
-  openRouterCode: z.union([z.string(), z.number()]).optional(),
-  openRouterType: z.string().optional(),
   openRouterMetadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  openRouterType: z.string().optional(),
 
-  // Response details (for debugging)
-  responseBody: z.string().optional(),
-  requestId: z.string().optional(),
-  traceId: z.string().optional(),
-
-  // Retry behavior
-  isTransient: z.boolean().optional(),
-  shouldRetry: z.boolean().optional(),
-  retryAfter: z.number().optional(),
-
-  // Participant context
-  modelId: z.string().optional(),
   participantId: z.string().optional(),
   participantRole: z.string().nullable().optional(),
-  roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+  providerMessage: z.string().optional(),
 
-  // ✅ Explicit catch-all for external API fields (replaces passthrough)
-  additionalProviderFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown())])).optional(),
+  // Raw error messages (for debugging)
+  rawErrorMessage: z.string().optional(),
+  requestId: z.string().optional(),
+  // Response details (for debugging)
+  responseBody: z.string().optional(),
+
+  retryAfter: z.number().optional(),
+  roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
+  shouldRetry: z.boolean().optional(),
+  // HTTP details
+  statusCode: z.number().int().min(100).max(599).optional(),
+
+  traceId: z.string().optional(),
 }).strict();
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
@@ -101,21 +101,21 @@ export function errorCategoryToUIType(
   category: ErrorCategory,
 ): UIMessageErrorType {
   const mapping: Record<ErrorCategory, UIMessageErrorType> = {
+    authentication: 'authentication',
+    content_filter: 'model_content_filter',
+    empty_response: 'empty_response',
+    model_content_filter: 'model_content_filter',
     // Frontend-style categories
     model_not_found: 'model_not_found',
-    content_filter: 'model_content_filter',
-    rate_limit: 'provider_rate_limit',
     network: 'provider_network',
     provider_error: 'failed',
-    validation: 'validation',
-    authentication: 'authentication',
-    silent_failure: 'silent_failure',
-    empty_response: 'empty_response',
-    unknown: 'unknown',
+    provider_network: 'provider_network',
     // Backend-style categories (from AIProviderErrorCategory)
     provider_rate_limit: 'provider_rate_limit',
-    provider_network: 'provider_network',
-    model_content_filter: 'model_content_filter',
+    rate_limit: 'provider_rate_limit',
+    silent_failure: 'silent_failure',
+    unknown: 'unknown',
+    validation: 'validation',
   };
 
   return mapping[category] || 'unknown';
@@ -187,21 +187,21 @@ export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
  */
 export function getErrorCategoryMessage(category: ErrorCategory): string {
   const messages: Readonly<Record<ErrorCategory, string>> = {
+    authentication: 'Authentication failed',
+    content_filter: 'Content was filtered by safety systems',
+    empty_response: 'No response was generated',
+    model_content_filter: 'Content was filtered by safety systems',
     // Frontend-style categories
     model_not_found: 'The requested model could not be found',
-    content_filter: 'Content was filtered by safety systems',
-    rate_limit: 'Rate limit exceeded, please try again later',
     network: 'Network error occurred, please check your connection',
     provider_error: 'An error occurred with the AI provider',
-    validation: 'Invalid request parameters',
-    authentication: 'Authentication failed',
-    silent_failure: 'The operation failed silently',
-    empty_response: 'No response was generated',
-    unknown: 'An unknown error occurred',
+    provider_network: 'Network error occurred, please check your connection',
     // Backend-style categories (from AIProviderErrorCategory)
     provider_rate_limit: 'Rate limit exceeded, please try again later',
-    provider_network: 'Network error occurred, please check your connection',
-    model_content_filter: 'Content was filtered by safety systems',
+    rate_limit: 'Rate limit exceeded, please try again later',
+    silent_failure: 'The operation failed silently',
+    unknown: 'An unknown error occurred',
+    validation: 'Invalid request parameters',
   };
 
   // Return message with fallback for type safety

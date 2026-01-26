@@ -49,8 +49,9 @@ function calculateIsAwaitingModerator(
   messages: UIMessage[],
   participants: ReturnType<typeof createMockParticipant>[],
 ): boolean {
-  if (messages.length === 0 || participants.length === 0)
+  if (messages.length === 0 || participants.length === 0) {
     return false;
+  }
 
   const currentRound = getCurrentRoundNumber(messages);
   const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
@@ -104,10 +105,10 @@ describe('moderator Transition Race Condition - Core Bug Scenario', () => {
 
     // Round 1: User message + all participants complete, NO moderator yet
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-1', content: 'say hi, 1 word only', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Hi', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-1', content: 'Hello', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
-      createTestAssistantMessage({ id: 'p2-1', content: 'Hey', roundNumber: 1, participantId: participants[2].id, participantIndex: 2 }),
+      createTestUserMessage({ content: 'say hi, 1 word only', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hi', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hello', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hey', id: 'p2-1', participantId: participants[2].id, participantIndex: 2, roundNumber: 1 }),
       // NO moderator message yet - this is the race condition window!
     ];
 
@@ -116,15 +117,15 @@ describe('moderator Transition Race Condition - Core Bug Scenario', () => {
     // - isModeratorStreaming = false (not started yet)
     // - pendingMessage = null (already sent)
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false,
       isModeratorStreaming: false,
-      pendingMessage: null,
+      isStreaming: false,
       messages,
       participants,
+      pendingMessage: null,
     });
 
     // ✅ FIX: isAwaitingModerator should block this
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('does NOT block when moderator message exists', () => {
@@ -132,22 +133,22 @@ describe('moderator Transition Race Condition - Core Bug Scenario', () => {
 
     // Round complete with moderator
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-1', content: 'Test', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Response 0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-1', content: 'Response 1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
-      createTestModeratorMessage({ id: 'mod-1', content: 'Summary', roundNumber: 1 }), // Moderator exists!
+      createTestUserMessage({ content: 'Test', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Response 0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Response 1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
+      createTestModeratorMessage({ content: 'Summary', id: 'mod-1', roundNumber: 1 }), // Moderator exists!
     ];
 
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false,
       isModeratorStreaming: false,
-      pendingMessage: null,
+      isStreaming: false,
       messages,
       participants,
+      pendingMessage: null,
     });
 
     // Should NOT block - round is truly complete
-    expect(isBlocked).toBe(false);
+    expect(isBlocked).toBeFalsy();
   });
 
   it('blocks when isStreaming is true (participants still streaming)', () => {
@@ -155,41 +156,41 @@ describe('moderator Transition Race Condition - Core Bug Scenario', () => {
 
     // One participant response exists
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-1', content: 'Test', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Response 0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Response 0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
     ];
 
     // isStreaming would be true in real scenario
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: true, // Active streaming
       isModeratorStreaming: false,
-      pendingMessage: null,
+      isStreaming: true, // Active streaming
       messages,
       participants,
+      pendingMessage: null,
     });
 
     // Should block due to isStreaming
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('blocks when isModeratorStreaming is true', () => {
     const participants = createMockParticipants(1);
 
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-1', content: 'Test', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Response', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestModeratorMessage({ id: 'mod-1', content: 'Streaming...', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Test', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Response', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestModeratorMessage({ content: 'Streaming...', id: 'mod-1', roundNumber: 1 }),
     ];
 
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false,
       isModeratorStreaming: true, // Moderator actively streaming
-      pendingMessage: null,
+      isStreaming: false,
       messages,
       participants,
+      pendingMessage: null,
     });
 
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 });
 
@@ -202,18 +203,18 @@ describe('isAwaitingModerator Calculation', () => {
     it('returns false when messages array is empty', () => {
       const participants = createMockParticipants(1);
       const isAwaiting = calculateIsAwaitingModerator([], participants);
-      expect(isAwaiting).toBe(false);
+      expect(isAwaiting).toBeFalsy();
     });
 
     it('returns false when participants array is empty', () => {
-      const messages = [createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 })];
+      const messages = [createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 })];
       const isAwaiting = calculateIsAwaitingModerator(messages, []);
-      expect(isAwaiting).toBe(false);
+      expect(isAwaiting).toBeFalsy();
     });
 
     it('returns false when both arrays are empty', () => {
       const isAwaiting = calculateIsAwaitingModerator([], []);
-      expect(isAwaiting).toBe(false);
+      expect(isAwaiting).toBeFalsy();
     });
   });
 
@@ -222,26 +223,26 @@ describe('isAwaitingModerator Calculation', () => {
       const participants = createMockParticipants(2);
 
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'p0-0', content: 'Response 0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'p1-0', content: 'Response 1', roundNumber: 0, participantId: participants[1].id, participantIndex: 1 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response 0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response 1', id: 'p1-0', participantId: participants[1].id, participantIndex: 1, roundNumber: 0 }),
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
-      expect(isAwaiting).toBe(true);
+      expect(isAwaiting).toBeTruthy();
     });
 
     it('returns false when moderator exists (round 0)', () => {
       const participants = createMockParticipants(1);
 
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'p0-0', content: 'Response', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-        createTestModeratorMessage({ id: 'mod-0', content: 'Summary', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'Response', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Summary', id: 'mod-0', roundNumber: 0 }),
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
-      expect(isAwaiting).toBe(false);
+      expect(isAwaiting).toBeFalsy();
     });
   });
 
@@ -252,18 +253,18 @@ describe('isAwaitingModerator Calculation', () => {
       // Complete round 0, then round 1 participants done but no moderator
       const messages: UIMessage[] = [
         // Round 0 - complete
-        createTestUserMessage({ id: 'user-0', content: 'Q0', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'p0-0', content: 'R0-0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'p1-0', content: 'R0-1', roundNumber: 0, participantId: participants[1].id, participantIndex: 1 }),
-        createTestModeratorMessage({ id: 'mod-0', content: 'Summary 0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'user-0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'R0-0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'R0-1', id: 'p1-0', participantId: participants[1].id, participantIndex: 1, roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'Summary 0', id: 'mod-0', roundNumber: 0 }),
         // Round 1 - participants done, no moderator
-        createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'p0-1', content: 'R1-0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'p1-1', content: 'R1-1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R1-0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R1-1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
-      expect(isAwaiting).toBe(true);
+      expect(isAwaiting).toBeTruthy();
     });
 
     it('handles multiple complete rounds before current incomplete round', () => {
@@ -271,20 +272,20 @@ describe('isAwaitingModerator Calculation', () => {
 
       const messages: UIMessage[] = [
         // Round 0 - complete
-        createTestUserMessage({ id: 'user-0', content: 'Q0', roundNumber: 0 }),
-        createTestAssistantMessage({ id: 'p0-0', content: 'R0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-        createTestModeratorMessage({ id: 'mod-0', content: 'S0', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Q0', id: 'user-0', roundNumber: 0 }),
+        createTestAssistantMessage({ content: 'R0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+        createTestModeratorMessage({ content: 'S0', id: 'mod-0', roundNumber: 0 }),
         // Round 1 - complete
-        createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'p0-1', content: 'R1', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-        createTestModeratorMessage({ id: 'mod-1', content: 'S1', roundNumber: 1 }),
+        createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R1', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+        createTestModeratorMessage({ content: 'S1', id: 'mod-1', roundNumber: 1 }),
         // Round 2 - participants done, no moderator
-        createTestUserMessage({ id: 'user-2', content: 'Q2', roundNumber: 2 }),
-        createTestAssistantMessage({ id: 'p0-2', content: 'R2', roundNumber: 2, participantId: participants[0].id, participantIndex: 0 }),
+        createTestUserMessage({ content: 'Q2', id: 'user-2', roundNumber: 2 }),
+        createTestAssistantMessage({ content: 'R2', id: 'p0-2', participantId: participants[0].id, participantIndex: 0, roundNumber: 2 }),
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
-      expect(isAwaiting).toBe(true);
+      expect(isAwaiting).toBeTruthy();
     });
   });
 
@@ -294,14 +295,14 @@ describe('isAwaitingModerator Calculation', () => {
 
       // Only 2 of 3 participants have responded
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'user-1', content: 'Test', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-        createTestAssistantMessage({ id: 'p1-1', content: 'R1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
+        createTestUserMessage({ content: 'Test', id: 'user-1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
         // p2 hasn't responded yet
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
-      expect(isAwaiting).toBe(false);
+      expect(isAwaiting).toBeFalsy();
     });
 
     it('only considers enabled participants', () => {
@@ -312,13 +313,13 @@ describe('isAwaitingModerator Calculation', () => {
 
       // Only enabled participant has responded
       const messages: UIMessage[] = [
-        createTestUserMessage({ id: 'user-1', content: 'Test', roundNumber: 1 }),
-        createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: enabledParticipant.id, participantIndex: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'user-1', roundNumber: 1 }),
+        createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: enabledParticipant.id, participantIndex: 0, roundNumber: 1 }),
       ];
 
       const isAwaiting = calculateIsAwaitingModerator(messages, participants);
       // All ENABLED participants complete, no moderator = awaiting
-      expect(isAwaiting).toBe(true);
+      expect(isAwaiting).toBeTruthy();
     });
   });
 });
@@ -333,27 +334,27 @@ describe('multi-Round Race Conditions', () => {
 
     // Each round fully complete with moderator
     const messages: UIMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Q0', roundNumber: 0 }),
-      createTestAssistantMessage({ id: 'p0-0', content: 'R0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-      createTestModeratorMessage({ id: 'mod-0', content: 'S0', roundNumber: 0 }),
-      createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'R1', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestModeratorMessage({ id: 'mod-1', content: 'S1', roundNumber: 1 }),
-      createTestUserMessage({ id: 'user-2', content: 'Q2', roundNumber: 2 }),
-      createTestAssistantMessage({ id: 'p0-2', content: 'R2', roundNumber: 2, participantId: participants[0].id, participantIndex: 0 }),
-      createTestModeratorMessage({ id: 'mod-2', content: 'S2', roundNumber: 2 }),
+      createTestUserMessage({ content: 'Q0', id: 'user-0', roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+      createTestModeratorMessage({ content: 'S0', id: 'mod-0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'R1', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestModeratorMessage({ content: 'S1', id: 'mod-1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q2', id: 'user-2', roundNumber: 2 }),
+      createTestAssistantMessage({ content: 'R2', id: 'p0-2', participantId: participants[0].id, participantIndex: 0, roundNumber: 2 }),
+      createTestModeratorMessage({ content: 'S2', id: 'mod-2', roundNumber: 2 }),
     ];
 
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false,
       isModeratorStreaming: false,
-      pendingMessage: null,
+      isStreaming: false,
       messages,
       participants,
+      pendingMessage: null,
     });
 
     // All rounds complete - should NOT block
-    expect(isBlocked).toBe(false);
+    expect(isBlocked).toBeFalsy();
   });
 
   it('scenario: user tries to submit during every transition window', () => {
@@ -362,49 +363,50 @@ describe('multi-Round Race Conditions', () => {
     // Test each transition state
     const testCases = [
       {
+        messages: [createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 })],
         name: 'only user message (no participants yet)',
-        messages: [createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 })],
         shouldBlock: false, // No participants complete yet
       },
       {
-        name: 'first participant complete, second still missing',
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-          createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
+          createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+          createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
         ],
+        name: 'first participant complete, second still missing',
         shouldBlock: false, // Not all participants complete
       },
       {
-        name: 'all participants complete, no moderator (THE BUG)',
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-          createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-          createTestAssistantMessage({ id: 'p1-1', content: 'R1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
+          createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+          createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+          createTestAssistantMessage({ content: 'R1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
         ],
+        name: 'all participants complete, no moderator (THE BUG)',
         shouldBlock: true, // MUST block - this was the bug!
       },
       {
-        name: 'round complete with moderator',
         messages: [
-          createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 }),
-          createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-          createTestAssistantMessage({ id: 'p1-1', content: 'R1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
-          createTestModeratorMessage({ id: 'mod-1', content: 'Summary', roundNumber: 1 }),
+          createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 }),
+          createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+          createTestAssistantMessage({ content: 'R1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
+          createTestModeratorMessage({ content: 'Summary', id: 'mod-1', roundNumber: 1 }),
         ],
+        name: 'round complete with moderator',
         shouldBlock: false, // Round complete
       },
     ];
 
     for (const testCase of testCases) {
       const isBlocked = calculateIsSubmitBlocked({
-        isStreaming: false,
         isModeratorStreaming: false,
-        pendingMessage: null,
+        isStreaming: false,
         messages: testCase.messages,
         participants,
+        pendingMessage: null,
       });
 
-      expect(isBlocked, `Failed for: ${testCase.name}`).toBe(testCase.shouldBlock);
+      // NOTE: Test case context: testCase.name
+      expect(isBlocked).toBe(testCase.shouldBlock);
     }
   });
 });
@@ -430,29 +432,29 @@ describe('regression Tests - Known Bug Scenarios', () => {
     // State at 21:47:30 - right when duplicate was created
     const messagesAt214730: UIMessage[] = [
       // Round 0 complete
-      createTestUserMessage({ id: 'user-0', content: 'Initial question', roundNumber: 0 }),
-      createTestAssistantMessage({ id: 'p0-0', content: 'R0-0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-0', content: 'R0-1', roundNumber: 0, participantId: participants[1].id, participantIndex: 1 }),
-      createTestAssistantMessage({ id: 'p2-0', content: 'R0-2', roundNumber: 0, participantId: participants[2].id, participantIndex: 2 }),
-      createTestModeratorMessage({ id: 'mod-0', content: 'Summary 0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Initial question', id: 'user-0', roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-1', id: 'p1-0', participantId: participants[1].id, participantIndex: 1, roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-2', id: 'p2-0', participantId: participants[2].id, participantIndex: 2, roundNumber: 0 }),
+      createTestModeratorMessage({ content: 'Summary 0', id: 'mod-0', roundNumber: 0 }),
       // Round 1 - all participants done, NO moderator yet
-      createTestUserMessage({ id: 'user-1', content: 'say hi, 1 word only', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Hi', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-1', content: 'Hello', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
-      createTestAssistantMessage({ id: 'p2-1', content: 'Hey', roundNumber: 1, participantId: participants[2].id, participantIndex: 2 }),
+      createTestUserMessage({ content: 'say hi, 1 word only', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hi', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hello', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hey', id: 'p2-1', participantId: participants[2].id, participantIndex: 2, roundNumber: 1 }),
       // Moderator doesn't exist at 21:47:30 (created at 21:47:31)
     ];
 
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false, // Participants done
       isModeratorStreaming: false, // Not started yet
-      pendingMessage: null, // Already sent
+      isStreaming: false, // Participants done
       messages: messagesAt214730,
       participants,
+      pendingMessage: null, // Already sent
     });
 
     // ✅ THE FIX: This should now be blocked
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('bUG-001 (after fix): submission allowed after moderator created', () => {
@@ -460,28 +462,28 @@ describe('regression Tests - Known Bug Scenarios', () => {
 
     // State at 21:47:31+ - moderator exists now
     const messagesAfterModerator: UIMessage[] = [
-      createTestUserMessage({ id: 'user-0', content: 'Initial question', roundNumber: 0 }),
-      createTestAssistantMessage({ id: 'p0-0', content: 'R0-0', roundNumber: 0, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-0', content: 'R0-1', roundNumber: 0, participantId: participants[1].id, participantIndex: 1 }),
-      createTestAssistantMessage({ id: 'p2-0', content: 'R0-2', roundNumber: 0, participantId: participants[2].id, participantIndex: 2 }),
-      createTestModeratorMessage({ id: 'mod-0', content: 'Summary 0', roundNumber: 0 }),
-      createTestUserMessage({ id: 'user-1', content: 'say hi, 1 word only', roundNumber: 1 }),
-      createTestAssistantMessage({ id: 'p0-1', content: 'Hi', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 }),
-      createTestAssistantMessage({ id: 'p1-1', content: 'Hello', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 }),
-      createTestAssistantMessage({ id: 'p2-1', content: 'Hey', roundNumber: 1, participantId: participants[2].id, participantIndex: 2 }),
-      createTestModeratorMessage({ id: 'mod-1', content: 'Summary 1', roundNumber: 1 }), // Now exists!
+      createTestUserMessage({ content: 'Initial question', id: 'user-0', roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-0', id: 'p0-0', participantId: participants[0].id, participantIndex: 0, roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-1', id: 'p1-0', participantId: participants[1].id, participantIndex: 1, roundNumber: 0 }),
+      createTestAssistantMessage({ content: 'R0-2', id: 'p2-0', participantId: participants[2].id, participantIndex: 2, roundNumber: 0 }),
+      createTestModeratorMessage({ content: 'Summary 0', id: 'mod-0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'say hi, 1 word only', id: 'user-1', roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hi', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hello', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 }),
+      createTestAssistantMessage({ content: 'Hey', id: 'p2-1', participantId: participants[2].id, participantIndex: 2, roundNumber: 1 }),
+      createTestModeratorMessage({ content: 'Summary 1', id: 'mod-1', roundNumber: 1 }), // Now exists!
     ];
 
     const isBlocked = calculateIsSubmitBlocked({
-      isStreaming: false,
       isModeratorStreaming: false,
-      pendingMessage: null,
+      isStreaming: false,
       messages: messagesAfterModerator,
       participants,
+      pendingMessage: null,
     });
 
     // Should NOT block - round is complete
-    expect(isBlocked).toBe(false);
+    expect(isBlocked).toBeFalsy();
   });
 });
 
@@ -497,27 +499,27 @@ describe('stress Tests - Rapid State Changes', () => {
     const checkResults: boolean[] = [];
 
     // Only user message
-    let messages: UIMessage[] = [createTestUserMessage({ id: 'user-1', content: 'Q1', roundNumber: 1 })];
+    let messages: UIMessage[] = [createTestUserMessage({ content: 'Q1', id: 'user-1', roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     // p0 complete
-    messages = [...messages, createTestAssistantMessage({ id: 'p0-1', content: 'R0', roundNumber: 1, participantId: participants[0].id, participantIndex: 0 })];
+    messages = [...messages, createTestAssistantMessage({ content: 'R0', id: 'p0-1', participantId: participants[0].id, participantIndex: 0, roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     // p1 complete
-    messages = [...messages, createTestAssistantMessage({ id: 'p1-1', content: 'R1', roundNumber: 1, participantId: participants[1].id, participantIndex: 1 })];
+    messages = [...messages, createTestAssistantMessage({ content: 'R1', id: 'p1-1', participantId: participants[1].id, participantIndex: 1, roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     // p2 complete
-    messages = [...messages, createTestAssistantMessage({ id: 'p2-1', content: 'R2', roundNumber: 1, participantId: participants[2].id, participantIndex: 2 })];
+    messages = [...messages, createTestAssistantMessage({ content: 'R2', id: 'p2-1', participantId: participants[2].id, participantIndex: 2, roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     // p3 complete - ALL participants done, no moderator
-    messages = [...messages, createTestAssistantMessage({ id: 'p3-1', content: 'R3', roundNumber: 1, participantId: participants[3].id, participantIndex: 3 })];
+    messages = [...messages, createTestAssistantMessage({ content: 'R3', id: 'p3-1', participantId: participants[3].id, participantIndex: 3, roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     // Moderator added
-    messages = [...messages, createTestModeratorMessage({ id: 'mod-1', content: 'Summary', roundNumber: 1 })];
+    messages = [...messages, createTestModeratorMessage({ content: 'Summary', id: 'mod-1', roundNumber: 1 })];
     checkResults.push(calculateIsAwaitingModerator(messages, participants));
 
     expect(checkResults).toEqual([
@@ -537,28 +539,28 @@ describe('stress Tests - Rapid State Changes', () => {
     // Simulate 10 rounds
     for (let round = 0; round < 10; round++) {
       // Add user message
-      messages = [...messages, createTestUserMessage({ id: `user-${round}`, content: `Q${round}`, roundNumber: round })];
-      expect(calculateIsAwaitingModerator(messages, participants)).toBe(false);
+      messages = [...messages, createTestUserMessage({ content: `Q${round}`, id: `user-${round}`, roundNumber: round })];
+      expect(calculateIsAwaitingModerator(messages, participants)).toBeFalsy();
 
       // Add participant response
       messages = [...messages, createTestAssistantMessage({
-        id: `p0-${round}`,
         content: `R${round}`,
-        roundNumber: round,
+        id: `p0-${round}`,
         participantId: participants[0].id,
         participantIndex: 0,
+        roundNumber: round,
       })];
       // Should be awaiting moderator
-      expect(calculateIsAwaitingModerator(messages, participants)).toBe(true);
+      expect(calculateIsAwaitingModerator(messages, participants)).toBeTruthy();
 
       // Add moderator
-      messages = [...messages, createTestModeratorMessage({ id: `mod-${round}`, content: `S${round}`, roundNumber: round })];
+      messages = [...messages, createTestModeratorMessage({ content: `S${round}`, id: `mod-${round}`, roundNumber: round })];
       // Should NOT be awaiting
-      expect(calculateIsAwaitingModerator(messages, participants)).toBe(false);
+      expect(calculateIsAwaitingModerator(messages, participants)).toBeFalsy();
     }
 
     // Final state: 10 complete rounds
     expect(messages).toHaveLength(30); // 3 messages per round
-    expect(calculateIsAwaitingModerator(messages, participants)).toBe(false);
+    expect(calculateIsAwaitingModerator(messages, participants)).toBeFalsy();
   });
 });

@@ -78,11 +78,11 @@ export async function startAutomatedJob(
     await db
       .update(tables.automatedJob)
       .set({
-        status: AutomatedJobStatuses.RUNNING,
         metadata: {
           ...job.metadata,
           startedAt: new Date().toISOString(),
         },
+        status: AutomatedJobStatuses.RUNNING,
       })
       .where(eq(tables.automatedJob.id, jobId));
 
@@ -90,14 +90,14 @@ export async function startAutomatedJob(
 
     const baseUrl = getBaseUrl(env);
     const response = await fetch(`${baseUrl}/api/v1/chat/threads`, {
-      method: 'POST',
-      headers: buildSessionAuthHeaders(sessionToken),
       body: JSON.stringify({
-        firstMessage: job.initialPrompt,
-        participants: analysis.participants,
-        mode: analysis.mode,
         enableWebSearch: analysis.enableWebSearch,
+        firstMessage: job.initialPrompt,
+        mode: analysis.mode,
+        participants: analysis.participants,
       }),
+      headers: buildSessionAuthHeaders(sessionToken),
+      method: 'POST',
     });
 
     if (!response.ok) {
@@ -116,44 +116,44 @@ export async function startAutomatedJob(
     const updatedMetadata: DbAutomatedJobMetadata = {
       ...job.metadata,
       promptReasoning: analysis.reasoning,
-      roundPrompts: [job.initialPrompt],
       roundConfigs: [{
-        round: 0,
-        mode: analysis.mode,
         enableWebSearch: analysis.enableWebSearch,
+        mode: analysis.mode,
+        round: 0,
       }],
+      roundPrompts: [job.initialPrompt],
       startedAt: new Date().toISOString(),
     };
 
     await db
       .update(tables.automatedJob)
       .set({
-        threadId,
-        selectedModels: analysis.modelIds,
         currentRound: 0,
         metadata: updatedMetadata,
+        selectedModels: analysis.modelIds,
+        threadId,
       })
       .where(eq(tables.automatedJob.id, jobId));
 
     await queue.send({
-      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
       messageId: `trigger-${threadId}-r0-p0`,
-      threadId,
-      roundNumber: 0,
       participantIndex: 0,
-      userId: job.userId,
-      sessionToken,
       queuedAt: new Date().toISOString(),
+      roundNumber: 0,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
+      userId: job.userId,
     });
   } catch (error) {
     await db
       .update(tables.automatedJob)
       .set({
-        status: AutomatedJobStatuses.FAILED,
         metadata: {
           ...job.metadata,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
         },
+        status: AutomatedJobStatuses.FAILED,
       })
       .where(eq(tables.automatedJob.id, jobId));
   }
@@ -180,7 +180,7 @@ export async function continueAutomatedJob(
     where: eq(tables.automatedJob.id, jobId),
   });
 
-  if (!job || job.status !== AutomatedJobStatuses.RUNNING) {
+  if (job?.status !== AutomatedJobStatuses.RUNNING) {
     return;
   }
 
@@ -188,12 +188,12 @@ export async function continueAutomatedJob(
 
   if (nextRound >= job.totalRounds) {
     await queue.send({
-      type: RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB,
-      messageId: `complete-${jobId}`,
-      jobId,
-      threadId,
       autoPublish: job.autoPublish,
+      jobId,
+      messageId: `complete-${jobId}`,
       queuedAt: new Date().toISOString(),
+      threadId,
+      type: RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB,
     } satisfies CompleteAutomatedJobQueueMessage);
     return;
   }
@@ -212,8 +212,8 @@ export async function continueAutomatedJob(
     await db
       .update(tables.chatThread)
       .set({
-        mode: roundConfig.mode,
         enableWebSearch: roundConfig.enableWebSearch,
+        mode: roundConfig.mode,
         updatedAt: new Date(),
       })
       .where(eq(tables.chatThread.id, threadId));
@@ -222,16 +222,16 @@ export async function continueAutomatedJob(
     const messageId = ulid();
 
     await db.insert(tables.chatMessage).values({
+      createdAt: now,
       id: messageId,
-      threadId,
-      role: MessageRoles.USER,
-      parts: [{ type: MessagePartTypes.TEXT, text: nextPrompt }],
-      roundNumber: nextRound,
       metadata: {
         role: MessageRoles.USER,
         roundNumber: nextRound,
       },
-      createdAt: now,
+      parts: [{ text: nextPrompt, type: MessagePartTypes.TEXT }],
+      role: MessageRoles.USER,
+      roundNumber: nextRound,
+      threadId,
     });
 
     await db
@@ -241,9 +241,9 @@ export async function continueAutomatedJob(
 
     const roundPrompts = [...(job.metadata?.roundPrompts || []), nextPrompt];
     const roundConfigs = [...(job.metadata?.roundConfigs || []), {
-      round: nextRound,
-      mode: roundConfig.mode,
       enableWebSearch: roundConfig.enableWebSearch,
+      mode: roundConfig.mode,
+      round: nextRound,
     }];
 
     await db
@@ -252,31 +252,31 @@ export async function continueAutomatedJob(
         currentRound: nextRound,
         metadata: {
           ...job.metadata,
-          roundPrompts,
           roundConfigs,
+          roundPrompts,
         },
       })
       .where(eq(tables.automatedJob.id, jobId));
 
     await queue.send({
-      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
       messageId: `trigger-${threadId}-r${nextRound}-p0`,
-      threadId,
-      roundNumber: nextRound,
       participantIndex: 0,
-      userId: job.userId,
-      sessionToken,
       queuedAt: new Date().toISOString(),
+      roundNumber: nextRound,
+      sessionToken,
+      threadId,
+      type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
+      userId: job.userId,
     });
   } catch (error) {
     await db
       .update(tables.automatedJob)
       .set({
-        status: AutomatedJobStatuses.FAILED,
         metadata: {
           ...job.metadata,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
         },
+        status: AutomatedJobStatuses.FAILED,
       })
       .where(eq(tables.automatedJob.id, jobId));
   }
@@ -306,11 +306,11 @@ export async function completeAutomatedJob(
     await db
       .update(tables.automatedJob)
       .set({
-        status: AutomatedJobStatuses.COMPLETED,
         metadata: {
           ...job.metadata,
           completedAt: new Date().toISOString(),
         },
+        status: AutomatedJobStatuses.COMPLETED,
       })
       .where(eq(tables.automatedJob.id, jobId));
 
@@ -341,19 +341,19 @@ export async function checkJobContinuation(
     where: eq(tables.automatedJob.threadId, threadId),
   });
 
-  if (!job || job.status !== AutomatedJobStatuses.RUNNING) {
+  if (job?.status !== AutomatedJobStatuses.RUNNING) {
     return false;
   }
 
   await queue.send({
-    type: RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB,
-    messageId: `continue-${job.id}-r${roundNumber}`,
-    jobId: job.id,
-    threadId,
     currentRound: roundNumber,
-    userId: job.userId,
-    sessionToken,
+    jobId: job.id,
+    messageId: `continue-${job.id}-r${roundNumber}`,
     queuedAt: new Date().toISOString(),
+    sessionToken,
+    threadId,
+    type: RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB,
+    userId: job.userId,
   } satisfies ContinueAutomatedJobQueueMessage);
 
   return true;

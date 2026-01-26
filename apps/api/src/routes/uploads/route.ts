@@ -40,11 +40,9 @@ import {
  * List user uploads
  */
 export const listUploadsRoute = createRoute({
+  description: 'List all uploads for the authenticated user with optional filtering',
   method: 'get',
   path: '/uploads',
-  tags: ['Uploads'],
-  summary: 'List uploads',
-  description: 'List all uploads for the authenticated user with optional filtering',
   request: {
     query: ListUploadsQuerySchema,
   },
@@ -60,17 +58,17 @@ export const listUploadsRoute = createRoute({
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'List uploads',
+  tags: ['Uploads'],
 });
 
 /**
  * Get upload by ID
  */
 export const getUploadRoute = createRoute({
+  description: 'Get upload details by ID',
   method: 'get',
   path: '/uploads/:id',
-  tags: ['Uploads'],
-  summary: 'Get upload',
-  description: 'Get upload details by ID',
   request: {
     params: IdParamSchema,
   },
@@ -87,6 +85,8 @@ export const getUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Get upload',
+  tags: ['Uploads'],
 });
 
 /**
@@ -94,11 +94,9 @@ export const getUploadRoute = createRoute({
  * Returns a signed URL that can be used to download/preview the file
  */
 export const getDownloadUrlRoute = createRoute({
+  description: 'Get a signed URL for downloading the file. The URL is time-limited and secure.',
   method: 'get',
   path: '/uploads/:id/download-url',
-  tags: ['Uploads'],
-  summary: 'Get download URL',
-  description: 'Get a signed URL for downloading the file. The URL is time-limited and secure.',
   request: {
     params: IdParamSchema,
   },
@@ -115,19 +113,18 @@ export const getDownloadUrlRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Get download URL',
+  tags: ['Uploads'],
 });
 
 /**
  * Update upload metadata
  */
 export const updateUploadRoute = createRoute({
+  description: 'Update upload metadata',
   method: 'patch',
   path: '/uploads/:id',
-  tags: ['Uploads'],
-  summary: 'Update upload',
-  description: 'Update upload metadata',
   request: {
-    params: IdParamSchema,
     body: {
       content: {
         'application/json': {
@@ -135,6 +132,7 @@ export const updateUploadRoute = createRoute({
         },
       },
     },
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -150,17 +148,17 @@ export const updateUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Update upload',
+  tags: ['Uploads'],
 });
 
 /**
  * Delete upload
  */
 export const deleteUploadRoute = createRoute({
+  description: 'Delete an upload and its R2 file',
   method: 'delete',
   path: '/uploads/:id',
-  tags: ['Uploads'],
-  summary: 'Delete upload',
-  description: 'Delete an upload and its R2 file',
   request: {
     params: IdParamSchema,
   },
@@ -177,6 +175,8 @@ export const deleteUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Delete upload',
+  tags: ['Uploads'],
 });
 
 // ============================================================================
@@ -194,10 +194,6 @@ export const deleteUploadRoute = createRoute({
  * 4. Server validates token before accepting file
  */
 export const requestUploadTicketRoute = createRoute({
-  method: 'post',
-  path: '/uploads/ticket',
-  tags: ['Uploads'],
-  summary: 'Request upload ticket',
   description: `
 Request a secure upload ticket (similar to S3 presigned URLs).
 
@@ -212,6 +208,8 @@ Request a secure upload ticket (similar to S3 presigned URLs).
 2. Receive signed token and upload URL
 3. Upload file to the provided URL with token
 `,
+  method: 'post',
+  path: '/uploads/ticket',
   request: {
     body: {
       content: {
@@ -235,6 +233,8 @@ Request a secure upload ticket (similar to S3 presigned URLs).
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Request upload ticket',
+  tags: ['Uploads'],
 });
 
 /**
@@ -244,10 +244,6 @@ Request a secure upload ticket (similar to S3 presigned URLs).
  * Token is validated before file is accepted.
  */
 export const uploadWithTicketRoute = createRoute({
-  method: 'post',
-  path: '/uploads/ticket/upload',
-  tags: ['Uploads'],
-  summary: 'Upload file with ticket',
   description: `
 Upload a file using a valid upload ticket.
 
@@ -261,26 +257,28 @@ Upload a file using a valid upload ticket.
 - Token must not be expired
 - User must match token owner
 `,
+  method: 'post',
+  path: '/uploads/ticket/upload',
   request: {
-    query: UploadWithTicketQuerySchema,
     body: {
       content: {
         'multipart/form-data': {
           schema: {
-            type: 'object',
             properties: {
               file: {
-                type: 'string',
-                format: 'binary',
                 description: 'File to upload',
+                format: 'binary',
+                type: 'string',
               },
             },
             required: ['file'],
+            type: 'object',
           },
         },
       },
       required: true,
     },
+    query: UploadWithTicketQuerySchema,
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
@@ -296,6 +294,8 @@ Upload a file using a valid upload ticket.
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Upload file with ticket',
+  tags: ['Uploads'],
 });
 
 // ============================================================================
@@ -307,10 +307,6 @@ Upload a file using a valid upload ticket.
  * Initiates a multipart upload for files > 100MB
  */
 export const createMultipartUploadRoute = createRoute({
-  method: 'post',
-  path: '/uploads/multipart',
-  tags: ['Uploads', 'Multipart'],
-  summary: 'Create multipart upload',
   description: `
 Initiate a multipart upload for large files.
 
@@ -321,6 +317,8 @@ Flow:
 2. PUT /uploads/multipart/:id/parts?partNumber=N - Upload each part (min 5MB, except last)
 3. POST /uploads/multipart/:id/complete - Complete with part ETags
   `,
+  method: 'post',
+  path: '/uploads/multipart',
   request: {
     body: {
       content: {
@@ -343,6 +341,8 @@ Flow:
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Create multipart upload',
+  tags: ['Uploads', 'Multipart'],
 });
 
 /**
@@ -350,10 +350,6 @@ Flow:
  * Upload a single part of a multipart upload
  */
 export const uploadPartRoute = createRoute({
-  method: 'put',
-  path: '/uploads/multipart/:id/parts',
-  tags: ['Uploads', 'Multipart'],
-  summary: 'Upload part',
   description: `
 Upload a single part of a multipart upload.
 
@@ -362,19 +358,21 @@ Upload a single part of a multipart upload.
 - Part number: 1-10000
 - Content-Type: application/octet-stream
   `,
+  method: 'put',
+  path: '/uploads/multipart/:id/parts',
   request: {
-    params: IdParamSchema,
-    query: UploadPartParamsSchema,
     body: {
       content: {
         'application/octet-stream': {
           schema: {
-            type: 'string',
             format: 'binary',
+            type: 'string',
           },
         },
       },
     },
+    params: IdParamSchema,
+    query: UploadPartParamsSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -390,6 +388,8 @@ Upload a single part of a multipart upload.
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Upload part',
+  tags: ['Uploads', 'Multipart'],
 });
 
 /**
@@ -397,13 +397,10 @@ Upload a single part of a multipart upload.
  * Finalize the upload with all part ETags
  */
 export const completeMultipartUploadRoute = createRoute({
+  description: 'Complete a multipart upload by providing all part ETags',
   method: 'post',
   path: '/uploads/multipart/:id/complete',
-  tags: ['Uploads', 'Multipart'],
-  summary: 'Complete multipart upload',
-  description: 'Complete a multipart upload by providing all part ETags',
   request: {
-    params: IdParamSchema,
     body: {
       content: {
         'application/json': {
@@ -411,6 +408,7 @@ export const completeMultipartUploadRoute = createRoute({
         },
       },
     },
+    params: IdParamSchema,
   },
   responses: {
     [HttpStatusCodes.OK]: {
@@ -426,6 +424,8 @@ export const completeMultipartUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Complete multipart upload',
+  tags: ['Uploads', 'Multipart'],
 });
 
 /**
@@ -433,11 +433,9 @@ export const completeMultipartUploadRoute = createRoute({
  * Cancel an in-progress multipart upload
  */
 export const abortMultipartUploadRoute = createRoute({
+  description: 'Cancel an in-progress multipart upload and clean up parts',
   method: 'delete',
   path: '/uploads/multipart/:id',
-  tags: ['Uploads', 'Multipart'],
-  summary: 'Abort multipart upload',
-  description: 'Cancel an in-progress multipart upload and clean up parts',
   request: {
     params: IdParamSchema,
     query: UploadPartParamsSchema.pick({ uploadId: true }),
@@ -456,6 +454,8 @@ export const abortMultipartUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Abort multipart upload',
+  tags: ['Uploads', 'Multipart'],
 });
 
 // ============================================================================
@@ -468,11 +468,9 @@ export const abortMultipartUploadRoute = createRoute({
  * SECURITY: Requires session auth - users can only access their own files
  */
 export const downloadUploadRoute = createRoute({
+  description: 'Download the file content. Requires authentication - users can only access their own uploads.',
   method: 'get',
   path: '/uploads/:id/download',
-  tags: ['Uploads'],
-  summary: 'Download file',
-  description: 'Download the file content. Requires authentication - users can only access their own uploads.',
   request: {
     params: IdParamSchema,
   },
@@ -481,8 +479,8 @@ export const downloadUploadRoute = createRoute({
       content: {
         'application/octet-stream': {
           schema: {
-            type: 'string',
             format: 'binary',
+            type: 'string',
           },
         },
       },
@@ -493,6 +491,8 @@ export const downloadUploadRoute = createRoute({
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },
+  summary: 'Download file',
+  tags: ['Uploads'],
 });
 
 // ============================================================================

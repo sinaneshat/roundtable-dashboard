@@ -12,9 +12,9 @@ type PresetNameFormProps = {
 };
 
 export const PresetNameForm = memo(({
-  onSubmit,
-  onCancel,
   isPending,
+  onCancel,
+  onSubmit,
 }: PresetNameFormProps) => {
   const t = useTranslations();
   const [name, setName] = useState('');

@@ -47,11 +47,11 @@ export function useOverviewActions(options: UseOverviewActionsOptions = {}): Use
   const { projectId } = options;
   // Batch state and action selectors with useShallow for stable reference
   const { showInitialUI, ...actions } = useChatStore(useShallow(s => ({
-    showInitialUI: s.showInitialUI,
+    setAutoMode: s.setAutoMode,
     setInputValue: s.setInputValue,
     setSelectedMode: s.setSelectedMode,
     setSelectedParticipants: s.setSelectedParticipants,
-    setAutoMode: s.setAutoMode,
+    showInitialUI: s.showInitialUI,
   })));
 
   // Delegate flow control to centralized controller

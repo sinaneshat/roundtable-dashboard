@@ -22,11 +22,11 @@ export const ChatAttachmentStatusSchema = z.enum(CHAT_ATTACHMENT_STATUSES).opena
 export type ChatAttachmentStatus = z.infer<typeof ChatAttachmentStatusSchema>;
 
 export const ChatAttachmentStatuses = {
-  UPLOADING: 'uploading' as const,
-  UPLOADED: 'uploaded' as const,
+  FAILED: 'failed' as const,
   PROCESSING: 'processing' as const,
   READY: 'ready' as const,
-  FAILED: 'failed' as const,
+  UPLOADED: 'uploaded' as const,
+  UPLOADING: 'uploading' as const,
 } as const;
 
 // ============================================================================
@@ -108,16 +108,16 @@ export function isImageMimeType(mimeType: unknown): mimeType is ImageMimeType {
 }
 
 export const ImageMimeTypes = {
-  PNG: 'image/png' as const,
-  JPEG: 'image/jpeg' as const,
-  GIF: 'image/gif' as const,
-  WEBP: 'image/webp' as const,
-  SVG: 'image/svg+xml' as const,
   AVIF: 'image/avif' as const,
+  BMP: 'image/bmp' as const,
+  GIF: 'image/gif' as const,
   HEIC: 'image/heic' as const,
   HEIF: 'image/heif' as const,
-  BMP: 'image/bmp' as const,
+  JPEG: 'image/jpeg' as const,
+  PNG: 'image/png' as const,
+  SVG: 'image/svg+xml' as const,
   TIFF: 'image/tiff' as const,
+  WEBP: 'image/webp' as const,
 } as const;
 
 // ============================================================================
@@ -147,13 +147,13 @@ export function isDocumentMimeType(mimeType: unknown): mimeType is DocumentMimeT
 }
 
 export const DocumentMimeTypes = {
-  PDF: 'application/pdf' as const,
   DOC: 'application/msword' as const,
   DOCX: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' as const,
-  XLS: 'application/vnd.ms-excel' as const,
-  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' as const,
+  PDF: 'application/pdf' as const,
   PPT: 'application/vnd.ms-powerpoint' as const,
   PPTX: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' as const,
+  XLS: 'application/vnd.ms-excel' as const,
+  XLSX: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' as const,
 } as const;
 
 // ============================================================================
@@ -176,11 +176,11 @@ export const TextMimeTypeSchema = z.enum(TEXT_MIME_TYPES).openapi({
 export type TextMimeType = z.infer<typeof TextMimeTypeSchema>;
 
 export const TextMimeTypes = {
-  PLAIN: 'text/plain' as const,
-  MARKDOWN: 'text/markdown' as const,
   CSV: 'text/csv' as const,
   HTML: 'text/html' as const,
   JSON: 'application/json' as const,
+  MARKDOWN: 'text/markdown' as const,
+  PLAIN: 'text/plain' as const,
 } as const;
 
 // ============================================================================
@@ -205,13 +205,13 @@ export const CodeMimeTypeSchema = z.enum(CODE_MIME_TYPES).openapi({
 export type CodeMimeType = z.infer<typeof CodeMimeTypeSchema>;
 
 export const CodeMimeTypes = {
-  JAVASCRIPT: 'text/javascript' as const,
-  JAVASCRIPT_APP: 'application/javascript' as const,
-  TYPESCRIPT: 'text/typescript' as const,
-  PYTHON: 'text/x-python' as const,
-  JAVA: 'text/x-java-source' as const,
   C: 'text/x-c' as const,
   CPP: 'text/x-c++' as const,
+  JAVA: 'text/x-java-source' as const,
+  JAVASCRIPT: 'text/javascript' as const,
+  JAVASCRIPT_APP: 'application/javascript' as const,
+  PYTHON: 'text/x-python' as const,
+  TYPESCRIPT: 'text/typescript' as const,
 } as const;
 
 // ============================================================================
@@ -219,10 +219,10 @@ export const CodeMimeTypes = {
 // ============================================================================
 
 export const MIME_TYPE_CATEGORIES = {
-  image: IMAGE_MIME_TYPES,
-  document: DOCUMENT_MIME_TYPES,
-  text: TEXT_MIME_TYPES,
   code: CODE_MIME_TYPES,
+  document: DOCUMENT_MIME_TYPES,
+  image: IMAGE_MIME_TYPES,
+  text: TEXT_MIME_TYPES,
 } as const;
 
 // ============================================================================
@@ -318,9 +318,9 @@ export type IncompatibilityReason = z.infer<typeof IncompatibilityReasonSchema>;
 
 // 5. CONSTANT OBJECT - For usage in code (prevents typos)
 export const IncompatibilityReasons = {
-  NO_VISION: 'noVision' as const,
-  NO_FILE_SUPPORT: 'noFileSupport' as const,
   FILE_TOO_LARGE: 'fileTooLarge' as const,
+  NO_FILE_SUPPORT: 'noFileSupport' as const,
+  NO_VISION: 'noVision' as const,
 } as const;
 
 // ============================================================================
@@ -328,40 +328,47 @@ export const IncompatibilityReasons = {
 // ============================================================================
 
 export const FILE_TYPE_LABELS = {
-  // Images
-  'image/png': 'PNG Image',
-  'image/jpeg': 'JPEG Image',
-  'image/gif': 'GIF Image',
-  'image/webp': 'WebP Image',
-  'image/svg+xml': 'SVG Image',
+  'application/javascript': 'JavaScript',
+  'application/json': 'JSON File',
+  'application/msword': 'Word Document',
   // Documents
   'application/pdf': 'PDF Document',
-  'application/msword': 'Word Document',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word Document',
   'application/vnd.ms-excel': 'Excel Spreadsheet',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel Spreadsheet',
   'application/vnd.ms-powerpoint': 'PowerPoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint',
-  // Text
-  'text/plain': 'Text File',
-  'text/markdown': 'Markdown',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel Spreadsheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word Document',
+  'image/gif': 'GIF Image',
+  'image/jpeg': 'JPEG Image',
+  // Images
+  'image/png': 'PNG Image',
+  'image/svg+xml': 'SVG Image',
+  'image/webp': 'WebP Image',
   'text/csv': 'CSV File',
   'text/html': 'HTML File',
-  'application/json': 'JSON File',
   // Code
   'text/javascript': 'JavaScript',
-  'application/javascript': 'JavaScript',
+  'text/markdown': 'Markdown',
+  // Text
+  'text/plain': 'Text File',
   'text/typescript': 'TypeScript',
-  'text/x-python': 'Python',
-  'text/x-java-source': 'Java',
   'text/x-c': 'C',
   'text/x-c++': 'C++',
+  'text/x-java-source': 'Java',
+  'text/x-python': 'Python',
 } as const satisfies Partial<Record<AllowedMimeType | 'text/typescript' | 'text/x-java-source' | 'text/x-c++', string>>;
 
 export type FileTypeLabelMimeType = keyof typeof FILE_TYPE_LABELS;
 
+function isFileTypeLabelMimeType(mimeType: string): mimeType is FileTypeLabelMimeType {
+  return mimeType in FILE_TYPE_LABELS;
+}
+
 export function getFileTypeLabelFromMime(mimeType: string): string {
-  return FILE_TYPE_LABELS[mimeType as FileTypeLabelMimeType] ?? 'File';
+  if (isFileTypeLabelMimeType(mimeType)) {
+    return FILE_TYPE_LABELS[mimeType];
+  }
+  return 'File';
 }
 
 // ============================================================================
@@ -383,16 +390,16 @@ export type FileSizeLimitCategory = typeof FILE_SIZE_LIMIT_CATEGORIES[number];
  * SINGLE SOURCE OF TRUTH - use getMaxFileSizeForMimeType() to get limits
  */
 export const FILE_SIZE_LIMITS = {
+  /** Office documents (DOC, DOCX, PPT, PPTX) - 512MB */
+  DOCUMENT: 512 * 1024 * 1024,
   /** General files - 512MB (matches ChatGPT) */
   GENERAL: 512 * 1024 * 1024,
   /** Images - 20MB (matches ChatGPT) */
   IMAGE: 20 * 1024 * 1024,
-  /** Spreadsheets (CSV, XLS, XLSX) - 50MB (matches ChatGPT) */
-  SPREADSHEET: 50 * 1024 * 1024,
   /** PDFs - 512MB (matches ChatGPT's general document limit) */
   PDF: 512 * 1024 * 1024,
-  /** Office documents (DOC, DOCX, PPT, PPTX) - 512MB */
-  DOCUMENT: 512 * 1024 * 1024,
+  /** Spreadsheets (CSV, XLS, XLSX) - 50MB (matches ChatGPT) */
+  SPREADSHEET: 50 * 1024 * 1024,
 } as const;
 
 /**
@@ -408,14 +415,18 @@ export const SPREADSHEET_MIME_TYPES = [
  * Get the file category for size limit purposes
  */
 export function getFileSizeLimitCategory(mimeType: string): FileSizeLimitCategory {
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return 'image';
-  if ((SPREADSHEET_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((SPREADSHEET_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return 'spreadsheet';
-  if (mimeType === 'application/pdf')
+  }
+  if (mimeType === 'application/pdf') {
     return 'pdf';
-  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return 'document';
+  }
   return 'general';
 }
 
@@ -430,7 +441,7 @@ export function getMaxFileSizeForMimeType(mimeType: string): number {
     case 'spreadsheet': return FILE_SIZE_LIMITS.SPREADSHEET;
     case 'pdf': return FILE_SIZE_LIMITS.PDF;
     case 'document': return FILE_SIZE_LIMITS.DOCUMENT;
-    default: return FILE_SIZE_LIMITS.GENERAL;
+    case 'general': return FILE_SIZE_LIMITS.GENERAL;
   }
 }
 
@@ -500,13 +511,13 @@ export const UploadStatusSchema = z.enum(UPLOAD_STATUSES).openapi({
 export type UploadStatus = z.infer<typeof UploadStatusSchema>;
 
 export const UploadStatuses = {
-  PENDING: 'pending' as const,
-  VALIDATING: 'validating' as const,
-  UPLOADING: 'uploading' as const,
-  PROCESSING: 'processing' as const,
+  CANCELLED: 'cancelled' as const,
   COMPLETED: 'completed' as const,
   FAILED: 'failed' as const,
-  CANCELLED: 'cancelled' as const,
+  PENDING: 'pending' as const,
+  PROCESSING: 'processing' as const,
+  UPLOADING: 'uploading' as const,
+  VALIDATING: 'validating' as const,
 } as const;
 
 // ============================================================================
@@ -525,8 +536,8 @@ export const UploadStrategySchema = z.enum(UPLOAD_STRATEGIES).openapi({
 export type UploadStrategy = z.infer<typeof UploadStrategySchema>;
 
 export const UploadStrategies = {
-  SINGLE: 'single' as const,
   MULTIPART: 'multipart' as const,
+  SINGLE: 'single' as const,
 } as const;
 
 // ============================================================================
@@ -553,20 +564,20 @@ export const FilePreviewTypeSchema = z.enum(FILE_PREVIEW_TYPES).openapi({
 export type FilePreviewType = z.infer<typeof FilePreviewTypeSchema>;
 
 export const FilePreviewTypes = {
+  CODE: 'code' as const,
+  DOCUMENT: 'document' as const,
   IMAGE: 'image' as const,
   PDF: 'pdf' as const,
   TEXT: 'text' as const,
-  CODE: 'code' as const,
-  DOCUMENT: 'document' as const,
   UNKNOWN: 'unknown' as const,
 } as const;
 
 export const FILE_PREVIEW_TYPE_LABELS: Record<FilePreviewType, string> = {
+  [FilePreviewTypes.CODE]: 'Code',
+  [FilePreviewTypes.DOCUMENT]: 'Document',
   [FilePreviewTypes.IMAGE]: 'Image',
   [FilePreviewTypes.PDF]: 'PDF',
   [FilePreviewTypes.TEXT]: 'Text',
-  [FilePreviewTypes.CODE]: 'Code',
-  [FilePreviewTypes.DOCUMENT]: 'Document',
   [FilePreviewTypes.UNKNOWN]: 'File',
 };
 
@@ -586,11 +597,11 @@ export const FileCategorySchema = z.enum(FILE_CATEGORIES).openapi({
 export type FileCategory = z.infer<typeof FileCategorySchema>;
 
 export const FileCategories = {
-  IMAGE: 'image' as const,
-  DOCUMENT: 'document' as const,
-  TEXT: 'text' as const,
   CODE: 'code' as const,
+  DOCUMENT: 'document' as const,
+  IMAGE: 'image' as const,
   OTHER: 'other' as const,
+  TEXT: 'text' as const,
 } as const;
 
 // ============================================================================
@@ -613,11 +624,11 @@ export const FileValidationErrorCodeSchema = z.enum(FILE_VALIDATION_ERROR_CODES)
 export type FileValidationErrorCode = z.infer<typeof FileValidationErrorCodeSchema>;
 
 export const FileValidationErrorCodes = {
-  FILE_TOO_LARGE: 'file_too_large' as const,
-  VISUAL_FILE_TOO_LARGE: 'visual_file_too_large' as const,
-  INVALID_TYPE: 'invalid_type' as const,
   EMPTY_FILE: 'empty_file' as const,
+  FILE_TOO_LARGE: 'file_too_large' as const,
   FILENAME_TOO_LONG: 'filename_too_long' as const,
+  INVALID_TYPE: 'invalid_type' as const,
+  VISUAL_FILE_TOO_LARGE: 'visual_file_too_large' as const,
 } as const;
 
 // ============================================================================
@@ -641,18 +652,18 @@ export const FileIconNameSchema = z.enum(FILE_ICON_NAMES).openapi({
 export type FileIconName = z.infer<typeof FileIconNameSchema>;
 
 export const FileIconNames = {
-  IMAGE: 'image' as const,
-  FILE_TEXT: 'file-text' as const,
-  FILE_CODE: 'file-code' as const,
   FILE: 'file' as const,
+  FILE_CODE: 'file-code' as const,
+  FILE_TEXT: 'file-text' as const,
+  IMAGE: 'image' as const,
 } as const;
 
 export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
+  [FilePreviewTypes.CODE]: FileIconNames.FILE_CODE,
+  [FilePreviewTypes.DOCUMENT]: FileIconNames.FILE,
   [FilePreviewTypes.IMAGE]: FileIconNames.IMAGE,
   [FilePreviewTypes.PDF]: FileIconNames.FILE_TEXT,
   [FilePreviewTypes.TEXT]: FileIconNames.FILE_TEXT,
-  [FilePreviewTypes.CODE]: FileIconNames.FILE_CODE,
-  [FilePreviewTypes.DOCUMENT]: FileIconNames.FILE,
   [FilePreviewTypes.UNKNOWN]: FileIconNames.FILE,
 };
 
@@ -665,14 +676,18 @@ export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
  * Use this for file validation classification
  */
 export function getFileCategoryFromMime(mimeType: string): FileCategory {
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FileCategories.IMAGE;
-  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FileCategories.DOCUMENT;
-  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FileCategories.TEXT;
-  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FileCategories.CODE;
+  }
   return FileCategories.OTHER;
 }
 
@@ -681,16 +696,21 @@ export function getFileCategoryFromMime(mimeType: string): FileCategory {
  * Use this for UI preview rendering
  */
 export function getPreviewTypeFromMime(mimeType: string): FilePreviewType {
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FilePreviewTypes.IMAGE;
-  if (mimeType === 'application/pdf')
+  }
+  if (mimeType === 'application/pdf') {
     return FilePreviewTypes.PDF;
-  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FilePreviewTypes.DOCUMENT;
-  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FilePreviewTypes.TEXT;
-  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FilePreviewTypes.CODE;
+  }
   return FilePreviewTypes.UNKNOWN;
 }
 
@@ -721,19 +741,19 @@ export type FileTypeColor = z.infer<typeof FileTypeColorSchema>;
 
 // 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
 export const FileTypeColors = {
-  RED: 'red' as const,
-  PURPLE: 'purple' as const,
-  YELLOW: 'yellow' as const,
   BLUE: 'blue' as const,
+  PURPLE: 'purple' as const,
+  RED: 'red' as const,
+  YELLOW: 'yellow' as const,
   ZINC: 'zinc' as const,
 } as const;
 
 // 6️⃣ CSS CLASS MAPPING - Tailwind background classes for each color
 export const FILE_TYPE_COLOR_CLASSES: Record<FileTypeColor, string> = {
-  [FileTypeColors.RED]: 'bg-red-500',
-  [FileTypeColors.PURPLE]: 'bg-purple-500',
-  [FileTypeColors.YELLOW]: 'bg-yellow-500',
   [FileTypeColors.BLUE]: 'bg-blue-500',
+  [FileTypeColors.PURPLE]: 'bg-purple-500',
+  [FileTypeColors.RED]: 'bg-red-500',
+  [FileTypeColors.YELLOW]: 'bg-yellow-500',
   [FileTypeColors.ZINC]: 'bg-zinc-600',
 };
 
@@ -742,14 +762,18 @@ export const FILE_TYPE_COLOR_CLASSES: Record<FileTypeColor, string> = {
  * SINGLE SOURCE OF TRUTH for file type color classification
  */
 export function getFileTypeColor(mimeType: string): FileTypeColor {
-  if (mimeType === DocumentMimeTypes.PDF)
+  if (mimeType === DocumentMimeTypes.PDF) {
     return FileTypeColors.RED;
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
+  }
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType)) {
     return FileTypeColors.PURPLE;
-  if (mimeType.startsWith('text/javascript') || mimeType.startsWith('application/javascript'))
+  }
+  if (mimeType.startsWith('text/javascript') || mimeType.startsWith('application/javascript')) {
     return FileTypeColors.YELLOW;
-  if (mimeType.startsWith('text/') || mimeType.includes('json'))
+  }
+  if (mimeType.startsWith('text/') || mimeType.includes('json')) {
     return FileTypeColors.BLUE;
+  }
   return FileTypeColors.ZINC;
 }
 

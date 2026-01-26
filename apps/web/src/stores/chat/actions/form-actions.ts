@@ -18,7 +18,6 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, createPrefetchMeta, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, toISOString, toISOStringOrNull, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/services/api';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -27,10 +26,10 @@ import { validateInfiniteQueryCache } from './types';
  * Attachment metadata passed from file upload handling
  */
 export const AttachmentInfoSchema = z.object({
-  uploadId: z.string(),
   filename: z.string(),
   mimeType: z.string(),
   previewUrl: z.string().optional(),
+  uploadId: z.string(),
 });
 
 export type AttachmentInfo = z.infer<typeof AttachmentInfoSchema>;
@@ -64,48 +63,48 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
+    enableWebSearch: s.enableWebSearch,
     inputValue: s.inputValue,
     selectedMode: s.selectedMode,
     selectedParticipants: s.selectedParticipants,
-    enableWebSearch: s.enableWebSearch,
   })));
 
   const actions = useChatStore(useShallow(s => ({
-    setInputValue: s.setInputValue,
-    resetForm: s.resetForm,
-    setSelectedMode: s.setSelectedMode,
-    setSelectedParticipants: s.setSelectedParticipants,
-    setEnableWebSearch: s.setEnableWebSearch,
-    setShowInitialUI: s.setShowInitialUI,
-    setIsCreatingThread: s.setIsCreatingThread,
-    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
-    setCreatedThreadId: s.setCreatedThreadId,
-    setCreatedThreadProjectId: s.setCreatedThreadProjectId,
-    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
-    prepareForNewMessage: s.prepareForNewMessage,
-    setExpectedParticipantIds: s.setExpectedParticipantIds,
-    initializeThread: s.initializeThread,
-    updateParticipants: s.updateParticipants,
     addPreSearch: s.addPreSearch,
-    setStreamingRoundNumber: s.setStreamingRoundNumber,
-    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
-    setMessages: s.setMessages,
-    clearAttachments: s.clearAttachments,
-    setThread: s.setThread,
-    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
-    setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
-    setIsPatchInProgress: s.setIsPatchInProgress,
-    clearStreamResumption: s.clearStreamResumption,
-    setPendingFileParts: s.setPendingFileParts,
-    setPendingMessage: s.setPendingMessage,
-    setPendingAttachmentIds: s.setPendingAttachmentIds,
     // ✅ RACE CONDITION FIX: Atomic config change state updates
     atomicUpdateConfigChangeState: s.atomicUpdateConfigChangeState,
+    clearAttachments: s.clearAttachments,
     clearConfigChangeState: s.clearConfigChangeState,
-    // ✅ RACE CONDITION FIX: Round epoch management
-    startNewRound: s.startNewRound,
+    clearStreamResumption: s.clearStreamResumption,
+    initializeThread: s.initializeThread,
+    prepareForNewMessage: s.prepareForNewMessage,
+    resetForm: s.resetForm,
     // ✅ RACE CONDITION FIX: Explicit stream completion signal
     resetStreamFinishAcknowledgment: s.resetStreamFinishAcknowledgment,
+    setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
+    setCreatedThreadId: s.setCreatedThreadId,
+    setCreatedThreadProjectId: s.setCreatedThreadProjectId,
+    setEnableWebSearch: s.setEnableWebSearch,
+    setExpectedParticipantIds: s.setExpectedParticipantIds,
+    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
+    setInputValue: s.setInputValue,
+    setIsCreatingThread: s.setIsCreatingThread,
+    setIsPatchInProgress: s.setIsPatchInProgress,
+    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
+    setMessages: s.setMessages,
+    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
+    setPendingAttachmentIds: s.setPendingAttachmentIds,
+    setPendingFileParts: s.setPendingFileParts,
+    setPendingMessage: s.setPendingMessage,
+    setSelectedMode: s.setSelectedMode,
+    setSelectedParticipants: s.setSelectedParticipants,
+    setShowInitialUI: s.setShowInitialUI,
+    setStreamingRoundNumber: s.setStreamingRoundNumber,
+    setThread: s.setThread,
+    setWaitingToStartStreaming: s.setWaitingToStartStreaming,
+    // ✅ RACE CONDITION FIX: Round epoch management
+    startNewRound: s.startNewRound,
+    updateParticipants: s.updateParticipants,
   })));
 
   const createThreadMutation = useCreateThreadMutation();
@@ -135,10 +134,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.setIsCreatingThread(true);
 
       const createThreadRequest = toCreateThreadRequest({
+        enableWebSearch: freshEnableWebSearch,
         message: prompt,
         mode: freshSelectedMode,
         participants: freshSelectedParticipants,
-        enableWebSearch: freshEnableWebSearch,
       }, attachmentIds, projectId);
 
       const apiResponse = await createThreadMutation.mutateAsync({
@@ -153,7 +152,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         throw new Error('Invalid response from server');
       }
 
-      const { thread, participants, messages: initialMessages } = apiResponse.data;
+      const { messages: initialMessages, participants, thread } = apiResponse.data;
 
       const threadWithDates = transformChatThread(thread);
       const participantsWithDates = transformChatParticipants(participants);
@@ -174,58 +173,58 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       // Thread item for cache updates
       const threadItem = {
+        createdAt: thread.createdAt,
+        enableWebSearch: thread.enableWebSearch,
         id: thread.id,
-        title: thread.title,
-        slug: thread.slug,
-        mode: thread.mode,
-        status: thread.status,
+        isAiGeneratedTitle: thread.isAiGeneratedTitle,
         isFavorite: thread.isFavorite,
         isPublic: thread.isPublic,
-        isAiGeneratedTitle: thread.isAiGeneratedTitle,
-        enableWebSearch: thread.enableWebSearch,
-        createdAt: thread.createdAt,
-        updatedAt: thread.updatedAt,
         lastMessageAt: thread.lastMessageAt,
+        mode: thread.mode,
+        slug: thread.slug,
+        status: thread.status,
+        title: thread.title,
+        updatedAt: thread.updatedAt,
       };
 
       // ✅ STEP 1: Pre-populate thread detail caches BEFORE navigation
       // This prevents skeleton flash when route loader runs
       queryClient.setQueryData(queryKeys.threads.bySlug(thread.slug), {
-        success: true,
         data: {
-          thread: {
-            ...thread,
-            createdAt: toISOString(thread.createdAt),
-            updatedAt: toISOString(thread.updatedAt),
-            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-          },
+          messages: messagesWithDates,
           participants: participantsWithDates.map(p => ({
             ...p,
             createdAt: toISOString(p.createdAt),
             updatedAt: toISOString(p.updatedAt),
           })),
-          messages: messagesWithDates,
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+            updatedAt: toISOString(thread.updatedAt),
+          },
         },
         meta: createPrefetchMeta(),
+        success: true,
       });
 
       queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
-        success: true,
         data: {
-          thread: {
-            ...thread,
-            createdAt: toISOString(thread.createdAt),
-            updatedAt: toISOString(thread.updatedAt),
-            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-          },
+          messages: messagesWithDates,
           participants: participantsWithDates.map(p => ({
             ...p,
             createdAt: toISOString(p.createdAt),
             updatedAt: toISOString(p.updatedAt),
           })),
-          messages: messagesWithDates,
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+            updatedAt: toISOString(thread.updatedAt),
+          },
         },
         meta: createPrefetchMeta(),
+        success: true,
       });
 
       // ✅ STEP 2: Navigate BEFORE sidebar cache updates
@@ -233,15 +232,15 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       rlog.flow('create', `3-navigate slug=${thread.slug} projectId=${projectId ?? 'none'}`);
       if (projectId) {
         router.navigate({
-          to: '/chat/projects/$projectId/$slug',
           params: { projectId, slug: thread.slug },
           replace: true,
+          to: '/chat/projects/$projectId/$slug',
         });
       } else {
         router.navigate({
-          to: '/chat/$slug',
           params: { slug: thread.slug },
           replace: true,
+          to: '/chat/$slug',
         });
       }
 
@@ -258,8 +257,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             {
               ...parsedExisting,
               pages: parsedExisting.pages.map((page, index) => {
-                if (index !== 0 || !page.success || !page.data?.items)
+                if (index !== 0 || !page.success || !page.data?.items) {
                   return page;
+                }
 
                 return {
                   ...page,
@@ -275,12 +275,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           queryClient.setQueryData(
             projectThreadsKey,
             {
+              pageParams: [undefined],
               pages: [{
-                success: true,
                 data: { items: [threadItem], pagination: { nextCursor: null } },
                 meta: createPrefetchMeta(),
+                success: true,
               }],
-              pageParams: [undefined],
             },
           );
         }
@@ -290,14 +290,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           { queryKey: queryKeys.projects.sidebar() },
           (old: unknown) => {
             const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery)
+            if (!parsedQuery) {
               return old;
+            }
 
             return {
               ...parsedQuery,
               pages: parsedQuery.pages.map((page) => {
-                if (!page.success || !page.data?.items)
+                if (!page.success || !page.data?.items) {
                   return page;
+                }
 
                 return {
                   ...page,
@@ -317,19 +319,21 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       } else {
         queryClient.setQueriesData(
           {
-            queryKey: queryKeys.threads.all,
             predicate: isNonProjectListOrSidebarQuery,
+            queryKey: queryKeys.threads.all,
           },
           (old: unknown) => {
             const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery)
+            if (!parsedQuery) {
               return old;
+            }
 
             return {
               ...parsedQuery,
               pages: parsedQuery.pages.map((page, index) => {
-                if (index !== 0 || !page.success || !page.data?.items)
+                if (index !== 0 || !page.success || !page.data?.items) {
                   return page;
+                }
 
                 return {
                   ...page,
@@ -364,8 +368,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       if (freshEnableWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
-          threadId: thread.id,
           roundNumber: 0,
+          threadId: thread.id,
           userQuery: prompt,
         }));
       }
@@ -432,8 +436,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
     }
 
-    const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
-      freshParticipants as ChatParticipant[],
+    // participants from store is already typed as ChatParticipant[] via ChatParticipantSchema
+    const { optimisticParticipants, updatePayloads, updateResult } = prepareParticipantUpdate(
+      freshParticipants,
       freshSelectedParticipants,
       threadId,
     );
@@ -460,25 +465,26 @@ export function useChatFormActions(): UseChatFormActionsReturn {
             return true;
           })
           .map(att => ({
-            type: MessagePartTypes.FILE,
-            url: att.previewUrl || '',
             filename: att.filename,
             mediaType: att.mimeType,
+            type: MessagePartTypes.FILE,
             uploadId: att.uploadId,
+            url: att.previewUrl || '',
           }))
       : [];
 
     const optimisticMessage = createOptimisticUserMessage({
+      fileParts,
       roundNumber: nextRoundNumber,
       text: trimmed,
-      fileParts,
     });
 
     actions.setMessages((currentMessages) => {
       return [...currentMessages, optimisticMessage];
     });
     actions.setStreamingRoundNumber(nextRoundNumber);
-    const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : (freshParticipants as ChatParticipant[]);
+    // participants from store is already typed as ChatParticipant[] via ChatParticipantSchema
+    const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : freshParticipants;
     actions.setExpectedParticipantIds(getEnabledParticipantModelIds(effectiveParticipants));
 
     if (hasParticipantChanges) {
@@ -491,8 +497,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       rlog.submit('pre-patch-flag', `r${nextRoundNumber} atomic: configChangeRoundNumber + isPatchInProgress`);
       actions.atomicUpdateConfigChangeState({
         configChangeRoundNumber: nextRoundNumber,
-        isPatchInProgress: true,
         hasPendingConfigChanges: false, // Clear pending since we're about to apply
+        isPatchInProgress: true,
       });
     } else {
       // Still need isPatchInProgress even without config changes
@@ -503,8 +509,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     if (freshEnableWebSearch) {
       actions.addPreSearch(createPlaceholderPreSearch({
-        threadId,
         roundNumber: nextRoundNumber,
+        threadId,
         userQuery: trimmed,
       }));
     }
@@ -534,18 +540,18 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     try {
       const apiResponse = await updateThreadMutation.mutateAsync({
-        param: { id: threadId },
         json: {
-          participants: hasParticipantChanges ? updatePayloads : undefined,
-          mode: modeChanged && freshSelectedMode ? freshSelectedMode : undefined,
           enableWebSearch: webSearchChanged ? freshEnableWebSearch : undefined,
+          mode: modeChanged && freshSelectedMode ? freshSelectedMode : undefined,
           newMessage: {
-            id: optimisticMessage.id,
-            content: trimmed,
-            roundNumber: nextRoundNumber,
             attachmentIds: attachmentIds?.length ? attachmentIds : undefined,
+            content: trimmed,
+            id: optimisticMessage.id,
+            roundNumber: nextRoundNumber,
           },
+          participants: hasParticipantChanges ? updatePayloads : undefined,
         },
+        param: { id: threadId },
       });
 
       if (!apiResponse.success) {
@@ -589,9 +595,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (hasAnyChanges) {
         rlog.submit('post-patch-flag', `r${nextRoundNumber} atomic: isPatchInProgress=false, isWaitingForChangelog=true`);
         actions.atomicUpdateConfigChangeState({
+          hasPendingConfigChanges: false,
           isPatchInProgress: false,
           isWaitingForChangelog: true,
-          hasPendingConfigChanges: false,
           // Keep configChangeRoundNumber until changelog is fetched
         });
       } else {
@@ -640,9 +646,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
   return useMemoizedReturn({
     handleCreateThread,
-    handleUpdateThreadAndSend,
-    handleResetForm,
     handleModeChange,
+    handleResetForm,
+    handleUpdateThreadAndSend,
     handleWebSearchToggle,
     isFormValid,
     isSubmitting,

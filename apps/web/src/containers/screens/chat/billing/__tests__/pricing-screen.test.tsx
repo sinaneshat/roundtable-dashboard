@@ -54,8 +54,8 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/hooks/utils')>();
   return {
     ...original,
-    useIsMounted: () => true,
     useAuthCheck: () => ({ isAuthenticated: true, isLoading: false }),
+    useIsMounted: () => true,
   };
 });
 
@@ -63,18 +63,18 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
 const mockRouter = {
   navigate: vi.fn(),
   push: vi.fn(),
-  replace: vi.fn(),
   refresh: vi.fn(),
+  replace: vi.fn(),
 };
 
 function createMockQueryClient() {
   return new QueryClient({
     defaultOptions: {
-      queries: {
-        retry: false,
-        gcTime: 0,
-      },
       mutations: {
+        retry: false,
+      },
+      queries: {
+        gcTime: 0,
         retry: false,
       },
     },
@@ -98,21 +98,21 @@ function createTestRouterWithChildren(
   });
 
   const pricingRoute = createRoute({
+    component: () => null,
     getParentRoute: () => rootRoute,
     path: '/chat/pricing',
-    component: () => null,
   });
 
   const routeTree = rootRoute.addChildren([pricingRoute]);
 
   return createRouter({
-    routeTree,
     history: createMemoryHistory({ initialEntries: ['/chat/pricing'] }),
+    routeTree,
   });
 }
 
 // Test wrapper component that provides both router and query context
-function TestWrapper({ queryClient, children }: { queryClient: QueryClient; children: ReactNode }) {
+function TestWrapper({ children, queryClient }: { queryClient: QueryClient; children: ReactNode }) {
   const childrenRef = useRef<ReactNode>(children);
   childrenRef.current = children;
 
@@ -142,8 +142,8 @@ describe('pricingScreen', () => {
       // Component will show error or empty state
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -166,13 +166,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -194,16 +194,16 @@ describe('pricingScreen', () => {
 
       // Set products data with error response structure that component understands
       queryClient.setQueryData(['products', 'list'], {
-        success: false,
         error: {
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to load products',
         },
+        success: false,
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -230,13 +230,13 @@ describe('pricingScreen', () => {
       const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 1, items: [subscription] },
         success: true,
-        data: { items: [subscription], count: 1 },
       });
 
       render(
@@ -255,13 +255,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -282,13 +282,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -312,13 +312,13 @@ describe('pricingScreen', () => {
       const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 1, items: [subscription] },
         success: true,
-        data: { items: [subscription], count: 1 },
       });
 
       render(
@@ -342,13 +342,13 @@ describe('pricingScreen', () => {
       const subscription = createActiveSubscription(proPlan.prices[0].id);
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 1, items: [subscription] },
         success: true,
-        data: { items: [subscription], count: 1 },
       });
 
       render(
@@ -369,13 +369,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -394,13 +394,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -421,13 +421,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -447,13 +447,13 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -476,13 +476,13 @@ describe('pricingScreen', () => {
       // Set empty products list (success response with no items)
       // This simulates the "no plans available" scenario
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -501,8 +501,8 @@ describe('pricingScreen', () => {
       const products = createMockProductCatalog();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], undefined);
@@ -522,13 +522,13 @@ describe('pricingScreen', () => {
       const queryClient = createMockQueryClient();
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 0, items: [] },
         success: true,
-        data: { items: [], count: 0 },
       });
 
       render(
@@ -557,13 +557,13 @@ describe('pricingScreen', () => {
       };
 
       queryClient.setQueryData(['products', 'list'], {
+        data: { count: products.length, items: products },
         success: true,
-        data: { items: products, count: products.length },
       });
 
       queryClient.setQueryData(['subscriptions', 'current'], {
+        data: { count: 2, items: [subscription1, subscription2] },
         success: true,
-        data: { items: [subscription1, subscription2], count: 2 },
       });
 
       render(

@@ -37,14 +37,14 @@ export type MockChatStoreState = {
   resumptionRoundNumber: number | null;
 
   // Data
-  participants: Array<{
+  participants: {
     id: string;
     threadId: string;
     modelId: string;
     role: string;
     priority: number;
     isEnabled?: boolean;
-  }>;
+  }[];
   messages: UIMessage[];
   preSearches: StoredPreSearch[];
   thread: {
@@ -81,45 +81,45 @@ export function createMockChatStore(
   initialState?: Partial<MockChatStoreState>,
 ): StoreApi<MockChatStoreState> {
   return createStore<MockChatStoreState>(set => ({
-    // Streaming state
-    waitingToStartStreaming: false,
-    isStreaming: false,
-    isModeratorStreaming: false,
-    streamingRoundNumber: null,
+    configChangeRoundNumber: null,
     currentParticipantIndex: 0,
-    nextParticipantToTrigger: null,
-
+    currentResumptionPhase: null,
+    enableWebSearch: false,
+    isModeratorStreaming: false,
     // PATCH/Config state
     isPatchInProgress: false,
-    configChangeRoundNumber: null,
+
+    isStreaming: false,
     isWaitingForChangelog: false,
+    messages: [],
 
-    // Resumption state
-    streamResumptionPrefilled: false,
-    currentResumptionPhase: null,
-    resumptionRoundNumber: null,
-
+    nextParticipantToTrigger: null,
     // Data
     participants: [],
-    messages: [],
     preSearches: [],
-    thread: null,
-    screenMode: ScreenModes.OVERVIEW,
-    enableWebSearch: false,
 
+    resumptionRoundNumber: null,
+    screenMode: ScreenModes.OVERVIEW,
+    setConfigChangeRoundNumber: (value: number | null) =>
+      set({ configChangeRoundNumber: value }),
+    setIsPatchInProgress: (value: boolean) =>
+      set({ isPatchInProgress: value }),
+    setIsStreaming: (value: boolean) =>
+      set({ isStreaming: value }),
+    setIsWaitingForChangelog: (value: boolean) =>
+      set({ isWaitingForChangelog: value }),
+
+    setNextParticipantToTrigger: (value: { index: number; participantId: string } | number | null) =>
+      set({ nextParticipantToTrigger: value }),
     // Actions
     setWaitingToStartStreaming: (value: boolean) =>
       set({ waitingToStartStreaming: value }),
-    setNextParticipantToTrigger: (value: { index: number; participantId: string } | number | null) =>
-      set({ nextParticipantToTrigger: value }),
-    setIsStreaming: (value: boolean) =>
-      set({ isStreaming: value }),
-    setIsPatchInProgress: (value: boolean) =>
-      set({ isPatchInProgress: value }),
-    setConfigChangeRoundNumber: (value: number | null) =>
-      set({ configChangeRoundNumber: value }),
-    setIsWaitingForChangelog: (value: boolean) =>
-      set({ isWaitingForChangelog: value }),
+    streamingRoundNumber: null,
+    // Resumption state
+    streamResumptionPrefilled: false,
+    thread: null,
+    // Streaming state
+    waitingToStartStreaming: false,
 
     ...initialState,
   }));
@@ -131,13 +131,13 @@ export function createMockChatStore(
 
 export function createMockChatHook(overrides?: Partial<MockChatHook>): MockChatHook {
   return {
-    isReady: false,
     continueFromParticipant: vi.fn(),
-    startRound: vi.fn(),
+    isReady: false,
+    isStreamingRef: { current: false },
+    isTriggeringRef: { current: false },
     messages: [],
     setMessages: vi.fn(),
-    isTriggeringRef: { current: false },
-    isStreamingRef: { current: false },
+    startRound: vi.fn(),
     ...overrides,
   };
 }
@@ -150,25 +150,25 @@ export function createMockStreamResumptionState(
   overrides?: Partial<ThreadStreamResumptionState>,
 ): ThreadStreamResumptionState {
   return {
-    roundNumber: 0,
     currentPhase: RoundPhases.PARTICIPANTS,
-    preSearch: null,
+    hasActiveStream: false,
+    moderator: null,
+    nextParticipantToTrigger: 0,
     participants: {
+      allComplete: false,
+      currentParticipantIndex: 0,
       hasActiveStream: false,
+      nextParticipantToTrigger: 0,
+      participantStatuses: null,
       streamId: null,
       totalParticipants: 2,
-      currentParticipantIndex: 0,
-      participantStatuses: null,
-      nextParticipantToTrigger: 0,
-      allComplete: false,
     },
-    moderator: null,
+    participantStatuses: null,
+    preSearch: null,
     roundComplete: false,
-    hasActiveStream: false,
+    roundNumber: 0,
     streamId: null,
     totalParticipants: 2,
-    participantStatuses: null,
-    nextParticipantToTrigger: 0,
     ...overrides,
   };
 }
@@ -183,11 +183,11 @@ export function createMockResumptionParticipant(
 ) {
   return {
     id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    role: `Role ${index}`,
-    priority: index,
     isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: `Role ${index}`,
+    threadId: 'thread-123',
     ...overrides,
   };
 }
@@ -207,12 +207,12 @@ export function createMockUserMessage(
 ): UIMessage {
   return {
     id: id ?? `msg-user-r${roundNumber}`,
-    role: UIMessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: `User message round ${roundNumber}` }],
     metadata: {
       role: MessageRoles.USER,
       roundNumber,
     },
+    parts: [{ text: `User message round ${roundNumber}`, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.USER,
   };
 }
 
@@ -224,21 +224,21 @@ export function createMockAssistantMessage(
 ): UIMessage {
   return {
     id: id ?? `msg-p${participantIndex}-r${roundNumber}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: `Assistant message p${participantIndex} r${roundNumber}` }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: FinishReasons.STOP,
+      hasError: false,
+      isPartialResponse: false,
+      isTransient: false,
+      model: 'gpt-4',
       participantId: participantId ?? `participant-${participantIndex}`,
       participantIndex,
       participantRole: null,
-      model: 'gpt-4',
-      finishReason: FinishReasons.STOP,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: false,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text: `Assistant message p${participantIndex} r${roundNumber}`, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -248,17 +248,17 @@ export function createMockModeratorMessage(
 ): UIMessage {
   return {
     id: id ?? `msg-mod-r${roundNumber}`,
-    role: UIMessageRoles.ASSISTANT,
-    parts: [{ type: MessagePartTypes.TEXT, text: `Moderator summary round ${roundNumber}` }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      isModerator: true,
-      roundNumber,
-      model: 'gemini-flash',
       finishReason: FinishReasons.STOP,
-      usage: { promptTokens: 100, completionTokens: 50, totalTokens: 150 },
       hasError: false,
+      isModerator: true,
+      model: 'gemini-flash',
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 50, promptTokens: 100, totalTokens: 150 },
     },
+    parts: [{ text: `Moderator summary round ${roundNumber}`, type: MessagePartTypes.TEXT }],
+    role: UIMessageRoles.ASSISTANT,
   };
 }
 
@@ -274,25 +274,25 @@ export function createMockResumptionPreSearch(
   const isFailed = status === MessageStatuses.FAILED;
 
   return {
+    completedAt: isComplete ? new Date().toISOString() : null,
+    createdAt: new Date().toISOString(),
+    errorMessage: isFailed ? 'Pre-search failed' : null,
     id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
     roundNumber,
-    status,
-    userQuery: 'Test query',
     searchData: isComplete
       ? {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Summary',
           successCount: 1,
-          failureCount: 0,
+          summary: 'Summary',
           totalResults: 3,
           totalTime: 1000,
         }
       : undefined,
-    errorMessage: isFailed ? 'Pre-search failed' : null,
-    createdAt: new Date().toISOString(),
-    completedAt: isComplete ? new Date().toISOString() : null,
+    status,
+    threadId: 'thread-123',
+    userQuery: 'Test query',
   } as StoredPreSearch;
 }
 
@@ -345,17 +345,17 @@ export function buildAfterPatchScenario(
   nextParticipant: number,
 ) {
   return createMockChatStore({
-    isPatchInProgress: patchInProgress,
     configChangeRoundNumber: patchInProgress ? 1 : null,
-    isWaitingForChangelog: patchInProgress,
-    nextParticipantToTrigger: nextParticipant,
-    waitingToStartStreaming: true,
-    isStreaming: false,
-    screenMode: ScreenModes.THREAD,
-    participants: createMockResumptionParticipants(3),
-    messages: [createMockUserMessage(1)],
-    thread: { id: 'thread-123', enableWebSearch: false },
     enableWebSearch: false,
+    isPatchInProgress: patchInProgress,
+    isStreaming: false,
+    isWaitingForChangelog: patchInProgress,
+    messages: [createMockUserMessage(1)],
+    nextParticipantToTrigger: nextParticipant,
+    participants: createMockResumptionParticipants(3),
+    screenMode: ScreenModes.THREAD,
+    thread: { enableWebSearch: false, id: 'thread-123' },
+    waitingToStartStreaming: true,
   });
 }
 
@@ -366,17 +366,17 @@ export function buildAfterChangelogScenario(
   waitingForChangelog: boolean,
 ) {
   return createMockChatStore({
-    isPatchInProgress: false,
     configChangeRoundNumber: null,
-    isWaitingForChangelog: waitingForChangelog,
-    nextParticipantToTrigger: 0,
-    waitingToStartStreaming: true,
-    isStreaming: false,
-    screenMode: ScreenModes.THREAD,
-    participants: createMockResumptionParticipants(3),
-    messages: [createMockUserMessage(1)],
-    thread: { id: 'thread-123', enableWebSearch: false },
     enableWebSearch: false,
+    isPatchInProgress: false,
+    isStreaming: false,
+    isWaitingForChangelog: waitingForChangelog,
+    messages: [createMockUserMessage(1)],
+    nextParticipantToTrigger: 0,
+    participants: createMockResumptionParticipants(3),
+    screenMode: ScreenModes.THREAD,
+    thread: { enableWebSearch: false, id: 'thread-123' },
+    waitingToStartStreaming: true,
   });
 }
 
@@ -388,18 +388,18 @@ export function buildAfterPreSearchScenario(
 ) {
   const roundNumber = 1;
   return createMockChatStore({
-    isPatchInProgress: false,
     configChangeRoundNumber: null,
-    isWaitingForChangelog: false,
-    nextParticipantToTrigger: 0,
-    waitingToStartStreaming: true,
-    isStreaming: false,
-    screenMode: ScreenModes.THREAD,
-    participants: createMockResumptionParticipants(2),
-    messages: [createMockUserMessage(roundNumber)],
-    preSearches: [createMockResumptionPreSearch(roundNumber, preSearchStatus)],
-    thread: { id: 'thread-123', enableWebSearch: true },
     enableWebSearch: true,
+    isPatchInProgress: false,
+    isStreaming: false,
+    isWaitingForChangelog: false,
+    messages: [createMockUserMessage(roundNumber)],
+    nextParticipantToTrigger: 0,
+    participants: createMockResumptionParticipants(2),
+    preSearches: [createMockResumptionPreSearch(roundNumber, preSearchStatus)],
+    screenMode: ScreenModes.THREAD,
+    thread: { enableWebSearch: true, id: 'thread-123' },
+    waitingToStartStreaming: true,
   });
 }
 
@@ -410,22 +410,22 @@ export function buildAfterPreSearchScenario(
 export function buildCacheMismatchScenario() {
   const roundNumber = 1;
   return createMockChatStore({
-    isPatchInProgress: false,
     configChangeRoundNumber: null,
-    isWaitingForChangelog: false,
-    // Server says next is p2 (p0 and p1 complete)
-    nextParticipantToTrigger: 2,
-    waitingToStartStreaming: true,
+    enableWebSearch: false,
+    isPatchInProgress: false,
     isStreaming: false,
-    screenMode: ScreenModes.THREAD,
-    participants: createMockResumptionParticipants(3),
+    isWaitingForChangelog: false,
     // But cache only has p0 message (mismatch)
     messages: [
       createMockUserMessage(roundNumber),
       createMockAssistantMessage(roundNumber, 0),
     ],
-    thread: { id: 'thread-123', enableWebSearch: false },
-    enableWebSearch: false,
+    // Server says next is p2 (p0 and p1 complete)
+    nextParticipantToTrigger: 2,
+    participants: createMockResumptionParticipants(3),
+    screenMode: ScreenModes.THREAD,
+    thread: { enableWebSearch: false, id: 'thread-123' },
+    waitingToStartStreaming: true,
   });
 }
 
@@ -435,23 +435,23 @@ export function buildCacheMismatchScenario() {
 export function buildDuringModeratorScenario() {
   const roundNumber = 1;
   return createMockChatStore({
-    isPatchInProgress: false,
     configChangeRoundNumber: null,
-    isWaitingForChangelog: false,
-    nextParticipantToTrigger: null,
-    waitingToStartStreaming: false,
-    isStreaming: false,
+    enableWebSearch: false,
     isModeratorStreaming: true,
-    streamingRoundNumber: roundNumber,
-    screenMode: ScreenModes.THREAD,
-    participants: createMockResumptionParticipants(2),
+    isPatchInProgress: false,
+    isStreaming: false,
+    isWaitingForChangelog: false,
     messages: [
       createMockUserMessage(roundNumber),
       createMockAssistantMessage(roundNumber, 0),
       createMockAssistantMessage(roundNumber, 1),
     ],
-    thread: { id: 'thread-123', enableWebSearch: false },
-    enableWebSearch: false,
+    nextParticipantToTrigger: null,
+    participants: createMockResumptionParticipants(2),
+    screenMode: ScreenModes.THREAD,
+    streamingRoundNumber: roundNumber,
+    thread: { enableWebSearch: false, id: 'thread-123' },
+    waitingToStartStreaming: false,
   });
 }
 
@@ -469,17 +469,17 @@ export function buildSSRHydratedScenario(
 ) {
   const roundNumber = 0;
   return createMockChatStore({
-    screenMode: ScreenModes.THREAD,
-    waitingToStartStreaming: true,
-    isStreaming: false,
-    isPatchInProgress: false,
     configChangeRoundNumber: null,
-    isWaitingForChangelog: false,
     enableWebSearch: true,
-    participants: createMockResumptionParticipants(2),
+    isPatchInProgress: false,
+    isStreaming: false,
+    isWaitingForChangelog: false,
     messages: [createMockUserMessage(roundNumber)],
-    thread: { id: 'thread-123', enableWebSearch: true },
+    participants: createMockResumptionParticipants(2),
     preSearches: [createMockResumptionPreSearch(roundNumber, preSearchStatus)],
+    screenMode: ScreenModes.THREAD,
+    thread: { enableWebSearch: true, id: 'thread-123' },
+    waitingToStartStreaming: true,
   });
 }
 

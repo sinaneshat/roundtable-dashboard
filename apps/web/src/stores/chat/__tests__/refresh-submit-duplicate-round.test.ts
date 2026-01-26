@@ -55,11 +55,11 @@ const mockStore = vi.hoisted(() => {
 
   return {
     getState: () => storeState,
-    setState: (newState: Partial<ChatStore>) => {
-      storeState = { ...storeState, ...newState };
-    },
     reset: () => {
       storeState = {};
+    },
+    setState: (newState: Partial<ChatStore>) => {
+      storeState = { ...storeState, ...newState };
     },
     subscribe: vi.fn(),
   };
@@ -82,12 +82,12 @@ vi.mock('@/components/providers/chat-store-provider', () => ({
 function createCompleteRound(
   roundNumber: number,
   participantCount: number,
-  userContent: string = `User message for round ${roundNumber}`,
+  userContent = `User message for round ${roundNumber}`,
 ): UIMessage[] {
   const messages: UIMessage[] = [
     createTestUserMessage({
-      id: `thread-123_r${roundNumber}_user`,
       content: userContent,
+      id: `thread-123_r${roundNumber}_user`,
       roundNumber,
     }),
   ];
@@ -95,12 +95,12 @@ function createCompleteRound(
   for (let i = 0; i < participantCount; i++) {
     messages.push(
       createTestAssistantMessage({
-        id: `thread-123_r${roundNumber}_p${i}`,
         content: `Assistant ${i} response for round ${roundNumber}`,
-        roundNumber,
+        finishReason: FinishReasons.STOP,
+        id: `thread-123_r${roundNumber}_p${i}`,
         participantId: `participant-${i}`,
         participantIndex: i,
-        finishReason: FinishReasons.STOP,
+        roundNumber,
       }),
     );
   }
@@ -108,10 +108,10 @@ function createCompleteRound(
   // Add moderator message to mark round as complete
   messages.push(
     createTestModeratorMessage({
-      id: `thread-123_r${roundNumber}_moderator`,
       content: `Moderator summary for round ${roundNumber}`,
-      roundNumber,
       finishReason: FinishReasons.STOP,
+      id: `thread-123_r${roundNumber}_moderator`,
+      roundNumber,
     }),
   );
 
@@ -128,21 +128,21 @@ function simulatePageRefreshState(
   additionalState?: Partial<ChatStore>,
 ): Partial<ChatStore> {
   return {
-    // Persisted by Zustand
-    messages: currentMessages,
-    thread: createMockThread({ enableWebSearch: true }),
-    preSearches,
+    currentResumptionPhase: null,
+    enableWebSearch: true,
+    hasEarlyOptimisticMessage: false,
+    hasSentPendingMessage: false,
     // Reset after refresh
     isStreaming: false,
-    waitingToStartStreaming: false,
-    pendingMessage: null, // May be persisted in some cases
-    hasSentPendingMessage: false,
-    hasEarlyOptimisticMessage: false,
-    streamResumptionPrefilled: false, // Gets set by prefill effect
-    currentResumptionPhase: null,
+    // Persisted by Zustand
+    messages: currentMessages,
     nextParticipantToTrigger: null,
     participants: createMockParticipants(1),
-    enableWebSearch: true,
+    pendingMessage: null, // May be persisted in some cases
+    preSearches,
+    streamResumptionPrefilled: false, // Gets set by prefill effect
+    thread: createMockThread({ enableWebSearch: true }),
+    waitingToStartStreaming: false,
     ...additionalState,
   };
 }
@@ -163,16 +163,16 @@ function calculateIsIncomplete(state: {
   enabled?: boolean;
 }): { isIncomplete: boolean; reason: string } {
   const {
+    enabled = true,
+    hasEarlyOptimisticMessage,
+    hasSentPendingMessage,
+    isStreaming,
     messages,
     participants,
-    preSearches,
-    isStreaming,
-    waitingToStartStreaming,
-    hasEarlyOptimisticMessage,
     pendingMessage,
-    hasSentPendingMessage,
+    preSearches,
     streamResumptionPrefilled,
-    enabled = true,
+    waitingToStartStreaming,
   } = state;
 
   if (!enabled) {
@@ -301,19 +301,19 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       // Calculate isIncomplete
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: allMessages,
         participants: createMockParticipants(1),
-        preSearches,
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches,
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
       // Round 2 is complete - should NOT be detected as incomplete
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('allParticipantsResponded');
     });
 
@@ -342,43 +342,43 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       // Incomplete check should return false
       const incompleteCheck = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: allMessages,
         participants: createMockParticipants(1),
-        preSearches,
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches,
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
-      expect(incompleteCheck.isIncomplete).toBe(false);
+      expect(incompleteCheck.isIncomplete).toBeFalsy();
 
       // NOW user submits for round 3
       // The form-actions.ts sets these flags
       const stateAfterSubmitStart = {
         ...stateBeforeSubmit,
-        pendingMessage: 'New question for round 3',
         hasEarlyOptimisticMessage: true, // Set by handleUpdateThreadAndSend
+        pendingMessage: 'New question for round 3',
         waitingToStartStreaming: true,
       };
       mockStore.setState(stateAfterSubmitStart);
 
       // Incomplete check should STILL return false (submission in progress)
       const incompleteCheckDuringSubmit = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: true,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: allMessages, // Messages not yet updated with round 3 user message
         participants: createMockParticipants(1),
-        preSearches,
-        isStreaming: false,
-        waitingToStartStreaming: true,
-        hasEarlyOptimisticMessage: true,
         pendingMessage: 'New question for round 3',
-        hasSentPendingMessage: false,
+        preSearches,
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: true,
       });
 
-      expect(incompleteCheckDuringSubmit.isIncomplete).toBe(false);
+      expect(incompleteCheckDuringSubmit.isIncomplete).toBeFalsy();
       expect(incompleteCheckDuringSubmit.reason).toBe('waitingToStartStreaming');
     });
   });
@@ -395,18 +395,18 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const round1 = createCompleteRound(1, 1);
 
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: true, // Form submission started
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: [...round0, ...round1],
         participants: createMockParticipants(1),
-        preSearches: [],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: true, // Form submission started
         pendingMessage: 'New message',
-        hasSentPendingMessage: false,
+        preSearches: [],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('isSubmissionInProgress');
     });
 
@@ -414,18 +414,18 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const round0 = createCompleteRound(0, 1);
 
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: [...round0],
         participants: createMockParticipants(1),
-        preSearches: [],
-        isStreaming: false,
-        waitingToStartStreaming: true, // About to start new round
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches: [],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: true, // About to start new round
       });
 
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('waitingToStartStreaming');
     });
 
@@ -433,18 +433,18 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const round0 = createCompleteRound(0, 1);
 
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false, // Not sent yet
+        isStreaming: false,
         messages: [...round0],
         participants: createMockParticipants(1),
-        preSearches: [],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: 'User is submitting',
-        hasSentPendingMessage: false, // Not sent yet
+        preSearches: [],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('isSubmissionInProgress');
     });
 
@@ -454,26 +454,26 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const round0 = createCompleteRound(0, 1);
       const round1UserOnly = [
         createTestUserMessage({
-          id: 'thread-123_r1_user',
           content: 'Round 1 question',
+          id: 'thread-123_r1_user',
           roundNumber: 1,
         }),
       ];
 
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: true, // Already sent
+        isStreaming: false,
         messages: [...round0, ...round1UserOnly],
         participants: createMockParticipants(1),
-        preSearches: [createMockStoredPreSearch(1, MessageStatuses.COMPLETE)],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: 'Round 1 question', // Stale
-        hasSentPendingMessage: true, // Already sent
+        preSearches: [createMockStoredPreSearch(1, MessageStatuses.COMPLETE)],
         streamResumptionPrefilled: true, // Prefill ran
+        waitingToStartStreaming: false,
       });
 
       // Round 1 only has user message, no participant responses = incomplete
-      expect(result.isIncomplete).toBe(true);
+      expect(result.isIncomplete).toBeTruthy();
     });
   });
 
@@ -495,14 +495,14 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       // If T5 runs before proper guards are set, it may incorrectly try to resume
 
       const timeline = [
-        { time: 'T0', action: 'User clicks submit', guards: { hasEarlyOptimisticMessage: false, pendingMessage: null, waitingToStartStreaming: false } },
-        { time: 'T1', action: 'handleUpdateThreadAndSend starts', guards: { hasEarlyOptimisticMessage: true, pendingMessage: 'query', waitingToStartStreaming: false } },
-        { time: 'T2', action: 'Optimistic message added', guards: { hasEarlyOptimisticMessage: true, pendingMessage: 'query', waitingToStartStreaming: false } },
-        { time: 'T3', action: 'prepareForNewMessage', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true } },
-        { time: 'T4', action: 'API calls start', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true } },
-        { time: 'T5', action: 'Resumption effect might run', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true } },
-        { time: 'T6', action: 'AI SDK sendMessage', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true } },
-        { time: 'T7', action: 'Stream starts', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: false, isStreaming: true } },
+        { action: 'User clicks submit', guards: { hasEarlyOptimisticMessage: false, pendingMessage: null, waitingToStartStreaming: false }, time: 'T0' },
+        { action: 'handleUpdateThreadAndSend starts', guards: { hasEarlyOptimisticMessage: true, pendingMessage: 'query', waitingToStartStreaming: false }, time: 'T1' },
+        { action: 'Optimistic message added', guards: { hasEarlyOptimisticMessage: true, pendingMessage: 'query', waitingToStartStreaming: false }, time: 'T2' },
+        { action: 'prepareForNewMessage', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true }, time: 'T3' },
+        { action: 'API calls start', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true }, time: 'T4' },
+        { action: 'Resumption effect might run', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true }, time: 'T5' },
+        { action: 'AI SDK sendMessage', guards: { hasEarlyOptimisticMessage: false, pendingMessage: 'query', waitingToStartStreaming: true }, time: 'T6' },
+        { action: 'Stream starts', guards: { hasEarlyOptimisticMessage: false, isStreaming: true, pendingMessage: 'query', waitingToStartStreaming: false }, time: 'T7' },
       ];
 
       // After T0, at least one guard should block resumption
@@ -511,18 +511,18 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       for (const step of stepsAfterT0) {
         const result = calculateIsIncomplete({
+          hasEarlyOptimisticMessage: step.guards.hasEarlyOptimisticMessage,
+          hasSentPendingMessage: false,
+          isStreaming: step.guards.isStreaming ?? false,
           messages: createCompleteRound(0, 1),
           participants: createMockParticipants(1),
-          preSearches: [],
-          isStreaming: step.guards.isStreaming ?? false,
-          waitingToStartStreaming: step.guards.waitingToStartStreaming,
-          hasEarlyOptimisticMessage: step.guards.hasEarlyOptimisticMessage,
           pendingMessage: step.guards.pendingMessage,
-          hasSentPendingMessage: false,
+          preSearches: [],
           streamResumptionPrefilled: false,
+          waitingToStartStreaming: step.guards.waitingToStartStreaming,
         });
 
-        expect(result.isIncomplete).toBe(false);
+        expect(result.isIncomplete).toBeFalsy();
       }
     });
 
@@ -532,21 +532,21 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       // Between T0 and T1: No guards set yet
       const t0State = {
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: createCompleteRound(0, 1),
         participants: createMockParticipants(1),
-        preSearches: [] as StoredPreSearch[],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches: [] as StoredPreSearch[],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       };
 
       const result = calculateIsIncomplete(t0State);
 
       // At T0, round 0 is complete, so no resumption needed anyway
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('allParticipantsResponded');
 
       // The danger is if we had an INCOMPLETE round and user was submitting
@@ -569,17 +569,17 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       // Round 2 - User submitted, first participant responded
       const round2Messages = [
         createTestUserMessage({
-          id: 'ExIw3DgkgKEUuvJ3',
           content: 'btc price right now. in dollars. 1 word',
+          id: 'ExIw3DgkgKEUuvJ3',
           roundNumber: 2,
         }),
         createTestAssistantMessage({
-          id: 'thread_r2_p0',
           content: 'Unavailable.',
-          roundNumber: 2,
+          finishReason: FinishReasons.STOP,
+          id: 'thread_r2_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 2,
         }),
       ];
 
@@ -587,19 +587,19 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       // State when the bug occurred - only 1 participant responded, no moderator
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: allMessages,
         participants: createMockParticipants(1), // Only 1 participant enabled
-        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches: [createMockStoredPreSearch(2, MessageStatuses.COMPLETE)],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
       // With 1 participant enabled and 1 response, round should be COMPLETE
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('allParticipantsResponded');
     });
 
@@ -611,36 +611,36 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const round0 = createCompleteRound(0, 1);
       const round1UserAndParticipant = [
         createTestUserMessage({
-          id: 'thread-123_r1_user',
           content: 'Question',
+          id: 'thread-123_r1_user',
           roundNumber: 1,
         }),
         createTestAssistantMessage({
-          id: 'thread-123_r1_p0',
           content: 'Response',
-          roundNumber: 1,
+          finishReason: FinishReasons.STOP,
+          id: 'thread-123_r1_p0',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 1,
         }),
         // NO MODERATOR - this is the "awaiting moderator" state
       ];
 
       const result = calculateIsIncomplete({
+        hasEarlyOptimisticMessage: false,
+        hasSentPendingMessage: false,
+        isStreaming: false,
         messages: [...round0, ...round1UserAndParticipant],
         participants: createMockParticipants(1),
-        preSearches: [],
-        isStreaming: false,
-        waitingToStartStreaming: false,
-        hasEarlyOptimisticMessage: false,
         pendingMessage: null,
-        hasSentPendingMessage: false,
+        preSearches: [],
         streamResumptionPrefilled: false,
+        waitingToStartStreaming: false,
       });
 
       // All PARTICIPANTS responded - not incomplete for participant resumption
       // The moderator trigger is separate (isAwaitingModerator in ChatThreadScreen)
-      expect(result.isIncomplete).toBe(false);
+      expect(result.isIncomplete).toBeFalsy();
       expect(result.reason).toBe('allParticipantsResponded');
     });
   });
@@ -652,11 +652,11 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
     it('should list all guards that prevent duplicate submissions', () => {
       // Document all the guards that SHOULD prevent this bug
       const guards = {
+        blockOnOptimistic: 'optimistic message && !prefilled && !preSearchEvidence',
         // In isIncomplete calculation
         isStreaming: 'Blocks when AI SDK is streaming',
-        waitingToStartStreaming: 'Blocks when about to trigger streaming',
+        isStreamingRef: 'Sync check for streaming state',
         isSubmissionInProgress: 'hasEarlyOptimisticMessage || (pendingMessage && !hasSentPendingMessage)',
-        blockOnOptimistic: 'optimistic message && !prefilled && !preSearchEvidence',
 
         // In ChatThreadScreen.handlePromptSubmit
         isSubmitBlocked: 'isStreaming || isModeratorStreaming || pendingMessage || isAwaitingModerator',
@@ -666,7 +666,7 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
         // In AI SDK useMultiParticipantChat.startRound
         isTriggeringRef: 'Prevents concurrent startRound calls',
-        isStreamingRef: 'Sync check for streaming state',
+        waitingToStartStreaming: 'Blocks when about to trigger streaming',
       };
 
       // All these guards should work together to prevent duplicates
@@ -710,15 +710,15 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
 
       // Test case: waitingToStartStreaming is true, other guards false
       const testState = {
-        isStreaming: false,
-        isModeratorStreaming: false,
-        pendingMessage: null,
         isAwaitingModerator: false,
+        isModeratorStreaming: false,
+        isStreaming: false,
+        pendingMessage: null,
         waitingToStartStreaming: true, // About to start streaming
       };
 
-      expect(currentIsSubmitBlocked(testState)).toBe(false); // BUG: allows submission
-      expect(fixedIsSubmitBlocked(testState)).toBe(true); // FIXED: blocks submission
+      expect(currentIsSubmitBlocked(testState)).toBeFalsy(); // BUG: allows submission
+      expect(fixedIsSubmitBlocked(testState)).toBeTruthy(); // FIXED: blocks submission
     });
   });
 });

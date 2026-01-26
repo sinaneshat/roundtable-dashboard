@@ -40,8 +40,9 @@ export const csrfProtection = createMiddleware<ApiEnv>(async (c, next) => {
   const middleware = csrf({
     origin: (origin) => {
       // Allow requests with no origin (like mobile apps or curl)
-      if (!origin)
+      if (!origin) {
         return true;
+      }
 
       // Check if origin is in allowed list
       return allowedOrigins.includes(origin);

@@ -68,9 +68,9 @@ function getMessage(messages: UIMessage[], index: number): UIMessage {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_user`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: `Question ${roundNumber}` }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: `Question ${roundNumber}`, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
@@ -85,21 +85,21 @@ function createAssistantMessage(
 ): UIMessage {
   return {
     id: `thread-123_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{
-      type: 'text',
-      text: `Response from participant ${participantIndex}`,
-      state,
-    }],
     metadata: {
+      finishReason: state === 'done' ? 'stop' : undefined,
+      model: `model-${participantIndex}`,
+      participantId,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      participantId,
-      model: `model-${participantIndex}`,
-      finishReason: state === 'done' ? 'stop' : undefined,
-      usage: state === 'done' ? { promptTokens: 100, completionTokens: 50, totalTokens: 150 } : undefined,
+      usage: state === 'done' ? { completionTokens: 50, promptTokens: 100, totalTokens: 150 } : undefined,
     },
+    parts: [{
+      state,
+      text: `Response from participant ${participantIndex}`,
+      type: 'text',
+    }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -113,23 +113,23 @@ function createModeratorMessage(
   const parts = state === 'pending'
     ? [] // Empty parts = pending state
     : [{
-        type: 'text' as const,
-        text: `Moderator summary for round ${roundNumber}`,
         state: state === 'streaming' ? 'streaming' as const : 'done' as const,
+        text: `Moderator summary for round ${roundNumber}`,
+        type: 'text' as const,
       }];
 
   return {
     id: `thread-123_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts,
     metadata: {
+      finishReason: state === 'done' ? 'stop' : undefined,
+      isModerator: true,
+      model: MODERATOR_NAME,
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
-      model: MODERATOR_NAME,
-      isModerator: true,
-      finishReason: state === 'done' ? 'stop' : undefined,
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -229,7 +229,7 @@ describe('moderator Round Boundary Isolation', () => {
 
       // Only round 2 messages should be in filtered list
       expect(messagesForCurrentRound).toHaveLength(3); // user + 2 streaming participants
-      expect(messagesForCurrentRound.every(m => m.metadata?.roundNumber === 2)).toBe(true);
+      expect(messagesForCurrentRound.every(m => m.metadata?.roundNumber === 2)).toBeTruthy();
 
       // Round 1 moderator should NOT be in current round messages
       const hasRound1ModeratorInCurrentRound = messagesForCurrentRound.some((m) => {
@@ -242,7 +242,7 @@ describe('moderator Round Boundary Isolation', () => {
           && meta.roundNumber === 1;
       });
 
-      expect(hasRound1ModeratorInCurrentRound).toBe(false);
+      expect(hasRound1ModeratorInCurrentRound).toBeFalsy();
     });
 
     it('should NOT show moderator placeholder until ALL round 2 participants complete', () => {
@@ -316,14 +316,16 @@ describe('moderator Round Boundary Isolation', () => {
       // After all participants complete, moderator CAN be created
       // (but not automatically - useModeratorTrigger handles this)
       const canCreateModerator = !store.getState().messages.some((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
-        if (m.metadata?.roundNumber !== 2)
+        }
+        if (m.metadata?.roundNumber !== 2) {
           return false;
+        }
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
 
-      expect(canCreateModerator).toBe(true);
+      expect(canCreateModerator).toBeTruthy();
     });
 
     it('should maintain round isolation when transitioning from round 1 complete to round 2 start', () => {
@@ -403,7 +405,7 @@ describe('moderator Round Boundary Isolation', () => {
       });
 
       expect(currentRound).toBe(2);
-      expect(currentRoundMessages.every(m => m.metadata?.roundNumber === 2)).toBe(true);
+      expect(currentRoundMessages.every(m => m.metadata?.roundNumber === 2)).toBeTruthy();
 
       // Round 1 moderator should NOT be in current round messages
       const round1ModInRound2 = currentRoundMessages.find((m) => {
@@ -472,16 +474,19 @@ describe('moderator Round Boundary Isolation', () => {
       // NOW moderator placeholder can be added (by useModeratorTrigger)
       // This test verifies the TIMING constraint - placeholder only after ALL participants
       const allParticipantsComplete = !store.getState().messages.some((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
-        if (m.metadata?.roundNumber !== 1)
+        }
+        if (m.metadata?.roundNumber !== 1) {
           return false;
-        if (m.metadata?.isModerator)
-          return false; // Skip moderator messages
+        }
+        if (m.metadata?.isModerator) {
+          return false;
+        } // Skip moderator messages
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
 
-      expect(allParticipantsComplete).toBe(true);
+      expect(allParticipantsComplete).toBeTruthy();
 
       // Simulate useModeratorTrigger adding placeholder
       const moderatorPlaceholder = createModeratorMessage(1, 'pending');
@@ -525,21 +530,24 @@ describe('moderator Round Boundary Isolation', () => {
       // Check if moderator should be triggered (via flow-state-machine logic)
       const state = store.getState();
       const hasStreamingParticipant = state.messages.some((m) => {
-        if (m.role !== MessageRoles.ASSISTANT)
+        if (m.role !== MessageRoles.ASSISTANT) {
           return false;
-        if (m.metadata?.roundNumber !== 1)
+        }
+        if (m.metadata?.roundNumber !== 1) {
           return false;
-        if (m.metadata?.isModerator)
+        }
+        if (m.metadata?.isModerator) {
           return false;
+        }
         return m.parts?.some(p => 'state' in p && p.state === 'streaming');
       });
 
       // Should have streaming participant
-      expect(hasStreamingParticipant).toBe(true);
+      expect(hasStreamingParticipant).toBeTruthy();
 
       // Should NOT create moderator while participants streaming
       // This matches flow-state-machine.ts line 139-147 logic
-      expect(state.isAiSdkStreaming || hasStreamingParticipant).toBe(true);
+      expect(state.isAiSdkStreaming || hasStreamingParticipant).toBeTruthy();
 
       // Moderator should NOT exist
       expect(
@@ -584,7 +592,7 @@ describe('moderator Round Boundary Isolation', () => {
       expect(getMessage(round1Messages, 0).role).toBe(MessageRoles.USER);
       expect(getMessage(round1Messages, 1).metadata?.participantIndex).toBe(0);
       expect(getMessage(round1Messages, 2).metadata?.participantIndex).toBe(1);
-      expect(getMessage(round1Messages, 3).metadata?.isModerator).toBe(true);
+      expect(getMessage(round1Messages, 3).metadata?.isModerator).toBeTruthy();
 
       // Extract round 2 messages
       const round2Messages = store.getState().messages.filter(m => m.metadata?.roundNumber === 2);
@@ -594,11 +602,11 @@ describe('moderator Round Boundary Isolation', () => {
       expect(getMessage(round2Messages, 0).role).toBe(MessageRoles.USER);
       expect(getMessage(round2Messages, 1).metadata?.participantIndex).toBe(0);
       expect(getMessage(round2Messages, 2).metadata?.participantIndex).toBe(1);
-      expect(getMessage(round2Messages, 3).metadata?.isModerator).toBe(true);
+      expect(getMessage(round2Messages, 3).metadata?.isModerator).toBeTruthy();
 
       // Verify rounds don't mix
-      expect(round1Messages.every(m => m.metadata?.roundNumber === 1)).toBe(true);
-      expect(round2Messages.every(m => m.metadata?.roundNumber === 2)).toBe(true);
+      expect(round1Messages.every(m => m.metadata?.roundNumber === 1)).toBeTruthy();
+      expect(round2Messages.every(m => m.metadata?.roundNumber === 2)).toBeTruthy();
     });
 
     it('should filter messages correctly during streaming transition between rounds', () => {
@@ -638,7 +646,7 @@ describe('moderator Round Boundary Isolation', () => {
       });
 
       expect(round1Messages).toHaveLength(4); // user + 2 participants + moderator
-      expect(round1Messages.every(m => m.metadata?.roundNumber === 1)).toBe(true);
+      expect(round1Messages.every(m => m.metadata?.roundNumber === 1)).toBeTruthy();
 
       // Verify round 1 moderator has finishReason (completed)
       const round1Moderator = round1Messages.find(m => m.metadata?.isModerator);
@@ -650,7 +658,7 @@ describe('moderator Round Boundary Isolation', () => {
       });
 
       expect(streamingRoundMessages).toHaveLength(2); // user + 1 streaming participant
-      expect(streamingRoundMessages.every(m => m.metadata?.roundNumber === 2)).toBe(true);
+      expect(streamingRoundMessages.every(m => m.metadata?.roundNumber === 2)).toBeTruthy();
 
       // CRITICAL: No round 1 moderator in streaming round messages
       expect(

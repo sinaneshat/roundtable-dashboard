@@ -20,8 +20,8 @@ export const FeedbackTypeSchema = z.enum(FEEDBACK_TYPES).openapi({
 export type FeedbackType = z.infer<typeof FeedbackTypeSchema>;
 
 export const FeedbackTypes = {
-  LIKE: 'like' as const,
   DISLIKE: 'dislike' as const,
+  LIKE: 'like' as const,
 } as const;
 
 // ============================================================================
@@ -38,7 +38,7 @@ export const RoundFeedbackValueSchema = z.enum(ROUND_FEEDBACK_VALUES).openapi({
 export type RoundFeedbackValue = z.infer<typeof RoundFeedbackValueSchema>;
 
 export const RoundFeedbackValues = {
-  LIKE: 'like' as const,
   DISLIKE: 'dislike' as const,
+  LIKE: 'like' as const,
   NONE: 'none' as const,
 } as const;

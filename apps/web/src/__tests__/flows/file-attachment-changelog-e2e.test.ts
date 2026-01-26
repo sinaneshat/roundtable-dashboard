@@ -83,10 +83,10 @@ function createMockAttachment(
   const mimeTypes = ['application/pdf', 'image/png', 'text/csv', 'text/plain'];
 
   return {
-    id: `attachment-${index}`,
     filename: filenames[index % filenames.length] ?? 'file.txt',
-    mimeType: mimeTypes[index % mimeTypes.length] ?? 'application/octet-stream',
     fileSize: (index + 1) * 1024 * 100, // 100KB, 200KB, 300KB, etc.
+    id: `attachment-${index}`,
+    mimeType: mimeTypes[index % mimeTypes.length] ?? 'application/octet-stream',
     uploadedAt: new Date(),
     ...overrides,
   };
@@ -97,16 +97,16 @@ function createInitialConversation(
   attachments: FileAttachment[],
 ): ConversationWithFiles {
   return {
-    threadId: 'thread-123',
+    attachments,
     rounds: [
       {
-        roundNumber: 0,
-        userMessage: 'Initial question',
         attachmentIds,
         changes: undefined, // No changes for first round
+        roundNumber: 0,
+        userMessage: 'Initial question',
       },
     ],
-    attachments,
+    threadId: 'thread-123',
   };
 }
 
@@ -136,11 +136,11 @@ function detectFileChanges(
       const attachment = allAttachments.find(a => a.id === id);
       if (attachment) {
         changes.push({
-          type: 'file_attachment',
           action: ChangelogTypes.ADDED,
           attachmentId: id,
           filename: attachment.filename,
           fileSize: attachment.fileSize,
+          type: 'file_attachment',
         });
       }
     }
@@ -152,11 +152,11 @@ function detectFileChanges(
       const attachment = allAttachments.find(a => a.id === id);
       if (attachment) {
         changes.push({
-          type: 'file_attachment',
           action: ChangelogTypes.REMOVED,
           attachmentId: id,
           filename: attachment.filename,
           fileSize: attachment.fileSize,
+          type: 'file_attachment',
         });
       }
     }
@@ -183,10 +183,10 @@ function addRound(
   );
 
   const newRound: RoundSubmission = {
-    roundNumber: nextRoundNumber,
-    userMessage,
     attachmentIds,
     changes: changes.length > 0 ? changes : undefined,
+    roundNumber: nextRoundNumber,
+    userMessage,
   };
 
   return {
@@ -204,7 +204,7 @@ describe('file Attachment Changelog E2E', () => {
     it('should detect single file addition in Round 1', () => {
       // Round 0: No attachments
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'report.pdf' }),
+        createMockAttachment(0, { filename: 'report.pdf', id: 'att-1' }),
       ];
       let state = createInitialConversation([], attachments);
 
@@ -224,9 +224,9 @@ describe('file Attachment Changelog E2E', () => {
 
     it('should detect multiple file additions in Round 1', () => {
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'doc1.pdf' }),
-        createMockAttachment(1, { id: 'att-2', filename: 'doc2.pdf' }),
-        createMockAttachment(2, { id: 'att-3', filename: 'image.png' }),
+        createMockAttachment(0, { filename: 'doc1.pdf', id: 'att-1' }),
+        createMockAttachment(1, { filename: 'doc2.pdf', id: 'att-2' }),
+        createMockAttachment(2, { filename: 'image.png', id: 'att-3' }),
       ];
       let state = createInitialConversation([], attachments);
 
@@ -235,7 +235,7 @@ describe('file Attachment Changelog E2E', () => {
 
       expect(state.rounds[1]?.attachmentIds).toHaveLength(3);
       expect(state.rounds[1]?.changes).toHaveLength(3);
-      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.ADDED)).toBe(true);
+      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.ADDED)).toBeTruthy();
     });
 
     it('should show changelog banner before Round 1 with file additions', () => {
@@ -246,8 +246,8 @@ describe('file Attachment Changelog E2E', () => {
 
       // Changelog exists for Round 1
       const changelogBanner = {
-        roundNumber: 1,
         changes: state.rounds[1]?.changes || [],
+        roundNumber: 1,
         summary: '1 file added',
       };
 
@@ -258,8 +258,8 @@ describe('file Attachment Changelog E2E', () => {
 
     it('should add files in Round 2 after Round 0 had files', () => {
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'initial.pdf' }),
-        createMockAttachment(1, { id: 'att-2', filename: 'additional.pdf' }),
+        createMockAttachment(0, { filename: 'initial.pdf', id: 'att-1' }),
+        createMockAttachment(1, { filename: 'additional.pdf', id: 'att-2' }),
       ];
       let state = createInitialConversation(['att-1'], attachments);
 
@@ -279,9 +279,9 @@ describe('file Attachment Changelog E2E', () => {
     it('should preserve file metadata in changelog entry', () => {
       const attachments = [
         createMockAttachment(0, {
-          id: 'att-1',
           filename: 'large-document.pdf',
           fileSize: 2048576, // 2MB
+          id: 'att-1',
           mimeType: 'application/pdf',
         }),
       ];
@@ -302,7 +302,7 @@ describe('file Attachment Changelog E2E', () => {
 
   describe('file Removal Between Rounds', () => {
     it('should detect single file removal in Round 1', () => {
-      const attachments = [createMockAttachment(0, { id: 'att-1', filename: 'doc.pdf' })];
+      const attachments = [createMockAttachment(0, { filename: 'doc.pdf', id: 'att-1' })];
       let state = createInitialConversation(['att-1'], attachments);
 
       expect(state.rounds[0]?.attachmentIds).toHaveLength(1);
@@ -329,11 +329,11 @@ describe('file Attachment Changelog E2E', () => {
 
       expect(state.rounds[1]?.attachmentIds).toHaveLength(0);
       expect(state.rounds[1]?.changes).toHaveLength(3);
-      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.REMOVED)).toBe(true);
+      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.REMOVED)).toBeTruthy();
     });
 
     it('should show changelog banner with removed file strikethrough', () => {
-      const attachments = [createMockAttachment(0, { id: 'att-1', filename: 'report.pdf' })];
+      const attachments = [createMockAttachment(0, { filename: 'report.pdf', id: 'att-1' })];
       let state = createInitialConversation(['att-1'], attachments);
 
       state = addRound(state, 'Question', []);
@@ -344,20 +344,20 @@ describe('file Attachment Changelog E2E', () => {
 
       // Changelog UI would render this with strikethrough
       const changelogDisplay = {
-        icon: '−',
         color: 'red',
+        icon: '−',
         strikethrough: true,
         text: `Removed ${removedChange?.filename}`,
       };
 
-      expect(changelogDisplay.strikethrough).toBe(true);
+      expect(changelogDisplay.strikethrough).toBeTruthy();
     });
 
     it('should handle partial file removal (keep some, remove others)', () => {
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'keep.pdf' }),
-        createMockAttachment(1, { id: 'att-2', filename: 'remove1.pdf' }),
-        createMockAttachment(2, { id: 'att-3', filename: 'remove2.pdf' }),
+        createMockAttachment(0, { filename: 'keep.pdf', id: 'att-1' }),
+        createMockAttachment(1, { filename: 'remove1.pdf', id: 'att-2' }),
+        createMockAttachment(2, { filename: 'remove2.pdf', id: 'att-3' }),
       ];
       let state = createInitialConversation(['att-1', 'att-2', 'att-3'], attachments);
 
@@ -382,8 +382,8 @@ describe('file Attachment Changelog E2E', () => {
   describe('multiple File Changes in Same Submission', () => {
     it('should detect add and remove in same round transition', () => {
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'old.pdf' }),
-        createMockAttachment(1, { id: 'att-2', filename: 'new.pdf' }),
+        createMockAttachment(0, { filename: 'old.pdf', id: 'att-1' }),
+        createMockAttachment(1, { filename: 'new.pdf', id: 'att-2' }),
       ];
       let state = createInitialConversation(['att-1'], attachments);
 
@@ -403,10 +403,10 @@ describe('file Attachment Changelog E2E', () => {
 
     it('should detect complex changes: 2 added, 1 removed, 1 kept', () => {
       const attachments = [
-        createMockAttachment(0, { id: 'att-1', filename: 'keep.pdf' }),
-        createMockAttachment(1, { id: 'att-2', filename: 'remove.pdf' }),
-        createMockAttachment(2, { id: 'att-3', filename: 'add1.pdf' }),
-        createMockAttachment(3, { id: 'att-4', filename: 'add2.pdf' }),
+        createMockAttachment(0, { filename: 'keep.pdf', id: 'att-1' }),
+        createMockAttachment(1, { filename: 'remove.pdf', id: 'att-2' }),
+        createMockAttachment(2, { filename: 'add1.pdf', id: 'att-3' }),
+        createMockAttachment(3, { filename: 'add2.pdf', id: 'att-4' }),
       ];
       let state = createInitialConversation(['att-1', 'att-2'], attachments);
 
@@ -532,7 +532,7 @@ describe('file Attachment Changelog E2E', () => {
 
       // Verify flow can continue (in real implementation, streaming would start)
       const canProceed = state.rounds[1]?.changes !== undefined;
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
 
     it('should allow streaming to proceed after file removal changelog processed', () => {
@@ -547,7 +547,7 @@ describe('file Attachment Changelog E2E', () => {
 
       // Flow should continue normally
       const canProceed = true;
-      expect(canProceed).toBe(true);
+      expect(canProceed).toBeTruthy();
     });
 
     it('should not block streaming when no file changes detected', () => {
@@ -562,7 +562,7 @@ describe('file Attachment Changelog E2E', () => {
 
       // Flow should continue immediately
       const shouldWaitForChangelog = state.rounds[1]?.changes !== undefined;
-      expect(shouldWaitForChangelog).toBe(false);
+      expect(shouldWaitForChangelog).toBeFalsy();
     });
 
     it('should preserve round number consistency across file changes', () => {
@@ -603,10 +603,10 @@ describe('file Attachment Changelog E2E', () => {
 
       // Simulate regeneration with different file
       const regeneratedRound: RoundSubmission = {
-        roundNumber: 1,
-        userMessage: 'Question',
         attachmentIds: ['att-2'], // Changed file
         changes: detectFileChanges(['att-1'], ['att-2'], attachments),
+        roundNumber: 1,
+        userMessage: 'Question',
       };
 
       // Replace Round 1
@@ -652,7 +652,7 @@ describe('file Attachment Changelog E2E', () => {
       state = addRound(state, 'Question with 10 files', allIds);
 
       expect(state.rounds[1]?.changes).toHaveLength(10);
-      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.ADDED)).toBe(true);
+      expect(state.rounds[1]?.changes?.every(c => c.action === ChangelogTypes.ADDED)).toBeTruthy();
     });
 
     it('should preserve changelog entries across multiple rounds', () => {
@@ -698,7 +698,7 @@ describe('file Attachment Changelog E2E', () => {
       state = addRound(state, 'Question', ['att-1']);
 
       // File change detected
-      expect(state.rounds[1]?.changes?.some(c => c.type === 'file_attachment')).toBe(true);
+      expect(state.rounds[1]?.changes?.some(c => c.type === 'file_attachment')).toBeTruthy();
 
       // In full implementation, would also verify participant changes in same changelog
     });

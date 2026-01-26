@@ -27,13 +27,6 @@ function createMockDb() {
     })),
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => withCache(mockDbSelect)),
-          orderBy: vi.fn(() => ({
-            limit: vi.fn(() => withCache(mockDbSelect)),
-            offset: vi.fn(() => mockDbSelect),
-          })),
-        })),
         innerJoin: vi.fn(() => ({
           where: vi.fn(() => ({
             limit: vi.fn(() => withCache(mockDbSelect)),
@@ -42,6 +35,13 @@ function createMockDb() {
         orderBy: vi.fn(() => ({
           limit: vi.fn(() => withCache(mockDbSelect)),
           offset: vi.fn(() => mockDbSelect),
+        })),
+        where: vi.fn(() => ({
+          limit: vi.fn(() => withCache(mockDbSelect)),
+          orderBy: vi.fn(() => ({
+            limit: vi.fn(() => withCache(mockDbSelect)),
+            offset: vi.fn(() => mockDbSelect),
+          })),
         })),
       })),
     })),
@@ -65,17 +65,17 @@ vi.mock('@/db', async () => {
 
 function createMockCreditRecord(overrides?: Partial<UserCreditBalance>): Partial<UserCreditBalance> {
   return {
-    id: 'credit_record_123',
-    userId: 'user_test_123',
     balance: 5_000,
-    reservedCredits: 0,
-    planType: PlanTypes.FREE,
-    monthlyCredits: 0,
-    lastRefillAt: null,
-    nextRefillAt: null,
-    version: 1,
     createdAt: new Date(),
+    id: 'credit_record_123',
+    lastRefillAt: null,
+    monthlyCredits: 0,
+    nextRefillAt: null,
+    planType: PlanTypes.FREE,
+    reservedCredits: 0,
     updatedAt: new Date(),
+    userId: 'user_test_123',
+    version: 1,
     ...overrides,
   };
 }
@@ -90,10 +90,10 @@ beforeEach(() => {
 describe('getUserCreditBalance', () => {
   it('returns balance for free user', async () => {
     const record = createMockCreditRecord({
-      userId: 'user_free',
       balance: 5_000,
-      reservedCredits: 0,
       planType: PlanTypes.FREE,
+      reservedCredits: 0,
+      userId: 'user_free',
     });
 
     mockDbSelect = [record];
@@ -111,11 +111,11 @@ describe('getUserCreditBalance', () => {
     const nextRefill = new Date('2025-02-01');
     const proMonthlyCredits = CREDIT_CONFIG.PLANS.paid.monthlyCredits;
     const record = createMockCreditRecord({
-      userId: 'user_paid',
       balance: 75_000,
-      planType: PlanTypes.PAID,
       monthlyCredits: proMonthlyCredits,
       nextRefillAt: nextRefill,
+      planType: PlanTypes.PAID,
+      userId: 'user_paid',
     });
 
     mockDbSelect = [record];
@@ -131,9 +131,9 @@ describe('getUserCreditBalance', () => {
 
   it('calculates available credits with reservations', async () => {
     const record = createMockCreditRecord({
-      userId: 'user_reserved',
       balance: 10_000,
       reservedCredits: 3_000,
+      userId: 'user_reserved',
     });
 
     mockDbSelect = [record];
@@ -177,8 +177,8 @@ describe('getUserCreditBalance', () => {
 
   it('creates record for new user with signup bonus', async () => {
     const newRecord = createMockCreditRecord({
-      userId: 'user_new',
       balance: CREDIT_CONFIG.SIGNUP_CREDITS,
+      userId: 'user_new',
     });
 
     mockDbSelect = [];

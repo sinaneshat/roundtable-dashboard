@@ -26,11 +26,11 @@ function createMockRequest(options?: {
   cookie?: string | null;
 }) {
   return {
-    path: options?.path || '/api/v1/chat/stream',
-    method: options?.method || 'POST',
     headers: {
       cookie: options?.cookie ?? 'ph_distinct_id=user_123',
     },
+    method: options?.method || 'POST',
+    path: options?.path || '/api/v1/chat/stream',
   };
 }
 
@@ -42,17 +42,18 @@ function createMockContext(options?: {
   revalidateReason?: string;
 }) {
   return {
-    routerKind: options?.routerKind || 'App Router',
-    routePath: options?.routePath || '/api/v1/chat/stream',
-    routeType: options?.routeType || 'route',
     renderSource: options?.renderSource || 'react-server-components',
     revalidateReason: options?.revalidateReason,
+    routePath: options?.routePath || '/api/v1/chat/stream',
+    routerKind: options?.routerKind || 'App Router',
+    routeType: options?.routeType || 'route',
   };
 }
 
 function getDistinctIdFromCookie(cookie: string | null): string {
-  if (!cookie)
+  if (!cookie) {
     return 'anonymous';
+  }
   const match = cookie.match(/ph_distinct_id=([^;]+)/);
   return match ? match[1] : 'anonymous';
 }
@@ -70,11 +71,11 @@ function getOtelConfig(
   environment: string,
 ) {
   return {
-    serviceName,
     attributes: {
-      'service.version': version,
       'deployment.environment': environment,
+      'service.version': version,
     },
+    serviceName,
   };
 }
 
@@ -86,22 +87,22 @@ describe('openTelemetry Instrumentation Patterns', () => {
   describe('shouldSkipOtelRegistration', () => {
     it('should skip OTEL registration in local env without endpoint', () => {
       const shouldSkip = shouldSkipOtelRegistration('local', false);
-      expect(shouldSkip).toBe(true);
+      expect(shouldSkip).toBeTruthy();
     });
 
     it('should NOT skip OTEL in local env with explicit endpoint', () => {
       const shouldSkip = shouldSkipOtelRegistration('local', true);
-      expect(shouldSkip).toBe(false);
+      expect(shouldSkip).toBeFalsy();
     });
 
     it('should NOT skip OTEL in preview environment', () => {
       const shouldSkip = shouldSkipOtelRegistration('preview', false);
-      expect(shouldSkip).toBe(false);
+      expect(shouldSkip).toBeFalsy();
     });
 
     it('should NOT skip OTEL in production environment', () => {
       const shouldSkip = shouldSkipOtelRegistration('prod', false);
-      expect(shouldSkip).toBe(false);
+      expect(shouldSkip).toBeFalsy();
     });
   });
 
@@ -164,11 +165,11 @@ describe('onRequestError Hook Patterns', () => {
 
       const errorContext = {
         $exception_source: 'server',
-        routerKind: context.routerKind,
-        routePath: context.routePath,
-        routeType: context.routeType,
-        requestPath: request.path,
         requestMethod: request.method,
+        requestPath: request.path,
+        routePath: context.routePath,
+        routerKind: context.routerKind,
+        routeType: context.routeType,
       };
 
       expect(errorContext.$exception_source).toBe('server');
@@ -183,8 +184,8 @@ describe('onRequestError Hook Patterns', () => {
       const context = createMockContext({ revalidateReason: 'stale-while-revalidate' });
 
       const errorContext = {
-        routerKind: context.routerKind,
         revalidateReason: context.revalidateReason,
+        routerKind: context.routerKind,
       };
 
       expect(errorContext.revalidateReason).toBe('stale-while-revalidate');
@@ -194,8 +195,8 @@ describe('onRequestError Hook Patterns', () => {
       const context = createMockContext();
 
       const errorContext = {
-        routerKind: context.routerKind,
         revalidateReason: context.revalidateReason,
+        routerKind: context.routerKind,
       };
 
       expect(errorContext.revalidateReason).toBeUndefined();
@@ -207,14 +208,14 @@ describe('onRequestError Hook Patterns', () => {
       const env = 'local';
       const shouldSkip = env === 'local';
 
-      expect(shouldSkip).toBe(true);
+      expect(shouldSkip).toBeTruthy();
     });
 
     it('should skip in Cloudflare Pages runtime', () => {
       const runtime = 'edge';
       const shouldSkip = runtime === 'edge';
 
-      expect(shouldSkip).toBe(true);
+      expect(shouldSkip).toBeTruthy();
     });
 
     it('should NOT skip in Node.js runtime in preview', () => {
@@ -222,7 +223,7 @@ describe('onRequestError Hook Patterns', () => {
       const env = 'preview';
       const shouldSkip = runtime === 'edge' || env === 'local';
 
-      expect(shouldSkip).toBe(false);
+      expect(shouldSkip).toBeFalsy();
     });
   });
 });
@@ -234,29 +235,29 @@ describe('onRequestError Hook Patterns', () => {
 describe('telemetry Metadata Schema', () => {
   it('should define correct participant telemetry metadata structure', () => {
     const participantTelemetryMetadata = {
-      thread_id: 'thread_123',
-      round_number: 1,
       conversation_mode: 'council',
+      estimated_input_tokens: 1500,
+      has_custom_system_prompt: false,
+      input_cost_per_million: 2.5,
+      is_first_participant: true,
+      is_reasoning_model: false,
+      is_regeneration: false,
+      max_output_tokens: 8192,
+      model_context_length: 128000,
+      model_id: ModelIds.OPENAI_GPT_4O_MINI,
+      model_name: 'GPT-4o',
+      output_cost_per_million: 10.0,
       participant_id: 'participant_abc',
       participant_index: 0,
       participant_role: 'AI Analyst',
-      is_first_participant: true,
+      rag_enabled: true,
+      reasoning_enabled: false,
+      round_number: 1,
+      thread_id: 'thread_123',
       total_participants: 3,
-      model_id: ModelIds.OPENAI_GPT_4O_MINI,
-      model_name: 'GPT-4o',
-      model_context_length: 128000,
-      max_output_tokens: 8192,
       user_id: 'user_456',
       user_tier: 'pro',
-      is_regeneration: false,
-      rag_enabled: true,
-      has_custom_system_prompt: false,
-      is_reasoning_model: false,
-      reasoning_enabled: false,
-      estimated_input_tokens: 1500,
       uses_dynamic_pricing: true,
-      input_cost_per_million: 2.5,
-      output_cost_per_million: 10.0,
     };
 
     // Verify all required fields are present
@@ -271,20 +272,20 @@ describe('telemetry Metadata Schema', () => {
     const MODERATOR_PARTICIPANT_INDEX = -99;
 
     const moderatorTelemetryMetadata = {
-      thread_id: 'thread_123',
-      round_number: 1,
       conversation_mode: 'council',
+      is_moderator: true,
+      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
+      model_name: 'Claude Sonnet 4',
+      participant_count: 3,
       participant_id: 'moderator',
       participant_index: MODERATOR_PARTICIPANT_INDEX,
       participant_role: 'AI Moderator',
-      model_id: ModelIds.ANTHROPIC_CLAUDE_SONNET_4,
-      model_name: 'Claude Sonnet 4',
-      is_moderator: true,
-      participant_count: 3,
+      round_number: 1,
+      thread_id: 'thread_123',
       user_id: 'user_456',
     };
 
-    expect(moderatorTelemetryMetadata.is_moderator).toBe(true);
+    expect(moderatorTelemetryMetadata.is_moderator).toBeTruthy();
     expect(moderatorTelemetryMetadata.participant_index).toBe(-99);
     expect(moderatorTelemetryMetadata.participant_count).toBeTypeOf('number');
   });
@@ -327,19 +328,19 @@ describe('oTEL Span Attributes', () => {
     ];
 
     const telemetryConfig = {
-      isEnabled: true,
       functionId: 'chat.thread.test.participant.0',
-      recordInputs: true,
-      recordOutputs: true,
+      isEnabled: true,
       metadata: {
-        thread_id: 'test',
-        round_number: 0,
         conversation_mode: 'council',
+        model_id: ModelIds.OPENAI_GPT_4O_MINI,
         participant_id: 'p1',
         participant_index: 0,
-        model_id: ModelIds.OPENAI_GPT_4O_MINI,
+        round_number: 0,
+        thread_id: 'test',
         user_id: 'user_1',
       },
+      recordInputs: true,
+      recordOutputs: true,
     };
 
     for (const field of requiredFields) {
@@ -349,12 +350,12 @@ describe('oTEL Span Attributes', () => {
 
   it('should support optional pricing attributes', () => {
     const pricingAttributes = {
-      uses_dynamic_pricing: true,
       input_cost_per_million: 2.5,
       output_cost_per_million: 10.0,
+      uses_dynamic_pricing: true,
     };
 
-    expect(pricingAttributes.uses_dynamic_pricing).toBe(true);
+    expect(pricingAttributes.uses_dynamic_pricing).toBeTruthy();
     expect(pricingAttributes.input_cost_per_million).toBeTypeOf('number');
     expect(pricingAttributes.output_cost_per_million).toBeTypeOf('number');
   });
@@ -365,8 +366,8 @@ describe('oTEL Span Attributes', () => {
       reasoning_enabled: true,
     };
 
-    expect(reasoningAttributes.is_reasoning_model).toBe(true);
-    expect(reasoningAttributes.reasoning_enabled).toBe(true);
+    expect(reasoningAttributes.is_reasoning_model).toBeTruthy();
+    expect(reasoningAttributes.reasoning_enabled).toBeTruthy();
   });
 });
 
@@ -391,7 +392,7 @@ describe('environment Configuration', () => {
     const nonLocalEnvs = ['preview', 'prod', 'staging', 'development'];
 
     for (const env of nonLocalEnvs) {
-      expect(shouldSkipOtelRegistration(env, false)).toBe(false);
+      expect(shouldSkipOtelRegistration(env, false)).toBeFalsy();
     }
   });
 

@@ -38,25 +38,25 @@ describe('round 1 from Overview Screen', () => {
       const thread = createMockThread({ enableWebSearch: false });
 
       // Phase 1: Initial state (ChatOverviewScreen)
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
       expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().messages).toHaveLength(0);
 
       // Phase 2: User submits message
       store.getState().setIsCreatingThread(true);
       store.getState().setShowInitialUI(false);
 
-      expect(store.getState().isCreatingThread).toBe(true);
-      expect(store.getState().showInitialUI).toBe(false);
+      expect(store.getState().isCreatingThread).toBeTruthy();
+      expect(store.getState().showInitialUI).toBeFalsy();
 
       // Phase 3: Thread created, user message added
       store.getState().setThread(thread);
       store.getState().setParticipants(participants);
 
       const userMessage = createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'What is the capital of France?',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -69,19 +69,19 @@ describe('round 1 from Overview Screen', () => {
       store.getState().setStreamingRoundNumber(0);
       store.getState().setIsStreaming(true);
 
-      expect(store.getState().isCreatingThread).toBe(false);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isCreatingThread).toBeFalsy();
+      expect(store.getState().isStreaming).toBeTruthy();
       expect(store.getState().streamingRoundNumber).toBe(0);
 
       // Phase 5: Participant 0 streams
       store.getState().setCurrentParticipantIndex(0);
 
       const p0Message = createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'The capital of France is Paris.',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: participants[0]?.id ?? 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message]);
 
@@ -92,11 +92,11 @@ describe('round 1 from Overview Screen', () => {
       store.getState().setCurrentParticipantIndex(1);
 
       const p1Message = createTestAssistantMessage({
-        id: `${thread.id}_r0_p1`,
         content: 'Paris is indeed the capital of France.',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p1`,
         participantId: participants[1]?.id ?? 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message, p1Message]);
 
@@ -106,27 +106,27 @@ describe('round 1 from Overview Screen', () => {
       // Phase 7: Participant streaming completes
       store.getState().setIsStreaming(false);
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
 
       // Phase 8: Moderator streams
       store.getState().setIsModeratorStreaming(true);
 
       const moderatorMessage = createTestModeratorMessage({
-        id: `${thread.id}_r0_moderator`,
         content: 'Both participants agree that Paris is the capital of France.',
+        id: `${thread.id}_r0_moderator`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message, p1Message, moderatorMessage]);
 
-      expect(store.getState().isModeratorStreaming).toBe(true);
+      expect(store.getState().isModeratorStreaming).toBeTruthy();
 
       // Phase 9: Round complete
       store.getState().setIsModeratorStreaming(false);
       store.getState().completeStreaming();
 
-      expect(store.getState().isModeratorStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(false);
-      expect(store.getState().streamingRoundNumber).toBe(null);
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeFalsy();
+      expect(store.getState().streamingRoundNumber).toBeNull();
       expect(store.getState().messages).toHaveLength(4);
     });
 
@@ -142,8 +142,8 @@ describe('round 1 from Overview Screen', () => {
 
       // Add messages in order
       const userMessage = createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Test question',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -152,11 +152,11 @@ describe('round 1 from Overview Screen', () => {
       const messages = [userMessage];
       for (let i = 0; i < 3; i++) {
         const pMessage = createTestAssistantMessage({
-          id: `${thread.id}_r0_p${i}`,
           content: `Response from participant ${i}`,
-          roundNumber: 0,
+          id: `${thread.id}_r0_p${i}`,
           participantId: participants[i]?.id ?? `participant-${i}`,
           participantIndex: i,
+          roundNumber: 0,
         });
         messages.push(pMessage);
         store.getState().setMessages([...messages]);
@@ -188,8 +188,8 @@ describe('round 1 from Overview Screen', () => {
 
       // Phase 2: User submits, pre-search placeholder created
       const userMessage = createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Search for latest news',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -216,20 +216,20 @@ describe('round 1 from Overview Screen', () => {
       store.getState().setIsStreaming(true);
 
       const p0Message = createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'Based on the search results...',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: participants[0]?.id ?? 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message]);
 
       const p1Message = createTestAssistantMessage({
-        id: `${thread.id}_r0_p1`,
         content: 'The search data indicates...',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p1`,
         participantId: participants[1]?.id ?? 'participant-1',
         participantIndex: 1,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message, p1Message]);
 
@@ -239,8 +239,8 @@ describe('round 1 from Overview Screen', () => {
       store.getState().setIsModeratorStreaming(true);
 
       const moderatorMessage = createTestModeratorMessage({
-        id: `${thread.id}_r0_moderator`,
         content: 'Summary of search-based discussion',
+        id: `${thread.id}_r0_moderator`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message, p1Message, moderatorMessage]);
@@ -251,7 +251,7 @@ describe('round 1 from Overview Screen', () => {
       // Verify final state
       expect(store.getState().messages).toHaveLength(4);
       expect(store.getState().preSearches[0]?.status).toBe(MessageStatuses.COMPLETE);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('should NOT trigger participants while pre-search is still streaming', () => {
@@ -265,7 +265,7 @@ describe('round 1 from Overview Screen', () => {
         = store.getState().preSearches[0]?.status === MessageStatuses.PENDING
           || store.getState().preSearches[0]?.status === MessageStatuses.STREAMING;
 
-      expect(shouldWaitForPreSearch).toBe(true);
+      expect(shouldWaitForPreSearch).toBeTruthy();
     });
 
     it('should handle pre-search failure gracefully', () => {
@@ -299,8 +299,8 @@ describe('round 1 from Overview Screen', () => {
 
       // User message with reference to attachments
       const userMessage = createTestUserMessage({
-        id: `${thread.id}_r0_user`,
         content: 'Analyze these documents',
+        id: `${thread.id}_r0_user`,
         roundNumber: 0,
       });
       store.getState().setMessages([userMessage]);
@@ -312,15 +312,15 @@ describe('round 1 from Overview Screen', () => {
       // Clear pending attachments after submission
       store.getState().setPendingAttachmentIds(null);
 
-      expect(store.getState().pendingAttachmentIds).toBe(null);
+      expect(store.getState().pendingAttachmentIds).toBeNull();
 
       // Participant messages can reference attachments
       const p0Message = createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'Based on the uploaded documents, I can see...',
-        roundNumber: 0,
+        id: `${thread.id}_r0_p0`,
         participantId: participants[0]?.id ?? 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       });
       store.getState().setMessages([userMessage, p0Message]);
 
@@ -344,27 +344,27 @@ describe('follow-up Rounds', () => {
 
     // Complete round 0
     const r0User = createTestUserMessage({
-      id: `${thread.id}_r0_user`,
       content: 'Question 1',
+      id: `${thread.id}_r0_user`,
       roundNumber: 0,
     });
     const r0P0 = createTestAssistantMessage({
-      id: `${thread.id}_r0_p0`,
       content: 'Response 1',
-      roundNumber: 0,
+      id: `${thread.id}_r0_p0`,
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 0,
     });
     const r0P1 = createTestAssistantMessage({
-      id: `${thread.id}_r0_p1`,
       content: 'Response 2',
-      roundNumber: 0,
+      id: `${thread.id}_r0_p1`,
       participantId: 'participant-1',
       participantIndex: 1,
+      roundNumber: 0,
     });
     const r0Mod = createTestModeratorMessage({
-      id: `${thread.id}_r0_moderator`,
       content: 'Summary 1',
+      id: `${thread.id}_r0_moderator`,
       roundNumber: 0,
     });
 
@@ -376,8 +376,8 @@ describe('follow-up Rounds', () => {
     store.getState().setIsStreaming(true);
 
     const r1User = createTestUserMessage({
-      id: `${thread.id}_r1_user`,
       content: 'Follow-up question',
+      id: `${thread.id}_r1_user`,
       roundNumber: 1,
     });
     store.getState().setMessages([r0User, r0P0, r0P1, r0Mod, r1User]);
@@ -386,11 +386,11 @@ describe('follow-up Rounds', () => {
 
     // Add round 1 participant messages
     const r1P0 = createTestAssistantMessage({
-      id: `${thread.id}_r1_p0`,
       content: 'Follow-up response 1',
-      roundNumber: 1,
+      id: `${thread.id}_r1_p0`,
       participantId: 'participant-0',
       participantIndex: 0,
+      roundNumber: 1,
     });
     store.getState().setMessages([r0User, r0P0, r0P1, r0Mod, r1User, r1P0]);
 
@@ -407,22 +407,22 @@ describe('follow-up Rounds', () => {
     store.getState().setIsWaitingForChangelog(true);
 
     expect(store.getState().configChangeRoundNumber).toBe(1);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
     // Simulate changelog fetch complete
     store.getState().setIsWaitingForChangelog(false);
 
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
   });
 
   it('should track PATCH in progress state', () => {
     const store = createTestChatStore();
 
     store.getState().setIsPatchInProgress(true);
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     store.getState().setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
   });
 });
 
@@ -445,8 +445,8 @@ describe('multi-Round Conversation', () => {
     for (let round = 0; round < 5; round++) {
       // User message
       const userMsg = createTestUserMessage({
-        id: `${thread.id}_r${round}_user`,
         content: `Question ${round}`,
+        id: `${thread.id}_r${round}_user`,
         roundNumber: round,
       });
       allMessages.push(userMsg);
@@ -454,19 +454,19 @@ describe('multi-Round Conversation', () => {
       // Participant messages
       for (let p = 0; p < 2; p++) {
         const pMsg = createTestAssistantMessage({
-          id: `${thread.id}_r${round}_p${p}`,
           content: `Response from P${p} in round ${round}`,
-          roundNumber: round,
+          id: `${thread.id}_r${round}_p${p}`,
           participantId: `participant-${p}`,
           participantIndex: p,
+          roundNumber: round,
         });
         allMessages.push(pMsg);
       }
 
       // Moderator message
       const modMsg = createTestModeratorMessage({
-        id: `${thread.id}_r${round}_moderator`,
         content: `Summary of round ${round}`,
+        id: `${thread.id}_r${round}_moderator`,
         roundNumber: round,
       });
       allMessages.push(modMsg);
@@ -498,9 +498,9 @@ describe('multi-Round Conversation', () => {
     // Complete round 0
     store.getState().completeStreaming();
 
-    expect(store.getState().streamingRoundNumber).toBe(null);
+    expect(store.getState().streamingRoundNumber).toBeNull();
     expect(store.getState().currentParticipantIndex).toBe(0);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isStreaming).toBeFalsy();
 
     // Round 1 lifecycle (independent)
     store.getState().setStreamingRoundNumber(1);
@@ -513,8 +513,8 @@ describe('multi-Round Conversation', () => {
     // Complete round 1
     store.getState().completeStreaming();
 
-    expect(store.getState().streamingRoundNumber).toBe(null);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().streamingRoundNumber).toBeNull();
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 
   it('should not have duplicate messages with same ID across rounds', () => {
@@ -522,21 +522,21 @@ describe('multi-Round Conversation', () => {
     const thread = createMockThread();
 
     const messages = [
-      createTestUserMessage({ id: `${thread.id}_r0_user`, content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: `${thread.id}_r0_user`, roundNumber: 0 }),
       createTestAssistantMessage({
-        id: `${thread.id}_r0_p0`,
         content: 'R0P0',
+        id: `${thread.id}_r0_p0`,
+        participantId: 'p0',
+        participantIndex: 0,
         roundNumber: 0,
-        participantId: 'p0',
-        participantIndex: 0,
       }),
-      createTestUserMessage({ id: `${thread.id}_r1_user`, content: 'Q1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'Q1', id: `${thread.id}_r1_user`, roundNumber: 1 }),
       createTestAssistantMessage({
-        id: `${thread.id}_r1_p0`,
         content: 'R1P0',
-        roundNumber: 1,
+        id: `${thread.id}_r1_p0`,
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
     ];
 

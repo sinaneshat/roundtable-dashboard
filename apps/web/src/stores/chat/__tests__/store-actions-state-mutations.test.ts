@@ -223,7 +223,7 @@ describe('thread Slice Actions', () => {
       store.getState().setThread(thread);
 
       expect(store.getState().thread).toEqual(thread);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
     });
 
     it('clears thread when set to null', () => {
@@ -260,7 +260,7 @@ describe('thread Slice Actions', () => {
       const store = createChatStore();
 
       const messages = [
-        createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
       ];
 
       store.getState().setMessages(messages);
@@ -272,18 +272,18 @@ describe('thread Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u1', content: 'First', roundNumber: 0 }),
+        createTestUserMessage({ content: 'First', id: 'u1', roundNumber: 0 }),
       ]);
 
       store.getState().setMessages(prev => [
         ...prev,
         createTestAssistantMessage({
-          id: 'a1',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
@@ -296,10 +296,10 @@ describe('thread Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setIsStreaming(true);
-      expect(store.getState().isStreaming).toBe(true);
+      expect(store.getState().isStreaming).toBeTruthy();
 
       store.getState().setIsStreaming(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
     });
   });
 
@@ -386,8 +386,8 @@ describe('tracking Slice Actions', () => {
 
       store.getState().markModeratorCreated(0);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
     });
 
     it('prevents duplicate creation', () => {
@@ -396,7 +396,7 @@ describe('tracking Slice Actions', () => {
       store.getState().markModeratorCreated(0);
 
       // Second call should be idempotent
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
     });
   });
 
@@ -406,8 +406,8 @@ describe('tracking Slice Actions', () => {
 
       const result = store.getState().tryMarkModeratorCreated(0);
 
-      expect(result).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(result).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
     });
 
     it('returns false when round already created (prevents race condition)', () => {
@@ -415,31 +415,31 @@ describe('tracking Slice Actions', () => {
 
       // First call succeeds
       const firstResult = store.getState().tryMarkModeratorCreated(0);
-      expect(firstResult).toBe(true);
+      expect(firstResult).toBeTruthy();
 
       // Second call fails - round already marked
       const secondResult = store.getState().tryMarkModeratorCreated(0);
-      expect(secondResult).toBe(false);
+      expect(secondResult).toBeFalsy();
 
       // State still shows created
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
     });
 
     it('handles multiple rounds independently', () => {
       const store = createChatStore();
 
       // Mark round 0
-      expect(store.getState().tryMarkModeratorCreated(0)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBeTruthy();
 
       // Can still mark round 1
-      expect(store.getState().tryMarkModeratorCreated(1)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(1)).toBeTruthy();
 
       // Cannot re-mark round 0
-      expect(store.getState().tryMarkModeratorCreated(0)).toBe(false);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBeFalsy();
 
       // Both rounds are marked
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
     });
 
     it('respects clearModeratorTracking', () => {
@@ -447,14 +447,14 @@ describe('tracking Slice Actions', () => {
 
       // Mark round 0
       store.getState().tryMarkModeratorCreated(0);
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
 
       // Clear tracking
       store.getState().clearModeratorTracking(0);
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
 
       // Can mark again after clearing
-      expect(store.getState().tryMarkModeratorCreated(0)).toBe(true);
+      expect(store.getState().tryMarkModeratorCreated(0)).toBeTruthy();
     });
   });
 
@@ -464,7 +464,7 @@ describe('tracking Slice Actions', () => {
 
       store.getState().markPreSearchTriggered(0);
 
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
     });
   });
 
@@ -474,8 +474,8 @@ describe('tracking Slice Actions', () => {
 
       store.getState().markModeratorStreamTriggered('moderator-123', 0);
 
-      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBe(true);
-      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBe(true); // Same round
+      expect(store.getState().hasModeratorStreamBeenTriggered('moderator-123', 0)).toBeTruthy();
+      expect(store.getState().hasModeratorStreamBeenTriggered('different-id', 0)).toBeTruthy(); // Same round
     });
   });
 
@@ -487,8 +487,8 @@ describe('tracking Slice Actions', () => {
       store.getState().markModeratorCreated(1);
       store.getState().clearModeratorTracking(0);
 
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
-      expect(store.getState().hasModeratorBeenCreated(1)).toBe(true);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
+      expect(store.getState().hasModeratorBeenCreated(1)).toBeTruthy();
     });
   });
 });
@@ -504,7 +504,7 @@ describe('operations Slice Actions', () => {
       const thread = createMockThread();
       const participants = [createMockParticipant(0), createMockParticipant(1)];
       const messages = [
-        createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
       ];
 
       store.getState().initializeThread(thread, participants, messages);
@@ -512,8 +512,8 @@ describe('operations Slice Actions', () => {
       expect(store.getState().thread).toEqual(thread);
       expect(store.getState().participants).toHaveLength(2);
       expect(store.getState().messages).toHaveLength(1);
-      expect(store.getState().hasInitiallyLoaded).toBe(true);
-      expect(store.getState().showInitialUI).toBe(false);
+      expect(store.getState().hasInitiallyLoaded).toBeTruthy();
+      expect(store.getState().showInitialUI).toBeFalsy();
     });
 
     it('preserves existing messages if same thread and more complete', () => {
@@ -524,20 +524,20 @@ describe('operations Slice Actions', () => {
       // Set up existing state with more messages
       store.getState().setThread(thread);
       store.getState().setMessages([
-        createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
         createTestAssistantMessage({
-          id: 'a1',
           content: 'Response',
-          roundNumber: 0,
+          finishReason: FinishReasons.STOP,
+          id: 'a1',
           participantId: 'p0',
           participantIndex: 0,
-          finishReason: FinishReasons.STOP,
+          roundNumber: 0,
         }),
       ]);
 
       // Initialize with fewer messages (stale SSR data)
       const staleMessages = [
-        createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 }),
+        createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 }),
       ];
 
       store.getState().initializeThread(thread, participants, staleMessages);
@@ -571,8 +571,8 @@ describe('operations Slice Actions', () => {
 
       expect(store.getState().pendingMessage).toBe('Hello');
       expect(store.getState().expectedParticipantIds).toEqual(['p0', 'p1']);
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().isStreaming).toBeFalsy();
     });
 
     it('adds optimistic user message on thread screen', () => {
@@ -584,7 +584,7 @@ describe('operations Slice Actions', () => {
       const messages = store.getState().messages;
       expect(messages).toHaveLength(1);
       expect(messages[0]?.role).toBe(MessageRoles.USER);
-      expect((messages[0]?.metadata as { isOptimistic?: boolean }).isOptimistic).toBe(true);
+      expect((messages[0]?.metadata as { isOptimistic?: boolean }).isOptimistic).toBeTruthy();
     });
 
     it('does NOT add optimistic message on overview screen', () => {
@@ -607,10 +607,10 @@ describe('operations Slice Actions', () => {
 
       store.getState().completeStreaming();
 
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().currentParticipantIndex).toBe(0);
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().isModeratorStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().isModeratorStreaming).toBeFalsy();
       expect(store.getState().pendingMessage).toBeNull();
     });
   });
@@ -624,10 +624,10 @@ describe('operations Slice Actions', () => {
 
       store.getState().startRegeneration(0);
 
-      expect(store.getState().isRegenerating).toBe(true);
+      expect(store.getState().isRegenerating).toBeTruthy();
       expect(store.getState().regeneratingRoundNumber).toBe(0);
-      expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
+      expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
     });
   });
 
@@ -637,14 +637,14 @@ describe('operations Slice Actions', () => {
 
       // Set up various state
       store.getState().setThread(createMockThread());
-      store.getState().setMessages([createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 })]);
+      store.getState().setMessages([createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 })]);
       store.getState().setIsStreaming(true);
 
       store.getState().resetToNewChat();
 
       expect(store.getState().thread).toBeNull();
       expect(store.getState().messages).toHaveLength(0);
-      expect(store.getState().isStreaming).toBe(false);
+      expect(store.getState().isStreaming).toBeFalsy();
       expect(store.getState().screenMode).toBe(ScreenModes.OVERVIEW);
     });
 
@@ -652,14 +652,14 @@ describe('operations Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().resetToNewChat({
-        selectedModelIds: ['gpt-4', 'claude-3'],
-        selectedMode: ChatModes.BRAINSTORMING,
         enableWebSearch: true,
+        selectedMode: ChatModes.BRAINSTORMING,
+        selectedModelIds: ['gpt-4', 'claude-3'],
       });
 
       expect(store.getState().selectedParticipants).toHaveLength(2);
       expect(store.getState().selectedMode).toBe(ChatModes.BRAINSTORMING);
-      expect(store.getState().enableWebSearch).toBe(true);
+      expect(store.getState().enableWebSearch).toBeTruthy();
     });
   });
 
@@ -668,7 +668,7 @@ describe('operations Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setThread(createMockThread());
-      store.getState().setMessages([createTestUserMessage({ id: 'u1', content: 'Test', roundNumber: 0 })]);
+      store.getState().setMessages([createTestUserMessage({ content: 'Test', id: 'u1', roundNumber: 0 })]);
 
       store.getState().resetForThreadNavigation();
 
@@ -688,11 +688,11 @@ describe('stream Resumption Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 1,
-        state: StreamStatuses.ACTIVE,
         createdAt: new Date(),
+        participantIndex: 1,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
       const resumptionState = store.getState().streamResumptionState;
@@ -705,21 +705,21 @@ describe('stream Resumption Slice Actions', () => {
     it('returns false when no resumption state', () => {
       const store = createChatStore();
 
-      expect(store.getState().needsStreamResumption()).toBe(false);
+      expect(store.getState().needsStreamResumption()).toBeFalsy();
     });
 
     it('returns false when stream is COMPLETED', () => {
       const store = createChatStore();
 
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.COMPLETED,
         createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.COMPLETED,
+        threadId: 'thread-123',
       });
 
-      expect(store.getState().needsStreamResumption()).toBe(false);
+      expect(store.getState().needsStreamResumption()).toBeFalsy();
     });
 
     it('returns true when stream is ACTIVE and matches thread', () => {
@@ -728,14 +728,14 @@ describe('stream Resumption Slice Actions', () => {
       store.getState().setThread(createMockThread());
       store.getState().setParticipants([createMockParticipant(0), createMockParticipant(1)]);
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
-      expect(store.getState().needsStreamResumption()).toBe(true);
+      expect(store.getState().needsStreamResumption()).toBeTruthy();
     });
   });
 
@@ -744,14 +744,14 @@ describe('stream Resumption Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
-      expect(store.getState().isStreamResumptionStale()).toBe(false);
+      expect(store.getState().isStreamResumptionStale()).toBeFalsy();
     });
 
     it('returns true for state older than 1 hour', () => {
@@ -759,14 +759,14 @@ describe('stream Resumption Slice Actions', () => {
 
       const twoHoursAgo = new Date(Date.now() - (2 * 60 * 60 * 1000));
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: twoHoursAgo,
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
-      expect(store.getState().isStreamResumptionStale()).toBe(true);
+      expect(store.getState().isStreamResumptionStale()).toBeTruthy();
     });
   });
 
@@ -776,18 +776,18 @@ describe('stream Resumption Slice Actions', () => {
 
       store.getState().setParticipants([createMockParticipant(0), createMockParticipant(1), createMockParticipant(2)]);
       store.getState().setStreamResumptionState({
-        threadId: 'thread-123',
-        roundNumber: 0,
-        participantIndex: 0,
-        state: StreamStatuses.ACTIVE,
         createdAt: new Date(),
+        participantIndex: 0,
+        roundNumber: 0,
+        state: StreamStatuses.ACTIVE,
+        threadId: 'thread-123',
       });
 
       store.getState().handleResumedStreamComplete(0, 0);
 
       expect(store.getState().streamResumptionState).toBeNull();
       expect(store.getState().nextParticipantToTrigger).toBe(1);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
 
     it('clears nextParticipantToTrigger when last participant', () => {
@@ -798,7 +798,7 @@ describe('stream Resumption Slice Actions', () => {
       store.getState().handleResumedStreamComplete(0, 0);
 
       expect(store.getState().nextParticipantToTrigger).toBeNull();
-      expect(store.getState().waitingToStartStreaming).toBe(false);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
     });
   });
 
@@ -809,8 +809,8 @@ describe('stream Resumption Slice Actions', () => {
       const firstAttempt = store.getState().markResumptionAttempted(0, 1);
       const secondAttempt = store.getState().markResumptionAttempted(0, 1);
 
-      expect(firstAttempt).toBe(true);
-      expect(secondAttempt).toBe(false);
+      expect(firstAttempt).toBeTruthy();
+      expect(secondAttempt).toBeFalsy();
     });
   });
 });
@@ -826,7 +826,7 @@ describe('animation Slice Actions', () => {
 
       store.getState().registerAnimation(0);
 
-      expect(store.getState().pendingAnimations.has(0)).toBe(true);
+      expect(store.getState().pendingAnimations.has(0)).toBeTruthy();
     });
   });
 
@@ -837,7 +837,7 @@ describe('animation Slice Actions', () => {
       store.getState().registerAnimation(0);
       store.getState().completeAnimation(0);
 
-      expect(store.getState().pendingAnimations.has(0)).toBe(false);
+      expect(store.getState().pendingAnimations.has(0)).toBeFalsy();
     });
   });
 
@@ -936,7 +936,7 @@ describe('screen Slice Actions', () => {
 
       store.getState().setScreenMode(ScreenModes.PUBLIC);
 
-      expect(store.getState().isReadOnly).toBe(true);
+      expect(store.getState().isReadOnly).toBeTruthy();
     });
 
     it('clears isReadOnly for non-PUBLIC mode', () => {
@@ -945,7 +945,7 @@ describe('screen Slice Actions', () => {
       store.getState().setScreenMode(ScreenModes.PUBLIC);
       store.getState().setScreenMode(ScreenModes.THREAD);
 
-      expect(store.getState().isReadOnly).toBe(false);
+      expect(store.getState().isReadOnly).toBeFalsy();
     });
   });
 });
@@ -960,10 +960,10 @@ describe('uI Slice Actions', () => {
       const store = createChatStore();
 
       store.getState().setShowInitialUI(false);
-      expect(store.getState().showInitialUI).toBe(false);
+      expect(store.getState().showInitialUI).toBeFalsy();
 
       store.getState().setShowInitialUI(true);
-      expect(store.getState().showInitialUI).toBe(true);
+      expect(store.getState().showInitialUI).toBeTruthy();
     });
   });
 
@@ -973,7 +973,7 @@ describe('uI Slice Actions', () => {
 
       store.getState().setWaitingToStartStreaming(true);
 
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
   });
 

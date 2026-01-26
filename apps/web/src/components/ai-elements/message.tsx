@@ -14,7 +14,7 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage['role'];
 };
 
-export function Message({ className, from, ...props }: MessageProps) {
+export function Message({ className, from: _from, ...props }: MessageProps) {
   return (
     <div
       className={cn(
@@ -29,6 +29,9 @@ export function Message({ className, from, ...props }: MessageProps) {
 const messageContentVariants = cva(
   'is-user:dark w-full flex flex-col gap-2 text-sm',
   {
+    defaultVariants: {
+      variant: 'contained',
+    },
     variants: {
       variant: {
         contained: [
@@ -41,9 +44,6 @@ const messageContentVariants = cva(
           'group-[.is-assistant]:flex-1 group-[.is-assistant]:min-w-0 group-[.is-assistant]:w-full group-[.is-assistant]:text-foreground',
         ],
       },
-    },
-    defaultVariants: {
-      variant: 'contained',
     },
   },
 );
@@ -59,7 +59,7 @@ export function MessageContent({
 }: MessageContentProps) {
   return (
     <div
-      className={cn(messageContentVariants({ variant, className }))}
+      className={cn(messageContentVariants({ className, variant }))}
       {...props}
     >
       {children}
@@ -73,9 +73,9 @@ export type MessageAvatarProps = ComponentProps<typeof Avatar> & {
 };
 
 export function MessageAvatar({
-  src,
-  name,
   className,
+  name,
+  src,
   ...props
 }: MessageAvatarProps) {
   return (

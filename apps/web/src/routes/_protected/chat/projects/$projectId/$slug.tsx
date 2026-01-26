@@ -24,11 +24,7 @@ import type {
 import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug')({
-  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
-  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
-  staleTime: 30_000,
-  pendingMs: 300,
-
+  component: ProjectThreadRoute,
   loader: async ({ params, context }) => {
     const { queryClient } = context;
     const isServer = typeof window === 'undefined';
@@ -121,7 +117,7 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
 
         streamResumption = streamResult?.success ? streamResult.data : undefined;
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
+        feedback = feedbackResult?.success ? feedbackResult.data : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
       } else {
         const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
@@ -142,12 +138,14 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
         const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
 
         streamResumption = cachedStream?.success ? cachedStream.data : undefined;
-        feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
+        feedback = cachedFeedback?.success ? cachedFeedback.data : undefined;
 
-        if (!cachedStream)
+        if (!cachedStream) {
           queryClient.prefetchQuery(streamOptions).catch(() => {});
-        if (!cachedFeedback)
+        }
+        if (!cachedFeedback) {
           queryClient.prefetchQuery(feedbackOptions).catch(() => {});
+        }
       }
     }
 
@@ -193,8 +191,12 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     };
   },
 
-  component: ProjectThreadRoute,
   pendingComponent: ThreadContentSkeleton,
+
+  pendingMs: 300,
+  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
+  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
+  staleTime: 30_000,
 });
 
 function ProjectThreadRoute() {
@@ -206,11 +208,11 @@ function ProjectThreadRoute() {
   const isInCreationFlow = useIsInCreationFlow();
 
   const hasLoaderData = Boolean(loaderData?.threadData);
-  const { data: queryData, isError, error, isFetching } = useQuery({
+  const { data: queryData, error, isError, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
     enabled: Boolean(slug) && !isInCreationFlow,
     initialData: hasLoaderData && loaderData.threadData
-      ? { success: true as const, data: loaderData.threadData }
+      ? { data: loaderData.threadData, success: true as const }
       : undefined,
     staleTime: hasLoaderData ? 10_000 : 0,
   });
@@ -223,8 +225,8 @@ function ProjectThreadRoute() {
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
-    name: session?.user?.name || 'You',
     image: session?.user?.image || null,
+    name: session?.user?.name || 'You',
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
   if (!slug || (!threadResponse && isFetching)) {
@@ -257,7 +259,7 @@ function ProjectThreadRoute() {
     );
   }
 
-  const { thread, participants, messages } = threadResponse;
+  const { messages, participants, thread } = threadResponse;
 
   return (
     <ChatThreadScreen

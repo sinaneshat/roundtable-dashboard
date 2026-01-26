@@ -30,11 +30,11 @@ type TestProvidersProps = {
 function createTestQueryClient() {
   return new QueryClient({
     defaultOptions: {
-      queries: {
-        retry: false,
-        gcTime: 0,
-      },
       mutations: {
+        retry: false,
+      },
+      queries: {
+        gcTime: 0,
         retry: false,
       },
     },

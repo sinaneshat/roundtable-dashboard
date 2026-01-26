@@ -23,14 +23,14 @@ export function useApiKeysQuery(enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.apiKeys.list(),
-    queryFn: () => listApiKeysService(),
-    staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
-    gcTime: GC_TIMES.STANDARD, // 5 minutes
-    refetchOnWindowFocus: false,
-    refetchOnMount: false, // Use staleTime to control freshness, invalidate on mutation
     enabled: isAuthenticated && enabled,
+    gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryFn: () => listApiKeysService(),
+    queryKey: queryKeys.apiKeys.list(),
+    refetchOnMount: false, // Use staleTime to control freshness, invalidate on mutation
+    refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.apiKeys, // 5 minutes - API keys don't change frequently
     throwOnError: false,
   });
 }
@@ -42,13 +42,13 @@ export function useApiKeyQuery(keyId: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useQuery({
-    queryKey: queryKeys.apiKeys.detail(keyId),
-    queryFn: () => getApiKeyService({ param: { keyId } }),
     enabled: isAuthenticated && !!keyId,
-    staleTime: STALE_TIMES.apiKeys, // 5 minutes
     gcTime: GC_TIMES.STANDARD, // 5 minutes
+    queryFn: () => getApiKeyService({ param: { keyId } }),
+    queryKey: queryKeys.apiKeys.detail(keyId),
     refetchOnWindowFocus: false,
     retry: false,
+    staleTime: STALE_TIMES.apiKeys, // 5 minutes
     throwOnError: false,
   });
 }

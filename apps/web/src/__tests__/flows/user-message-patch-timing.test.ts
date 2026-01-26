@@ -52,9 +52,9 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
     // Setup thread with participants
     thread = createMockThread({
+      enableWebSearch: false,
       id: 'thread-123',
       mode: ChatModes.BRAINSTORM,
-      enableWebSearch: false,
     });
 
     participants = [
@@ -73,23 +73,23 @@ describe('user Message Submission and Patching Flow - Timing', () => {
     // Complete Round 0 so we can test Round 1 submission
     const round0Messages = [
       createTestUserMessage({
-        id: 'user-r0',
         content: 'Round 0 question',
+        id: 'user-r0',
         roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'P0 response',
-        roundNumber: 0,
+        id: 'thread-123_r0_p0',
         participantId: 'p1',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p1',
         content: 'P1 response',
-        roundNumber: 0,
+        id: 'thread-123_r0_p1',
         participantId: 'p2',
         participantIndex: 1,
+        roundNumber: 0,
       }),
     ];
 
@@ -113,8 +113,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       // ACT: Simulate submission action (what form-actions.ts does at line 285)
       const nextRoundNumber = 1;
       const optimisticMessage = createTestUserMessage({
-        id: 'optimistic-msg',
         content: 'My question for round 1',
+        id: 'optimistic-msg',
         roundNumber: nextRoundNumber,
       });
 
@@ -137,8 +137,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT: Add optimistic message + set streaming round
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question',
+        id: 'opt-msg',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -154,8 +154,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT: Add optimistic message (form-actions.ts:285 always does this)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-no-changes',
         content: 'Same config question',
+        id: 'opt-no-changes',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -173,8 +173,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT: Add optimistic message (form-actions.ts:285 always does this)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-with-changes',
         content: 'Changed config question',
+        id: 'opt-with-changes',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -203,7 +203,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
     it('should set configChangeRoundNumber even when NO config changes exist', () => {
       // ARRANGE: No config changes at all
-      expect(store.getState().hasPendingConfigChanges).toBe(false);
+      expect(store.getState().hasPendingConfigChanges).toBeFalsy();
       const nextRoundNumber = 1;
 
       // ACT: form-actions.ts:309 ALWAYS sets this (prevents streaming before PATCH)
@@ -238,7 +238,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ASSERT: Both flags set, configChangeRoundNumber blocks until PATCH completes
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
     });
   });
 
@@ -250,18 +250,18 @@ describe('user Message Submission and Patching Flow - Timing', () => {
     it('should replace optimistic message with persisted message after PATCH', () => {
       // ARRANGE: Optimistic message in store
       const optimisticMessage = createTestUserMessage({
-        id: 'optimistic-msg',
         content: 'My question',
+        id: 'optimistic-msg',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT: Simulate PATCH response (form-actions.ts:343-346)
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'My question',
-        roundNumber: 1,
         createdAt: '2024-01-01T00:00:00Z',
+        id: 'thread-123_r1_user',
+        roundNumber: 1,
       });
 
       store.getState().setMessages(
@@ -284,16 +284,16 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       // ARRANGE
       const content = 'Exact question text';
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content,
+        id: 'opt',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT: Replace with persisted
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content,
+        id: 'thread-123_r1_user',
         roundNumber: 1,
       });
       store.getState().setMessages(
@@ -307,16 +307,16 @@ describe('user Message Submission and Patching Flow - Timing', () => {
     it('should preserve round number when replacing optimistic with persisted', () => {
       // ARRANGE
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT: Replace
       const persistedMessage = createTestUserMessage({
-        id: 'persisted',
         content: 'Q',
+        id: 'persisted',
         roundNumber: 1,
       });
       store.getState().setMessages(
@@ -325,8 +325,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ASSERT: Round number unchanged
       expect(store.getState().messages[3]?.metadata).toMatchObject({
-        roundNumber: 1,
         role: MessageRoles.USER,
+        roundNumber: 1,
       });
     });
   });
@@ -345,7 +345,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       // ASSERT: Streaming unblocked
-      expect(store.getState().configChangeRoundNumber).toBe(null);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
     });
 
     it('should NOT clear configChangeRoundNumber when config changes exist (waits for changelog)', () => {
@@ -359,7 +359,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ASSERT: Still blocked waiting for changelog
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
     });
 
     it('should clear hasPendingConfigChanges after PATCH completes', () => {
@@ -370,7 +370,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setHasPendingConfigChanges(false);
 
       // ASSERT: Flag cleared
-      expect(store.getState().hasPendingConfigChanges).toBe(false);
+      expect(store.getState().hasPendingConfigChanges).toBeFalsy();
     });
   });
 
@@ -386,8 +386,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT 1: Add optimistic message (form-actions.ts:285)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question without config changes',
+        id: 'opt-msg',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -404,8 +404,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT 3: PATCH completes - replace message (form-actions.ts:343-346)
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Question without config changes',
+        id: 'thread-123_r1_user',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -420,9 +420,9 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       // ASSERT PHASE 2: After PATCH
       expect(store.getState().messages).toHaveLength(4);
       expect(store.getState().messages[3]?.id).toBe('thread-123_r1_user');
-      expect(store.getState().configChangeRoundNumber).toBe(null);
-      expect(store.getState().waitingToStartStreaming).toBe(true);
-      expect(store.getState().isWaitingForChangelog).toBe(false);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
+      expect(store.getState().waitingToStartStreaming).toBeTruthy();
+      expect(store.getState().isWaitingForChangelog).toBeFalsy();
 
       // CRITICAL: Streaming can now proceed (configChangeRoundNumber cleared)
     });
@@ -434,16 +434,16 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT: Complete flow
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
       store.getState().setConfigChangeRoundNumber(nextRoundNumber);
 
       const persistedMessage = createTestUserMessage({
-        id: 'persisted',
         content: 'Q',
+        id: 'persisted',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -470,8 +470,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT 1: Add optimistic message (form-actions.ts:285)
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question with mode change',
+        id: 'opt-msg',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -487,8 +487,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT 3: PATCH completes - replace message + mode changed
       const persistedMessage = createTestUserMessage({
-        id: 'thread-123_r1_user',
         content: 'Question with mode change',
+        id: 'thread-123_r1_user',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages(
@@ -504,7 +504,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       // ASSERT PHASE 2: After PATCH, waiting for changelog
       expect(store.getState().messages[3]?.id).toBe('thread-123_r1_user');
       expect(store.getState().configChangeRoundNumber).toBe(1); // Still blocked
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // CRITICAL: Streaming still blocked until changelog syncs
     });
@@ -519,7 +519,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ASSERT: configChangeRoundNumber still set
       expect(store.getState().configChangeRoundNumber).toBe(1);
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
 
       // NOTE: use-changelog-sync will clear configChangeRoundNumber after changelog fetches
     });
@@ -533,8 +533,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
     it('should rollback optimistic message when PATCH fails', () => {
       // ARRANGE: Optimistic message added
       const optimisticMessage = createTestUserMessage({
-        id: 'opt-msg',
         content: 'Question',
+        id: 'opt-msg',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -564,18 +564,18 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       // ASSERT: All streaming state cleared
-      expect(store.getState().waitingToStartStreaming).toBe(false);
-      expect(store.getState().streamingRoundNumber).toBe(null);
-      expect(store.getState().nextParticipantToTrigger).toBe(null);
-      expect(store.getState().configChangeRoundNumber).toBe(null);
+      expect(store.getState().waitingToStartStreaming).toBeFalsy();
+      expect(store.getState().streamingRoundNumber).toBeNull();
+      expect(store.getState().nextParticipantToTrigger).toBeNull();
+      expect(store.getState().configChangeRoundNumber).toBeNull();
     });
 
     it('should preserve existing messages when PATCH fails', () => {
       // ARRANGE: Existing messages + optimistic message
       const existingCount = store.getState().messages.length;
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -603,8 +603,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ACT: Simulate exact order from form-actions.ts:285-309
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: nextRoundNumber,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
@@ -632,23 +632,23 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
       // ASSERT: Block set before waiting flag
       expect(blockSet).toBe(1);
-      expect(waitingSet).toBe(true);
+      expect(waitingSet).toBeTruthy();
     });
 
     it('should guarantee PATCH completes BEFORE configChangeRoundNumber cleared (no config changes)', () => {
       // ARRANGE: Simulate PATCH in progress
       store.getState().setConfigChangeRoundNumber(1);
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT: PATCH completes (replace message)
       const persistedMessage = createTestUserMessage({
-        id: 'persisted',
         content: 'Q',
+        id: 'persisted',
         roundNumber: 1,
       });
       store.getState().setMessages(
@@ -662,7 +662,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setConfigChangeRoundNumber(null);
 
       // ASSERT: Block cleared only after message persisted
-      expect(store.getState().configChangeRoundNumber).toBe(null);
+      expect(store.getState().configChangeRoundNumber).toBeNull();
     });
 
     it('should guarantee PATCH completes BEFORE changelog fetch triggered (with config changes)', () => {
@@ -670,16 +670,16 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setConfigChangeRoundNumber(1);
       store.getState().setHasPendingConfigChanges(true);
       const optimisticMessage = createTestUserMessage({
-        id: 'opt',
         content: 'Q',
+        id: 'opt',
         roundNumber: 1,
       });
       store.getState().setMessages([...store.getState().messages, optimisticMessage]);
 
       // ACT: PATCH completes
       const persistedMessage = createTestUserMessage({
-        id: 'persisted',
         content: 'Q',
+        id: 'persisted',
         roundNumber: 1,
       });
       store.getState().setMessages(
@@ -693,7 +693,7 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       store.getState().setIsWaitingForChangelog(true);
 
       // ASSERT: Changelog fetch only after PATCH
-      expect(store.getState().isWaitingForChangelog).toBe(true);
+      expect(store.getState().isWaitingForChangelog).toBeTruthy();
       expect(store.getState().configChangeRoundNumber).toBe(1); // Still blocked
     });
   });
@@ -705,13 +705,13 @@ describe('user Message Submission and Patching Flow - Timing', () => {
   describe('9. Identical Flow Verification - With vs Without Config Changes', () => {
     it('should follow same optimistic message addition flow regardless of config changes', () => {
       // TEST 1: No config changes
-      const opt1 = createTestUserMessage({ id: 'opt1', content: 'Q1', roundNumber: 1 });
+      const opt1 = createTestUserMessage({ content: 'Q1', id: 'opt1', roundNumber: 1 });
       store.getState().setMessages([...store.getState().messages, opt1]);
       const messagesAfterOpt1 = store.getState().messages.length;
 
       // TEST 2: With config changes
       store.getState().setHasPendingConfigChanges(true);
-      const opt2 = createTestUserMessage({ id: 'opt2', content: 'Q2', roundNumber: 2 });
+      const opt2 = createTestUserMessage({ content: 'Q2', id: 'opt2', roundNumber: 2 });
       store.getState().setMessages([...store.getState().messages, opt2]);
       const messagesAfterOpt2 = store.getState().messages.length;
 
@@ -734,17 +734,17 @@ describe('user Message Submission and Patching Flow - Timing', () => {
 
     it('should replace optimistic message with persisted in both scenarios', () => {
       // TEST 1: No config changes
-      const opt1 = createTestUserMessage({ id: 'opt1', content: 'Q1', roundNumber: 1 });
+      const opt1 = createTestUserMessage({ content: 'Q1', id: 'opt1', roundNumber: 1 });
       store.getState().setMessages([...store.getState().messages, opt1]);
-      const pers1 = createTestUserMessage({ id: 'pers1', content: 'Q1', roundNumber: 1 });
+      const pers1 = createTestUserMessage({ content: 'Q1', id: 'pers1', roundNumber: 1 });
       store.getState().setMessages(store.getState().messages.map(m => (m.id === 'opt1' ? pers1 : m)));
       expect(store.getState().messages.find(m => m.id === 'pers1')).toBeDefined();
 
       // TEST 2: With config changes
       store.getState().setHasPendingConfigChanges(true);
-      const opt2 = createTestUserMessage({ id: 'opt2', content: 'Q2', roundNumber: 2 });
+      const opt2 = createTestUserMessage({ content: 'Q2', id: 'opt2', roundNumber: 2 });
       store.getState().setMessages([...store.getState().messages, opt2]);
-      const pers2 = createTestUserMessage({ id: 'pers2', content: 'Q2', roundNumber: 2 });
+      const pers2 = createTestUserMessage({ content: 'Q2', id: 'pers2', roundNumber: 2 });
       store.getState().setMessages(store.getState().messages.map(m => (m.id === 'opt2' ? pers2 : m)));
       expect(store.getState().messages.find(m => m.id === 'pers2')).toBeDefined();
 
@@ -764,8 +764,8 @@ describe('user Message Submission and Patching Flow - Timing', () => {
       const stillBlocked = store.getState().configChangeRoundNumber === 2;
 
       // ASSERT: Different clearing behavior is ONLY difference
-      expect(clearedImmediately).toBe(true);
-      expect(stillBlocked).toBe(true);
+      expect(clearedImmediately).toBeTruthy();
+      expect(stillBlocked).toBeTruthy();
     });
   });
 });

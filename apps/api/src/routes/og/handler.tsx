@@ -47,7 +47,7 @@ async function generateOgImage(params: {
   title: string;
   participantModelIds?: string[];
 }): Promise<ArrayBuffer> {
-  const { title, participantModelIds = [] } = params;
+  const { participantModelIds = [], title } = params;
   const logoBase64 = getLogoBase64Sync();
   const fonts = getOGFontsSync();
 
@@ -56,8 +56,8 @@ async function generateOgImage(params: {
     id => !id.toLowerCase().startsWith('openrouter/'),
   );
   const modelIcons = filteredModelIds.slice(0, 6).map(modelId => ({
-    modelId,
     icon: getModelIconBase64Sync(modelId),
+    modelId,
   }));
 
   // Dynamic import to avoid loading 2.4MB+ WASM on every cold start
@@ -67,40 +67,40 @@ async function generateOgImage(params: {
     (
       <div
         style={{
+          backgroundColor: '#0a0a0a',
           display: 'flex',
           flexDirection: 'column',
-          width: '100%',
-          height: '100%',
-          backgroundColor: '#0a0a0a',
-          position: 'relative',
           fontFamily: 'sans-serif',
+          height: '100%',
+          position: 'relative',
+          width: '100%',
         }}
       >
         {/* Top-right rainbow gradient orb - pink/purple/magenta */}
         <div
           style={{
-            display: 'flex',
-            position: 'absolute',
-            top: -50,
-            right: -50,
-            width: 500,
-            height: 500,
             background: `radial-gradient(circle at 70% 30%, ${RAINBOW[2]}55, ${RAINBOW[3]}38, ${RAINBOW[4]}22, ${RAINBOW[5]}10, transparent 60%)`,
+            display: 'flex',
             filter: 'blur(60px)',
+            height: 500,
+            position: 'absolute',
+            right: -50,
+            top: -50,
+            width: 500,
           }}
         />
 
         {/* Bottom-left rainbow gradient orb - blue/cyan/teal */}
         <div
           style={{
-            display: 'flex',
-            position: 'absolute',
-            bottom: -50,
-            left: -50,
-            width: 550,
-            height: 550,
             background: `radial-gradient(circle at 30% 70%, ${RAINBOW[6]}45, ${RAINBOW[7]}32, ${RAINBOW[8]}18, ${RAINBOW[9]}08, transparent 55%)`,
+            bottom: -50,
+            display: 'flex',
             filter: 'blur(70px)',
+            height: 550,
+            left: -50,
+            position: 'absolute',
+            width: 550,
           }}
         />
 
@@ -109,20 +109,20 @@ async function generateOgImage(params: {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            width: '100%',
             height: '100%',
             padding: 60,
             position: 'relative',
+            width: '100%',
           }}
         >
           {/* Header with logo */}
           <div
             style={{
+              alignItems: 'center',
               display: 'flex',
               flexDirection: 'row',
-              alignItems: 'center',
-              marginBottom: 32,
               gap: 16,
+              marginBottom: 32,
             }}
           >
             {logoBase64
@@ -136,13 +136,13 @@ async function generateOgImage(params: {
                   />
                 )
               : (
-                  <div style={{ display: 'flex', width: 56, height: 56 }} />
+                  <div style={{ display: 'flex', height: 56, width: 56 }} />
                 )}
             <span
               style={{
+                color: OG_COLORS.textPrimary,
                 fontSize: 28,
                 fontWeight: 600,
-                color: OG_COLORS.textPrimary,
                 letterSpacing: '-0.01em',
               }}
             >
@@ -154,8 +154,8 @@ async function generateOgImage(params: {
           <div
             style={{
               display: 'flex',
-              flexDirection: 'column',
               flex: 1,
+              flexDirection: 'column',
               justifyContent: 'flex-start',
               paddingTop: 20,
             }}
@@ -170,14 +170,14 @@ async function generateOgImage(params: {
             >
               <span
                 style={{
+                  color: OG_COLORS.textPrimary,
                   fontSize: 52,
                   fontWeight: 700,
-                  color: OG_COLORS.textPrimary,
-                  lineHeight: 1.3,
                   letterSpacing: '-0.02em',
+                  lineClamp: 2,
+                  lineHeight: 1.3,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  lineClamp: 2,
                 }}
               >
                 {truncateTitle(title)}
@@ -201,14 +201,14 @@ async function generateOgImage(params: {
                       <div
                         key={modelId}
                         style={{
-                          display: 'flex',
                           alignItems: 'center',
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          borderRadius: 16,
+                          display: 'flex',
+                          height: 64,
                           justifyContent: 'center',
                           width: 64,
-                          height: 64,
-                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                          borderRadius: 16,
-                          border: '1px solid rgba(255, 255, 255, 0.1)',
                         }}
                       >
                         {icon
@@ -216,7 +216,7 @@ async function generateOgImage(params: {
                               <img src={icon} width={36} height={36} alt={modelId} />
                             )
                           : (
-                              <div style={{ display: 'flex', width: 36, height: 36 }} />
+                              <div style={{ display: 'flex', height: 36, width: 36 }} />
                             )}
                       </div>
                     ))}
@@ -228,28 +228,28 @@ async function generateOgImage(params: {
           {/* Footer with tagline */}
           <div
             style={{
+              borderTop: `2px solid ${OG_COLORS.glassBorder}`,
               display: 'flex',
               flexDirection: 'column',
+              gap: 8,
               marginTop: 'auto',
               paddingTop: 24,
-              borderTop: `2px solid ${OG_COLORS.glassBorder}`,
-              gap: 8,
             }}
           >
             <span
               style={{
+                color: OG_COLORS.primary,
                 fontSize: 26,
                 fontWeight: 700,
-                color: OG_COLORS.primary,
               }}
             >
               Your AI Board of Directors
             </span>
             <span
               style={{
+                color: OG_COLORS.textSecondary,
                 fontSize: 18,
                 fontWeight: 500,
-                color: OG_COLORS.textSecondary,
               }}
             >
               Get perspectives from multiple AI models working together
@@ -259,14 +259,14 @@ async function generateOgImage(params: {
       </div>
     ),
     {
-      width: OG_WIDTH,
-      height: OG_HEIGHT,
       fonts: fonts.map(font => ({
-        name: font.name,
         data: font.data,
-        weight: font.weight as 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900,
-        style: font.style as 'normal' | 'italic',
+        name: font.name,
+        style: font.style,
+        weight: font.weight,
       })),
+      height: OG_HEIGHT,
+      width: OG_WIDTH,
     },
   );
 
@@ -286,7 +286,7 @@ async function generateOgImage(params: {
  * Generate fallback OG image for threads not found or not public
  */
 async function generateFallbackOgImage(): Promise<ArrayBuffer> {
-  return generateOgImage({
+  return await generateOgImage({
     title: 'AI Conversation',
   });
 }
@@ -364,13 +364,13 @@ function createErrorFallbackResponse(): Response {
     0x60,
     0x82,
   ]);
-  return new Response(transparentPng.buffer as ArrayBuffer, {
-    status: 200,
+  return new Response(transparentPng.buffer, {
     headers: {
-      'Content-Type': 'image/png',
       'Cache-Control': 'no-cache',
+      'Content-Type': 'image/png',
       'X-OG-Cache': 'ERROR',
     },
+    status: 200,
   });
 }
 
@@ -380,8 +380,8 @@ function createErrorFallbackResponse(): Response {
 export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHandler(
   {
     auth: 'public',
-    validateQuery: OgChatQuerySchema,
     operationName: 'ogChat',
+    validateQuery: OgChatQuerySchema,
   },
   async (c) => {
     try {
@@ -410,13 +410,13 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
         try {
           const fallbackPng = await generateFallbackOgImage();
           return new Response(fallbackPng, {
-            status: 200,
             headers: {
-              'Content-Type': 'image/png',
               'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
+              'Content-Type': 'image/png',
               'X-OG-Cache': 'MISS',
               'X-OG-Fallback': 'true',
             },
+            status: 200,
           });
         } catch (fallbackError) {
           console.error('[OG] Fallback generation error:', fallbackError);
@@ -431,10 +431,10 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
       const participantModelIds = participants.map(p => p.modelId);
 
       const versionHash = versionParam ?? generateOgVersionHash({
-        title: thread.title ?? undefined,
+        messageCount: 0,
         mode: thread.mode,
         participantCount: participants.length,
-        messageCount: 0,
+        title: thread.title ?? undefined,
         updatedAt: thread.updatedAt,
       });
 
@@ -450,32 +450,32 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
       }
 
       const pngData = await generateOgImage({
-        title: thread.title ?? 'AI Conversation',
         participantModelIds,
+        title: thread.title ?? 'AI Conversation',
       });
 
       storeOgImageInCache(r2Bucket, cacheKey, pngData).catch(() => {});
 
       return new Response(pngData, {
-        status: 200,
         headers: {
-          'Content-Type': 'image/png',
           'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
+          'Content-Type': 'image/png',
           'X-OG-Cache': 'MISS',
         },
+        status: 200,
       });
     } catch (error) {
       console.error('[OG] Handler error:', error);
       try {
         const fallbackPng = await generateFallbackOgImage();
         return new Response(fallbackPng, {
-          status: 200,
           headers: {
-            'Content-Type': 'image/png',
             'Cache-Control': 'no-cache',
+            'Content-Type': 'image/png',
             'X-OG-Cache': 'ERROR',
             'X-OG-Fallback': 'true',
           },
+          status: 200,
         });
       } catch {
         return createErrorFallbackResponse();

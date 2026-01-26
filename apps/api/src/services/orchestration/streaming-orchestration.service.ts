@@ -89,14 +89,14 @@ async function getAiSdk() {
 type FileDataEntry = {
   data: Uint8Array;
   mimeType: string;
-  filename?: string;
+  filename?: string | undefined;
 };
 
 /**
  * RAG API response item structure
  */
 type RagSearchResultItem = {
-  content: Array<{ type: string; text: string }>;
+  content: { type: string; text: string }[];
   file_id: string;
   filename: string;
   score: number;
@@ -111,20 +111,20 @@ type RagSearchResultItem = {
  * Allows extra fields via passthrough to handle all ModelFilePart/UrlFilePart variants
  */
 const FilePartWithUrlExtractSchema = z.object({
-  type: z.literal('file'),
-  url: z.string(),
+  filename: z.string().optional(),
   mediaType: z.string().optional(),
   mimeType: z.string().optional(),
-  filename: z.string().optional(),
+  type: z.literal('file'),
+  url: z.string(),
 });
 
 /**
  * Zod schema for extracting image part properties (lenient for extraction)
  */
 const ImagePartExtractSchema = z.object({
-  type: z.literal('image'),
   image: z.string(),
   mimeType: z.string(),
+  type: z.literal('image'),
 });
 
 /**
@@ -135,7 +135,7 @@ type UIFilePart = {
   type: 'file';
   url: string;
   mediaType: string;
-  filename?: string;
+  filename?: string | undefined;
 };
 
 /**
@@ -184,19 +184,19 @@ function isImagePartWithData(part: ModelFilePart | UrlFilePart): part is UrlFile
  */
 function convertFilePartsToUIMessageParts<T extends UIMessage>(
   fileParts: (ModelFilePart | UrlFilePart)[],
-): Array<T['parts'][number]> {
+): T['parts'][number][] {
   const result: UIConvertedPart[] = [];
 
   for (const part of fileParts) {
     if (part.type === 'file' && isFilePartWithUrl(part)) {
       const parseResult = FilePartWithUrlExtractSchema.safeParse(part);
       if (parseResult.success) {
-        const { url, mediaType, mimeType, filename } = parseResult.data;
+        const { filename, mediaType, mimeType, url } = parseResult.data;
         const converted: UIFilePart = {
+          filename,
+          mediaType: mediaType ?? mimeType ?? '',
           type: 'file',
           url,
-          mediaType: mediaType ?? mimeType ?? '',
-          filename,
         };
         result.push(converted);
         continue;
@@ -208,9 +208,9 @@ function convertFilePartsToUIMessageParts<T extends UIMessage>(
       if (parseResult.success) {
         const { image, mimeType } = parseResult.data;
         const converted: UIImagePart = {
-          type: 'image',
           image,
           mimeType,
+          type: 'image',
         };
         result.push(converted);
         continue;
@@ -228,17 +228,17 @@ function convertFilePartsToUIMessageParts<T extends UIMessage>(
       const filename = ('filename' in part && typeof part.filename === 'string')
         ? part.filename
         : undefined;
-      result.push({ type: 'file', url, mediaType, filename });
+      result.push({ filename, mediaType, type: 'file', url });
     } else if (part.type === 'image' && 'image' in part && 'mimeType' in part) {
       const image = typeof part.image === 'string' ? part.image : '';
       const mimeType = typeof part.mimeType === 'string' ? part.mimeType : '';
-      result.push({ type: 'image', image, mimeType });
+      result.push({ image, mimeType, type: 'image' });
     }
   }
 
   // UIConvertedPart is compatible with UIMessage['parts'][number] since both
   // include file and image part types with the same structure
-  return result as Array<T['parts'][number]>;
+  return result as T['parts'][number][];
 }
 
 // ============================================================================
@@ -246,66 +246,66 @@ function convertFilePartsToUIMessageParts<T extends UIMessage>(
 // ============================================================================
 
 const AttachmentErrorSchema = z.object({
-  uploadId: z.string().min(1),
   error: z.string(),
+  uploadId: z.string().min(1),
 });
 
 export const LoadParticipantConfigParamsSchema = z.object({
-  threadId: z.string().min(1),
-  participantIndex: z.number().int().nonnegative(),
-  hasPersistedParticipants: z.boolean().optional(),
-  thread: z.custom<ChatThread & { participants: ChatParticipant[] }>(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  hasPersistedParticipants: z.boolean().optional(),
   logger: z.custom<TypedLogger>().optional(),
+  participantIndex: z.number().int().nonnegative(),
+  thread: z.custom<ChatThread & { participants: ChatParticipant[] }>(),
+  threadId: z.string().min(1),
 });
 
 export const LoadParticipantConfigResultSchema = z.object({
-  participants: z.array(z.custom<ChatParticipant>()),
   participant: z.custom<ChatParticipant>(),
+  participants: z.array(z.custom<ChatParticipant>()),
 });
 
 export const BuildSystemPromptParamsSchema = z.object({
-  participant: z.custom<ChatParticipant>(),
   allParticipants: z.array(z.custom<ChatParticipant>()),
-  thread: z.custom<Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>>(),
-  userQuery: z.string(),
-  previousDbMessages: z.array(z.custom<ChatMessage>()),
+  attachmentIds: z.array(z.string()).optional(),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
   currentRoundNumber: z.number().int().nonnegative(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   env: z.object({
     AI: z.custom<Ai>().optional(),
     UPLOADS_R2_BUCKET: z.custom<R2Bucket>().optional(),
   }),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
   logger: z.custom<TypedLogger>().optional(),
-  attachmentIds: z.array(z.string()).optional(),
-  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
   memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
+  participant: z.custom<ChatParticipant>(),
+  previousDbMessages: z.array(z.custom<ChatMessage>()),
+  thread: z.custom<Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>>(),
+  userQuery: z.string(),
 });
 
 export const BuildSystemPromptResultSchema = z.object({
-  systemPrompt: z.string(),
-  citationSourceMap: z.custom<CitationSourceMap>(),
   citableSources: z.array(z.custom<CitableSource>()),
+  citationSourceMap: z.custom<CitationSourceMap>(),
+  systemPrompt: z.string(),
 });
 
 export const PrepareValidatedMessagesParamsSchema = z.object({
-  previousDbMessages: z.array(z.custom<ChatMessage>()),
-  newMessage: z.custom<UIMessage>(),
-  logger: z.custom<TypedLogger>().optional(),
-  r2Bucket: z.custom<R2Bucket>().optional(),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>().optional(),
   attachmentIds: z.array(z.string()).optional(),
   // Hybrid loading params (for large file URL-based delivery)
   baseUrl: z.string().optional(),
-  userId: z.string().optional(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>().optional(),
+  logger: z.custom<TypedLogger>().optional(),
+  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
+  newMessage: z.custom<UIMessage>(),
+  previousDbMessages: z.array(z.custom<ChatMessage>()),
+  r2Bucket: z.custom<R2Bucket>().optional(),
   secret: z.string().optional(),
   threadId: z.string().optional(),
-  memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
+  userId: z.string().optional(),
 });
 
 export const PrepareValidatedMessagesResultSchema = z.object({
-  modelMessages: z.array(z.custom<ModelMessage>()),
   attachmentErrors: z.array(AttachmentErrorSchema).optional(),
+  modelMessages: z.array(z.custom<ModelMessage>()),
 });
 
 // ============================================================================
@@ -323,21 +323,21 @@ export type PrepareValidatedMessagesResult = z.infer<typeof PrepareValidatedMess
 // Thread Attachment Context Functions
 // ============================================================================
 
-const TEXT_EXTRACTABLE_SET: Set<string> = new Set(TEXT_EXTRACTABLE_MIME_TYPES);
+const TEXT_EXTRACTABLE_SET = new Set<string>(TEXT_EXTRACTABLE_MIME_TYPES);
 
 function generateAttachmentCitationId(uploadId: string): string {
   return `${CitationSourcePrefixes[CitationSourceTypes.ATTACHMENT]}_${uploadId.slice(0, 8)}`;
 }
 
 export const LoadThreadAttachmentContextParamsSchema = z.object({
-  threadId: z.string().min(1),
-  r2Bucket: z.custom<R2Bucket>().optional(),
+  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
+  currentAttachmentIds: z.array(z.string()).default([]),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  extractContent: z.boolean().default(true),
   logger: z.custom<TypedLogger>().optional(),
   maxAttachments: z.number().int().positive().default(20),
-  extractContent: z.boolean().default(true),
-  currentAttachmentIds: z.array(z.string()).default([]),
-  baseUrl: z.string().url(), // Base URL for generating absolute download URLs
+  r2Bucket: z.custom<R2Bucket>().optional(),
+  threadId: z.string().min(1),
 });
 
 export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachmentContextParamsSchema>;
@@ -345,7 +345,7 @@ export type LoadThreadAttachmentContextParams = z.infer<typeof LoadThreadAttachm
 export async function loadThreadAttachmentContext(
   params: LoadThreadAttachmentContextParams,
 ): Promise<ThreadAttachmentContextResult> {
-  const { threadId, r2Bucket, db, logger, maxAttachments, extractContent, currentAttachmentIds, baseUrl } = params;
+  const { baseUrl, currentAttachmentIds, db, extractContent, logger, maxAttachments, r2Bucket, threadId } = params;
 
   const attachments: ThreadAttachmentWithContent[] = [];
   const citableSources: CitableSource[] = [];
@@ -362,31 +362,31 @@ export async function loadThreadAttachmentContext(
     // Parallelize independent queries
     const [threadMessages, unprocessedUploads] = await Promise.all([
       db.query.chatMessage.findMany({
-        where: eq(tables.chatMessage.threadId, threadId),
-        orderBy: [asc(tables.chatMessage.roundNumber)],
         columns: {
           id: true,
           roundNumber: true,
         },
+        orderBy: [asc(tables.chatMessage.roundNumber)],
+        where: eq(tables.chatMessage.threadId, threadId),
       }),
       // Pre-load current attachments in parallel if they exist
       // ✅ FIX: Check for both 'uploaded' AND 'ready' statuses
       // Status flow: uploading → uploaded → processing → ready
       currentAttachmentIds.length > 0
         ? db.query.upload.findMany({
+            columns: {
+              filename: true,
+              fileSize: true,
+              id: true,
+              metadata: true,
+              mimeType: true,
+              r2Key: true,
+              status: true,
+            },
             where: and(
               inArray(tables.upload.id, currentAttachmentIds),
               inArray(tables.upload.status, ['uploaded', 'ready']),
             ),
-            columns: {
-              id: true,
-              filename: true,
-              mimeType: true,
-              fileSize: true,
-              r2Key: true,
-              status: true,
-              metadata: true,
-            },
           })
         : Promise.resolve([]),
     ]);
@@ -411,9 +411,9 @@ export async function loadThreadAttachmentContext(
                 }
               } catch (error) {
                 logger?.warn('Failed to extract content from current attachment', LogHelpers.operation({
+                  error: getErrorMessage(error),
                   operationName: 'loadThreadAttachmentContext',
                   uploadId: upload.id,
-                  error: getErrorMessage(error),
                 }));
               }
             } else {
@@ -422,15 +422,15 @@ export async function loadThreadAttachmentContext(
           }
 
           const attachment: ThreadAttachmentWithContent = {
-            id: upload.id,
+            citationId,
             filename: upload.filename,
-            mimeType: upload.mimeType,
             fileSize: upload.fileSize,
-            r2Key: upload.r2Key,
+            id: upload.id,
             messageId: null,
+            mimeType: upload.mimeType,
+            r2Key: upload.r2Key,
             roundNumber: null,
             textContent,
-            citationId,
           };
 
           attachments.push(attachment);
@@ -445,35 +445,35 @@ export async function loadThreadAttachmentContext(
           const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
           citableSources.push({
+            content: contentPreview,
             id: citationId,
-            type: CitationSourceTypes.ATTACHMENT,
+            metadata: {
+              downloadUrl,
+              filename: upload.filename,
+              fileSize: upload.fileSize,
+              mimeType: upload.mimeType,
+              roundNumber: undefined,
+            },
             sourceId: upload.id,
             title: upload.filename,
-            content: contentPreview,
-            metadata: {
-              filename: upload.filename,
-              roundNumber: undefined,
-              downloadUrl,
-              mimeType: upload.mimeType,
-              fileSize: upload.fileSize,
-            },
+            type: CitationSourceTypes.ATTACHMENT,
           });
         }
 
         const formattedPrompt = formatThreadAttachmentPrompt(attachments);
         return {
           attachments,
-          formattedPrompt,
           citableSources,
-          stats: { total: attachments.length, withContent, skipped },
+          formattedPrompt,
+          stats: { skipped, total: attachments.length, withContent },
         };
       }
 
       return {
         attachments: [],
-        formattedPrompt: '',
         citableSources: [],
-        stats: { total: 0, withContent: 0, skipped: 0 },
+        formattedPrompt: '',
+        stats: { skipped: 0, total: 0, withContent: 0 },
       };
     }
 
@@ -523,32 +523,32 @@ export async function loadThreadAttachmentContext(
             }
           } catch (error) {
             logger?.warn('Failed to extract content from attachment', LogHelpers.operation({
+              error: getErrorMessage(error),
               operationName: 'loadThreadAttachmentContext',
               uploadId: upload.id,
-              error: getErrorMessage(error),
             }));
           }
         } else {
           skipped++;
           logger?.debug('Skipping large file for content extraction', LogHelpers.operation({
-            operationName: 'loadThreadAttachmentContext',
-            uploadId: upload.id,
             fileSize: upload.fileSize,
             maxSize: MAX_TEXT_CONTENT_SIZE,
+            operationName: 'loadThreadAttachmentContext',
+            uploadId: upload.id,
           }));
         }
       }
 
       const attachment: ThreadAttachmentWithContent = {
-        id: upload.id,
+        citationId,
         filename: upload.filename,
-        mimeType: upload.mimeType,
         fileSize: upload.fileSize,
-        r2Key: upload.r2Key,
+        id: upload.id,
         messageId,
+        mimeType: upload.mimeType,
+        r2Key: upload.r2Key,
         roundNumber,
         textContent,
-        citationId,
       };
 
       attachments.push(attachment);
@@ -563,18 +563,18 @@ export async function loadThreadAttachmentContext(
       const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
       citableSources.push({
+        content: contentPreview,
         id: citationId,
-        type: CitationSourceTypes.ATTACHMENT,
+        metadata: {
+          downloadUrl,
+          filename: upload.filename,
+          fileSize: upload.fileSize,
+          mimeType: upload.mimeType,
+          roundNumber: roundNumber ?? undefined,
+        },
         sourceId: upload.id,
         title: upload.filename,
-        content: contentPreview,
-        metadata: {
-          filename: upload.filename,
-          roundNumber: roundNumber ?? undefined,
-          downloadUrl,
-          mimeType: upload.mimeType,
-          fileSize: upload.fileSize,
-        },
+        type: CitationSourceTypes.ATTACHMENT,
       });
     }
 
@@ -585,8 +585,8 @@ export async function loadThreadAttachmentContext(
 
     if (currentUploads.length > 0) {
       logger?.info('Processing current message attachments for citation context', LogHelpers.operation({
-        operationName: 'loadThreadAttachmentContext',
         currentAttachmentCount: currentUploads.length,
+        operationName: 'loadThreadAttachmentContext',
       }));
 
       for (const upload of currentUploads) {
@@ -609,9 +609,9 @@ export async function loadThreadAttachmentContext(
               logger?.warn(
                 'Failed to extract content from current attachment',
                 LogHelpers.operation({
+                  error: getErrorMessage(error),
                   operationName: 'loadThreadAttachmentContext',
                   uploadId: upload.id,
-                  error: getErrorMessage(error),
                 }),
               );
             }
@@ -621,15 +621,15 @@ export async function loadThreadAttachmentContext(
         }
 
         const attachment: ThreadAttachmentWithContent = {
-          id: upload.id,
+          citationId,
           filename: upload.filename,
-          mimeType: upload.mimeType,
           fileSize: upload.fileSize,
-          r2Key: upload.r2Key,
+          id: upload.id,
           messageId: null,
+          mimeType: upload.mimeType,
+          r2Key: upload.r2Key,
           roundNumber: null,
           textContent,
-          citationId,
         };
 
         attachments.push(attachment);
@@ -644,18 +644,18 @@ export async function loadThreadAttachmentContext(
         const downloadUrl = `${baseUrl}/api/v1/uploads/${upload.id}/download`;
 
         citableSources.push({
+          content: contentPreview,
           id: citationId,
-          type: CitationSourceTypes.ATTACHMENT,
+          metadata: {
+            downloadUrl,
+            filename: upload.filename,
+            fileSize: upload.fileSize,
+            mimeType: upload.mimeType,
+            roundNumber: undefined,
+          },
           sourceId: upload.id,
           title: upload.filename,
-          content: contentPreview,
-          metadata: {
-            filename: upload.filename,
-            roundNumber: undefined,
-            downloadUrl,
-            mimeType: upload.mimeType,
-            fileSize: upload.fileSize,
-          },
+          type: CitationSourceTypes.ATTACHMENT,
         });
       }
     }
@@ -664,22 +664,22 @@ export async function loadThreadAttachmentContext(
 
     return {
       attachments,
-      formattedPrompt,
       citableSources,
-      stats: { total: attachments.length, withContent, skipped },
+      formattedPrompt,
+      stats: { skipped, total: attachments.length, withContent },
     };
   } catch (error) {
     logger?.error('Failed to load thread attachment context', LogHelpers.operation({
+      error: getErrorMessage(error),
       operationName: 'loadThreadAttachmentContext',
       threadId,
-      error: getErrorMessage(error),
     }));
 
     return {
       attachments: [],
-      formattedPrompt: '',
       citableSources: [],
-      stats: { total: 0, withContent: 0, skipped: 0 },
+      formattedPrompt: '',
+      stats: { skipped: 0, total: 0, withContent: 0 },
     };
   }
 }
@@ -688,10 +688,10 @@ function formatThreadAttachmentPrompt(
   attachments: ThreadAttachmentWithContent[],
 ): string {
   const citationInfos: AttachmentCitationInfo[] = attachments.map(att => ({
-    filename: att.filename,
     citationId: att.citationId,
-    mimeType: att.mimeType,
+    filename: att.filename,
     fileSize: att.fileSize,
+    mimeType: att.mimeType,
     roundNumber: att.roundNumber,
     textContent: att.textContent,
   }));
@@ -706,26 +706,26 @@ function formatThreadAttachmentPrompt(
 export async function loadParticipantConfiguration(
   params: LoadParticipantConfigParams,
 ): Promise<LoadParticipantConfigResult> {
-  const { threadId, participantIndex, hasPersistedParticipants, thread, db, logger } = params;
+  const { db, hasPersistedParticipants, logger, participantIndex, thread, threadId } = params;
 
   let participants: ChatParticipant[];
 
   if (hasPersistedParticipants && participantIndex === 0) {
     logger?.info('Reloading participants after persistence', LogHelpers.operation({
       operationName: 'loadParticipantConfiguration',
-      threadId,
       participantIndex,
+      threadId,
     }));
 
     const reloadedThread = await db.query.chatThread.findFirst({
-      where: eq(tables.chatThread.id, threadId),
       columns: {
         id: true,
       },
+      where: eq(tables.chatThread.id, threadId),
       with: {
         participants: {
-          where: eq(tables.chatParticipant.isEnabled, true),
           orderBy: [asc(tables.chatParticipant.priority)],
+          where: eq(tables.chatParticipant.isEnabled, true),
         },
       },
     });
@@ -760,7 +760,7 @@ export async function loadParticipantConfiguration(
     );
   }
 
-  return { participants, participant };
+  return { participant, participants };
 }
 
 // ============================================================================
@@ -770,7 +770,7 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { participant, allParticipants, thread, userQuery, previousDbMessages, currentRoundNumber, env, db, logger, attachmentIds, baseUrl, memoryLimits } = params;
+  const { allParticipants, attachmentIds, baseUrl, currentRoundNumber, db, env, logger, memoryLimits, participant, previousDbMessages, thread, userQuery } = params;
 
   // Memory safety defaults
   const maxRagResults = memoryLimits?.maxRagResults ?? 5;
@@ -793,13 +793,13 @@ export async function buildSystemPromptWithContext(
   if (thread.projectId && userQuery.trim()) {
     try {
       const project = await db.query.chatProject.findFirst({
-        where: eq(tables.chatProject.id, thread.projectId),
         columns: {
-          id: true,
-          customInstructions: true,
           autoragInstanceId: true,
+          customInstructions: true,
+          id: true,
           r2FolderPrefix: true,
         },
+        where: eq(tables.chatProject.id, thread.projectId),
       });
 
       if (project) {
@@ -812,19 +812,7 @@ export async function buildSystemPromptWithContext(
             const ragResponse = await env.AI.autorag(
               project.autoragInstanceId,
             ).aiSearch({
-              query: userQuery,
-              max_num_results: maxRagResults, // ✅ MEMORY SAFETY: Dynamic limit based on request complexity
-              rewrite_query: true,
-              stream: false,
-              reranking: {
-                enabled: true,
-                model: '@cf/baai/bge-reranker-base',
-              },
-              ranking_options: {
-                score_threshold: 0.3,
-              },
               filters: {
-                type: 'and',
                 filters: [
                   {
                     key: 'folder',
@@ -837,7 +825,19 @@ export async function buildSystemPromptWithContext(
                     value: `${project.r2FolderPrefix}/z`,
                   },
                 ],
+                type: 'and',
               },
+              max_num_results: maxRagResults, // ✅ MEMORY SAFETY: Dynamic limit based on request complexity
+              query: userQuery,
+              ranking_options: {
+                score_threshold: 0.3,
+              },
+              reranking: {
+                enabled: true,
+                model: '@cf/baai/bge-reranker-base',
+              },
+              rewrite_query: true,
+              stream: false,
             });
 
             if (ragResponse.data && ragResponse.data.length > 0) {
@@ -851,16 +851,16 @@ export async function buildSystemPromptWithContext(
                   const citationId = `${CitationSourcePrefixes[CitationSourceTypes.RAG]}_${result.file_id.slice(0, 8)}`;
 
                   const ragSource: CitableSource = {
-                    id: citationId,
-                    type: CitationSourceTypes.RAG,
-                    sourceId: result.file_id,
-                    title: result.filename,
                     content:
                       contentText.slice(0, 500)
                       + (contentText.length > 500 ? '...' : ''),
+                    id: citationId,
                     metadata: {
                       filename: result.filename,
                     },
+                    sourceId: result.file_id,
+                    title: result.filename,
+                    type: CitationSourceTypes.RAG,
                   };
                   citableSources.push(ragSource);
                   citationSourceMap.set(citationId, ragSource);
@@ -883,20 +883,20 @@ export async function buildSystemPromptWithContext(
               systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Indexed Files)\n\n${ragContext}\n\n---\n\n## 🚨 MANDATORY: RAG Knowledge Citation Requirements\n\n**YOU MUST CITE indexed files when using their information. This is NOT optional.**\n\n### Available RAG Sources:\n${ragSourceList}\n\n### Citation Rules:\n1. **EVERY fact from indexed files needs a citation** - Use [rag_xxxxxxxx] immediately after.\n2. **Quote or paraphrase specific content** - Show WHAT you're citing.\n\n✅ GOOD: "The document states the API uses REST architecture [rag_abc12345]."\n❌ BAD: "The API uses REST architecture." ← MISSING CITATION\n\n**NO citation = INCOMPLETE RESPONSE.**`;
 
               logger?.info('AutoRAG retrieved context', LogHelpers.operation({
+                citableSourcesAdded: ragResponse.data.length,
+                hasAiResponse: !!ragResponse.response,
                 operationName: 'buildSystemPromptWithContext',
                 projectId: thread.projectId,
                 resultCount: ragResponse.data.length,
-                hasAiResponse: !!ragResponse.response,
-                citableSourcesAdded: ragResponse.data.length,
               }));
             } else if (ragResponse.response) {
               systemPrompt = `${systemPrompt}\n\n## Project Knowledge (Files)\n\n${ragResponse.response}\n\n---\n\nUse the above knowledge from uploaded project files when relevant to the conversation.`;
             }
           } catch (error) {
             logger?.warn('AutoRAG retrieval failed', LogHelpers.operation({
+              error: getErrorMessage(error),
               operationName: 'buildSystemPromptWithContext',
               projectId: thread.projectId,
-              error: getErrorMessage(error),
             }));
           }
         }
@@ -905,26 +905,26 @@ export async function buildSystemPromptWithContext(
         // ✅ MEMORY SAFETY: Use dynamic limits based on request complexity
         const [citableContextResult, threadAttachmentResult] = await Promise.allSettled([
           buildCitableContext({
-            projectId: thread.projectId,
+            baseUrl,
             currentThreadId: thread.id,
-            userQuery,
+            db,
             maxMemories: Math.min(10, maxCitationSources),
             maxMessagesPerThread: 3,
-            maxSearchResults: Math.min(5, maxRagResults),
             maxModerators: 3,
-            db,
-            baseUrl,
+            maxSearchResults: Math.min(5, maxRagResults),
+            projectId: thread.projectId,
             r2Bucket: env.UPLOADS_R2_BUCKET, // Load project attachment content
+            userQuery,
           }),
           loadThreadAttachmentContext({
-            threadId: thread.id,
-            r2Bucket: env.UPLOADS_R2_BUCKET,
+            baseUrl,
+            currentAttachmentIds: attachmentIds || [],
             db,
+            extractContent: true,
             logger,
             maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
-            extractContent: true,
-            currentAttachmentIds: attachmentIds || [],
-            baseUrl,
+            r2Bucket: env.UPLOADS_R2_BUCKET,
+            threadId: thread.id,
           }),
         ]);
 
@@ -949,9 +949,9 @@ export async function buildSystemPromptWithContext(
           }));
         } else {
           logger?.warn('Citable project context loading failed', LogHelpers.operation({
+            error: getErrorMessage(citableContextResult.reason),
             operationName: 'buildSystemPromptWithContext',
             projectId: thread.projectId,
-            error: getErrorMessage(citableContextResult.reason),
           }));
         }
 
@@ -973,25 +973,25 @@ export async function buildSystemPromptWithContext(
             }
 
             logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
-              operationName: 'buildSystemPromptWithContext',
-              threadId: thread.id,
               attachmentStats: threadAttachmentContext.stats,
               citableSourcesAdded: threadAttachmentContext.citableSources.length,
+              operationName: 'buildSystemPromptWithContext',
+              threadId: thread.id,
             }));
           }
         } else {
           logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
+            error: getErrorMessage(threadAttachmentResult.reason),
             operationName: 'buildSystemPromptWithContext',
             threadId: thread.id,
-            error: getErrorMessage(threadAttachmentResult.reason),
           }));
         }
       }
     } catch (error) {
       logger?.warn('Project context loading failed', LogHelpers.operation({
+        error: getErrorMessage(error),
         operationName: 'buildSystemPromptWithContext',
         projectId: thread.projectId,
-        error: getErrorMessage(error),
       }));
     }
   }
@@ -1015,8 +1015,8 @@ export async function buildSystemPromptWithContext(
       }
     } catch (error) {
       logger?.warn('Search context building failed', LogHelpers.operation({
-        operationName: 'buildSystemPromptWithContext',
         error: getErrorMessage(error),
+        operationName: 'buildSystemPromptWithContext',
       }));
     }
   }
@@ -1036,14 +1036,14 @@ export async function buildSystemPromptWithContext(
       }));
 
       const threadAttachmentContext = await loadThreadAttachmentContext({
-        threadId: thread.id,
-        r2Bucket: env.UPLOADS_R2_BUCKET,
+        baseUrl,
+        currentAttachmentIds: attachmentIds || [],
         db,
+        extractContent: true,
         logger,
         maxAttachments, // ✅ MEMORY SAFETY: Dynamic limit
-        extractContent: true,
-        currentAttachmentIds: attachmentIds || [],
-        baseUrl,
+        r2Bucket: env.UPLOADS_R2_BUCKET,
+        threadId: thread.id,
       });
 
       logger?.info(`Thread attachment result: found=${threadAttachmentContext.attachments.length}, sources=${threadAttachmentContext.citableSources.length}`, LogHelpers.operation({
@@ -1060,17 +1060,17 @@ export async function buildSystemPromptWithContext(
         }
 
         logger?.info('Added thread attachment context for RAG', LogHelpers.operation({
-          operationName: 'buildSystemPromptWithContext',
-          threadId: thread.id,
           attachmentStats: threadAttachmentContext.stats,
           citableSourcesAdded: threadAttachmentContext.citableSources.length,
+          operationName: 'buildSystemPromptWithContext',
+          threadId: thread.id,
         }));
       }
     } catch (error) {
       logger?.warn('Thread attachment context loading failed', LogHelpers.operation({
+        error: getErrorMessage(error),
         operationName: 'buildSystemPromptWithContext',
         threadId: thread.id,
-        error: getErrorMessage(error),
       }));
     }
   }
@@ -1100,9 +1100,9 @@ export async function buildSystemPromptWithContext(
   }));
 
   return {
-    systemPrompt: finalSystemPrompt,
-    citationSourceMap,
     citableSources: limitedCitableSources,
+    citationSourceMap,
+    systemPrompt: finalSystemPrompt,
   };
 }
 
@@ -1142,8 +1142,8 @@ function collectFileDataFromMessages(
         fileDataMap.set(key, {
           // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
           data: new Uint8Array(part.data),
-          mimeType: part.mimeType,
           filename: part.filename,
+          mimeType: part.mimeType,
         });
       }
     }
@@ -1253,20 +1253,20 @@ function injectFileDataIntoModelMessages(
           // This fixes Bedrock error: "URL sources are not supported"
           if (isImage) {
             return {
-              type: 'image' as const,
               image: base64, // Raw base64 string (NOT data URL)
               mimeType: fileData.mimeType, // Matches AI SDK's ImageUIPart.mimeType
+              type: 'image' as const,
             };
           }
 
           // Non-image files use 'file' type with data URL
           return {
-            type: 'file' as const,
             data: fileData.data,
-            url: `data:${fileData.mimeType};base64,${base64}`,
+            ...(fileData.filename !== undefined && { filename: fileData.filename }),
             mediaType: fileData.mimeType,
             mimeType: fileData.mimeType,
-            filename: fileData.filename,
+            type: 'file' as const,
+            url: `data:${fileData.mimeType};base64,${base64}`,
           };
         }
 
@@ -1296,7 +1296,7 @@ export async function prepareValidatedMessages(
   // ✅ LAZY LOAD AI SDK: Load at function invocation, not module startup
   const { convertToModelMessages, validateUIMessages } = await getAiSdk();
 
-  const { previousDbMessages, newMessage, logger, r2Bucket, db, attachmentIds, baseUrl, userId, secret, threadId, memoryLimits } = params;
+  const { attachmentIds, baseUrl, db, logger, memoryLimits, newMessage, previousDbMessages, r2Bucket, secret, threadId, userId } = params;
 
   // ✅ MEMORY SAFETY: Apply limits to attachment processing
   const maxAttachments = memoryLimits?.maxAttachments ?? 10;
@@ -1318,13 +1318,13 @@ export async function prepareValidatedMessages(
     limitedAttachmentIds && limitedAttachmentIds.length > 0 && db && canUseUrlLoading && baseUrl && userId && secret
       ? loadAttachmentContentUrl({
           attachmentIds: limitedAttachmentIds,
-          r2Bucket,
+          baseUrl,
           db,
           logger,
-          baseUrl,
-          userId,
+          r2Bucket,
           secret,
           threadId,
+          userId,
         })
       : Promise.resolve(null),
   ]);
@@ -1333,7 +1333,7 @@ export async function prepareValidatedMessages(
 
   if (firstAttachmentLoad) {
     try {
-      const { fileParts, extractedTextContent, errors, stats } = firstAttachmentLoad;
+      const { errors, extractedTextContent, fileParts, stats } = firstAttachmentLoad;
 
       if (fileParts.length > 0 || extractedTextContent) {
         const existingParts = Array.isArray(newMessage.parts)
@@ -1350,7 +1350,7 @@ export async function prepareValidatedMessages(
         // Prepend extracted text from PDFs/documents as a text part
         if (extractedTextContent) {
           combinedParts = [
-            { type: MessagePartTypes.TEXT, text: extractedTextContent },
+            { text: extractedTextContent, type: MessagePartTypes.TEXT },
             ...combinedParts,
           ];
         }
@@ -1368,16 +1368,16 @@ export async function prepareValidatedMessages(
 
       if (errors.length > 0) {
         logger?.warn('Some attachments failed to load', LogHelpers.operation({
-          operationName: 'prepareValidatedMessages',
           errors,
+          operationName: 'prepareValidatedMessages',
         }));
       }
     } catch (error) {
       const errorMessage = getErrorMessage(error);
       logger?.error('Failed to load attachment content', LogHelpers.operation({
-        operationName: 'prepareValidatedMessages',
-        error: errorMessage,
         attachmentIds,
+        error: errorMessage,
+        operationName: 'prepareValidatedMessages',
       }));
     }
   }
@@ -1400,8 +1400,9 @@ export async function prepareValidatedMessages(
       const uploadIdsFromUrls = httpUrlFileParts
         .map((part) => {
           const url = extractUrlFromFilePart(part);
-          if (!url)
+          if (!url) {
             return null;
+          }
           const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
           return match?.[1] ?? null;
         })
@@ -1412,8 +1413,8 @@ export async function prepareValidatedMessages(
           'Participant 1+ detected HTTP URLs in newMessage, extracting uploadIds',
           LogHelpers.operation({
             operationName: 'prepareValidatedMessages',
-            uploadIdsCount: uploadIdsFromUrls.length,
             uploadIds: uploadIdsFromUrls,
+            uploadIdsCount: uploadIdsFromUrls.length,
           }),
         );
 
@@ -1423,19 +1424,19 @@ export async function prepareValidatedMessages(
           const loadResult = canUseUrlLoading && baseUrl && userId && secret
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromUrls,
-                r2Bucket,
+                baseUrl,
                 db,
                 logger,
-                baseUrl,
-                userId,
+                r2Bucket,
                 secret,
                 threadId,
+                userId,
               })
             : await loadAttachmentContent({
                 attachmentIds: uploadIdsFromUrls,
-                r2Bucket,
                 db,
                 logger,
+                r2Bucket,
               });
 
           const { fileParts, stats } = loadResult;
@@ -1453,7 +1454,7 @@ export async function prepareValidatedMessages(
             // Prepend extracted text from PDFs/documents as a text part
             if (extractedTextContent) {
               combinedParts = [
-                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                { text: extractedTextContent, type: MessagePartTypes.TEXT },
                 ...combinedParts,
               ];
             }
@@ -1466,8 +1467,8 @@ export async function prepareValidatedMessages(
             logger?.info(
               'Loaded file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
-                operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
+                operationName: 'prepareValidatedMessages',
                 stats,
               }),
             );
@@ -1477,8 +1478,8 @@ export async function prepareValidatedMessages(
           logger?.error(
             'Failed to load participant 1+ attachment content',
             LogHelpers.operation({
-              operationName: 'prepareValidatedMessages',
               error: errorMessage,
+              operationName: 'prepareValidatedMessages',
               uploadIds: uploadIdsFromUrls,
             }),
           );
@@ -1504,8 +1505,8 @@ export async function prepareValidatedMessages(
           'Participant 1+ detected uploadId on file parts, loading content directly',
           LogHelpers.operation({
             operationName: 'prepareValidatedMessages',
-            uploadIdsCount: uploadIdsFromParts.length,
             uploadIds: uploadIdsFromParts,
+            uploadIdsCount: uploadIdsFromParts.length,
           }),
         );
 
@@ -1514,19 +1515,19 @@ export async function prepareValidatedMessages(
           const loadResult = canUseUrlLoading && baseUrl && userId && secret
             ? await loadAttachmentContentUrl({
                 attachmentIds: uploadIdsFromParts,
-                r2Bucket,
+                baseUrl,
                 db,
                 logger,
-                baseUrl,
-                userId,
+                r2Bucket,
                 secret,
                 threadId,
+                userId,
               })
             : await loadAttachmentContent({
                 attachmentIds: uploadIdsFromParts,
-                r2Bucket,
                 db,
                 logger,
+                r2Bucket,
               });
 
           const { fileParts, stats } = loadResult;
@@ -1544,7 +1545,7 @@ export async function prepareValidatedMessages(
             // Prepend extracted text from PDFs/documents as a text part
             if (extractedTextContent) {
               combinedParts = [
-                { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                { text: extractedTextContent, type: MessagePartTypes.TEXT },
                 ...combinedParts,
               ];
             }
@@ -1557,8 +1558,8 @@ export async function prepareValidatedMessages(
             logger?.info(
               'Loaded uploadId file parts for participant 1+ (URL mode)',
               LogHelpers.operation({
-                operationName: 'prepareValidatedMessages',
                 filePartsCount: fileParts.length,
+                operationName: 'prepareValidatedMessages',
                 stats,
               }),
             );
@@ -1568,8 +1569,8 @@ export async function prepareValidatedMessages(
           logger?.error(
             'Failed to load participant 1+ uploadId attachment content',
             LogHelpers.operation({
-              operationName: 'prepareValidatedMessages',
               error: errorMessage,
+              operationName: 'prepareValidatedMessages',
               uploadIds: uploadIdsFromParts,
             }),
           );
@@ -1596,8 +1597,9 @@ export async function prepareValidatedMessages(
             return true;
           }
 
-          if (!Array.isArray(msg.parts))
+          if (!Array.isArray(msg.parts)) {
             return false;
+          }
           return msg.parts.some((part) => {
             const url = extractUrlFromFilePart(part);
             return (
@@ -1610,8 +1612,8 @@ export async function prepareValidatedMessages(
         .map(msg => msg.id);
 
       logger?.debug('Checking messages for attachment conversion', LogHelpers.operation({
-        operationName: 'prepareValidatedMessages',
         messageIdsToCheck,
+        operationName: 'prepareValidatedMessages',
         totalPreviousMessages: previousMessages.length,
         userMessages: previousMessages.filter(m => m.role === MessageRoles.USER).length,
       }));
@@ -1621,23 +1623,23 @@ export async function prepareValidatedMessages(
         // Falls back to base64 only for localhost (AI providers can't access localhost URLs)
         const loadResult = canUseUrlLoading && baseUrl && userId && secret
           ? await loadMessageAttachmentsUrl({
-              messageIds: messageIdsToCheck,
-              r2Bucket,
+              baseUrl,
               db,
               logger,
-              baseUrl,
-              userId,
+              messageIds: messageIdsToCheck,
+              r2Bucket,
               secret,
               threadId,
+              userId,
             })
           : await loadMessageAttachments({
-              messageIds: messageIdsToCheck,
-              r2Bucket,
               db,
               logger,
+              messageIds: messageIdsToCheck,
+              r2Bucket,
             });
 
-        const { filePartsByMessageId, errors, stats } = loadResult;
+        const { errors, filePartsByMessageId, stats } = loadResult;
         // extractedTextByMessageId only exists in URL-based loading
         const extractedTextByMessageId = 'extractedTextByMessageId' in loadResult
           ? loadResult.extractedTextByMessageId
@@ -1685,7 +1687,7 @@ export async function prepareValidatedMessages(
             // Prepend extracted text from PDFs/documents as a text part
             if (extractedText) {
               combinedParts = [
-                { type: MessagePartTypes.TEXT, text: extractedText },
+                { text: extractedText, type: MessagePartTypes.TEXT },
                 ...combinedParts,
               ];
             }
@@ -1699,8 +1701,8 @@ export async function prepareValidatedMessages(
           logger?.info(
             'Loaded previous message attachments via signed URLs',
             LogHelpers.operation({
-              operationName: 'prepareValidatedMessages',
               messagesConverted: filePartsByMessageId.size,
+              operationName: 'prepareValidatedMessages',
               stats,
             }),
           );
@@ -1708,15 +1710,15 @@ export async function prepareValidatedMessages(
 
         if (errors.length > 0) {
           logger?.warn('Some previous message attachments failed to load', LogHelpers.operation({
-            operationName: 'prepareValidatedMessages',
             errors: errors.slice(0, 5),
+            operationName: 'prepareValidatedMessages',
           }));
         }
       }
     } catch (error) {
       logger?.warn('Failed to load previous message attachments', LogHelpers.operation({
-        operationName: 'prepareValidatedMessages',
         error: getErrorMessage(error),
+        operationName: 'prepareValidatedMessages',
       }));
     }
   }
@@ -1743,8 +1745,8 @@ export async function prepareValidatedMessages(
       'Skipping duplicate user message with potentially invalid URLs',
       LogHelpers.operation({
         operationName: 'prepareValidatedMessages',
-        roundNumber: newMessageRoundNumber,
         reason: 'DB already has user message with proper signed URLs',
+        roundNumber: newMessageRoundNumber,
       }),
     );
   }
@@ -1764,10 +1766,10 @@ export async function prepareValidatedMessages(
     && fileDataFromHistory.size === 0
   ) {
     logger?.warn('File parts detected but no file data collected', LogHelpers.operation({
-      operationName: 'prepareValidatedMessages',
+      attachmentIdsCount: attachmentIds?.length ?? 0,
       filePartsCount: newMessageFileParts.length,
       isDuplicateUserMessage,
-      attachmentIdsCount: attachmentIds?.length ?? 0,
+      operationName: 'prepareValidatedMessages',
     }));
   }
 
@@ -1803,15 +1805,15 @@ export async function prepareValidatedMessages(
         if (canUseUrlLoading && baseUrl && userId && secret) {
           // URL-based loading - files parts will have URLs, not raw data
           // The AI provider will fetch the file directly, avoiding Worker memory limits
-          const { fileParts: urlParts, extractedTextContent, stats } = await loadAttachmentContentUrl({
+          const { extractedTextContent, fileParts: urlParts, stats } = await loadAttachmentContentUrl({
             attachmentIds: uploadIdsFromFileParts,
-            r2Bucket,
+            baseUrl,
             db,
             logger,
-            baseUrl,
-            userId,
+            r2Bucket,
             secret,
             threadId,
+            userId,
           });
 
           // For URL-based loading, inject URL parts directly into messages
@@ -1822,12 +1824,14 @@ export async function prepareValidatedMessages(
             // Update allMessages to include URL-based file parts or extracted text
             for (let i = 0; i < allMessages.length; i++) {
               const msg = allMessages[i];
-              if (!msg || !Array.isArray(msg.parts))
+              if (!msg || !Array.isArray(msg.parts)) {
                 continue;
+              }
 
               const hasFileParts = msg.parts.some(p => isFilePart(p));
-              if (!hasFileParts)
+              if (!hasFileParts) {
                 continue;
+              }
 
               const nonFileParts = msg.parts.filter(p => !isFilePart(p));
               const uiUrlParts = convertFilePartsToUIMessageParts<typeof msg>(urlParts);
@@ -1836,7 +1840,7 @@ export async function prepareValidatedMessages(
               // Prepend extracted text from PDFs/documents as a text part
               if (extractedTextContent) {
                 newParts = [
-                  { type: MessagePartTypes.TEXT, text: extractedTextContent },
+                  { text: extractedTextContent, type: MessagePartTypes.TEXT },
                   ...newParts,
                 ];
               }
@@ -1850,18 +1854,18 @@ export async function prepareValidatedMessages(
           }
 
           logger?.info('Loaded file data via URL-based fallback', LogHelpers.operation({
-            operationName: 'prepareValidatedMessages',
-            uploadIdsCount: uploadIdsFromFileParts.length,
             loadedCount: urlParts.length,
+            operationName: 'prepareValidatedMessages',
             stats,
+            uploadIdsCount: uploadIdsFromFileParts.length,
           }));
         } else {
           // Localhost fallback - must use base64 since AI providers can't access localhost URLs
           const { fileParts: loadedParts } = await loadAttachmentContent({
             attachmentIds: uploadIdsFromFileParts,
-            r2Bucket,
             db,
             logger,
+            r2Bucket,
           });
 
           for (const part of loadedParts) {
@@ -1879,22 +1883,22 @@ export async function prepareValidatedMessages(
               fileDataFromHistory.set(key, {
                 // Create new Uint8Array for ArrayBuffer type (TS 5.6 compatibility)
                 data: new Uint8Array(part.data),
-                mimeType: part.mimeType,
                 filename,
+                mimeType: part.mimeType,
               });
             }
           }
 
           logger?.info('Loaded file data via uploadId fallback (localhost base64)', LogHelpers.operation({
+            loadedCount: fileDataFromHistory.size,
             operationName: 'prepareValidatedMessages',
             uploadIdsCount: uploadIdsFromFileParts.length,
-            loadedCount: fileDataFromHistory.size,
           }));
         }
       } catch (error) {
         logger?.warn('Fallback file data loading failed', LogHelpers.operation({
-          operationName: 'prepareValidatedMessages',
           error: getErrorMessage(error),
+          operationName: 'prepareValidatedMessages',
         }));
       }
     }
@@ -1931,9 +1935,9 @@ export async function prepareValidatedMessages(
 
   if (fileDataMap.size > 0) {
     logger?.debug('Collected file data for post-processing', LogHelpers.operation({
-      operationName: 'prepareValidatedMessages',
       fileCount: fileDataMap.size,
       filenames: Array.from(fileDataMap.keys()),
+      operationName: 'prepareValidatedMessages',
     }));
   }
 
@@ -1980,7 +1984,7 @@ export async function prepareValidatedMessages(
   }
 
   const lastModelMessage = modelMessages[modelMessages.length - 1];
-  if (!lastModelMessage || lastModelMessage.role !== UIMessageRoles.USER) {
+  if (lastModelMessage?.role !== UIMessageRoles.USER) {
     const lastUserMessage = nonEmptyMessages.findLast(
       m => m.role === UIMessageRoles.USER,
     );
@@ -2002,8 +2006,8 @@ export async function prepareValidatedMessages(
     modelMessages = await convertToModelMessages([
       ...nonEmptyMessages,
       {
+        parts: [{ text: lastUserText.text, type: 'text' }],
         role: UIMessageRoles.USER,
-        parts: [{ type: 'text', text: lastUserText.text }],
       },
     ]);
   }

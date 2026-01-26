@@ -37,15 +37,15 @@ type RevenueEventType
 type RevenueEventProperties = {
   revenue: number;
   currency: string;
-  product?: string;
-  subscription_id?: string;
-  coupon?: string;
-  interval?: BillingInterval;
-  price_id?: string;
-  invoice_id?: string;
-  subscription_status?: StripeSubscriptionStatus;
-  total_revenue?: number;
-  lifetime_value?: number;
+  product?: string | undefined;
+  subscription_id?: string | undefined;
+  coupon?: string | undefined;
+  interval?: BillingInterval | undefined;
+  price_id?: string | undefined;
+  invoice_id?: string | undefined;
+  subscription_status?: StripeSubscriptionStatus | undefined;
+  total_revenue?: number | undefined;
+  lifetime_value?: number | undefined;
 };
 
 type CaptureRevenueOptions = {
@@ -75,8 +75,9 @@ export async function captureRevenueEvent(
   options?: CaptureRevenueOptions,
 ): Promise<void> {
   const posthog = getPostHogClient();
-  if (!posthog)
+  if (!posthog) {
     return;
+  }
 
   const distinctId = options?.distinctId
     ?? options?.userId
@@ -88,36 +89,36 @@ export async function captureRevenueEvent(
     distinctId,
     event: eventType,
     properties: {
-      // Core revenue properties (PostHog Revenue Analytics)
-      revenue: properties.revenue,
       $revenue: properties.revenue, // PostHog Revenue Analytics dashboard
-      currency: properties.currency,
-      product: properties.product,
-      subscription_id: properties.subscription_id,
-      coupon: properties.coupon,
-
-      // Additional context
-      billing_interval: properties.interval,
-      stripe_price_id: properties.price_id,
-      stripe_invoice_id: properties.invoice_id,
-
       // Person updates - set every time
       $set: {
-        last_billing_event: eventType,
         last_billing_date: new Date().toISOString(),
+        last_billing_event: eventType,
         ...(properties.product && { current_plan: properties.product }),
         ...(properties.subscription_id && { stripe_subscription_id: properties.subscription_id }),
         ...(properties.subscription_status && { subscription_status: properties.subscription_status }),
         ...(properties.total_revenue !== undefined && { total_revenue: properties.total_revenue }),
         ...(properties.lifetime_value !== undefined && { lifetime_value: properties.lifetime_value }),
       },
-
       // Person updates - set only once (never overwrite)
       $set_once: {
         first_purchase_date: new Date().toISOString(),
         ...(options?.customerId && { stripe_customer_id: options.customerId }),
         ...(eventType === 'subscription_started' && { subscription_started_at: new Date().toISOString() }),
       },
+      // Additional context
+      billing_interval: properties.interval,
+      coupon: properties.coupon,
+      currency: properties.currency,
+
+      product: properties.product,
+      // Core revenue properties (PostHog Revenue Analytics)
+      revenue: properties.revenue,
+      stripe_invoice_id: properties.invoice_id,
+
+      stripe_price_id: properties.price_id,
+
+      subscription_id: properties.subscription_id,
     },
   });
 }
@@ -126,36 +127,37 @@ export async function captureRevenueEvent(
  * Track subscription lifecycle events
  */
 export const revenueTracking = {
-  subscriptionStarted: (
-    props: Omit<RevenueEventProperties, 'revenue' | 'currency'> & {
-      revenue: number;
-      currency: string;
-    },
+  creditsPurchased: async (
+    props: RevenueEventProperties & { credits_amount?: number },
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('subscription_started', props, options),
+  ) => await captureRevenueEvent('credits_purchased', props, options),
 
-  subscriptionRenewed: (
-    props: RevenueEventProperties,
+  paymentFailed: async (
+    props: Partial<RevenueEventProperties> & { error_message?: string; currency?: string },
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('subscription_renewed', props, options),
+  ) => await captureRevenueEvent('payment_failed', {
+    currency: props.currency ?? 'USD', // Use provided currency
+    revenue: 0,
+    ...props,
+  }, options),
 
-  subscriptionUpgraded: (
-    props: RevenueEventProperties & { previous_product?: string },
+  refundIssued: async (
+    props: RevenueEventProperties & { refund_reason?: string },
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('subscription_upgraded', props, options),
-
-  subscriptionDowngraded: (
-    props: RevenueEventProperties & { previous_product?: string },
-    options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('subscription_downgraded', props, options),
+  ) => await captureRevenueEvent('refund_issued', {
+    ...props,
+    // Refunds should be negative for proper revenue tracking
+    revenue: -Math.abs(props.revenue),
+  }, options),
 
   subscriptionCanceled: (
     props: Partial<RevenueEventProperties> & { subscription_id: string; currency?: string },
     options?: CaptureRevenueOptions,
   ) => {
     const posthog = getPostHogClient();
-    if (!posthog)
+    if (!posthog) {
       return;
+    }
 
     const distinctId = options?.distinctId
       ?? options?.userId
@@ -167,42 +169,42 @@ export const revenueTracking = {
       distinctId,
       event: 'subscription_canceled',
       properties: {
-        revenue: 0,
         $revenue: 0,
-        currency: props.currency ?? 'USD', // Use provided currency, fallback to USD
-        subscription_id: props.subscription_id,
-        product: props.product,
         $set: {
-          last_billing_event: 'subscription_canceled',
           last_billing_date: new Date().toISOString(),
-          subscription_status: 'canceled',
+          last_billing_event: 'subscription_canceled',
           subscription_canceled_at: new Date().toISOString(),
+          subscription_status: 'canceled',
           ...(props.product && { current_plan: props.product }),
         },
+        currency: props.currency ?? 'USD', // Use provided currency, fallback to USD
+        product: props.product,
+        revenue: 0,
+        subscription_id: props.subscription_id,
       },
     });
   },
 
-  creditsPurchased: (
-    props: RevenueEventProperties & { credits_amount?: number },
+  subscriptionDowngraded: async (
+    props: RevenueEventProperties & { previous_product?: string },
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('credits_purchased', props, options),
+  ) => await captureRevenueEvent('subscription_downgraded', props, options),
 
-  paymentFailed: (
-    props: Partial<RevenueEventProperties> & { error_message?: string; currency?: string },
+  subscriptionRenewed: async (
+    props: RevenueEventProperties,
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('payment_failed', {
-    revenue: 0,
-    currency: props.currency ?? 'USD', // Use provided currency
-    ...props,
-  }, options),
+  ) => await captureRevenueEvent('subscription_renewed', props, options),
 
-  refundIssued: (
-    props: RevenueEventProperties & { refund_reason?: string },
+  subscriptionStarted: async (
+    props: Omit<RevenueEventProperties, 'revenue' | 'currency'> & {
+      revenue: number;
+      currency: string;
+    },
     options?: CaptureRevenueOptions,
-  ) => captureRevenueEvent('refund_issued', {
-    ...props,
-    // Refunds should be negative for proper revenue tracking
-    revenue: -Math.abs(props.revenue),
-  }, options),
+  ) => await captureRevenueEvent('subscription_started', props, options),
+
+  subscriptionUpgraded: async (
+    props: RevenueEventProperties & { previous_product?: string },
+    options?: CaptureRevenueOptions,
+  ) => await captureRevenueEvent('subscription_upgraded', props, options),
 };

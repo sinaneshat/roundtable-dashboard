@@ -41,15 +41,15 @@ function createPlaceholderPreSearch(
   userQuery: string,
 ): StoredPreSearch {
   return {
-    id: `placeholder-presearch-${threadId}-${roundNumber}`,
-    threadId,
-    roundNumber,
-    userQuery,
-    status: MessageStatuses.PENDING,
-    searchData: null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `placeholder-presearch-${threadId}-${roundNumber}`,
+    roundNumber,
+    searchData: null,
+    status: MessageStatuses.PENDING,
+    threadId,
+    userQuery,
   } as StoredPreSearch;
 }
 
@@ -59,10 +59,10 @@ function createPlaceholderPreSearch(
 function createPartialDataWithQueries(queryCount: number): PartialPreSearchData {
   return {
     queries: Array.from({ length: queryCount }, (_, i) => ({
+      index: i,
       query: `Test query ${i}`,
       rationale: `Test rationale ${i}`,
       searchDepth: 'basic' as const,
-      index: i,
       total: queryCount,
     })),
     results: [],
@@ -78,26 +78,26 @@ function createPartialDataWithResults(
 ): PartialPreSearchData {
   return {
     queries: Array.from({ length: queryCount }, (_, i) => ({
+      index: i,
       query: `Test query ${i}`,
       rationale: `Test rationale ${i}`,
       searchDepth: 'basic' as const,
-      index: i,
       total: queryCount,
     })),
     results: Array.from({ length: resultCount }, (_, i) => ({
-      query: `Test query ${i % queryCount}`,
       answer: null,
+      index: i,
+      query: `Test query ${i % queryCount}`,
+      responseTime: 100,
       results: [
         {
-          title: `Result ${i}`,
-          url: `https://example.com/${i}`,
           content: `Content ${i}`,
           excerpt: `Excerpt ${i}`,
           score: 0,
+          title: `Result ${i}`,
+          url: `https://example.com/${i}`,
         },
       ],
-      responseTime: 100,
-      index: i,
     })),
   };
 }
@@ -183,11 +183,11 @@ describe('non-first round progressive UI', () => {
       const existingPreSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Existing summary',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Existing summary',
           totalResults: 0,
           totalTime: 0,
         },
@@ -211,11 +211,11 @@ describe('non-first round progressive UI', () => {
       const existingPreSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Existing summary',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Existing summary',
           totalResults: 0,
           totalTime: 0,
         },
@@ -246,15 +246,15 @@ describe('non-first round progressive UI', () => {
 
       // Add "real" pre-search with STREAMING status
       const realPreSearch: StoredPreSearch = {
-        id: 'real-presearch-id',
-        threadId,
-        roundNumber,
-        userQuery: 'test query',
-        status: MessageStatuses.STREAMING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'real-presearch-id',
+        roundNumber,
+        searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId,
+        userQuery: 'test query',
       };
       store.getState().addPreSearch(realPreSearch);
 
@@ -282,15 +282,15 @@ describe('non-first round progressive UI', () => {
 
       // Try to add another pre-search for same round with STREAMING
       const anotherPreSearch: StoredPreSearch = {
-        id: 'another-presearch-id',
-        threadId,
-        roundNumber,
-        userQuery: 'test query',
-        status: MessageStatuses.STREAMING,
-        searchData: null,
-        errorMessage: null,
-        createdAt: new Date(),
         completedAt: null,
+        createdAt: new Date(),
+        errorMessage: null,
+        id: 'another-presearch-id',
+        roundNumber,
+        searchData: null,
+        status: MessageStatuses.STREAMING,
+        threadId,
+        userQuery: 'test query',
       };
       store.getState().addPreSearch(anotherPreSearch);
 
@@ -304,8 +304,8 @@ describe('non-first round progressive UI', () => {
     it('should return false for untriggered rounds', () => {
       const store = createChatStore();
 
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
 
     it('should return true after markPreSearchTriggered', () => {
@@ -313,20 +313,20 @@ describe('non-first round progressive UI', () => {
 
       store.getState().markPreSearchTriggered(1);
 
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
       // Other rounds should still be false
-      expect(store.getState().hasPreSearchBeenTriggered(0)).toBe(false);
-      expect(store.getState().hasPreSearchBeenTriggered(2)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(0)).toBeFalsy();
+      expect(store.getState().hasPreSearchBeenTriggered(2)).toBeFalsy();
     });
 
     it('should return false after clearPreSearchTracking', () => {
       const store = createChatStore();
 
       store.getState().markPreSearchTriggered(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       store.getState().clearPreSearchTracking(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
     });
   });
 
@@ -347,7 +347,7 @@ describe('non-first round progressive UI', () => {
 
       // Step 2: Mark as triggered (simulating effect marking)
       store.getState().markPreSearchTriggered(roundNumber);
-      expect(store.getState().hasPreSearchBeenTriggered(roundNumber)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(roundNumber)).toBeTruthy();
 
       // Step 3: Update to STREAMING status (simulating addPreSearch)
       store.getState().updatePreSearchStatus(roundNumber, MessageStatuses.STREAMING);
@@ -356,10 +356,10 @@ describe('non-first round progressive UI', () => {
       // Step 4: First partial update - 1 query
       store.getState().updatePartialPreSearchData(roundNumber, {
         queries: [{
+          index: 0,
           query: 'AI machine learning basics',
           rationale: 'Understanding core concepts',
           searchDepth: 'basic',
-          index: 0,
           total: 2,
         }],
         results: [],
@@ -375,17 +375,17 @@ describe('non-first round progressive UI', () => {
       store.getState().updatePartialPreSearchData(roundNumber, {
         queries: [
           {
+            index: 0,
             query: 'AI machine learning basics',
             rationale: 'Understanding core concepts',
             searchDepth: 'basic',
-            index: 0,
             total: 2,
           },
           {
+            index: 1,
             query: 'Neural network architecture',
             rationale: 'Deep dive into structure',
             searchDepth: 'advanced',
-            index: 1,
             total: 2,
           },
         ],
@@ -400,34 +400,34 @@ describe('non-first round progressive UI', () => {
       store.getState().updatePartialPreSearchData(roundNumber, {
         queries: [
           {
+            index: 0,
             query: 'AI machine learning basics',
             rationale: 'Understanding core concepts',
             searchDepth: 'basic',
-            index: 0,
             total: 2,
           },
           {
+            index: 1,
             query: 'Neural network architecture',
             rationale: 'Deep dive into structure',
             searchDepth: 'advanced',
-            index: 1,
             total: 2,
           },
         ],
         results: [{
-          query: 'AI machine learning basics',
           answer: null,
+          index: 0,
+          query: 'AI machine learning basics',
+          responseTime: 250,
           results: [
             {
-              title: 'Introduction to AI',
-              url: 'https://example.com/ai-intro',
               content: 'AI content...',
               excerpt: 'Learn about AI...',
               score: 0.9,
+              title: 'Introduction to AI',
+              url: 'https://example.com/ai-intro',
             },
           ],
-          responseTime: 250,
-          index: 0,
         }],
       });
 
@@ -438,57 +438,57 @@ describe('non-first round progressive UI', () => {
 
       // Step 7: Final update via updatePreSearchData (marks complete)
       store.getState().updatePreSearchData(roundNumber, {
+        failureCount: 0,
         queries: [
           {
+            index: 0,
             query: 'AI machine learning basics',
             rationale: 'Understanding core concepts',
             searchDepth: 'basic',
-            index: 0,
             total: 2,
           },
           {
+            index: 1,
             query: 'Neural network architecture',
             rationale: 'Deep dive into structure',
             searchDepth: 'advanced',
-            index: 1,
             total: 2,
           },
         ],
         results: [
           {
-            query: 'AI machine learning basics',
             answer: 'AI is...',
+            index: 0,
+            query: 'AI machine learning basics',
+            responseTime: 250,
             results: [
               {
-                title: 'Introduction to AI',
-                url: 'https://example.com/ai-intro',
                 content: 'AI content...',
                 excerpt: 'Learn about AI...',
                 score: 0.9,
+                title: 'Introduction to AI',
+                url: 'https://example.com/ai-intro',
               },
             ],
-            responseTime: 250,
-            index: 0,
           },
           {
-            query: 'Neural network architecture',
             answer: 'Neural networks...',
+            index: 1,
+            query: 'Neural network architecture',
+            responseTime: 300,
             results: [
               {
-                title: 'Deep Learning Guide',
-                url: 'https://example.com/dl-guide',
                 content: 'DL content...',
                 excerpt: 'Deep learning...',
                 score: 0.85,
+                title: 'Deep Learning Guide',
+                url: 'https://example.com/dl-guide',
               },
             ],
-            responseTime: 300,
-            index: 1,
           },
         ],
-        summary: 'Search complete. Found relevant resources.',
         successCount: 2,
-        failureCount: 0,
+        summary: 'Search complete. Found relevant resources.',
         totalResults: 2,
         totalTime: 550,
       });
@@ -581,11 +581,11 @@ describe('non-first round progressive UI', () => {
       const preSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: '',
           successCount: 0,
-          failureCount: 0,
+          summary: '',
           totalResults: 0,
           totalTime: 0,
         },
@@ -664,16 +664,16 @@ describe('non-first round progressive UI', () => {
       // Create COMPLETE pre-search
       const completePreSearch = {
         ...createPlaceholderPreSearch(threadId, roundNumber, 'test query'),
-        status: MessageStatuses.COMPLETE,
         searchData: {
+          failureCount: 0,
           queries: [],
           results: [],
-          summary: 'Search complete',
           successCount: 0,
-          failureCount: 0,
+          summary: 'Search complete',
           totalResults: 0,
           totalTime: 0,
         },
+        status: MessageStatuses.COMPLETE,
       };
       store.getState().setPreSearches([completePreSearch]);
 
@@ -691,15 +691,15 @@ describe('non-first round progressive UI', () => {
       const preSearchComplete = preSearch && preSearch.status === MessageStatuses.COMPLETE;
 
       // ✅ KEY ASSERTION: isStreamingRound should be true
-      expect(isStreamingRound).toBe(true);
-      expect(preSearchActive).toBe(false); // Pre-search is COMPLETE, not active
-      expect(preSearchComplete).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
+      expect(preSearchActive).toBeFalsy(); // Pre-search is COMPLETE, not active
+      expect(preSearchComplete).toBeTruthy();
 
       // Calculate isAnyStreamingActive (from chat-message-list.tsx)
       const isAnyStreamingActive = isStreaming || isModeratorStreaming || isStreamingRound;
 
       // ✅ KEY ASSERTION: isAnyStreamingActive should be true because isStreamingRound is true
-      expect(isAnyStreamingActive).toBe(true);
+      expect(isAnyStreamingActive).toBeTruthy();
 
       // shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive)
       // Since round is not complete (no moderator with finishReason), shouldShowPendingCards should be true
@@ -707,7 +707,7 @@ describe('non-first round progressive UI', () => {
       const shouldShowPendingCards = !isRoundComplete && (preSearchActive || preSearchComplete || isAnyStreamingActive);
 
       // ✅ KEY ASSERTION: shouldShowPendingCards should be true
-      expect(shouldShowPendingCards).toBe(true);
+      expect(shouldShowPendingCards).toBeTruthy();
     });
 
     it('should show pending cards even when isStreaming is false after pre-search completes', () => {
@@ -734,12 +734,12 @@ describe('non-first round progressive UI', () => {
       const isAnyStreamingActive = state.isStreaming || state.isModeratorStreaming || isStreamingRound;
 
       // Even though isStreaming=false, isStreamingRound keeps things visible
-      expect(isStreamingRound).toBe(true);
-      expect(preSearchComplete).toBe(true);
-      expect(isAnyStreamingActive).toBe(true);
+      expect(isStreamingRound).toBeTruthy();
+      expect(preSearchComplete).toBeTruthy();
+      expect(isAnyStreamingActive).toBeTruthy();
 
       const shouldShowPendingCards = true && (false || preSearchComplete || isAnyStreamingActive);
-      expect(shouldShowPendingCards).toBe(true);
+      expect(shouldShowPendingCards).toBeTruthy();
     });
 
     it('should NOT clear streamingRoundNumber when config change completes', () => {

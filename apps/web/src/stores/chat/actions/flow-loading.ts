@@ -55,17 +55,17 @@ export function useFlowLoading(options: UseFlowLoadingOptions): UseFlowLoadingRe
   const loadingDetails = useMemo(
     () => ({
       isCreatingThread: flowState === FlowStates.CREATING_THREAD,
-      isStreamingParticipants: flowState === FlowStates.STREAMING_PARTICIPANTS,
-      isStreamingModerator: flowState === FlowStates.STREAMING_MODERATOR,
       isNavigating: flowState === FlowStates.NAVIGATING,
+      isStreamingModerator: flowState === FlowStates.STREAMING_MODERATOR,
+      isStreamingParticipants: flowState === FlowStates.STREAMING_PARTICIPANTS,
     }),
     [flowState],
   );
 
   return {
-    showLoader: isLoading,
-    loadingMessage,
     flowState,
     loadingDetails,
+    loadingMessage,
+    showLoader: isLoading,
   };
 }

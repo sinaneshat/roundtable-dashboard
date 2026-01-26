@@ -6,7 +6,7 @@ type CustomDataPartProps = {
   part: DataPart;
   className?: string;
 };
-export function CustomDataPart({ part, className }: CustomDataPartProps) {
+export function CustomDataPart({ className, part }: CustomDataPartProps) {
   const customType = part.type.startsWith('data-')
     ? part.type.substring(5)
     : part.type;

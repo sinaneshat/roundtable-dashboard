@@ -136,18 +136,18 @@ function handleIdleTransitions(event: RoundFlowEvent, ctx: RoundContext, payload
       // Decide whether to run pre-search
       if (guards.shouldRunPreSearch(ctx)) {
         return {
-          nextState: RoundFlowStates.PRE_SEARCH_PENDING,
           actions: [actions.createPreSearch(roundNumber)],
+          nextState: RoundFlowStates.PRE_SEARCH_PENDING,
         };
       }
 
       // Skip pre-search, go directly to participants
       return {
-        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
         actions: [
           actions.skipPreSearch(),
           actions.startParticipant(0, false),
         ],
+        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
       };
     }
 
@@ -163,25 +163,25 @@ function handleIdleTransitions(event: RoundFlowEvent, ctx: RoundContext, payload
         const preSearchStreamId = ctx.resumption.preSearchStreamId;
         if (preSearchStreamId) {
           return {
-            nextState: RoundFlowStates.PRE_SEARCH_STREAMING,
             actions: [actions.resumePreSearch(preSearchStreamId, roundNumber)],
+            nextState: RoundFlowStates.PRE_SEARCH_STREAMING,
           };
         }
         // Pre-search stream expired, create new one
         return {
-          nextState: RoundFlowStates.PRE_SEARCH_PENDING,
           actions: [actions.createPreSearch(roundNumber)],
+          nextState: RoundFlowStates.PRE_SEARCH_PENDING,
         };
       }
 
       if (guards.isResumingFromParticipants(ctx)) {
         const participantIndex = ctx.resumption.participantIndex ?? 0;
         return {
-          nextState: RoundFlowStates.PARTICIPANT_STREAMING,
           actions: [
             actions.setParticipantIndex(participantIndex),
             actions.startParticipant(participantIndex, true),
           ],
+          nextState: RoundFlowStates.PARTICIPANT_STREAMING,
         };
       }
 
@@ -189,22 +189,22 @@ function handleIdleTransitions(event: RoundFlowEvent, ctx: RoundContext, payload
         const moderatorStreamId = ctx.resumption.moderatorStreamId;
         if (moderatorStreamId) {
           return {
-            nextState: RoundFlowStates.MODERATOR_STREAMING,
             actions: [actions.resumeModerator(moderatorStreamId, roundNumber)],
+            nextState: RoundFlowStates.MODERATOR_STREAMING,
           };
         }
         // Moderator stream expired, trigger fresh
         return {
-          nextState: RoundFlowStates.MODERATOR_PENDING,
           actions: [actions.startModerator(roundNumber)],
+          nextState: RoundFlowStates.MODERATOR_PENDING,
         };
       }
 
       // Round is complete, nothing to resume
       if (guards.isRoundComplete(ctx)) {
         return {
-          nextState: RoundFlowStates.COMPLETE,
           actions: [actions.completeRound(roundNumber)],
+          nextState: RoundFlowStates.COMPLETE,
         };
       }
 
@@ -223,24 +223,24 @@ function handlePreSearchPendingTransitions(event: RoundFlowEvent, _ctx: RoundCon
   switch (event) {
     case 'PRE_SEARCH_START':
       return {
-        nextState: RoundFlowStates.PRE_SEARCH_STREAMING,
         actions: [],
+        nextState: RoundFlowStates.PRE_SEARCH_STREAMING,
       };
 
     case 'PRE_SEARCH_SKIP':
       return {
-        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
         actions: [
           actions.skipPreSearch(),
           actions.startParticipant(0, false),
         ],
+        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
       };
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -255,24 +255,24 @@ function handlePreSearchStreamingTransitions(event: RoundFlowEvent, _ctx: RoundC
   switch (event) {
     case 'PRE_SEARCH_COMPLETE':
       return {
-        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
         actions: [actions.startParticipant(0, false)],
+        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
       };
 
     case 'PRE_SEARCH_ERROR': {
       // ✅ ZOD VALIDATION: Use type guard instead of cast
       const error = isErrorPayload(payload) ? payload.error : new Error('Pre-search failed');
       return {
-        nextState: RoundFlowStates.ERROR,
         actions: [actions.setError(error, 'pre_search')],
+        nextState: RoundFlowStates.ERROR,
       };
     }
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -293,15 +293,15 @@ function handleParticipantStreamingTransitions(event: RoundFlowEvent, ctx: Round
       // Check if there are more participants
       if (guards.hasNextParticipant(ctx)) {
         return {
-          nextState: RoundFlowStates.PARTICIPANT_TRANSITION,
           actions: [actions.advanceToNextParticipant(currentIndex)],
+          nextState: RoundFlowStates.PARTICIPANT_TRANSITION,
         };
       }
 
       // All participants done, move to moderator
       return {
-        nextState: RoundFlowStates.MODERATOR_PENDING,
         actions: [actions.startModerator(roundNumber)],
+        nextState: RoundFlowStates.MODERATOR_PENDING,
       };
     }
 
@@ -309,16 +309,16 @@ function handleParticipantStreamingTransitions(event: RoundFlowEvent, ctx: Round
       // ✅ ZOD VALIDATION: Use type guard instead of cast
       const error = isErrorPayload(payload) ? payload.error : new Error('Participant streaming failed');
       return {
-        nextState: RoundFlowStates.ERROR,
         actions: [actions.setError(error, 'participant')],
+        nextState: RoundFlowStates.ERROR,
       };
     }
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -338,25 +338,25 @@ function handleParticipantTransitionTransitions(event: RoundFlowEvent, ctx: Roun
       if (!guards.isValidParticipantIndex(ctx, nextIndex)) {
         // Invalid index, go to moderator
         return {
-          nextState: RoundFlowStates.MODERATOR_PENDING,
           actions: [actions.startModerator(ctx.roundNumber ?? 0)],
+          nextState: RoundFlowStates.MODERATOR_PENDING,
         };
       }
 
       return {
-        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
         actions: [
           actions.setParticipantIndex(nextIndex),
           actions.startParticipant(nextIndex, false),
         ],
+        nextState: RoundFlowStates.PARTICIPANT_STREAMING,
       };
     }
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -371,15 +371,15 @@ function handleModeratorPendingTransitions(event: RoundFlowEvent, _ctx: RoundCon
   switch (event) {
     case 'MODERATOR_START':
       return {
-        nextState: RoundFlowStates.MODERATOR_STREAMING,
         actions: [],
+        nextState: RoundFlowStates.MODERATOR_STREAMING,
       };
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -395,11 +395,11 @@ function handleModeratorStreamingTransitions(event: RoundFlowEvent, ctx: RoundCo
     case 'MODERATOR_COMPLETE': {
       const roundNumber = ctx.roundNumber ?? 0;
       return {
-        nextState: RoundFlowStates.COMPLETE,
         actions: [
           actions.completeRound(roundNumber),
           actions.notifyCompletion(roundNumber),
         ],
+        nextState: RoundFlowStates.COMPLETE,
       };
     }
 
@@ -407,16 +407,16 @@ function handleModeratorStreamingTransitions(event: RoundFlowEvent, ctx: RoundCo
       // ✅ ZOD VALIDATION: Use type guard instead of cast
       const error = isErrorPayload(payload) ? payload.error : new Error('Moderator streaming failed');
       return {
-        nextState: RoundFlowStates.ERROR,
         actions: [actions.setError(error, 'moderator')],
+        nextState: RoundFlowStates.ERROR,
       };
     }
 
     case 'ABORT':
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -432,8 +432,8 @@ function handleCompleteTransitions(event: RoundFlowEvent): TransitionResult {
     case 'RESET':
     case 'START_ROUND':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -448,8 +448,8 @@ function handleErrorTransitions(event: RoundFlowEvent): TransitionResult {
   switch (event) {
     case 'RESET':
       return {
-        nextState: RoundFlowStates.IDLE,
         actions: [actions.resetFlow()],
+        nextState: RoundFlowStates.IDLE,
       };
 
     default:
@@ -565,15 +565,20 @@ export function isModeratorPhase(state: RoundFlowState): boolean {
  * Get the round phase from FSM state
  */
 export function getPhaseFromState(state: RoundFlowState): 'idle' | 'pre_search' | 'participants' | 'moderator' | 'complete' {
-  if (state === RoundFlowStates.IDLE)
+  if (state === RoundFlowStates.IDLE) {
     return 'idle';
-  if (isPreSearchPhase(state))
+  }
+  if (isPreSearchPhase(state)) {
     return 'pre_search';
-  if (isParticipantPhase(state))
+  }
+  if (isParticipantPhase(state)) {
     return 'participants';
-  if (isModeratorPhase(state))
+  }
+  if (isModeratorPhase(state)) {
     return 'moderator';
-  if (state === RoundFlowStates.COMPLETE)
+  }
+  if (state === RoundFlowStates.COMPLETE) {
     return 'complete';
+  }
   return 'idle'; // ERROR state maps to idle for phase purposes
 }

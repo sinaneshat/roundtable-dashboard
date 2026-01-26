@@ -21,9 +21,23 @@ import * as tables from '@/db';
 import type { DbMessageParts } from '@/db/schemas/chat-metadata';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
+import type { UsageStats } from '@/services/errors';
 import { extractErrorMetadata } from '@/services/errors';
 import type { CitationSourceMap } from '@/types/citations';
 import { AvailableSourceSchema } from '@/types/citations';
+
+// ============================================================================
+// Helper Functions for Safe Property Access
+// ============================================================================
+
+/**
+ * Safely access a property from a Record<string, unknown> using bracket notation.
+ * This helper avoids TS4111 index signature access errors while keeping code readable.
+ */
+function getMetadataProp<T>(obj: Record<string, unknown>, key: string): T | undefined {
+  const value = obj[key];
+  return value as T | undefined;
+}
 
 // ============================================================================
 // Type Definitions
@@ -34,21 +48,21 @@ import { AvailableSourceSchema } from '@/types/citations';
  * Following type-inference-patterns.md: Zod-first type inference
  */
 export const SaveMessageParamsSchema = z.object({
+  availableSources: z.array(AvailableSourceSchema).optional(),
+  citationSourceMap: z.custom<CitationSourceMap>().optional(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  emptyResponseError: z.string().nullable().optional(),
+  finishResult: z.custom<StreamingFinishResult>(),
   messageId: CoreSchemas.id(),
-  threadId: CoreSchemas.id(),
+  modelId: z.string().min(1),
   participantId: CoreSchemas.id(),
   participantIndex: z.number().int().nonnegative(),
   participantRole: z.string().nullable(),
-  modelId: z.string().min(1),
+  reasoningDeltas: z.array(z.string()),
+  reasoningDuration: z.number().nonnegative().optional(),
   roundNumber: z.number().int().nonnegative(),
   text: z.string(),
-  reasoningDeltas: z.array(z.string()),
-  finishResult: z.custom<StreamingFinishResult>(),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
-  citationSourceMap: z.custom<CitationSourceMap>().optional(),
-  availableSources: z.array(AvailableSourceSchema).optional(),
-  reasoningDuration: z.number().nonnegative().optional(),
-  emptyResponseError: z.string().nullable().optional(),
+  threadId: CoreSchemas.id(),
 }).strict();
 
 export type SaveMessageParams = z.infer<typeof SaveMessageParamsSchema>;
@@ -77,13 +91,15 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
     const reasoningTexts: string[] = [];
     for (const part of finishResult.reasoning) {
       if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string' && part.text.trim()) {
-        if ('type' in part && part.type === 'redacted')
+        if ('type' in part && part.type === 'redacted') {
           continue;
+        }
         reasoningTexts.push(part.text.trim());
       }
     }
-    if (reasoningTexts.length > 0)
+    if (reasoningTexts.length > 0) {
       return reasoningTexts.join('\n\n');
+    }
   }
 
   if (typeof finishResult.reasoningText === 'string' && finishResult.reasoningText.trim()) {
@@ -91,14 +107,16 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
   }
 
   const metadata = finishResult.providerMetadata;
-  if (!metadata || !isObject(metadata))
+  if (!metadata || !isObject(metadata)) {
     return null;
+  }
 
   const getNested = (obj: unknown, path: string[]): unknown => {
     let current = obj;
     for (const key of path) {
-      if (!isObject(current))
+      if (!isObject(current)) {
         return undefined;
+      }
       current = current[key];
     }
     return current;
@@ -106,23 +124,28 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
 
   const fields = [
     getNested(metadata, ['openai', 'reasoning']),
-    metadata.reasoning,
-    metadata.thinking,
-    metadata.thought,
-    metadata.thoughts,
-    metadata.chain_of_thought,
-    metadata.internal_reasoning,
-    metadata.scratchpad,
+    getMetadataProp<unknown>(metadata, 'reasoning'),
+    getMetadataProp<unknown>(metadata, 'thinking'),
+    getMetadataProp<unknown>(metadata, 'thought'),
+    getMetadataProp<unknown>(metadata, 'thoughts'),
+    getMetadataProp<unknown>(metadata, 'chain_of_thought'),
+    getMetadataProp<unknown>(metadata, 'internal_reasoning'),
+    getMetadataProp<unknown>(metadata, 'scratchpad'),
   ];
 
   for (const field of fields) {
-    if (typeof field === 'string' && field.trim())
+    if (typeof field === 'string' && field.trim()) {
       return field.trim();
+    }
     if (isObject(field)) {
-      if (typeof field.content === 'string' && field.content.trim())
-        return field.content.trim();
-      if (typeof field.text === 'string' && field.text.trim())
-        return field.text.trim();
+      const content = getMetadataProp<unknown>(field, 'content');
+      if (typeof content === 'string' && content.trim()) {
+        return content.trim();
+      }
+      const text = getMetadataProp<unknown>(field, 'text');
+      if (typeof text === 'string' && text.trim()) {
+        return text.trim();
+      }
     }
   }
 
@@ -146,27 +169,27 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
  */
 export async function saveStreamedMessage(params: SaveMessageParams): Promise<void> {
   const {
+    availableSources,
+    citationSourceMap,
+    db,
+    emptyResponseError,
+    finishResult,
     messageId,
-    threadId,
+    modelId,
     participantId,
     participantIndex,
     participantRole,
-    modelId,
+    reasoningDeltas,
+    reasoningDuration,
     roundNumber,
     text,
-    reasoningDeltas,
-    finishResult,
-    db,
-    citationSourceMap,
-    availableSources,
-    reasoningDuration,
-    emptyResponseError,
+    threadId,
   } = params;
 
   try {
     const reasoningText = extractReasoning(reasoningDeltas, finishResult);
 
-    const getTotalUsage = () => {
+    const getTotalUsage = (): { inputTokens?: number; outputTokens?: number } | undefined => {
       if (
         !('totalUsage' in finishResult)
         || !finishResult.totalUsage
@@ -175,54 +198,80 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         return undefined;
       }
       const tu = finishResult.totalUsage;
-      const inputTokens
-        = 'inputTokens' in tu && typeof tu.inputTokens === 'number'
-          ? tu.inputTokens
-          : undefined;
-      const outputTokens
-        = 'outputTokens' in tu && typeof tu.outputTokens === 'number'
-          ? tu.outputTokens
-          : undefined;
-      return { inputTokens, outputTokens };
+      const inputTokens = 'inputTokens' in tu && typeof tu.inputTokens === 'number' ? tu.inputTokens : null;
+      const outputTokens = 'outputTokens' in tu && typeof tu.outputTokens === 'number' ? tu.outputTokens : null;
+
+      // Conditionally build object to satisfy exactOptionalPropertyTypes
+      if (inputTokens !== null && outputTokens !== null) {
+        return { inputTokens, outputTokens };
+      }
+      if (inputTokens !== null) {
+        return { inputTokens };
+      }
+      if (outputTokens !== null) {
+        return { outputTokens };
+      }
+      return {};
     };
     const usageData = finishResult.usage || getTotalUsage();
 
-    const errorMetadata = extractErrorMetadata({
+    // Build extractErrorMetadata params conditionally to satisfy exactOptionalPropertyTypes
+    const errorMetadataParams: {
+      finishReason: string;
+      providerMetadata: unknown;
+      response: unknown;
+      text?: string;
+      usage?: UsageStats;
+      reasoning?: string;
+    } = {
+      finishReason: finishResult.finishReason,
       providerMetadata: finishResult.providerMetadata,
       response: finishResult.response,
-      finishReason: finishResult.finishReason,
-      usage: usageData,
       text,
-      reasoning: reasoningText || undefined,
-    });
+    };
+    // Conditionally add usage to avoid exactOptionalPropertyTypes issues
+    if (usageData) {
+      const normalizedUsage: UsageStats = {};
+      if (usageData.inputTokens !== undefined) {
+        normalizedUsage.inputTokens = usageData.inputTokens;
+      }
+      if (usageData.outputTokens !== undefined) {
+        normalizedUsage.outputTokens = usageData.outputTokens;
+      }
+      errorMetadataParams.usage = normalizedUsage;
+    }
+    if (reasoningText) {
+      errorMetadataParams.reasoning = reasoningText;
+    }
+    const errorMetadata = extractErrorMetadata(errorMetadataParams);
 
     const parts: MessagePart[] = [];
 
     if (emptyResponseError) {
-      parts.push({ type: MessagePartTypes.TEXT, text: emptyResponseError });
+      parts.push({ text: emptyResponseError, type: MessagePartTypes.TEXT });
     } else if (text) {
-      parts.push({ type: MessagePartTypes.TEXT, text });
+      parts.push({ text, type: MessagePartTypes.TEXT });
     }
 
     const isRedactedOnlyReasoning = reasoningText && /^\[REDACTED\]$/i.test(reasoningText.trim());
     if (reasoningText && !isRedactedOnlyReasoning) {
-      parts.push({ type: MessagePartTypes.REASONING, text: reasoningText });
+      parts.push({ text: reasoningText, type: MessagePartTypes.REASONING });
     }
 
     const toolCalls = finishResult.toolCalls && Array.isArray(finishResult.toolCalls) ? finishResult.toolCalls : [];
     for (const toolCall of toolCalls) {
       parts.push({
-        type: 'tool-call',
+        args: toolCall.args,
         toolCallId: toolCall.toolCallId,
         toolName: toolCall.toolName,
-        args: toolCall.args,
+        type: 'tool-call',
       });
     }
 
     const toolResults = finishResult.toolResults && Array.isArray(finishResult.toolResults) ? finishResult.toolResults : [];
 
     if (parts.length === 0) {
-      parts.push({ type: MessagePartTypes.TEXT, text: '' });
+      parts.push({ text: '', type: MessagePartTypes.TEXT });
     }
 
     const existingMessage = await db.query.chatMessage.findFirst({
@@ -235,20 +284,20 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
 
     const usageMetadata = usageData
       ? {
-          promptTokens: usageData.inputTokens ?? 0,
           completionTokens: usageData.outputTokens ?? 0,
+          promptTokens: usageData.inputTokens ?? 0,
           totalTokens:
             (usageData.inputTokens ?? 0) + (usageData.outputTokens ?? 0),
         }
       : text.trim().length > 0
         ? {
-            promptTokens: 0,
             completionTokens: Math.ceil(text.length / 4),
+            promptTokens: 0,
             totalTokens: Math.ceil(text.length / 4),
           }
         : {
-            promptTokens: 0,
             completionTokens: 0,
+            promptTokens: 0,
             totalTokens: 0,
           };
 
@@ -260,21 +309,53 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           parsedResult.citations,
           (sourceId) => {
             const source = citationSourceMap.get(sourceId);
-            if (!source)
+            if (!source) {
               return undefined;
-            return {
-              title: source.title,
+            }
+            // Build result conditionally to satisfy exactOptionalPropertyTypes
+            // Only include properties that have defined values
+            type SourceDataResult = {
+              title?: string;
+              excerpt?: string;
+              url?: string;
+              threadId?: string;
+              threadTitle?: string;
+              roundNumber?: number;
+              downloadUrl?: string;
+              filename?: string;
+              mimeType?: string;
+              fileSize?: number;
+            };
+            const result: SourceDataResult = {
               // Clean and format the excerpt for better display
               excerpt: cleanCitationExcerpt(source.content, 200),
-              url: source.metadata.url,
-              threadId: source.metadata.threadId,
-              threadTitle: source.metadata.threadTitle,
-              roundNumber: source.metadata.roundNumber,
-              downloadUrl: source.metadata.downloadUrl,
-              filename: source.metadata.filename,
-              mimeType: source.metadata.mimeType,
-              fileSize: source.metadata.fileSize,
+              title: source.title,
             };
+            if (source.metadata.downloadUrl !== undefined) {
+              result.downloadUrl = source.metadata.downloadUrl;
+            }
+            if (source.metadata.filename !== undefined) {
+              result.filename = source.metadata.filename;
+            }
+            if (source.metadata.fileSize !== undefined) {
+              result.fileSize = source.metadata.fileSize;
+            }
+            if (source.metadata.mimeType !== undefined) {
+              result.mimeType = source.metadata.mimeType;
+            }
+            if (source.metadata.roundNumber !== undefined) {
+              result.roundNumber = source.metadata.roundNumber;
+            }
+            if (source.metadata.threadId !== undefined) {
+              result.threadId = source.metadata.threadId;
+            }
+            if (source.metadata.threadTitle !== undefined) {
+              result.threadTitle = source.metadata.threadTitle;
+            }
+            if (source.metadata.url !== undefined) {
+              result.url = source.metadata.url;
+            }
+            return result;
           },
         );
       }
@@ -292,51 +373,51 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
       : (text || reasoningText) ? FinishReasons.STOP : FinishReasons.UNKNOWN;
 
     const messageMetadata = createParticipantMetadata({
-      roundNumber,
-      participantId,
-      participantIndex,
-      participantRole,
-      model: modelId,
-      finishReason: validatedFinishReason,
-      usage: usageMetadata,
-      hasError: finalHasError,
+      availableSources,
+      citations: resolvedCitations,
       errorCategory: errorMetadata.errorCategory,
       errorMessage: finalErrorMessage,
-      isTransient: errorMetadata.isTransientError,
+      finishReason: validatedFinishReason,
+      hasError: finalHasError,
       isPartialResponse: errorMetadata.isPartialResponse,
-      providerMessage: errorMetadata.providerMessage,
+      isTransient: errorMetadata.isTransientError,
+      model: modelId,
       openRouterError: errorMetadata.openRouterError
         ? { message: errorMetadata.openRouterError }
         : undefined,
-      citations: resolvedCitations,
-      availableSources,
+      participantId,
+      participantIndex,
+      participantRole,
+      providerMessage: errorMetadata.providerMessage,
       reasoningDuration,
+      roundNumber,
+      usage: usageMetadata,
     });
 
     await db
       .insert(tables.chatMessage)
       .values({
+        createdAt: new Date(),
         id: messageId,
-        threadId,
+        metadata: messageMetadata,
         participantId,
-        role: MessageRoles.ASSISTANT,
         // TYPE BRIDGE: MessagePart[] and DbMessageParts are structurally identical
         // Zod schemas. Cast needed because TypeScript treats them as separate types.
         parts: parts as DbMessageParts,
+        role: MessageRoles.ASSISTANT,
         roundNumber,
-        metadata: messageMetadata,
-        createdAt: new Date(),
+        threadId,
       })
       .returning();
 
     if (toolResults.length > 0) {
       const toolMessageId = ulid();
       const toolParts: MessagePart[] = toolResults.map(toolResult => ({
-        type: 'tool-result',
+        isError: toolResult.isError,
+        result: toolResult.result,
         toolCallId: toolResult.toolCallId,
         toolName: toolResult.toolName,
-        result: toolResult.result,
-        isError: toolResult.isError,
+        type: 'tool-result',
       }));
 
       const existingToolMessage = await db.query.chatMessage.findFirst({
@@ -345,15 +426,15 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
 
       if (!existingToolMessage) {
         await db.insert(tables.chatMessage).values({
+          createdAt: new Date(),
           id: toolMessageId,
-          threadId,
+          metadata: null,
           participantId,
-          role: MessageRoles.TOOL,
           // TYPE BRIDGE: Same as above - MessagePart[] to DbMessageParts
           parts: toolParts as DbMessageParts,
+          role: MessageRoles.TOOL,
           roundNumber,
-          metadata: null,
-          createdAt: new Date(),
+          threadId,
         });
       }
     }

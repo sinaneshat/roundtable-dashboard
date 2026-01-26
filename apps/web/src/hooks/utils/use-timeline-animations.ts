@@ -54,12 +54,14 @@ export function useTimelineAnimations({
 
   const shouldAnimate = useCallback((itemKey: string): boolean => {
     // Animations disabled entirely
-    if (!enabled)
+    if (!enabled) {
       return false;
+    }
 
     // Already animated
-    if (animatedItemsRef.current.has(itemKey))
+    if (animatedItemsRef.current.has(itemKey)) {
       return false;
+    }
 
     return true;
   }, [enabled]);
@@ -84,10 +86,10 @@ export function useTimelineAnimations({
   }, []);
 
   return {
-    shouldAnimate,
-    markAnimated,
     hasAnimated,
+    markAnimated,
     reset,
+    shouldAnimate,
   };
 }
 

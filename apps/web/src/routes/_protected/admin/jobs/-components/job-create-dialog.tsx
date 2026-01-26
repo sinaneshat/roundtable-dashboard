@@ -32,25 +32,25 @@ type JobCreateDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-export function JobCreateDialog({ open, onOpenChange }: JobCreateDialogProps) {
+export function JobCreateDialog({ onOpenChange, open }: JobCreateDialogProps) {
   const t = useTranslations();
   const createMutation = useCreateJobMutation();
 
   const createJobFormSchema = z.object({
+    autoPublish: z.boolean(),
     initialPrompt: z.string().min(10, t('admin.jobs.validation.promptMinLength')).max(2000),
     totalRounds: z.number().int().min(1).max(5),
-    autoPublish: z.boolean(),
   });
 
   type CreateJobFormValues = z.infer<typeof createJobFormSchema>;
 
   const form = useForm<CreateJobFormValues>({
-    resolver: zodResolver(createJobFormSchema),
     defaultValues: {
+      autoPublish: false,
       initialPrompt: '',
       totalRounds: 3,
-      autoPublish: false,
     },
+    resolver: zodResolver(createJobFormSchema),
   });
 
   const onSubmit = (data: CreateJobFormValues) => {

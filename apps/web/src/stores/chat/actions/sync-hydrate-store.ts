@@ -41,17 +41,17 @@ export type SyncHydrateOptions = {
  */
 export function useSyncHydrateStore(options: SyncHydrateOptions): void {
   const {
-    mode,
-    thread,
-    participants = [],
-    initialMessages = [],
-    streamResumptionState,
-    initialPreSearches,
     initialChangelog,
+    initialMessages = [],
+    initialPreSearches,
+    mode,
+    participants = [],
+    streamResumptionState,
+    thread,
   } = options;
 
   const storeApi = useChatStoreApi();
-  const hasHydrated = useRef(false);
+  const hasHydratedRef = useRef(false);
   const prevThreadIdRef = useRef<string | undefined>(undefined);
 
   // Track thread ID to detect navigation
@@ -60,7 +60,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
   useLayoutEffect(() => {
     // Reset hydration flag when threadId changes
     if (prevThreadIdRef.current !== threadId) {
-      hasHydrated.current = false;
+      hasHydratedRef.current = false;
       prevThreadIdRef.current = threadId;
     }
 
@@ -69,11 +69,11 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     const isSameThread = threadId && (state.thread?.id === threadId || state.createdThreadId === threadId);
     const storeMessages = state.messages || [];
 
-    rlog.sync('hydrate-check', `props=${thread?.slug ?? '-'}(${initialMessages.length}msg) store=${state.thread?.slug ?? '-'}(${storeMessages.length}msg) init=${isInitialized} same=${isSameThread} hydrated=${hasHydrated.current}`);
+    rlog.sync('hydrate-check', `props=${thread?.slug ?? '-'}(${initialMessages.length}msg) store=${state.thread?.slug ?? '-'}(${storeMessages.length}msg) init=${isInitialized} same=${isSameThread} hydrated=${hasHydratedRef.current}`);
     rlog.init('hydrate-data', `propMsgs=${initialMessages.length} propParts=${participants.length} storeMsgs=${storeMessages.length}`);
 
     // Skip if already initialized for this thread
-    if (isInitialized && isSameThread && hasHydrated.current) {
+    if (isInitialized && isSameThread && hasHydratedRef.current) {
       rlog.sync('hydrate-skip', 'already initialized for this thread');
       return;
     }
@@ -83,7 +83,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     const storeHasMoreData = isSameThread && storeMessages.length > initialMessages.length;
     if (storeHasMoreData) {
       rlog.init('sync-hydrate', `skip: store has more data (store=${storeMessages.length} > ssr=${initialMessages.length})`);
-      hasHydrated.current = true;
+      hasHydratedRef.current = true;
       return;
     }
 
@@ -114,7 +114,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     }
 
     // Skip if already hydrated this mount
-    if (hasHydrated.current && isSameThread) {
+    if (hasHydratedRef.current && isSameThread) {
       return;
     }
 
@@ -173,6 +173,6 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
       rlog.init('sync-hydrate', `set ${initialChangelog.length} changelog items into store`);
     }
 
-    hasHydrated.current = true;
+    hasHydratedRef.current = true;
   }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches, initialChangelog]);
 }

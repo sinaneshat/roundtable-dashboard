@@ -29,12 +29,12 @@ type UseStateSyncParams = {
  * Syncs reactive state between AI SDK hook and Zustand store
  */
 export function useStateSync({
-  store,
   chat,
   queryClientRef,
   sendMessageRef,
-  startRoundRef,
   setMessagesRef,
+  startRoundRef,
+  store,
 }: UseStateSyncParams) {
   // ✅ CRITICAL FIX: Use useLayoutEffect to sync refs BEFORE any effects run
   // Without this, usePendingMessage effect might call sendMessageRef.current
@@ -64,7 +64,7 @@ export function useStateSync({
 
     if (currentState.isStreaming !== chat.isStreaming) {
       // Debug: Track streaming state transitions (debounced)
-      devLog.d('StateSync', { str: chat.isStreaming, pIdx: chat.currentParticipantIndex, rnd: currentState.streamingRoundNumber });
+      devLog.d('StateSync', { pIdx: chat.currentParticipantIndex, rnd: currentState.streamingRoundNumber, str: chat.isStreaming });
       currentState.setIsStreaming(chat.isStreaming);
     }
 
@@ -117,9 +117,9 @@ export function useStateSync({
   // Sync callbacks to store - updates when callbacks change
   useEffect(() => {
     store.setState({
+      chatSetMessages: setMessagesRef.current,
       sendMessage: sendMessageWithQuotaInvalidation,
       startRound: startRoundWithQuotaInvalidation,
-      chatSetMessages: setMessagesRef.current,
     });
   }, [sendMessageWithQuotaInvalidation, startRoundWithQuotaInvalidation, setMessagesRef, store]);
 }

@@ -52,41 +52,41 @@ export type UseAutoModeAnalysisReturn = {
  * @param syncToPreferences - Whether to sync results to preferences store (default: true)
  */
 export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalysisReturn {
-  const { streamConfig, isStreaming, partialConfig, abort } = useAnalyzePromptStream();
+  const { abort, isStreaming, partialConfig, streamConfig } = useAnalyzePromptStream();
 
   const chatStoreActions = useChatStore(useShallow(s => ({
+    setEnableWebSearch: s.setEnableWebSearch,
     setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
-    setSelectedParticipants: s.setSelectedParticipants,
     setModelOrder: s.setModelOrder,
     setSelectedMode: s.setSelectedMode,
-    setEnableWebSearch: s.setEnableWebSearch,
+    setSelectedParticipants: s.setSelectedParticipants,
   })));
 
   // Preferences store actions for persistence sync
   const preferencesActions = useModelPreferencesStore(useShallow(s => ({
-    setSelectedModelIds: s.setSelectedModelIds,
+    setEnableWebSearch: s.setEnableWebSearch,
     setModelOrder: s.setModelOrder,
     setSelectedMode: s.setSelectedMode,
-    setEnableWebSearch: s.setEnableWebSearch,
+    setSelectedModelIds: s.setSelectedModelIds,
   })));
 
   const analyzeAndApply = useCallback(async (options: AutoModeAnalysisOptions): Promise<boolean> => {
-    const { prompt, hasImageFiles = false, hasDocumentFiles = false, accessibleModelIds } = options;
+    const { accessibleModelIds, hasDocumentFiles = false, hasImageFiles = false, prompt } = options;
 
     chatStoreActions.setIsAnalyzingPrompt(true);
 
     try {
-      const result = await streamConfig({ prompt, hasImageFiles, hasDocumentFiles });
+      const result = await streamConfig({ hasDocumentFiles, hasImageFiles, prompt });
 
       if (result) {
-        const { participants, mode: recommendedMode, enableWebSearch: recommendedWebSearch } = result;
+        const { enableWebSearch: recommendedWebSearch, mode: recommendedMode, participants } = result;
 
         // Transform to ParticipantConfig format
         let newParticipants: ParticipantConfig[] = participants.map((p, index) => ({
           id: p.modelId,
           modelId: p.modelId,
-          role: p.role || '',
           priority: index,
+          role: p.role || '',
         }));
 
         // Filter by client-accessible models if provided
@@ -135,9 +135,9 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
   }, [streamConfig, chatStoreActions, syncToPreferences, preferencesActions]);
 
   return {
+    abort,
     analyzeAndApply,
     isAnalyzing: isStreaming,
     partialConfig,
-    abort,
   };
 }

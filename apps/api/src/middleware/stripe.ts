@@ -31,5 +31,5 @@ export const ensureStripeInitialized = createMiddleware<ApiEnv>(async (c, next) 
   // This is idempotent - safe to call multiple times
   initializeStripe(c.env);
 
-  return next();
+  return await next();
 });

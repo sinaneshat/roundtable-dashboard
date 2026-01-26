@@ -36,12 +36,12 @@ export function useStreamActivityTracker({
   const lastStreamActivityRef = useRef<number>(Date.now());
 
   // ✅ PERF: Batch selectors with useShallow to prevent unnecessary re-renders
-  const { isStreaming, messages, currentParticipantIndex, preSearches } = useStore(
+  const { currentParticipantIndex, isStreaming, messages, preSearches } = useStore(
     store,
     useShallow(s => ({
+      currentParticipantIndex: s.currentParticipantIndex,
       isStreaming: s.isStreaming,
       messages: s.messages,
-      currentParticipantIndex: s.currentParticipantIndex,
       preSearches: s.preSearches,
     })),
   );

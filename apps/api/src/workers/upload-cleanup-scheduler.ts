@@ -41,8 +41,9 @@ type CancelCleanupRequest = {
 };
 
 function isValidScheduleRequest(data: unknown): data is ScheduleCleanupRequest {
-  if (typeof data !== 'object' || data === null)
+  if (typeof data !== 'object' || data === null) {
     return false;
+  }
   // Type-safe property checks without Record<string, unknown> cast
   return (
     'uploadId' in data && typeof data.uploadId === 'string' && data.uploadId.length > 0
@@ -52,14 +53,24 @@ function isValidScheduleRequest(data: unknown): data is ScheduleCleanupRequest {
 }
 
 function isValidCancelRequest(data: unknown): data is CancelCleanupRequest {
-  if (typeof data !== 'object' || data === null)
+  if (typeof data !== 'object' || data === null) {
     return false;
+  }
   // Type-safe property check without Record<string, unknown> cast
   return 'uploadId' in data && typeof data.uploadId === 'string' && data.uploadId.length > 0;
 }
 
 // Cleanup delay in milliseconds (15 minutes)
 const CLEANUP_DELAY_MS = 15 * 60 * 1000;
+
+/**
+ * Helper function to access properties on SQL row objects with index signatures.
+ * This pattern avoids TS4111 errors while satisfying the linter's preference
+ * for dot notation (which would trigger TS4111 on index signature types).
+ */
+function getRowProp<T>(row: Record<string, SqlStorageValue>, key: string): T {
+  return row[key] as T;
+}
 
 // Type guard for SQL row validation
 function isValidCleanupStateRow(
@@ -72,11 +83,11 @@ function isValidCleanupStateRow(
   created_at: number;
 } {
   return (
-    typeof row.upload_id === 'string'
-    && typeof row.user_id === 'string'
-    && typeof row.r2_key === 'string'
-    && typeof row.scheduled_at === 'number'
-    && typeof row.created_at === 'number'
+    typeof getRowProp<string>(row, 'upload_id') === 'string'
+    && typeof getRowProp<string>(row, 'user_id') === 'string'
+    && typeof getRowProp<string>(row, 'r2_key') === 'string'
+    && typeof getRowProp<number>(row, 'scheduled_at') === 'number'
+    && typeof getRowProp<number>(row, 'created_at') === 'number'
   );
 }
 
@@ -89,10 +100,10 @@ function isValidDueUploadRow(
   scheduled_at: number;
 } {
   return (
-    typeof row.upload_id === 'string'
-    && typeof row.user_id === 'string'
-    && typeof row.r2_key === 'string'
-    && typeof row.scheduled_at === 'number'
+    typeof getRowProp<string>(row, 'upload_id') === 'string'
+    && typeof getRowProp<string>(row, 'user_id') === 'string'
+    && typeof getRowProp<string>(row, 'r2_key') === 'string'
+    && typeof getRowProp<number>(row, 'scheduled_at') === 'number'
   );
 }
 
@@ -177,7 +188,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
     // Set the alarm for cleanup check
     await this.ctx.storage.setAlarm(alarmTime);
 
-    return { scheduled: true, alarmTime };
+    return { alarmTime, scheduled: true };
   }
 
   /**
@@ -190,7 +201,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
     // Check if there are any remaining uploads to clean
     const remaining = this.sql.exec('SELECT COUNT(*) as count FROM cleanup_state').one();
-    if (remaining && (remaining.count as number) === 0) {
+    if (remaining && getRowProp<number>(remaining, 'count') === 0) {
       // No more uploads to track, delete the alarm
       await this.ctx.storage.deleteAlarm();
     }
@@ -207,19 +218,20 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       uploadId,
     ).one();
 
-    if (!row)
+    if (!row) {
       return null;
+    }
 
     if (!isValidCleanupStateRow(row)) {
       throw new TypeError('Invalid cleanup_state row format');
     }
 
     return {
-      uploadId: row.upload_id,
-      userId: row.user_id,
+      createdAt: row.created_at,
       r2Key: row.r2_key,
       scheduledAt: row.scheduled_at,
-      createdAt: row.created_at,
+      uploadId: row.upload_id,
+      userId: row.user_id,
     };
   }
 
@@ -227,7 +239,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
    * Alarm handler - triggered when cleanup delay expires
    * Uses waitUntil to ensure cleanup completes even if DO hibernates
    */
-  async alarm(): Promise<void> {
+  override async alarm(): Promise<void> {
     // Use waitUntil to ensure cleanup work completes
     this.ctx.waitUntil(this.processCleanups());
   }
@@ -295,14 +307,14 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       } catch (error) {
         // Structured logging for Cloudflare Workers Logs indexing
         console.error({
-          log_type: 'alarm_error',
-          timestamp: new Date().toISOString(),
           durable_object: 'UploadCleanupScheduler',
-          operation: 'processCleanups',
-          upload_id: uploadId,
-          r2_key: r2Key,
           error_message: error instanceof Error ? error.message : String(error),
           error_stack: error instanceof Error ? error.stack : undefined,
+          log_type: 'alarm_error',
+          operation: 'processCleanups',
+          r2_key: r2Key,
+          timestamp: new Date().toISOString(),
+          upload_id: uploadId,
         });
         // Don't remove from state - will be retried on next alarm
       }
@@ -313,9 +325,10 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       'SELECT MIN(scheduled_at) as next_time FROM cleanup_state',
     ).one();
 
-    if (nextAlarm && nextAlarm.next_time) {
+    const nextTime = nextAlarm ? getRowProp<number | null>(nextAlarm, 'next_time') : null;
+    if (nextTime !== null) {
       // Schedule next alarm
-      await this.ctx.storage.setAlarm(nextAlarm.next_time as number);
+      await this.ctx.storage.setAlarm(nextTime);
     }
   }
 
@@ -337,18 +350,20 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         return result.isOrphaned;
       } catch (error) {
         console.error({
-          log_type: 'alarm_retry',
-          timestamp: new Date().toISOString(),
-          durable_object: 'UploadCleanupScheduler',
-          operation: 'checkIfOrphanedWithRetry',
-          upload_id: uploadId,
           attempt: attempt + 1,
-          max_attempts: MAX_D1_RETRIES + 1,
+          durable_object: 'UploadCleanupScheduler',
           error_message: error instanceof Error ? error.message : String(error),
+          log_type: 'alarm_retry',
+          max_attempts: MAX_D1_RETRIES + 1,
+          operation: 'checkIfOrphanedWithRetry',
+          timestamp: new Date().toISOString(),
+          upload_id: uploadId,
         });
         if (attempt < MAX_D1_RETRIES) {
           // Exponential backoff: 100ms, 200ms, 400ms...
-          await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt));
+          await new Promise((resolve) => {
+            setTimeout(resolve, 100 * 2 ** attempt);
+          });
         }
       }
     }
@@ -379,7 +394,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
    * HTTP fetch handler for the Durable Object
    * Allows external calls to schedule/cancel cleanup
    */
-  async fetch(request: Request): Promise<Response> {
+  override async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -413,18 +428,18 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       return new Response('Not Found', { status: 404 });
     } catch (error) {
       console.error({
-        log_type: 'do_fetch_error',
-        timestamp: new Date().toISOString(),
         durable_object: 'UploadCleanupScheduler',
-        operation: 'fetch',
-        path,
-        method: request.method,
         error_message: error instanceof Error ? error.message : String(error),
         error_stack: error instanceof Error ? error.stack : undefined,
+        log_type: 'do_fetch_error',
+        method: request.method,
+        operation: 'fetch',
+        path,
+        timestamp: new Date().toISOString(),
       });
       return new Response(
         JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
+        { headers: { 'Content-Type': 'application/json' }, status: 500 },
       );
     }
   }

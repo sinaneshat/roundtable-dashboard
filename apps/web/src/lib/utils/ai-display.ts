@@ -24,23 +24,23 @@ function getDisplayNameFromModelId(modelId: string): string {
 
 const PROVIDER_ICON_MAP: Record<string, string> = {
   'anthropic': 'claude.png',
-  'openai': 'openai.png',
+  'claude': 'claude.png',
+  'deepseek': 'deepseek.png',
+  'gemini': 'google.png',
   'google': 'google.png',
+  'gpt': 'openai.png',
+  'grok': 'grok.png',
   'meta': 'meta.png',
   'meta-llama': 'meta.png',
+  'microsoft': 'microsoft.png',
+  'mistral': 'mistral.png',
+  'mistralai': 'mistral.png',
+  'moonshotai': 'kimi.png',
+  'openai': 'openai.png',
+  'openrouter': 'openrouter.png',
+  'qwen': 'qwen.png',
   'x-ai': 'grok.png',
   'xai': 'grok.png',
-  'deepseek': 'deepseek.png',
-  'qwen': 'qwen.png',
-  'moonshotai': 'kimi.png',
-  'mistralai': 'mistral.png',
-  'mistral': 'mistral.png',
-  'microsoft': 'microsoft.png',
-  'claude': 'claude.png',
-  'grok': 'grok.png',
-  'gemini': 'google.png',
-  'gpt': 'openai.png',
-  'openrouter': 'openrouter.png',
 };
 
 // ============================================================================
@@ -70,8 +70,8 @@ export function getAvatarPropsFromModelId(
 ): AvatarProps {
   if (role === MessageRoles.USER) {
     return {
-      src: userImage || '/static/icons/user-avatar.svg',
       name: userName || 'User',
+      src: userImage || '/static/icons/user-avatar.svg',
     };
   }
 
@@ -80,13 +80,13 @@ export function getAvatarPropsFromModelId(
     const displayName = getDisplayNameFromModelId(modelId);
 
     return {
-      src: getProviderIcon(provider),
       name: displayName,
+      src: getProviderIcon(provider),
     };
   }
 
   return {
-    src: '/static/icons/ai-models/openrouter.png',
     name: 'AI',
+    src: '/static/icons/ai-models/openrouter.png',
   };
 }

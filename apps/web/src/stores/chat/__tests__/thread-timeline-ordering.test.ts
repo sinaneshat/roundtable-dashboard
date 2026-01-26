@@ -51,11 +51,11 @@ function createTimelineElement(
   participantIndex?: number,
 ): TimelineElement {
   return {
-    type,
-    roundNumber,
-    participantIndex,
-    timestamp,
     id: `${type}-r${roundNumber}${participantIndex !== undefined ? `-p${participantIndex}` : ''}`,
+    participantIndex,
+    roundNumber,
+    timestamp,
+    type,
   };
 }
 
@@ -73,9 +73,9 @@ function buildRoundTimeline(
   },
 ): TimelineElement[] {
   const {
-    includePreSearch = true,
-    includeModerator = true,
     includeFeedback = true,
+    includeModerator = true,
+    includePreSearch = true,
   } = options ?? {};
 
   const timeline: TimelineElement[] = [];
@@ -199,8 +199,8 @@ describe('element Order Within Round', () => {
   describe('round Without Moderator', () => {
     it('order is correct without moderator (e.g., brainstorming mode)', () => {
       const timeline = buildRoundTimeline(0, 3, new Date(), {
-        includeModerator: false,
         includeFeedback: false,
+        includeModerator: false,
       });
 
       const expectedOrder: TimelineElement['type'][] = [
@@ -245,23 +245,23 @@ describe('participant Message Order', () => {
     it('maps store messages to timeline elements correctly', () => {
       const storeMessages = [
         createTestUserMessage({
-          id: 'msg-user-0',
           content: 'User question',
+          id: 'msg-user-0',
           roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p0',
           content: 'Participant 0 response',
-          roundNumber: 0,
+          id: 'msg-p0',
           participantId: 'participant-0',
           participantIndex: 0,
+          roundNumber: 0,
         }),
         createTestAssistantMessage({
-          id: 'msg-p1',
           content: 'Participant 1 response',
-          roundNumber: 0,
+          id: 'msg-p1',
           participantId: 'participant-1',
           participantIndex: 1,
+          roundNumber: 0,
         }),
       ];
 
@@ -315,10 +315,10 @@ describe('timestamp Sequences', () => {
   describe('created At Timestamps', () => {
     it('message createdAt is set on creation', () => {
       const message = createTestUserMessage({
-        id: 'msg-1',
         content: 'Test',
-        roundNumber: 0,
         createdAt: '2024-01-01T00:00:00Z',
+        id: 'msg-1',
+        roundNumber: 0,
       });
 
       expect((message.metadata as DbUserMessageMetadata).createdAt).toBe('2024-01-01T00:00:00Z');
@@ -326,12 +326,12 @@ describe('timestamp Sequences', () => {
 
     it('assistant message createdAt is set after streaming completes', () => {
       const message = createTestAssistantMessage({
-        id: 'msg-1',
         content: 'Test',
-        roundNumber: 0,
+        createdAt: '2024-01-01T00:00:05Z',
+        id: 'msg-1',
         participantId: 'p0',
         participantIndex: 0,
-        createdAt: '2024-01-01T00:00:05Z',
+        roundNumber: 0,
       });
 
       expect((message.metadata as DbAssistantMessageMetadata).createdAt).toBe('2024-01-01T00:00:05Z');
@@ -376,8 +376,9 @@ describe('multi-Round Timeline', () => {
 
       const groupedByRound = allElements.reduce((acc, element) => {
         const round = element.roundNumber;
-        if (!acc[round])
+        if (!acc[round]) {
           acc[round] = [];
+        }
         acc[round].push(element);
         return acc;
       }, {} as Record<number, TimelineElement[]>);
@@ -424,10 +425,10 @@ describe('visual Ordering', () => {
     it('streaming indicator shows on currently streaming element', () => {
       // During pre-search streaming
       const streamingElement: TimelineElement = {
-        type: 'pre-search',
+        id: 'presearch-r0',
         roundNumber: 0,
         timestamp: new Date(),
-        id: 'presearch-r0',
+        type: 'pre-search',
       };
 
       expect(streamingElement.type).toBe('pre-search');
@@ -462,8 +463,8 @@ describe('special UI States', () => {
     it('timeline shows partial elements during streaming', () => {
       // Mid-streaming: user + pre-search + participant 0 + (participant 1 streaming)
       const partialTimeline = buildRoundTimeline(0, 2, new Date(), {
-        includeModerator: false, // Not yet triggered
         includeFeedback: false,
+        includeModerator: false, // Not yet triggered
       });
 
       expect(partialTimeline.map(e => e.type)).toEqual([
@@ -481,7 +482,7 @@ describe('special UI States', () => {
       const messages: unknown[] = [];
 
       const showSkeleton = !hasInitiallyLoaded || messages.length === 0;
-      expect(showSkeleton).toBe(true);
+      expect(showSkeleton).toBeTruthy();
     });
 
     it('skeleton hidden after initial load', () => {
@@ -489,7 +490,7 @@ describe('special UI States', () => {
       const messages = [{ id: 'msg-1' }];
 
       const showSkeleton = !hasInitiallyLoaded || messages.length === 0;
-      expect(showSkeleton).toBe(false);
+      expect(showSkeleton).toBeFalsy();
     });
   });
 });

@@ -15,17 +15,17 @@ import * as z from 'zod';
  * LLM tracking context schema - captures all relevant context for PostHog event enrichment
  */
 export const LLMTrackingContextSchema = z.object({
-  userId: z.string(),
-  sessionId: z.string().optional(),
-  threadId: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-  threadMode: z.string(),
+  isRegeneration: z.boolean().optional(),
+  modelId: z.string(),
+  modelName: z.string().optional(),
   participantId: z.string(),
   participantIndex: z.number().int().nonnegative(),
   participantRole: z.string().nullable().optional(),
-  modelId: z.string(),
-  modelName: z.string().optional(),
-  isRegeneration: z.boolean().optional(),
+  roundNumber: z.number().int().nonnegative(),
+  sessionId: z.string().optional(),
+  threadId: z.string(),
+  threadMode: z.string(),
+  userId: z.string(),
   userTier: z.string().optional(),
 });
 
@@ -36,25 +36,25 @@ export type LLMTrackingContext = z.infer<typeof LLMTrackingContextSchema>;
 // ============================================================================
 
 const InputTokenDetailsSchema = z.object({
-  noCacheTokens: z.number().int().nonnegative().optional(),
   cacheReadTokens: z.number().int().nonnegative().optional(),
   cacheWriteTokens: z.number().int().nonnegative().optional(),
+  noCacheTokens: z.number().int().nonnegative().optional(),
 });
 
 const OutputTokenDetailsSchema = z.object({
-  textTokens: z.number().int().nonnegative().optional(),
   reasoningTokens: z.number().int().nonnegative().optional(),
+  textTokens: z.number().int().nonnegative().optional(),
 });
 
 /**
  * Simplified usage schema for tracking purposes
  */
 export const LLMTrackingUsageSchema = z.object({
+  inputTokenDetails: InputTokenDetailsSchema.optional(),
   inputTokens: z.number().int().nonnegative().optional(),
+  outputTokenDetails: OutputTokenDetailsSchema.optional(),
   outputTokens: z.number().int().nonnegative().optional(),
   totalTokens: z.number().int().nonnegative().optional(),
-  inputTokenDetails: InputTokenDetailsSchema.optional(),
-  outputTokenDetails: OutputTokenDetailsSchema.optional(),
 });
 
 export type LLMTrackingUsage = z.infer<typeof LLMTrackingUsageSchema>;
@@ -67,10 +67,10 @@ export type LLMTrackingUsage = z.infer<typeof LLMTrackingUsageSchema>;
  * AI SDK v6 Tool Call structure
  */
 export const ToolCallSchema = z.object({
-  type: z.literal('tool-call'),
+  input: z.unknown(),
   toolCallId: z.string(),
   toolName: z.string(),
-  input: z.unknown(),
+  type: z.literal('tool-call'),
 });
 
 export type ToolCall = z.infer<typeof ToolCallSchema>;
@@ -79,10 +79,10 @@ export type ToolCall = z.infer<typeof ToolCallSchema>;
  * AI SDK v6 Tool Result structure
  */
 export const ToolResultSchema = z.object({
-  type: z.literal('tool-result'),
+  result: z.unknown().optional(),
   toolCallId: z.string(),
   toolName: z.string(),
-  result: z.unknown().optional(),
+  type: z.literal('tool-result'),
 });
 
 export type ToolResult = z.infer<typeof ToolResultSchema>;
@@ -92,8 +92,8 @@ export type ToolResult = z.infer<typeof ToolResultSchema>;
 // ============================================================================
 
 const ReasoningPartSchema = z.object({
-  type: z.literal('reasoning'),
   text: z.string(),
+  type: z.literal('reasoning'),
 });
 
 const LLMResponseMetadataSchema = z.object({
@@ -106,13 +106,13 @@ const LLMResponseMetadataSchema = z.object({
  * LLM generation result schema from AI SDK v6
  */
 export const LLMGenerationResultSchema = z.object({
-  text: z.string(),
   finishReason: z.string(),
-  usage: LLMTrackingUsageSchema.optional(),
   reasoning: z.array(ReasoningPartSchema).optional(),
+  response: LLMResponseMetadataSchema.optional(),
+  text: z.string(),
   toolCalls: z.array(ToolCallSchema).optional(),
   toolResults: z.array(ToolResultSchema).optional(),
-  response: LLMResponseMetadataSchema.optional(),
+  usage: LLMTrackingUsageSchema.optional(),
 });
 
 export type LLMGenerationResult = z.infer<typeof LLMGenerationResultSchema>;
@@ -122,16 +122,16 @@ export type LLMGenerationResult = z.infer<typeof LLMGenerationResultSchema>;
 // ============================================================================
 
 const ContentPartSchema = z.object({
-  type: z.string(),
   text: z.string(),
+  type: z.string(),
 });
 
 /**
  * Input message schema for PostHog tracking
  */
 export const LLMInputMessageSchema = z.object({
-  role: z.string(),
   content: z.union([z.string(), z.array(ContentPartSchema)]),
+  role: z.string(),
 });
 
 export type LLMInputMessage = z.infer<typeof LLMInputMessageSchema>;
@@ -144,9 +144,9 @@ export type LLMInputMessage = z.infer<typeof LLMInputMessageSchema>;
  * Result from LLM generation tracking
  */
 export const LLMTrackingResultSchema = z.object({
-  traceId: z.string(),
-  success: z.boolean(),
   errorMessage: z.string().optional(),
+  success: z.boolean(),
+  traceId: z.string(),
 });
 
 export type LLMTrackingResult = z.infer<typeof LLMTrackingResultSchema>;

@@ -30,9 +30,9 @@ type PreSearchStreamProps = {
 };
 
 function PreSearchStreamComponent({
-  threadId,
-  preSearch,
   onStreamComplete,
+  preSearch,
+  threadId,
 }: PreSearchStreamProps) {
   const t = useTranslations('chat.preSearch');
   const tErrors = useTranslations('errors');
@@ -44,8 +44,8 @@ function PreSearchStreamComponent({
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
   const storeData = useChatStoreOptional(
     useShallow(s => ({
-      markPreSearchTriggered: s.markPreSearchTriggered,
       clearPreSearchTracking: s.clearPreSearchTracking,
+      markPreSearchTriggered: s.markPreSearchTriggered,
     })),
   );
 
@@ -113,8 +113,9 @@ function PreSearchStreamComponent({
   const isPollingRef = useRef(false);
 
   useEffect(() => {
-    if (!is409Conflict.value)
+    if (!is409Conflict.value) {
       return;
+    }
 
     if (isPollingRef.current) {
       return;
@@ -263,8 +264,8 @@ function PreSearchStreamComponent({
   const summary = displayData?.summary;
   const totalResults = displayData?.totalResults;
   const totalTime = displayData?.totalTime;
-  const validQueries = queries.filter((q: PreSearchQuery | null | undefined): q is PreSearchQuery => q != null);
-  const validResults = results.filter((r: PreSearchResult | null | undefined): r is PreSearchResult => r != null);
+  const validQueries = queries.filter((q: PreSearchQuery | null | undefined): q is PreSearchQuery => q !== null && q !== undefined);
+  const validResults = results.filter((r: PreSearchResult | null | undefined): r is PreSearchResult => r !== null && r !== undefined);
   const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
   const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
 
@@ -290,16 +291,16 @@ function PreSearchStreamComponent({
         >
           <WebSearchConfigurationDisplay
             queries={validQueries.filter((q: PreSearchQuery) => q?.query).map((q: PreSearchQuery) => ({
+              index: q.index,
               query: q.query,
               rationale: q.rationale,
               searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
-              index: q.index,
             }))}
             results={validResults.flatMap((r: PreSearchResult) => r.results || [])}
             searchPlan={summary}
             isStreamingPlan={isStreamingNow && !summary}
-            totalResults={totalResults}
-            totalTime={totalTime}
+            {...(totalResults !== undefined ? { totalResults } : {})}
+            {...(totalTime !== undefined ? { totalTime } : {})}
           />
         </AnimatedStreamingItem>
       )}

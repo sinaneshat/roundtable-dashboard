@@ -32,23 +32,23 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
     switch (failureData?.errorType) {
       case BillingErrorTypes.PAYMENT_FAILED:
         return {
-          title: t('billing.failure.paymentFailed'),
           description: t('billing.failure.paymentFailedDescription'),
+          title: t('billing.failure.paymentFailed'),
         };
       case BillingErrorTypes.SYNC_FAILED:
         return {
-          title: t('billing.failure.syncFailed'),
           description: t('billing.failure.syncFailedDescription'),
+          title: t('billing.failure.syncFailed'),
         };
       case BillingErrorTypes.AUTHENTICATION_FAILED:
         return {
-          title: t('billing.failure.authFailed'),
           description: t('billing.failure.authFailedDescription'),
+          title: t('billing.failure.authFailed'),
         };
       default:
         return {
-          title: t('billing.failure.unknownError'),
           description: t('billing.failure.unknownErrorDescription'),
+          title: t('billing.failure.unknownError'),
         };
     }
   };

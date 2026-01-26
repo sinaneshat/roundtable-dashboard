@@ -32,37 +32,37 @@ import { createChatStore } from '../store';
 
 function createThread() {
   return {
+    createdAt: '2024-01-01T00:00:00Z',
+    enableWebSearch: false,
     id: 'thread-123',
-    userId: 'user-123',
-    projectId: null,
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    mode: 'debating' as const,
-    status: 'active' as const,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    enableWebSearch: false,
-    metadata: null,
-    version: 1,
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-01-01T00:00:00Z',
     lastMessageAt: '2024-01-01T00:00:00Z',
+    metadata: null,
+    mode: 'debating' as const,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active' as const,
+    title: 'Test Thread',
+    updatedAt: '2024-01-01T00:00:00Z',
+    userId: 'user-123',
+    version: 1,
   };
 }
 
 function createParticipant(index: number) {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    customRoleId: null,
-    role: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: '2024-01-01T00:00:00Z',
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId: `model-${index}`,
+    priority: index,
+    role: null,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: '2024-01-01T00:00:00Z',
   };
 }
@@ -70,24 +70,24 @@ function createParticipant(index: number) {
 function createUserMessage(roundNumber: number): UIMessage {
   return {
     id: `user-msg-r${roundNumber}`,
-    role: MessageRoles.USER,
-    parts: [{ type: 'text', text: `Question ${roundNumber}` }],
     metadata: { role: MessageRoles.USER, roundNumber },
+    parts: [{ text: `Question ${roundNumber}`, type: 'text' }],
+    role: MessageRoles.USER,
   };
 }
 
 function createModeratorPlaceholder(threadId: string, roundNumber: number): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_moderator`,
-    role: MessageRoles.ASSISTANT,
-    parts: [], // Empty parts = pending state
     metadata: {
       isModerator: true,
-      roundNumber,
-      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       model: 'Council Moderator',
+      participantIndex: MODERATOR_PARTICIPANT_INDEX,
       role: MessageRoles.ASSISTANT,
+      roundNumber,
     },
+    parts: [], // Empty parts = pending state
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -98,14 +98,14 @@ function createParticipantMessage(
 ): UIMessage {
   return {
     id: `${threadId}_r${roundNumber}_p${participantIndex}`,
-    role: MessageRoles.ASSISTANT,
-    parts: [{ type: 'text', text: `Response from participant ${participantIndex}` }],
     metadata: {
+      model: `model-${participantIndex}`,
+      participantIndex,
       role: MessageRoles.ASSISTANT,
       roundNumber,
-      participantIndex,
-      model: `model-${participantIndex}`,
     },
+    parts: [{ text: `Response from participant ${participantIndex}`, type: 'text' }],
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -114,8 +114,9 @@ function createParticipantMessage(
  */
 function getAssistantMessagesForRound(messages: UIMessage[], roundNumber: number): UIMessage[] {
   return messages.filter((m) => {
-    if (m.role !== MessageRoles.ASSISTANT)
+    if (m.role !== MessageRoles.ASSISTANT) {
       return false;
+    }
     const meta = m.metadata as { roundNumber?: number } | undefined;
     return meta?.roundNumber === roundNumber;
   });
@@ -164,8 +165,8 @@ describe('moderator Placeholder Timing', () => {
 
       // Verify: After participants complete, NO moderator exists yet
       let messages = store.getState().messages;
-      expect(hasParticipantMessagesForRound(messages, 0)).toBe(true);
-      expect(hasModeratorForRound(messages, 0)).toBe(false);
+      expect(hasParticipantMessagesForRound(messages, 0)).toBeTruthy();
+      expect(hasModeratorForRound(messages, 0)).toBeFalsy();
 
       // Step 3: useModeratorTrigger adds moderator placeholder (after participants complete)
       const moderatorPlaceholder = createModeratorPlaceholder('thread-123', 0);
@@ -173,13 +174,13 @@ describe('moderator Placeholder Timing', () => {
 
       // Verify: Now moderator exists AND participants exist (correct order)
       messages = store.getState().messages;
-      expect(hasParticipantMessagesForRound(messages, 0)).toBe(true);
-      expect(hasModeratorForRound(messages, 0)).toBe(true);
+      expect(hasParticipantMessagesForRound(messages, 0)).toBeTruthy();
+      expect(hasModeratorForRound(messages, 0)).toBeTruthy();
 
       // INVARIANT: When moderator exists, participants must also exist
       const hasModerator = hasModeratorForRound(messages, 0);
       const hasParticipants = hasParticipantMessagesForRound(messages, 0);
-      expect(hasModerator && hasParticipants).toBe(true);
+      expect(hasModerator && hasParticipants).toBeTruthy();
     });
 
     it('should have moderator visible only AFTER participant messages exist', () => {
@@ -207,11 +208,11 @@ describe('moderator Placeholder Timing', () => {
       const hasModerator = hasModeratorForRound(messages, 0);
       const hasParticipants = hasParticipantMessagesForRound(messages, 0);
 
-      expect(hasModerator).toBe(true);
-      expect(hasParticipants).toBe(true);
+      expect(hasModerator).toBeTruthy();
+      expect(hasParticipants).toBeTruthy();
 
       // INVARIANT: This is the correct state - both exist
-      expect(hasModerator && hasParticipants).toBe(true);
+      expect(hasModerator && hasParticipants).toBeTruthy();
     });
 
     it('during streaming, moderator should NOT be added until participants complete', () => {
@@ -233,16 +234,16 @@ describe('moderator Placeholder Timing', () => {
       // - No participant messages yet (streaming just started)
       // - Moderator should NOT exist yet (fix: added after participants complete)
       let messages = store.getState().messages;
-      expect(hasModeratorForRound(messages, 0)).toBe(false);
-      expect(hasParticipantMessagesForRound(messages, 0)).toBe(false);
+      expect(hasModeratorForRound(messages, 0)).toBeFalsy();
+      expect(hasParticipantMessagesForRound(messages, 0)).toBeFalsy();
 
       // Participant 0 starts streaming and completes
       const p0Message = createParticipantMessage(0, 0, 'thread-123');
       store.getState().setMessages([userMessage, p0Message]);
 
       messages = store.getState().messages;
-      expect(hasModeratorForRound(messages, 0)).toBe(false); // Still no moderator
-      expect(hasParticipantMessagesForRound(messages, 0)).toBe(true);
+      expect(hasModeratorForRound(messages, 0)).toBeFalsy(); // Still no moderator
+      expect(hasParticipantMessagesForRound(messages, 0)).toBeTruthy();
 
       // Participant 1 completes
       const p1Message = createParticipantMessage(0, 1, 'thread-123');
@@ -250,15 +251,15 @@ describe('moderator Placeholder Timing', () => {
 
       // Still no moderator until useModeratorTrigger runs
       messages = store.getState().messages;
-      expect(hasModeratorForRound(messages, 0)).toBe(false);
+      expect(hasModeratorForRound(messages, 0)).toBeFalsy();
 
       // After all participants complete, useModeratorTrigger adds moderator
       const moderatorPlaceholder = createModeratorPlaceholder('thread-123', 0);
       store.getState().setMessages([userMessage, p0Message, p1Message, moderatorPlaceholder]);
 
       messages = store.getState().messages;
-      expect(hasModeratorForRound(messages, 0)).toBe(true);
-      expect(hasParticipantMessagesForRound(messages, 0)).toBe(true);
+      expect(hasModeratorForRound(messages, 0)).toBeTruthy();
+      expect(hasParticipantMessagesForRound(messages, 0)).toBeTruthy();
     });
   });
 
@@ -289,7 +290,7 @@ describe('moderator Placeholder Timing', () => {
       // The moderator should be somewhere in the array
       // (actual sorting happens in useThreadTimeline, not in store)
       expect(round0Messages).toHaveLength(3); // p0, p1, moderator
-      expect(round0Messages.some(m => isModeratorMessage(m))).toBe(true);
+      expect(round0Messages.some(m => isModeratorMessage(m))).toBeTruthy();
     });
   });
 });

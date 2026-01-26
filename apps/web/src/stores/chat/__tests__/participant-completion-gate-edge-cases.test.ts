@@ -29,14 +29,14 @@ import { getParticipantCompletionStatus, isMessageComplete } from '@/stores/chat
 
 function createParticipant(id: string, priority: number, isEnabled = true): ChatParticipant {
   return {
-    id,
-    name: `Model ${id}`,
-    provider: 'openai',
-    model: `gpt-${id}`,
-    priority,
-    isEnabled,
-    description: `Participant ${id}`,
     createdAt: new Date(),
+    description: `Participant ${id}`,
+    id,
+    isEnabled,
+    model: `gpt-${id}`,
+    name: `Model ${id}`,
+    priority,
+    provider: 'openai',
     updatedAt: new Date(),
   };
 }
@@ -44,9 +44,9 @@ function createParticipant(id: string, priority: number, isEnabled = true): Chat
 function createUserMessage(round: number): UIMessage {
   return {
     id: `user_${round}`,
+    metadata: { role: MessageRoles.USER, roundNumber: round },
+    parts: [{ text: 'Test query', type: MessagePartTypes.TEXT }],
     role: MessageRoles.USER,
-    parts: [{ type: MessagePartTypes.TEXT, text: 'Test query' }],
-    metadata: { roundNumber: round, role: MessageRoles.USER },
   };
 }
 
@@ -61,17 +61,17 @@ function createParticipantMessage(
   } = {},
 ): UIMessage {
   const {
+    finishReason = 'stop',
     hasContent = true,
     isStreaming = false,
-    finishReason = 'stop',
     participantIndex = 0,
   } = options;
 
   const parts = hasContent
     ? [
         {
-          type: MessagePartTypes.TEXT as const,
           text: 'Response from participant',
+          type: MessagePartTypes.TEXT as const,
           ...(isStreaming ? { state: 'streaming' as const } : {}),
         },
       ]
@@ -79,15 +79,15 @@ function createParticipantMessage(
 
   return {
     id: `${participantId}_r${round}`,
-    role: MessageRoles.ASSISTANT,
-    parts,
     metadata: {
-      roundNumber: round,
+      finishReason,
       participantId,
       participantIndex,
       role: MessageRoles.ASSISTANT,
-      finishReason,
+      roundNumber: round,
     },
+    parts,
+    role: MessageRoles.ASSISTANT,
   };
 }
 
@@ -99,48 +99,48 @@ describe('isMessageComplete - basic cases', () => {
   it('complete message with text content and finishReason', () => {
     const message: UIMessage = {
       id: 'msg1',
-      role: MessageRoles.ASSISTANT,
-      parts: [{ type: MessagePartTypes.TEXT, text: 'Hello' }],
       metadata: { finishReason: 'stop' },
+      parts: [{ text: 'Hello', type: MessagePartTypes.TEXT }],
+      role: MessageRoles.ASSISTANT,
     };
 
-    expect(isMessageComplete(message)).toBe(true);
+    expect(isMessageComplete(message)).toBeTruthy();
   });
 
   it('incomplete message with streaming parts', () => {
     const message: UIMessage = {
       id: 'msg1',
-      role: MessageRoles.ASSISTANT,
-      parts: [
-        { type: MessagePartTypes.TEXT, text: 'Hello', state: 'streaming' },
-      ],
       metadata: { finishReason: null },
+      parts: [
+        { state: 'streaming', text: 'Hello', type: MessagePartTypes.TEXT },
+      ],
+      role: MessageRoles.ASSISTANT,
     };
 
-    expect(isMessageComplete(message)).toBe(false);
+    expect(isMessageComplete(message)).toBeFalsy();
   });
 
   it('empty message with no parts', () => {
     const message: UIMessage = {
       id: 'msg1',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: {},
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
-    expect(isMessageComplete(message)).toBe(false);
+    expect(isMessageComplete(message)).toBeFalsy();
   });
 
   it('failed message with finishReason but no content', () => {
     const message: UIMessage = {
       id: 'msg1',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: { finishReason: 'error' },
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
     // Should be complete - finishReason indicates stream ended
-    expect(isMessageComplete(message)).toBe(true);
+    expect(isMessageComplete(message)).toBeTruthy();
   });
 });
 
@@ -159,9 +159,9 @@ describe('getParticipantCompletionStatus - participant failures', () => {
     const messages: UIMessage[] = [
       createUserMessage(1),
       // P1: Complete with content
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
       // P2: Failed - has finishReason but no content (error/timeout)
-      createParticipantMessage('p2', 1, { hasContent: false, finishReason: 'error' }),
+      createParticipantMessage('p2', 1, { finishReason: 'error', hasContent: false }),
       // P3: Still streaming
       createParticipantMessage('p3', 1, { hasContent: true, isStreaming: true }),
     ];
@@ -171,7 +171,7 @@ describe('getParticipantCompletionStatus - participant failures', () => {
     expect(status.expectedCount).toBe(3);
     expect(status.completedCount).toBe(2); // p1 (success) + p2 (failed but complete)
     expect(status.streamingCount).toBe(1); // p3 still streaming
-    expect(status.allComplete).toBe(false); // p3 not done yet
+    expect(status.allComplete).toBeFalsy(); // p3 not done yet
     expect(status.completedParticipantIds).toContain('p1');
     expect(status.completedParticipantIds).toContain('p2'); // Failed is still "complete"
     expect(status.streamingParticipantIds).toContain('p3');
@@ -186,15 +186,15 @@ describe('getParticipantCompletionStatus - participant failures', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
-      createParticipantMessage('p2', 1, { hasContent: false, finishReason: 'error' }),
-      createParticipantMessage('p3', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
+      createParticipantMessage('p2', 1, { finishReason: 'error', hasContent: false }),
+      createParticipantMessage('p3', 1, { finishReason: 'stop', hasContent: true }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // Gate should PASS - all participants done (even if one failed)
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.expectedCount).toBe(3);
     expect(status.completedCount).toBe(3);
     expect(status.streamingCount).toBe(0);
@@ -205,7 +205,7 @@ describe('getParticipantCompletionStatus - participant failures', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: false, finishReason: 'unknown' }),
+      createParticipantMessage('p1', 1, { finishReason: 'unknown', hasContent: false }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
@@ -213,7 +213,7 @@ describe('getParticipantCompletionStatus - participant failures', () => {
     // ✅ FIX: 'unknown' finishReason with NO content = INTERRUPTED stream
     // This stream needs to be resumed, NOT counted as complete
     // Gate should BLOCK to allow stream resumption to detect and re-trigger
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.completedCount).toBe(0);
     expect(status.streamingCount).toBe(1);
   });
@@ -223,13 +223,13 @@ describe('getParticipantCompletionStatus - participant failures', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'unknown' }),
+      createParticipantMessage('p1', 1, { finishReason: 'unknown', hasContent: true }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // 'unknown' finishReason WITH content = stream has usable content, can proceed
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.completedCount).toBe(1);
     expect(status.streamingCount).toBe(0);
   });
@@ -249,13 +249,13 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
-      createParticipantMessage('p2', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
+      createParticipantMessage('p2', 1, { finishReason: 'stop', hasContent: true }),
     ];
 
     // Gate passes with 2 participants
     let status = getParticipantCompletionStatus(messages, initialParticipants, 1);
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.completedCount).toBe(2);
 
     // NOW: User adds 3rd participant mid-stream (should NOT block gate)
@@ -266,7 +266,7 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
 
     // Gate should FAIL because we now expect 3 but only have 2 messages
     status = getParticipantCompletionStatus(messages, updatedParticipants, 1);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.expectedCount).toBe(3);
     expect(status.completedCount).toBe(2);
     expect(status.streamingCount).toBe(1); // p3 missing
@@ -282,15 +282,15 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
-      createParticipantMessage('p2', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
+      createParticipantMessage('p2', 1, { finishReason: 'stop', hasContent: true }),
       // p3 is still streaming
       createParticipantMessage('p3', 1, { hasContent: true, isStreaming: true }),
     ];
 
     // Gate fails - p3 still streaming
     let status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingCount).toBe(1);
 
     // NOW: User disables p3 (or p3 fails and is auto-disabled)
@@ -302,7 +302,7 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
 
     // Gate should NOW PASS - only enabled participants count
     status = getParticipantCompletionStatus(messages, updatedParticipants, 1);
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.expectedCount).toBe(2); // Only p1 and p2
     expect(status.completedCount).toBe(2);
     expect(status.streamingCount).toBe(0);
@@ -317,9 +317,9 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
       // p2 disabled, no message expected
-      createParticipantMessage('p3', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p3', 1, { finishReason: 'stop', hasContent: true }),
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
@@ -327,7 +327,7 @@ describe('getParticipantCompletionStatus - dynamic participant changes', () => {
     // Should only count p1 and p3
     expect(status.expectedCount).toBe(2);
     expect(status.completedCount).toBe(2);
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
   });
 });
 
@@ -344,17 +344,17 @@ describe('getParticipantCompletionStatus - multiple gate triggers', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
-      createParticipantMessage('p2', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
+      createParticipantMessage('p2', 1, { finishReason: 'stop', hasContent: true }),
     ];
 
     // First check - gate passes
     const status1 = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status1.allComplete).toBe(true);
+    expect(status1.allComplete).toBeTruthy();
 
     // Second check - gate should still pass (idempotent)
     const status2 = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status2.allComplete).toBe(true);
+    expect(status2.allComplete).toBeTruthy();
 
     // Results should be identical
     expect(status1).toEqual(status2);
@@ -369,21 +369,21 @@ describe('getParticipantCompletionStatus - multiple gate triggers', () => {
     const messages: UIMessage[] = [
       // Round 1 - complete
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
-      createParticipantMessage('p2', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
+      createParticipantMessage('p2', 1, { finishReason: 'stop', hasContent: true }),
       // Round 2 - incomplete
       createUserMessage(2),
-      createParticipantMessage('p1', 2, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 2, { finishReason: 'stop', hasContent: true }),
       // p2 still streaming in round 2
     ];
 
     // Round 1 - complete
     const status1 = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status1.allComplete).toBe(true);
+    expect(status1.allComplete).toBeTruthy();
 
     // Round 2 - incomplete
     const status2 = getParticipantCompletionStatus(messages, participants, 2);
-    expect(status2.allComplete).toBe(false);
+    expect(status2.allComplete).toBeFalsy();
     expect(status2.completedCount).toBe(1);
     expect(status2.streamingCount).toBe(1);
   });
@@ -401,26 +401,26 @@ describe('getParticipantCompletionStatus - streaming detection', () => {
       createUserMessage(1),
       {
         id: 'p1_r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          { type: MessagePartTypes.TEXT, text: 'Partial', state: 'streaming' },
-        ],
         metadata: {
-          roundNumber: 1,
           participantId: 'p1',
           role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
           // finishReason not set yet - stream active
         },
+        parts: [
+          { state: 'streaming', text: 'Partial', type: MessagePartTypes.TEXT },
+        ],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingCount).toBe(1);
     expect(status.completedCount).toBe(0);
-    expect(status.debugInfo[0].hasStreamingParts).toBe(true);
-    expect(status.debugInfo[0].isComplete).toBe(false);
+    expect(status.debugInfo[0].hasStreamingParts).toBeTruthy();
+    expect(status.debugInfo[0].isComplete).toBeFalsy();
   });
 
   it('message with content but no finishReason is complete', () => {
@@ -430,27 +430,27 @@ describe('getParticipantCompletionStatus - streaming detection', () => {
       createUserMessage(1),
       {
         id: 'p1_r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [
-          { type: MessagePartTypes.TEXT, text: 'Complete content' },
-        ],
         metadata: {
-          roundNumber: 1,
           participantId: 'p1',
           role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
           // No finishReason - but has content and no streaming parts
         },
+        parts: [
+          { text: 'Complete content', type: MessagePartTypes.TEXT },
+        ],
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // Complete because has content and no streaming parts
-    expect(status.allComplete).toBe(true);
+    expect(status.allComplete).toBeTruthy();
     expect(status.completedCount).toBe(1);
-    expect(status.debugInfo[0].hasContent).toBe(true);
-    expect(status.debugInfo[0].hasStreamingParts).toBe(false);
-    expect(status.debugInfo[0].isComplete).toBe(true);
+    expect(status.debugInfo[0].hasContent).toBeTruthy();
+    expect(status.debugInfo[0].hasStreamingParts).toBeFalsy();
+    expect(status.debugInfo[0].isComplete).toBeTruthy();
   });
 
   it('bUG: empty placeholder message should NOT be complete', () => {
@@ -460,24 +460,24 @@ describe('getParticipantCompletionStatus - streaming detection', () => {
       createUserMessage(1),
       {
         id: 'p1_r1',
-        role: MessageRoles.ASSISTANT,
-        parts: [], // Empty placeholder created by AI SDK
         metadata: {
-          roundNumber: 1,
           participantId: 'p1',
           role: MessageRoles.ASSISTANT,
+          roundNumber: 1,
         },
+        parts: [], // Empty placeholder created by AI SDK
+        role: MessageRoles.ASSISTANT,
       },
     ];
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
     // Should NOT be complete - empty placeholder
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingCount).toBe(1);
-    expect(status.debugInfo[0].hasContent).toBe(false);
-    expect(status.debugInfo[0].hasFinishReason).toBe(false);
-    expect(status.debugInfo[0].isComplete).toBe(false);
+    expect(status.debugInfo[0].hasContent).toBeFalsy();
+    expect(status.debugInfo[0].hasFinishReason).toBeFalsy();
+    expect(status.debugInfo[0].isComplete).toBeFalsy();
   });
 });
 
@@ -492,7 +492,7 @@ describe('getParticipantCompletionStatus - empty cases', () => {
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.expectedCount).toBe(0);
     expect(status.completedCount).toBe(0);
     expect(status.streamingCount).toBe(0);
@@ -507,7 +507,7 @@ describe('getParticipantCompletionStatus - empty cases', () => {
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.expectedCount).toBe(0);
   });
 
@@ -520,7 +520,7 @@ describe('getParticipantCompletionStatus - empty cases', () => {
 
     const status = getParticipantCompletionStatus(messages, participants, 1);
 
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.expectedCount).toBe(2);
     expect(status.completedCount).toBe(0);
     expect(status.streamingCount).toBe(2);
@@ -542,7 +542,7 @@ describe('getParticipantCompletionStatus - debug info', () => {
 
     const messages: UIMessage[] = [
       createUserMessage(1),
-      createParticipantMessage('p1', 1, { hasContent: true, finishReason: 'stop' }),
+      createParticipantMessage('p1', 1, { finishReason: 'stop', hasContent: true }),
       createParticipantMessage('p2', 1, { hasContent: true, isStreaming: true }),
       // p3 has no message yet
     ];
@@ -553,35 +553,35 @@ describe('getParticipantCompletionStatus - debug info', () => {
 
     // p1 - complete
     expect(status.debugInfo[0]).toMatchObject({
-      participantId: 'p1',
-      participantIndex: 0,
+      hasContent: true,
+      hasFinishReason: true,
       hasMessage: true,
       hasStreamingParts: false,
-      hasFinishReason: true,
-      hasContent: true,
       isComplete: true,
+      participantId: 'p1',
+      participantIndex: 0,
     });
 
     // p2 - streaming
     expect(status.debugInfo[1]).toMatchObject({
-      participantId: 'p2',
-      participantIndex: 1,
+      hasContent: true,
+      hasFinishReason: true,
       hasMessage: true,
       hasStreamingParts: true,
-      hasFinishReason: true,
-      hasContent: true,
       isComplete: false,
+      participantId: 'p2',
+      participantIndex: 1,
     });
 
     // p3 - no message
     expect(status.debugInfo[2]).toMatchObject({
-      participantId: 'p3',
-      participantIndex: 2,
+      hasContent: false,
+      hasFinishReason: false,
       hasMessage: false,
       hasStreamingParts: false,
-      hasFinishReason: false,
-      hasContent: false,
       isComplete: false,
+      participantId: 'p3',
+      participantIndex: 2,
     });
   });
 });
@@ -603,28 +603,28 @@ describe('getParticipantCompletionStatus - integration scenario', () => {
     // STEP 1: All participants start (empty placeholders)
     messages = [
       ...messages,
-      createParticipantMessage('gpt-4', 1, { hasContent: false, finishReason: null }),
-      createParticipantMessage('claude', 1, { hasContent: false, finishReason: null }),
-      createParticipantMessage('gemini', 1, { hasContent: false, finishReason: null }),
+      createParticipantMessage('gpt-4', 1, { finishReason: null, hasContent: false }),
+      createParticipantMessage('claude', 1, { finishReason: null, hasContent: false }),
+      createParticipantMessage('gemini', 1, { finishReason: null, hasContent: false }),
     ];
 
     let status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.streamingCount).toBe(3);
 
     // STEP 2: GPT-4 completes successfully
-    messages[1] = createParticipantMessage('gpt-4', 1, { hasContent: true, finishReason: 'stop' });
+    messages[1] = createParticipantMessage('gpt-4', 1, { finishReason: 'stop', hasContent: true });
 
     status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.completedCount).toBe(1);
     expect(status.streamingCount).toBe(2);
 
     // STEP 3: Claude fails (error but finishReason set)
-    messages[2] = createParticipantMessage('claude', 1, { hasContent: false, finishReason: 'error' });
+    messages[2] = createParticipantMessage('claude', 1, { finishReason: 'error', hasContent: false });
 
     status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(false); // Gemini still pending
+    expect(status.allComplete).toBeFalsy(); // Gemini still pending
     expect(status.completedCount).toBe(2); // gpt-4 + claude (failed)
     expect(status.streamingCount).toBe(1);
 
@@ -632,15 +632,15 @@ describe('getParticipantCompletionStatus - integration scenario', () => {
     messages[3] = createParticipantMessage('gemini', 1, { hasContent: true, isStreaming: true });
 
     status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(false);
+    expect(status.allComplete).toBeFalsy();
     expect(status.completedCount).toBe(2);
     expect(status.streamingCount).toBe(1);
 
     // STEP 5: Gemini completes
-    messages[3] = createParticipantMessage('gemini', 1, { hasContent: true, finishReason: 'stop' });
+    messages[3] = createParticipantMessage('gemini', 1, { finishReason: 'stop', hasContent: true });
 
     status = getParticipantCompletionStatus(messages, participants, 1);
-    expect(status.allComplete).toBe(true); // ALL DONE (including failed claude)
+    expect(status.allComplete).toBeTruthy(); // ALL DONE (including failed claude)
     expect(status.completedCount).toBe(3);
     expect(status.streamingCount).toBe(0);
   });

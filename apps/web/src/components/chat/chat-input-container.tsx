@@ -39,44 +39,44 @@ const variantStyles: Record<BorderVariant, {
   button: string;
 }> = {
   [BorderVariants.DEFAULT]: {
-    border: 'border-border',
     alertBg: 'bg-muted',
-    text: 'text-foreground',
+    border: 'border-border',
     button: 'border-border/40 bg-muted/20 text-foreground hover:bg-muted/30',
-  },
-  [BorderVariants.SUCCESS]: {
-    border: 'border-green-500/30',
-    alertBg: 'bg-green-500/10',
-    text: 'text-green-600 dark:text-green-400',
-    button: 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
-  },
-  [BorderVariants.WARNING]: {
-    border: 'border-amber-500/30',
-    alertBg: 'bg-amber-500/10',
-    text: 'text-amber-600 dark:text-amber-400',
-    button: 'border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30',
+    text: 'text-foreground',
   },
   [BorderVariants.ERROR]: {
-    border: 'border-destructive/30',
     alertBg: 'bg-destructive/10',
-    text: 'text-destructive',
+    border: 'border-destructive/30',
     button: 'border-destructive/40 bg-destructive/20 text-destructive hover:bg-destructive/30',
+    text: 'text-destructive',
+  },
+  [BorderVariants.SUCCESS]: {
+    alertBg: 'bg-green-500/10',
+    border: 'border-green-500/30',
+    button: 'border-green-500/40 bg-green-500/20 text-green-600 dark:text-green-400 hover:bg-green-500/30',
+    text: 'text-green-600 dark:text-green-400',
+  },
+  [BorderVariants.WARNING]: {
+    alertBg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+    button: 'border-amber-500/40 bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30',
+    text: 'text-amber-600 dark:text-amber-400',
   },
 };
 
 export const ChatInputContainer = memo(({
-  participants = [],
+  autoMode = false,
+  children,
+  className,
   inputValue = '',
   isHydrating = false,
   isModelsLoading = false,
-  children,
-  className,
-  autoMode = false,
+  participants = [],
 }: ChatInputContainerProps) => {
   const t = useTranslations();
   const isMobile = useIsMobile();
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
-  const { isFreeUser, hasUsedTrial, isWarningState } = useFreeTrialState();
+  const { hasUsedTrial, isFreeUser, isWarningState } = useFreeTrialState();
 
   const isOverLimit = inputValue.length > STRING_LIMITS.MESSAGE_MAX;
   const participantCount = participants.length;
@@ -86,13 +86,13 @@ export const ChatInputContainer = memo(({
   const creditStatus = useMemo((): { status: CreditStatus; estimated: number; available: number; remaining: number } => {
     const validated = validateUsageStatsCache(statsData);
     if (!validated) {
-      return { status: CreditStatuses.OK, estimated: 0, available: 0, remaining: 0 };
+      return { available: 0, estimated: 0, remaining: 0, status: CreditStatuses.OK };
     }
 
     const { credits, plan } = validated;
 
     if (plan.type !== PlanTypes.PAID) {
-      return { status: CreditStatuses.OK, estimated: 0, available: credits.available, remaining: 0 };
+      return { available: credits.available, estimated: 0, remaining: 0, status: CreditStatuses.OK };
     }
 
     const count = participantCount || 1;
@@ -100,18 +100,19 @@ export const ChatInputContainer = memo(({
     const remaining = credits.available - estimated;
 
     if (credits.available < estimated) {
-      return { status: CreditStatuses.INSUFFICIENT, estimated, available: credits.available, remaining };
+      return { available: credits.available, estimated, remaining, status: CreditStatuses.INSUFFICIENT };
     }
     if (remaining < 500 && remaining >= 0) {
-      return { status: CreditStatuses.LOW, estimated, available: credits.available, remaining };
+      return { available: credits.available, estimated, remaining, status: CreditStatuses.LOW };
     }
-    return { status: CreditStatuses.OK, estimated, available: credits.available, remaining };
+    return { available: credits.available, estimated, remaining, status: CreditStatuses.OK };
   }, [statsData, participantCount]);
 
   const isQuotaExceeded = useMemo(() => {
     const validated = validateUsageStatsCache(statsData);
-    if (!validated || validated.plan.type !== PlanTypes.PAID)
+    if (!validated || validated.plan.type !== PlanTypes.PAID) {
       return false;
+    }
     return validated.credits.available < creditStatus.estimated || validated.credits.available <= 0;
   }, [statsData, creditStatus.estimated]);
 
@@ -148,14 +149,14 @@ export const ChatInputContainer = memo(({
     }
     if (isFreeUser && !isLoadingStats) {
       return {
+        actionHref: '/chat/pricing',
+        actionLabel: isMobile
+          ? t('usage.freeTrial.upgradeToProShort')
+          : t('usage.freeTrial.upgradeToPro'),
         message: hasUsedTrial
           ? t('usage.freeTrial.usedDescription')
           : t('usage.freeTrial.availableDescription'),
         variant: isWarningState ? BorderVariants.WARNING : BorderVariants.SUCCESS,
-        actionLabel: isMobile
-          ? t('usage.freeTrial.upgradeToProShort')
-          : t('usage.freeTrial.upgradeToPro'),
-        actionHref: '/chat/pricing',
       };
     }
     return null;

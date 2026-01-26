@@ -52,22 +52,22 @@ export async function generateNextRoundPrompt(
     const conversationSummary = buildConversationSummary(messages, currentRound);
 
     const result = await openRouterService.generateText({
-      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+      maxTokens: 300,
       messages: [{
         id: 'generate-prompt',
-        role: 'user',
-        parts: [{ type: 'text', text: `Original discussion topic: "${initialPrompt}"
+        parts: [{ text: `Original discussion topic: "${initialPrompt}"
 
 Conversation so far:
 ${conversationSummary}
 
 Current round: ${currentRound + 1}
 
-Generate the next follow-up prompt to deepen this discussion.` }],
+Generate the next follow-up prompt to deepen this discussion.`, type: 'text' }],
+        role: 'user',
       }],
+      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
       system: PROMPT_GENERATION_SYSTEM,
       temperature: 0.7,
-      maxTokens: 300,
     });
 
     const prompt = result.text.trim();
@@ -87,7 +87,7 @@ Generate the next follow-up prompt to deepen this discussion.` }],
  * Build a summary of the conversation for context
  */
 function buildConversationSummary(
-  messages: Array<typeof tables.chatMessage.$inferSelect>,
+  messages: typeof tables.chatMessage.$inferSelect[],
   upToRound: number,
 ): string {
   const relevantMessages = messages
@@ -109,8 +109,9 @@ function buildConversationSummary(
  * Extract text content from message parts
  */
 function extractTextFromParts(parts: unknown): string {
-  if (!Array.isArray(parts))
+  if (!Array.isArray(parts)) {
     return '';
+  }
 
   return parts
     .filter((p): p is { type: 'text'; text: string } =>

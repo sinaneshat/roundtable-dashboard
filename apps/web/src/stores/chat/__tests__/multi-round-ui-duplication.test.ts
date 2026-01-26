@@ -43,46 +43,46 @@ import { createChatStore } from '../store';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: 'thread-123',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createParticipant(index: number, modelId = `model-${index}`): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId,
-    role: `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: `Participant ${index}`,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   } as ChatParticipant;
 }
 
 function createUserMsg(roundNumber: number, content = `Question ${roundNumber}`): ApiMessage {
   return createTestUserMessage({
-    id: `thread-123_r${roundNumber}_user`,
     content,
+    id: `thread-123_r${roundNumber}_user`,
     roundNumber,
   });
 }
@@ -93,12 +93,12 @@ function createAssistantMsg(
   content = `Response R${roundNumber}P${participantIndex}`,
 ): ApiMessage {
   return createTestAssistantMessage({
-    id: `thread-123_r${roundNumber}_p${participantIndex}`,
     content,
-    roundNumber,
+    finishReason: FinishReasons.STOP,
+    id: `thread-123_r${roundNumber}_p${participantIndex}`,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    finishReason: FinishReasons.STOP,
+    roundNumber,
   });
 }
 
@@ -107,21 +107,21 @@ function createPreSearch(
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
   const statusMap = {
-    pending: MessageStatuses.PENDING,
-    streaming: MessageStatuses.STREAMING,
     complete: MessageStatuses.COMPLETE,
     failed: MessageStatuses.FAILED,
+    pending: MessageStatuses.PENDING,
+    streaming: MessageStatuses.STREAMING,
   };
   return {
-    id: `presearch-thread-123-r${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    userQuery: `Query ${roundNumber}`,
-    status: statusMap[status],
-    searchData: status === MessageStatuses.COMPLETE ? { queries: [], results: [], moderatorSummary: 'Done', successCount: 1, failureCount: 0, totalResults: 0, totalTime: 100 } : null,
-    errorMessage: null,
-    createdAt: new Date(),
     completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
+    createdAt: new Date(),
+    errorMessage: null,
+    id: `presearch-thread-123-r${roundNumber}`,
+    roundNumber,
+    searchData: status === MessageStatuses.COMPLETE ? { failureCount: 0, moderatorSummary: 'Done', queries: [], results: [], successCount: 1, totalResults: 0, totalTime: 100 } : null,
+    status: statusMap[status],
+    threadId: 'thread-123',
+    userQuery: `Query ${roundNumber}`,
   } as StoredPreSearch;
 }
 
@@ -281,8 +281,8 @@ describe('timeline Duplication Detection', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -314,8 +314,8 @@ describe('timeline Duplication Detection', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
           preSearches: [],
         }),
       );
@@ -343,8 +343,8 @@ describe('timeline Duplication Detection', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages: [createUserMsg(0), createUserMsg(1)],
           changelog: [],
+          messages: [createUserMsg(0), createUserMsg(1)],
           preSearches,
         }),
       );
@@ -411,8 +411,10 @@ describe('second Round Specific Duplication Issues', () => {
       createAssistantMsg(1, 0),
       createAssistantMsg(1, 1),
     ]);
+  });
 
-    // Verify no duplicates
+  it('should have correct round messages after setup', () => {
+    // Verify no duplicates after setup
     const messages = store.getState().messages;
     const round0Msgs = messages.filter(m => getMetadataRoundNumber(m.metadata) === 0);
     const round1Msgs = messages.filter(m => getMetadataRoundNumber(m.metadata) === 1);
@@ -552,8 +554,8 @@ describe('full Flow E2E - No Duplication', () => {
     // Verify timeline renders correctly
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: allMessages,
         changelog: [], // No changelog in this test
+        messages: allMessages,
         preSearches: allPreSearches,
       }),
     );
@@ -628,45 +630,45 @@ describe('trigger Deduplication', () => {
     const store = createChatStore();
 
     // First trigger succeeds
-    expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
+    expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
 
     // Second trigger fails (already triggered)
-    expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(false);
+    expect(store.getState().tryMarkPreSearchTriggered(0)).toBeFalsy();
 
     // Different round succeeds
-    expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
+    expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
   });
 
   it('moderator stream trigger is idempotent per round+id', () => {
     const store = createChatStore();
 
     // Not triggered yet
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBeFalsy();
 
     // Mark triggered
     store.getState().markModeratorStreamTriggered('moderator-1', 0);
 
     // Now blocked
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBe(true);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-1', 0)).toBeTruthy();
 
     // Different ID/round not blocked
-    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-2', 1)).toBe(false);
+    expect(store.getState().hasModeratorStreamBeenTriggered('moderator-2', 1)).toBeFalsy();
   });
 
   it('hasModeratorBeenCreated prevents duplicate moderator creation', () => {
     const store = createChatStore();
 
     // Not created yet
-    expect(store.getState().hasModeratorBeenCreated(0)).toBe(false);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBeFalsy();
 
     // Mark created
     store.getState().markModeratorCreated(0);
 
     // Now blocked
-    expect(store.getState().hasModeratorBeenCreated(0)).toBe(true);
+    expect(store.getState().hasModeratorBeenCreated(0)).toBeTruthy();
 
     // Different round not blocked
-    expect(store.getState().hasModeratorBeenCreated(1)).toBe(false);
+    expect(store.getState().hasModeratorBeenCreated(1)).toBeFalsy();
   });
 
   it('clearAllPreSearchTracking resets tracking for navigation', () => {
@@ -681,9 +683,9 @@ describe('trigger Deduplication', () => {
     store.getState().clearAllPreSearchTracking();
 
     // All rounds can be triggered again
-    expect(store.getState().tryMarkPreSearchTriggered(0)).toBe(true);
-    expect(store.getState().tryMarkPreSearchTriggered(1)).toBe(true);
-    expect(store.getState().tryMarkPreSearchTriggered(2)).toBe(true);
+    expect(store.getState().tryMarkPreSearchTriggered(0)).toBeTruthy();
+    expect(store.getState().tryMarkPreSearchTriggered(1)).toBeTruthy();
+    expect(store.getState().tryMarkPreSearchTriggered(2)).toBeTruthy();
   });
 });
 
@@ -733,6 +735,6 @@ describe('optimistic Message Handling', () => {
 
     // Optimistic message should exist and have isOptimistic flag
     expect(round1UserMsg).toBeDefined();
-    expect(isOptimisticMessage(round1UserMsg?.metadata)).toBe(true);
+    expect(isOptimisticMessage(round1UserMsg?.metadata)).toBeTruthy();
   });
 });

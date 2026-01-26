@@ -15,11 +15,11 @@ export type ConversationModeModalProps = {
 };
 
 export function ConversationModeModal({
-  open,
-  onOpenChange,
-  selectedMode,
-  onModeSelect,
   className,
+  onModeSelect,
+  onOpenChange,
+  open,
+  selectedMode,
 }: ConversationModeModalProps) {
   const t = useTranslations();
 

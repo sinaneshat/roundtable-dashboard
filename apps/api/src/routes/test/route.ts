@@ -18,11 +18,9 @@ import { SetCreditsRequestSchema, SetCreditsResponseSchema } from './schema';
  * Set user credits (test only)
  */
 export const setUserCreditsRoute = createRoute({
+  description: 'Directly set user credit balance for testing. Only available in development/test.',
   method: 'post',
   path: '/test/set-credits',
-  tags: ['test'],
-  summary: 'Set user credits (test only)',
-  description: 'Directly set user credit balance for testing. Only available in development/test.',
   request: {
     body: {
       content: {
@@ -32,11 +30,13 @@ export const setUserCreditsRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      description: 'Credits set successfully',
       content: {
         'application/json': { schema: SetCreditsResponseSchema },
       },
+      description: 'Credits set successfully',
     },
     ...createProtectedRouteResponses(),
   },
+  summary: 'Set user credits (test only)',
+  tags: ['test'],
 });

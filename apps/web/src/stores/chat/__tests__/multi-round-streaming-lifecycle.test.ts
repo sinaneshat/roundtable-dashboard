@@ -79,24 +79,24 @@ type ConversationState = {
 // Helper functions for simulating conversation flow
 function createInitialState(threadId: string, participants: Participant[]): ConversationState {
   return {
-    threadId,
-    currentRoundNumber: 0,
-    rounds: new Map(),
-    participants,
-    isStreaming: false,
     currentParticipantIndex: 0,
+    currentRoundNumber: 0,
     enableWebSearch: false,
+    isStreaming: false,
+    participants,
+    rounds: new Map(),
+    threadId,
   };
 }
 
 function initializeRound(state: ConversationState, userMessage: Message): ConversationState {
   const roundNumber = state.currentRoundNumber;
   const round: RoundState = {
+    participantMessages: [],
     roundNumber,
+    startedAt: new Date(),
     status: 'pending',
     userMessage,
-    participantMessages: [],
-    startedAt: new Date(),
   };
 
   state.rounds.set(roundNumber, round);
@@ -105,8 +105,9 @@ function initializeRound(state: ConversationState, userMessage: Message): Conver
 
 function startPreSearch(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round)
+  if (!round) {
     return state;
+  }
 
   round.status = 'pre_search';
   round.preSearch = {
@@ -123,8 +124,9 @@ function completePreSearch(
   searchData: PreSearchStatus['searchData'],
 ): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round || !round.preSearch)
+  if (!round || !round.preSearch) {
     return state;
+  }
 
   round.preSearch.status = 'complete';
   round.preSearch.searchData = searchData;
@@ -134,8 +136,9 @@ function completePreSearch(
 
 function startParticipantStreaming(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round)
+  if (!round) {
     return state;
+  }
 
   round.status = 'streaming';
   state.isStreaming = true;
@@ -152,17 +155,18 @@ function addStreamingMessage(
 ): ConversationState {
   const round = state.rounds.get(roundNumber);
   const participant = state.participants[participantIndex];
-  if (!round || !participant)
+  if (!round || !participant) {
     return state;
+  }
 
   const message: Message = {
-    id: messageId,
-    role: UIMessageRoles.ASSISTANT,
     content: '',
-    roundNumber,
+    createdAt: new Date(),
+    id: messageId,
     participantId: participant.id,
     participantIndex,
-    createdAt: new Date(),
+    role: UIMessageRoles.ASSISTANT,
+    roundNumber,
     status: 'streaming',
   };
 
@@ -203,8 +207,9 @@ function advanceToNextParticipant(state: ConversationState): ConversationState {
 
 function startModerator(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round)
+  if (!round) {
     return state;
+  }
 
   round.status = 'moderator';
   round.moderator = {
@@ -221,8 +226,9 @@ function completeModerator(
   data: ModeratorStatus['data'],
 ): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round || !round.moderator)
+  if (!round || !round.moderator) {
     return state;
+  }
 
   round.moderator.status = 'complete';
   round.moderator.data = data;
@@ -232,8 +238,9 @@ function completeModerator(
 
 function completeRound(state: ConversationState, roundNumber: number): ConversationState {
   const round = state.rounds.get(roundNumber);
-  if (!round)
+  if (!round) {
     return state;
+  }
 
   round.status = 'complete';
   round.completedAt = new Date();
@@ -249,20 +256,20 @@ function generateMessageId(threadId: string, roundNumber: number, participantInd
 
 describe('multi-Round Streaming Lifecycle', () => {
   const defaultParticipants: Participant[] = [
-    { id: 'p1', modelId: 'gpt-4o', role: 'Analyst', priority: 0, isEnabled: true },
-    { id: 'p2', modelId: 'claude-3-opus', role: 'Critic', priority: 1, isEnabled: true },
-    { id: 'p3', modelId: 'gemini-pro', role: 'Ideator', priority: 2, isEnabled: true },
+    { id: 'p1', isEnabled: true, modelId: 'gpt-4o', priority: 0, role: 'Analyst' },
+    { id: 'p2', isEnabled: true, modelId: 'claude-3-opus', priority: 1, role: 'Critic' },
+    { id: 'p3', isEnabled: true, modelId: 'gemini-pro', priority: 2, role: 'Ideator' },
   ];
 
   describe('round Initialization', () => {
     it('should initialize first round with correct state', () => {
       let state = createInitialState('thread-123', defaultParticipants);
       const userMessage: Message = {
+        content: 'What is AI?',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'What is AI?',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       };
 
@@ -281,22 +288,22 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 0
       state = initializeRound(state, {
+        content: 'First question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'First question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = completeRound(state, 0);
 
       // Round 1
       state = initializeRound(state, {
+        content: 'Second question',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'Second question',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -311,11 +318,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       state.enableWebSearch = true;
 
       state = initializeRound(state, {
+        content: 'Search query',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Search query',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -326,7 +333,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       expect(round?.preSearch?.status).toBe('streaming');
 
       // Should not start streaming yet
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
     });
 
     it('should allow participant streaming after pre-search completes', () => {
@@ -334,11 +341,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       state.enableWebSearch = true;
 
       state = initializeRound(state, {
+        content: 'Search query',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Search query',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -353,7 +360,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       const round = state.rounds.get(0);
       expect(round?.preSearch?.status).toBe('complete');
       expect(round?.status).toBe('streaming');
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
     });
 
     it('should proceed without pre-search when web search disabled', () => {
@@ -361,11 +368,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       state.enableWebSearch = false;
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -383,11 +390,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -430,11 +437,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-abc', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -445,8 +452,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-abc', 0, i);
         state = addStreamingMessage(state, 0, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
 
       const round = state.rounds.get(0);
@@ -459,11 +467,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -492,11 +500,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -508,8 +516,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         state = addStreamingMessage(state, 0, i, msgId);
         state = appendToMessage(state, msgId, `Response ${i}`);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
 
       // Start moderator
@@ -524,11 +533,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -539,8 +548,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 0, i);
         state = addStreamingMessage(state, 0, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
 
       state = startModerator(state, 0);
@@ -554,7 +564,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       expect(round?.status).toBe('complete');
       expect(round?.moderator?.status).toBe('complete');
       expect(round?.completedAt).toBeDefined();
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
     });
   });
 
@@ -564,11 +574,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Complete Round 0
       state = initializeRound(state, {
+        content: 'First question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'First question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 0);
@@ -576,8 +586,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 0, i);
         state = addStreamingMessage(state, 0, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
       state = startModerator(state, 0);
       state = completeModerator(state, 0, { leaderboard: [], moderator: 'R0' });
@@ -585,11 +596,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Complete Round 1
       state = initializeRound(state, {
+        content: 'Second question',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'Second question',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 1);
@@ -597,8 +608,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 1, i);
         state = addStreamingMessage(state, 1, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
       state = startModerator(state, 1);
       state = completeModerator(state, 1, { leaderboard: [], moderator: 'R1' });
@@ -606,11 +618,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Complete Round 2
       state = initializeRound(state, {
+        content: 'Third question',
+        createdAt: new Date(),
         id: 'user-msg-3',
         role: UIMessageRoles.USER,
-        content: 'Third question',
         roundNumber: 2,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 2);
@@ -618,8 +630,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 2, i);
         state = addStreamingMessage(state, 2, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
       state = startModerator(state, 2);
       state = completeModerator(state, 2, { leaderboard: [], moderator: 'R2' });
@@ -642,11 +655,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Complete Round 0 with specific content
       state = initializeRound(state, {
+        content: 'What is machine learning?',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'What is machine learning?',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 0);
@@ -674,11 +687,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Start Round 1
       state = initializeRound(state, {
+        content: 'What about deep learning?',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'What about deep learning?',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -695,11 +708,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 0
       state = initializeRound(state, {
+        content: 'Q1',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Q1',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 0);
@@ -707,18 +720,19 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 0, i);
         state = addStreamingMessage(state, 0, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
       state = completeRound(state, 0);
 
       // Round 1
       state = initializeRound(state, {
+        content: 'Q2',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'Q2',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 1);
@@ -726,8 +740,9 @@ describe('multi-Round Streaming Lifecycle', () => {
         const msgId = generateMessageId('thread-123', 1, i);
         state = addStreamingMessage(state, 1, i, msgId);
         state = completeMessage(state, msgId);
-        if (i < 2)
+        if (i < 2) {
           state = advanceToNextParticipant(state);
+        }
       }
 
       // Verify message IDs follow round pattern
@@ -752,11 +767,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -788,11 +803,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -836,11 +851,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -851,12 +866,12 @@ describe('multi-Round Streaming Lifecycle', () => {
       state = addStreamingMessage(state, 0, 0, msgId0);
       state = appendToMessage(state, msgId0, 'Partial response...');
 
-      expect(state.isStreaming).toBe(true);
+      expect(state.isStreaming).toBeTruthy();
 
       // User clicks stop
       state = stopStreaming(state, 0);
 
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
       const round = state.rounds.get(0);
       expect(round?.participantMessages[0].status).toBe('complete');
       expect(round?.participantMessages[0].content).toBe('Partial response...');
@@ -866,11 +881,11 @@ describe('multi-Round Streaming Lifecycle', () => {
       let state = createInitialState('thread-123', defaultParticipants);
 
       state = initializeRound(state, {
+        content: 'Question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'Question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
 
@@ -889,7 +904,7 @@ describe('multi-Round Streaming Lifecycle', () => {
       // Only first participant's message exists
       expect(round?.participantMessages).toHaveLength(1);
       expect(state.currentParticipantIndex).toBe(1);
-      expect(state.isStreaming).toBe(false);
+      expect(state.isStreaming).toBeFalsy();
     });
   });
 
@@ -900,11 +915,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 0 without web search
       state = initializeRound(state, {
+        content: 'First question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'First question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 0);
@@ -921,11 +936,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 1 with web search
       state = initializeRound(state, {
+        content: 'Search-enabled question',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'Search-enabled question',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startPreSearch(state, 1);
@@ -946,11 +961,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 0 with web search
       state = initializeRound(state, {
+        content: 'First question',
+        createdAt: new Date(),
         id: 'user-msg-1',
         role: UIMessageRoles.USER,
-        content: 'First question',
         roundNumber: 0,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startPreSearch(state, 0);
@@ -969,11 +984,11 @@ describe('multi-Round Streaming Lifecycle', () => {
 
       // Round 1 without web search
       state = initializeRound(state, {
+        content: 'No search question',
+        createdAt: new Date(),
         id: 'user-msg-2',
         role: UIMessageRoles.USER,
-        content: 'No search question',
         roundNumber: 1,
-        createdAt: new Date(),
         status: 'complete',
       });
       state = startParticipantStreaming(state, 1);
@@ -1015,16 +1030,18 @@ describe('multi-Round Streaming Lifecycle', () => {
       const match = messageId.match(/^(.+)_r(\d+)_p(\d+)$/);
 
       expect(match).not.toBeNull();
-      if (!match)
+      if (!match) {
         throw new Error('expected match');
+      }
       const threadPart = match[1];
       const roundPart = match[2];
       const participantPart = match[3];
-      if (!threadPart || !roundPart || !participantPart)
+      if (!threadPart || !roundPart || !participantPart) {
         throw new Error('expected match groups');
+      }
       expect(threadPart).toBe('thread-abc');
-      expect(Number.parseInt(roundPart)).toBe(3);
-      expect(Number.parseInt(participantPart)).toBe(1);
+      expect(Number.parseInt(roundPart, 10)).toBe(3);
+      expect(Number.parseInt(participantPart, 10)).toBe(1);
     });
   });
 });

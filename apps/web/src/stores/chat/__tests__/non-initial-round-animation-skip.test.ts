@@ -66,35 +66,35 @@ describe('non-Initial Round Animation Skip', () => {
     it('should NOT skip animation for round 0 user message with normal ID', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(false);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeFalsy();
     });
 
     it('should skip animation for round 0 optimistic user message', () => {
       const message: UIMessage = {
         id: 'optimistic-user-1736128000000',
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Hello', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Hello' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 0, isOptimistic: true },
       };
 
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeTruthy();
     });
 
     it('cRITICAL: should skip animation for round 1 user message (non-initial)', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up question' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Follow-up question', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // This is the critical fix - roundNumber > 0 should skip animation
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeTruthy();
     });
 
     it('cRITICAL: should skip animation for round 2+ user messages', () => {
@@ -103,33 +103,33 @@ describe('non-Initial Round Animation Skip', () => {
       for (const roundNumber of rounds) {
         const message: UIMessage = {
           id: `db-id-round-${roundNumber}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: `Question for round ${roundNumber}` }],
           metadata: { role: MessageRoles.USER, roundNumber },
+          parts: [{ text: `Question for round ${roundNumber}`, type: 'text' }],
+          role: MessageRoles.USER,
         };
 
-        expect(shouldSkipUserMessageAnimation(message, false)).toBe(true);
+        expect(shouldSkipUserMessageAnimation(message, false)).toBeTruthy();
       }
     });
 
     it('should skip animation when skipEntranceAnimations is true (any round)', () => {
       const round0Message: UIMessage = {
         id: 'some-id-1',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 0' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'Round 0', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       const round1Message: UIMessage = {
         id: 'some-id-2',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Round 1' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Round 1', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Both should skip when global flag is set
-      expect(shouldSkipUserMessageAnimation(round0Message, true)).toBe(true);
-      expect(shouldSkipUserMessageAnimation(round1Message, true)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(round0Message, true)).toBeTruthy();
+      expect(shouldSkipUserMessageAnimation(round1Message, true)).toBeTruthy();
     });
   });
 
@@ -146,46 +146,46 @@ describe('non-Initial Round Animation Skip', () => {
       // Step 1: Optimistic message (animation skipped via optimistic- prefix)
       const optimisticMessage: UIMessage = {
         id: 'optimistic-user-1736128000000',
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 1 },
+        parts: [{ text: 'Follow-up', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 1, isOptimistic: true },
       };
 
-      expect(shouldSkipUserMessageAnimation(optimisticMessage, false)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(optimisticMessage, false)).toBeTruthy();
 
       // Step 2: DB ID replaces optimistic ID (component remounts)
       const dbMessage: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Follow-up' }],
         metadata: { role: MessageRoles.USER, roundNumber: 1 }, // isOptimistic removed
+        parts: [{ text: 'Follow-up', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // CRITICAL: Animation must STILL be skipped because roundNumber > 0
-      expect(shouldSkipUserMessageAnimation(dbMessage, false)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(dbMessage, false)).toBeTruthy();
     });
 
     it('should handle multiple round transitions correctly', () => {
       // Simulate a conversation with multiple rounds
-      const messages: Array<{ round: number; phase: 'optimistic' | 'persisted' }> = [
-        { round: 0, phase: 'persisted' }, // Initial round - should animate
-        { round: 1, phase: 'optimistic' }, // Round 1 optimistic - skip
-        { round: 1, phase: 'persisted' }, // Round 1 persisted - skip (roundNumber > 0)
-        { round: 2, phase: 'optimistic' }, // Round 2 optimistic - skip
-        { round: 2, phase: 'persisted' }, // Round 2 persisted - skip (roundNumber > 0)
+      const messages: { round: number; phase: 'optimistic' | 'persisted' }[] = [
+        { phase: 'persisted', round: 0 }, // Initial round - should animate
+        { phase: 'optimistic', round: 1 }, // Round 1 optimistic - skip
+        { phase: 'persisted', round: 1 }, // Round 1 persisted - skip (roundNumber > 0)
+        { phase: 'optimistic', round: 2 }, // Round 2 optimistic - skip
+        { phase: 'persisted', round: 2 }, // Round 2 persisted - skip (roundNumber > 0)
       ];
 
-      for (const { round, phase } of messages) {
+      for (const { phase, round } of messages) {
         const isOptimistic = phase === 'optimistic';
         const message: UIMessage = {
           id: isOptimistic ? `optimistic-user-${round}-${Date.now()}` : `db-id-${round}`,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: `Round ${round}` }],
           metadata: {
             role: MessageRoles.USER,
             roundNumber: round,
             ...(isOptimistic ? { isOptimistic: true } : {}),
           },
+          parts: [{ text: `Round ${round}`, type: 'text' }],
+          role: MessageRoles.USER,
         };
 
         const shouldSkip = shouldSkipUserMessageAnimation(message, false);
@@ -201,46 +201,46 @@ describe('non-Initial Round Animation Skip', () => {
     it('should handle missing roundNumber metadata (default to 0)', () => {
       const message: UIMessage = {
         id: 'message-without-round',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'No round number' }],
         metadata: { role: MessageRoles.USER }, // No roundNumber
+        parts: [{ text: 'No round number', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Should NOT skip (defaults to round 0)
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(false);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeFalsy();
     });
 
     it('should handle null metadata gracefully', () => {
       const message: UIMessage = {
         id: 'message-null-metadata',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Null metadata' }],
         metadata: createInvalidMetadata('null'),
+        parts: [{ text: 'Null metadata', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // getRoundNumberFromMetadata should return default (0)
       // So animation should NOT be skipped
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(false);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeFalsy();
     });
 
     it('should handle optimistic- prefix in any round', () => {
       // Even in round 0, optimistic messages should skip
       const round0Optimistic: UIMessage = {
         id: 'optimistic-user-first',
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'First message', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'First message' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 0, isOptimistic: true },
       };
 
       const round5Optimistic: UIMessage = {
         id: 'optimistic-user-fifth',
+        metadata: { isOptimistic: true, role: MessageRoles.USER, roundNumber: 5 },
+        parts: [{ text: 'Fifth round', type: 'text' }],
         role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'Fifth round' }],
-        metadata: { role: MessageRoles.USER, roundNumber: 5, isOptimistic: true },
       };
 
-      expect(shouldSkipUserMessageAnimation(round0Optimistic, false)).toBe(true);
-      expect(shouldSkipUserMessageAnimation(round5Optimistic, false)).toBe(true);
+      expect(shouldSkipUserMessageAnimation(round0Optimistic, false)).toBeTruthy();
+      expect(shouldSkipUserMessageAnimation(round5Optimistic, false)).toBeTruthy();
     });
   });
 
@@ -253,44 +253,44 @@ describe('non-Initial Round Animation Skip', () => {
       // Generate various realistic scenarios
       const scenarios = [
         // Typical follow-up
-        { id: 'db-123', round: 1, optimistic: false },
+        { id: 'db-123', optimistic: false, round: 1 },
         // Optimistic before DB persist
-        { id: 'optimistic-user-456', round: 1, optimistic: true },
+        { id: 'optimistic-user-456', optimistic: true, round: 1 },
         // Later round
-        { id: 'db-789', round: 3, optimistic: false },
+        { id: 'db-789', optimistic: false, round: 3 },
         // Much later round
-        { id: 'db-abc', round: 10, optimistic: false },
+        { id: 'db-abc', optimistic: false, round: 10 },
       ];
 
       for (const scenario of scenarios) {
         const message: UIMessage = {
           id: scenario.id,
-          role: MessageRoles.USER,
-          parts: [{ type: 'text', text: 'Test' }],
           metadata: {
             role: MessageRoles.USER,
             roundNumber: scenario.round,
             ...(scenario.optimistic ? { isOptimistic: true } : {}),
           },
+          parts: [{ text: 'Test', type: 'text' }],
+          role: MessageRoles.USER,
         };
 
         const shouldSkip = shouldSkipUserMessageAnimation(message, false);
 
         // ALL non-initial round messages must skip animation
-        expect(shouldSkip).toBe(true);
+        expect(shouldSkip).toBeTruthy();
       }
     });
 
     it('gUARANTEE: initial round persisted messages still animate normally', () => {
       const message: UIMessage = {
         id: '01KE5W6ER2Q1SFYSXNDZ0YZZVJ',
-        role: MessageRoles.USER,
-        parts: [{ type: 'text', text: 'First message ever' }],
         metadata: { role: MessageRoles.USER, roundNumber: 0 },
+        parts: [{ text: 'First message ever', type: 'text' }],
+        role: MessageRoles.USER,
       };
 
       // Round 0 persisted messages should animate normally
-      expect(shouldSkipUserMessageAnimation(message, false)).toBe(false);
+      expect(shouldSkipUserMessageAnimation(message, false)).toBeFalsy();
     });
   });
 });

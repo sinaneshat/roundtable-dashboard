@@ -17,7 +17,7 @@
  * formatFileSize(0) // "0 B"
  * formatFileSize(undefined) // ""
  */
-export function formatFileSize(bytes: number | undefined | null, decimals: number = 1): string {
+export function formatFileSize(bytes: number | undefined | null, decimals = 1): string {
   if (bytes === undefined || bytes === null || bytes === 0) {
     return bytes === 0 ? '0 B' : '';
   }

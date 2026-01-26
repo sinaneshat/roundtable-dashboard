@@ -50,30 +50,30 @@ describe('participant Streaming Errors', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'thread-error-123_r0_user',
       content: 'Test question',
+      id: 'thread-error-123_r0_user',
       roundNumber: 0,
     });
 
     // Participant 0 succeeds
     const p0Message = createTestAssistantMessage({
-      id: 'thread-error-123_r0_p0',
       content: 'Success response',
-      roundNumber: 0,
+      finishReason: FinishReasons.STOP,
+      id: 'thread-error-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 0,
     });
 
     // Participant 1 errors
     const p1Message = createTestAssistantMessage({
-      id: 'thread-error-123_r0_p1',
       content: 'Partial response before error...',
-      roundNumber: 0,
-      participantId: 'participant-1',
-      participantIndex: 1,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'thread-error-123_r0_p1',
+      participantId: 'participant-1',
+      participantIndex: 1,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, p0Message, p1Message]);
@@ -83,25 +83,25 @@ describe('participant Streaming Errors', () => {
 
     // Can check error via metadata
     const erroredMessage = getStoreState(store).messages[2];
-    expect((erroredMessage?.metadata as { hasError?: boolean }).hasError).toBe(true);
+    expect((erroredMessage?.metadata as { hasError?: boolean }).hasError).toBeTruthy();
   });
 
   it('handles content_filter finishReason', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'thread-error-123_r0_user',
       content: 'Test question',
+      id: 'thread-error-123_r0_user',
       roundNumber: 0,
     });
 
     const p0Message = createTestAssistantMessage({
-      id: 'thread-error-123_r0_p0',
       content: '', // Empty content due to filter
-      roundNumber: 0,
+      finishReason: FinishReasons.CONTENT_FILTER,
+      id: 'thread-error-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.CONTENT_FILTER,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, p0Message]);
@@ -114,18 +114,18 @@ describe('participant Streaming Errors', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'thread-error-123_r0_user',
       content: 'Test question',
+      id: 'thread-error-123_r0_user',
       roundNumber: 0,
     });
 
     const p0Message = createTestAssistantMessage({
-      id: 'thread-error-123_r0_p0',
       content: 'Long response that was truncated...',
-      roundNumber: 0,
+      finishReason: FinishReasons.LENGTH,
+      id: 'thread-error-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.LENGTH,
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, p0Message]);
@@ -156,7 +156,7 @@ describe('participant Streaming Errors', () => {
     state.completeStreaming();
 
     // Streaming flags cleared
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
 
     // Error preserved (caller decides when to clear)
@@ -184,11 +184,11 @@ describe('moderator Streaming Errors', () => {
     const state = getStoreState(store);
 
     state.setIsModeratorStreaming(true);
-    expect(getStoreState(store).isModeratorStreaming).toBe(true);
+    expect(getStoreState(store).isModeratorStreaming).toBeTruthy();
 
     // Error handling should clear flag
     state.setIsModeratorStreaming(false);
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
   });
 
   it('moderator can be retried after failure', () => {
@@ -196,20 +196,20 @@ describe('moderator Streaming Errors', () => {
 
     // Mark moderator as created (simulating initial attempt)
     const wasMarked = state.tryMarkModeratorCreated(0);
-    expect(wasMarked).toBe(true);
+    expect(wasMarked).toBeTruthy();
 
     // Verify it's marked
-    expect(state.hasModeratorBeenCreated(0)).toBe(true);
+    expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
 
     // Clear tracking to allow retry
     state.clearModeratorTracking(0);
 
     // Verify tracking cleared
-    expect(state.hasModeratorBeenCreated(0)).toBe(false);
+    expect(state.hasModeratorBeenCreated(0)).toBeFalsy();
 
     // Retry can mark moderator created again
     const canRetry = state.tryMarkModeratorCreated(0);
-    expect(canRetry).toBe(true);
+    expect(canRetry).toBeTruthy();
   });
 });
 
@@ -232,23 +232,24 @@ describe('pre-Search Errors', () => {
     const state = getStoreState(store);
 
     const failedPreSearch: StoredPreSearch = {
-      id: 'presearch-0',
-      threadId: 'thread-error-123',
-      roundNumber: 0,
-      status: MessageStatuses.FAILED,
-      userQuery: 'Search query',
-      searchData: undefined,
-      errorMessage: 'Search timed out',
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: 'Search timed out',
+      id: 'presearch-0',
+      roundNumber: 0,
+      searchData: undefined,
+      status: MessageStatuses.FAILED,
+      threadId: 'thread-error-123',
+      userQuery: 'Search query',
     } as StoredPreSearch;
 
     state.addPreSearch(failedPreSearch);
 
     expect(getStoreState(store).preSearches).toHaveLength(1);
     const preSearch = getStoreState(store).preSearches[0];
-    if (!preSearch)
+    if (!preSearch) {
       throw new Error('expected preSearch at index 0');
+    }
     expect(preSearch.status).toBe(MessageStatuses.FAILED);
     expect(preSearch.errorMessage).toBe('Search timed out');
   });
@@ -258,15 +259,15 @@ describe('pre-Search Errors', () => {
 
     // Pre-search fails
     const failedPreSearch: StoredPreSearch = {
-      id: 'presearch-0',
-      threadId: 'thread-error-123',
-      roundNumber: 0,
-      status: MessageStatuses.FAILED,
-      userQuery: 'Search query',
-      searchData: undefined,
-      errorMessage: 'Error',
-      createdAt: new Date(),
       completedAt: null,
+      createdAt: new Date(),
+      errorMessage: 'Error',
+      id: 'presearch-0',
+      roundNumber: 0,
+      searchData: undefined,
+      status: MessageStatuses.FAILED,
+      threadId: 'thread-error-123',
+      userQuery: 'Search query',
     } as StoredPreSearch;
 
     state.addPreSearch(failedPreSearch);
@@ -275,10 +276,11 @@ describe('pre-Search Errors', () => {
     state.setIsStreaming(true);
     state.setStreamingRoundNumber(0);
 
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     const preSearchAfter = getStoreState(store).preSearches[0];
-    if (!preSearchAfter)
+    if (!preSearchAfter) {
       throw new Error('expected preSearch at index 0');
+    }
     expect(preSearchAfter.status).toBe(MessageStatuses.FAILED);
   });
 });
@@ -302,19 +304,19 @@ describe('partial Response Handling', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'thread-error-123_r0_user',
       content: 'Test',
+      id: 'thread-error-123_r0_user',
       roundNumber: 0,
     });
 
     // Partial response (interrupted mid-stream)
     const partialMessage = createTestAssistantMessage({
-      id: 'thread-error-123_r0_p0',
       content: 'I was saying something important when-',
-      roundNumber: 0,
+      finishReason: FinishReasons.UNKNOWN, // Unknown = incomplete
+      id: 'thread-error-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN, // Unknown = incomplete
+      roundNumber: 0,
     });
 
     state.setMessages([userMessage, partialMessage]);
@@ -326,11 +328,12 @@ describe('partial Response Handling', () => {
     // Partial content preserved
     expect(getStoreState(store).messages).toHaveLength(2);
     const partialMsg = getStoreState(store).messages[1];
-    if (!partialMsg)
+    if (!partialMsg) {
       throw new Error('expected message at index 1');
+    }
     expect(partialMsg.parts?.[0]).toEqual({
-      type: 'text',
       text: 'I was saying something important when-',
+      type: 'text',
     });
   });
 
@@ -338,39 +341,40 @@ describe('partial Response Handling', () => {
     const state = getStoreState(store);
 
     const userMessage = createTestUserMessage({
-      id: 'user',
       content: 'Test',
+      id: 'user',
       roundNumber: 0,
     });
 
     // Empty message (failed before any content)
     const emptyMessage: UIMessage = {
       id: 'thread-error-123_r0_p0',
-      role: MessageRoles.ASSISTANT,
-      parts: [],
       metadata: {
-        role: MessageRoles.ASSISTANT,
-        roundNumber: 0,
+        finishReason: FinishReasons.UNKNOWN,
+        hasError: false,
+        isPartialResponse: true,
+        isTransient: false,
+        model: 'gpt-4',
         participantId: 'participant-0',
         participantIndex: 0,
         participantRole: null,
-        model: 'gpt-4',
-        finishReason: FinishReasons.UNKNOWN,
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        hasError: false,
-        isTransient: false,
-        isPartialResponse: true,
+        role: MessageRoles.ASSISTANT,
+        roundNumber: 0,
+        usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
       },
+      parts: [],
+      role: MessageRoles.ASSISTANT,
     };
 
     state.setMessages([userMessage, emptyMessage]);
 
     expect(getStoreState(store).messages).toHaveLength(2);
     const emptyMsg = getStoreState(store).messages[1];
-    if (!emptyMsg)
+    if (!emptyMsg) {
       throw new Error('expected message at index 1');
+    }
     expect(emptyMsg.parts).toEqual([]);
-    expect((emptyMsg.metadata as { isPartialResponse: boolean }).isPartialResponse).toBe(true);
+    expect((emptyMsg.metadata as { isPartialResponse: boolean }).isPartialResponse).toBeTruthy();
   });
 });
 
@@ -410,7 +414,7 @@ describe('error State Cleanup', () => {
 
     // All cleared
     expect(getStoreState(store).error).toBeNull();
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
   });
 
   it('resetForNewRound clears streaming but preserves thread', () => {
@@ -426,7 +430,7 @@ describe('error State Cleanup', () => {
     state.completeStreaming();
 
     // Streaming cleared
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).streamingRoundNumber).toBeNull();
 
     // Thread preserved
@@ -452,13 +456,13 @@ describe('regeneration Error Recovery', () => {
   it('regeneration state tracks round number', () => {
     const state = getStoreState(store);
 
-    expect(getStoreState(store).isRegenerating).toBe(false);
+    expect(getStoreState(store).isRegenerating).toBeFalsy();
     expect(getStoreState(store).regeneratingRoundNumber).toBeNull();
 
     state.setIsRegenerating(true);
     state.setRegeneratingRoundNumber(0);
 
-    expect(getStoreState(store).isRegenerating).toBe(true);
+    expect(getStoreState(store).isRegenerating).toBeTruthy();
     expect(getStoreState(store).regeneratingRoundNumber).toBe(0);
   });
 
@@ -474,7 +478,7 @@ describe('regeneration Error Recovery', () => {
     state.setRegeneratingRoundNumber(null);
     state.setError(null);
 
-    expect(getStoreState(store).isRegenerating).toBe(false);
+    expect(getStoreState(store).isRegenerating).toBeFalsy();
     expect(getStoreState(store).regeneratingRoundNumber).toBeNull();
     expect(getStoreState(store).error).toBeNull();
   });
@@ -496,22 +500,22 @@ describe('complete Error Journey', () => {
 
     // === ROUND 0: Successful ===
     const round0Messages: UIMessage[] = [
-      createTestUserMessage({ id: 'r0_user', content: 'Q0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Q0', id: 'r0_user', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'r0_p0',
         content: 'R0P0',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
       createTestAssistantMessage({
-        id: 'r0_p1',
         content: 'R0P1',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'r0_p1',
         participantId: 'participant-1',
         participantIndex: 1,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
     state.setMessages(round0Messages);
@@ -521,28 +525,28 @@ describe('complete Error Journey', () => {
 
     // === ROUND 1: Participant 1 errors ===
     const round1UserMessage = createTestUserMessage({
-      id: 'r1_user',
       content: 'Q1',
+      id: 'r1_user',
       roundNumber: 1,
     });
 
     const round1P0 = createTestAssistantMessage({
-      id: 'r1_p0',
       content: 'R1P0 success',
-      roundNumber: 1,
+      finishReason: FinishReasons.STOP,
+      id: 'r1_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.STOP,
+      roundNumber: 1,
     });
 
     const round1P1Error = createTestAssistantMessage({
-      id: 'r1_p1',
       content: 'Partial before error...',
-      roundNumber: 1,
-      participantId: 'participant-1',
-      participantIndex: 1,
       finishReason: FinishReasons.ERROR,
       hasError: true,
+      id: 'r1_p1',
+      participantId: 'participant-1',
+      participantIndex: 1,
+      roundNumber: 1,
     });
 
     state.setMessages([...round0Messages, round1UserMessage, round1P0, round1P1Error]);
@@ -550,7 +554,7 @@ describe('complete Error Journey', () => {
     state.setError(new Error('Model rate limited'));
 
     // === ERROR STATE ===
-    expect(getStoreState(store).isStreaming).toBe(true);
+    expect(getStoreState(store).isStreaming).toBeTruthy();
     expect(getStoreState(store).error).not.toBeNull();
     expect(getStoreState(store).messages).toHaveLength(6); // 4 from round 0 + 3 from round 1
 
@@ -559,11 +563,11 @@ describe('complete Error Journey', () => {
     state.setError(null);
 
     // Error cleared, but partial results preserved
-    expect(getStoreState(store).isStreaming).toBe(false);
+    expect(getStoreState(store).isStreaming).toBeFalsy();
     expect(getStoreState(store).error).toBeNull();
     expect(getStoreState(store).messages).toHaveLength(6);
 
     // Round 0 moderator tracking still intact
-    expect(state.hasModeratorBeenCreated(0)).toBe(true);
+    expect(state.hasModeratorBeenCreated(0)).toBeTruthy();
   });
 });

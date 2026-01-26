@@ -36,18 +36,18 @@ import { createChatStore } from '@/stores/chat';
 
 function createMockThread(overrides: Partial<ChatThread> = {}): ChatThread {
   return {
+    createdAt: new Date(),
+    enableWebSearch: false,
     id: 'test-thread-123',
-    slug: 'test-thread',
-    title: 'Test Thread',
-    mode: ChatModes.BRAINSTORMING,
-    status: ThreadStatuses.ACTIVE,
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    enableWebSearch: false,
-    isAiGeneratedTitle: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    mode: ChatModes.BRAINSTORMING,
+    slug: 'test-thread',
+    status: ThreadStatuses.ACTIVE,
+    title: 'Test Thread',
+    updatedAt: new Date(),
     ...overrides,
   };
 }
@@ -55,14 +55,14 @@ function createMockThread(overrides: Partial<ChatThread> = {}): ChatThread {
 function createMockParticipants(): ChatParticipant[] {
   return [
     {
-      id: 'participant-1',
-      threadId: 'test-thread-123',
-      modelId: 'gpt-4o',
-      role: 'Analyst',
-      priority: 0,
-      isEnabled: true,
-      settings: null,
       createdAt: new Date(),
+      id: 'participant-1',
+      isEnabled: true,
+      modelId: 'gpt-4o',
+      priority: 0,
+      role: 'Analyst',
+      settings: null,
+      threadId: 'test-thread-123',
       updatedAt: new Date(),
     },
   ];
@@ -75,10 +75,10 @@ function createMockParticipants(): ChatParticipant[] {
 function readFreshStateForPatch(store: ReturnType<typeof createChatStore>) {
   const currentState = store.getState();
   return {
-    threadSavedMode: currentState.thread?.mode || null,
-    threadSavedWebSearch: currentState.thread?.enableWebSearch || false,
     formMode: currentState.selectedMode,
     formWebSearch: currentState.enableWebSearch,
+    threadSavedMode: currentState.thread?.mode || null,
+    threadSavedWebSearch: currentState.thread?.enableWebSearch || false,
   };
 }
 
@@ -86,7 +86,7 @@ function readFreshStateForPatch(store: ReturnType<typeof createChatStore>) {
  * Simulates PATCH payload construction with fresh state
  */
 function buildPatchPayload(store: ReturnType<typeof createChatStore>) {
-  const { threadSavedMode, threadSavedWebSearch, formMode, formWebSearch } = readFreshStateForPatch(store);
+  const { formMode, formWebSearch, threadSavedMode, threadSavedWebSearch } = readFreshStateForPatch(store);
 
   const modeChanged = threadSavedMode !== formMode;
   const webSearchChanged = threadSavedWebSearch !== formWebSearch;
@@ -105,9 +105,9 @@ function buildPatchPayload(store: ReturnType<typeof createChatStore>) {
   }
 
   return {
-    payload,
     hasChanges: modeChanged || webSearchChanged,
     modeChanged,
+    payload,
     webSearchChanged,
   };
 }
@@ -134,8 +134,8 @@ describe('stale Closure Prevention', () => {
 
       const { payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(webSearchChanged).toBe(true);
-      expect(payload.enableWebSearch).toBe(true);
+      expect(webSearchChanged).toBeTruthy();
+      expect(payload.enableWebSearch).toBeTruthy();
     });
 
     it('should include enableWebSearch in PATCH when toggled from true to false', () => {
@@ -148,8 +148,8 @@ describe('stale Closure Prevention', () => {
 
       const { payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(webSearchChanged).toBe(true);
-      expect(payload.enableWebSearch).toBe(false);
+      expect(webSearchChanged).toBeTruthy();
+      expect(payload.enableWebSearch).toBeFalsy();
     });
 
     it('should NOT include enableWebSearch when unchanged', () => {
@@ -160,7 +160,7 @@ describe('stale Closure Prevention', () => {
       // No toggle, just submit
       const { payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(webSearchChanged).toBe(false);
+      expect(webSearchChanged).toBeFalsy();
       expect(payload.enableWebSearch).toBeUndefined();
     });
 
@@ -175,8 +175,8 @@ describe('stale Closure Prevention', () => {
 
       const { payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(webSearchChanged).toBe(true);
-      expect(payload.enableWebSearch).toBe(true);
+      expect(webSearchChanged).toBeTruthy();
+      expect(payload.enableWebSearch).toBeTruthy();
     });
 
     it('should NOT detect change if rapid toggle ends at original value', () => {
@@ -189,7 +189,7 @@ describe('stale Closure Prevention', () => {
 
       const { payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(webSearchChanged).toBe(false);
+      expect(webSearchChanged).toBeFalsy();
       expect(payload.enableWebSearch).toBeUndefined();
     });
   });
@@ -203,9 +203,9 @@ describe('stale Closure Prevention', () => {
       // Change mode
       store.getState().setSelectedMode(ChatModes.DEBATING);
 
-      const { payload, modeChanged } = buildPatchPayload(store);
+      const { modeChanged, payload } = buildPatchPayload(store);
 
-      expect(modeChanged).toBe(true);
+      expect(modeChanged).toBeTruthy();
       expect(payload.mode).toBe(ChatModes.DEBATING);
     });
 
@@ -214,9 +214,9 @@ describe('stale Closure Prevention', () => {
       store.getState().initializeThread(thread, createMockParticipants(), []);
       store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
 
-      const { payload, modeChanged } = buildPatchPayload(store);
+      const { modeChanged, payload } = buildPatchPayload(store);
 
-      expect(modeChanged).toBe(false);
+      expect(modeChanged).toBeFalsy();
       expect(payload.mode).toBeUndefined();
     });
   });
@@ -224,8 +224,8 @@ describe('stale Closure Prevention', () => {
   describe('combined Changes', () => {
     it('should include both mode and webSearch when both changed', () => {
       const thread = createMockThread({
-        mode: ChatModes.BRAINSTORMING,
         enableWebSearch: false,
+        mode: ChatModes.BRAINSTORMING,
       });
       store.getState().initializeThread(thread, createMockParticipants(), []);
       store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
@@ -235,18 +235,18 @@ describe('stale Closure Prevention', () => {
       store.getState().setSelectedMode(ChatModes.DEBATING);
       store.getState().setEnableWebSearch(true);
 
-      const { payload, modeChanged, webSearchChanged } = buildPatchPayload(store);
+      const { modeChanged, payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(modeChanged).toBe(true);
-      expect(webSearchChanged).toBe(true);
+      expect(modeChanged).toBeTruthy();
+      expect(webSearchChanged).toBeTruthy();
       expect(payload.mode).toBe(ChatModes.DEBATING);
-      expect(payload.enableWebSearch).toBe(true);
+      expect(payload.enableWebSearch).toBeTruthy();
     });
 
     it('should only include changed fields', () => {
       const thread = createMockThread({
-        mode: ChatModes.BRAINSTORMING,
         enableWebSearch: false,
+        mode: ChatModes.BRAINSTORMING,
       });
       store.getState().initializeThread(thread, createMockParticipants(), []);
       store.getState().setSelectedMode(ChatModes.BRAINSTORMING);
@@ -255,12 +255,12 @@ describe('stale Closure Prevention', () => {
       // Only change webSearch
       store.getState().setEnableWebSearch(true);
 
-      const { payload, modeChanged, webSearchChanged } = buildPatchPayload(store);
+      const { modeChanged, payload, webSearchChanged } = buildPatchPayload(store);
 
-      expect(modeChanged).toBe(false);
-      expect(webSearchChanged).toBe(true);
+      expect(modeChanged).toBeFalsy();
+      expect(webSearchChanged).toBeTruthy();
       expect(payload.mode).toBeUndefined();
-      expect(payload.enableWebSearch).toBe(true);
+      expect(payload.enableWebSearch).toBeTruthy();
     });
   });
 });
@@ -288,24 +288,24 @@ describe('request Ordering', () => {
       store.getState().setEnableWebSearch(true);
       let state = store.getState();
       checkpoints.push({
-        name: 'after-config-change',
         blocked: state.isWaitingForChangelog || state.configChangeRoundNumber !== null,
+        name: 'after-config-change',
       });
 
       // Step 2: Set configChangeRoundNumber (before PATCH)
       store.getState().setConfigChangeRoundNumber(1);
       state = store.getState();
       checkpoints.push({
-        name: 'after-configChangeRoundNumber',
         blocked: state.isWaitingForChangelog || state.configChangeRoundNumber !== null,
+        name: 'after-configChangeRoundNumber',
       });
 
       // Step 3: Set isWaitingForChangelog (after PATCH)
       store.getState().setIsWaitingForChangelog(true);
       state = store.getState();
       checkpoints.push({
-        name: 'after-isWaitingForChangelog',
         blocked: state.isWaitingForChangelog || state.configChangeRoundNumber !== null,
+        name: 'after-isWaitingForChangelog',
       });
 
       // Step 4: Changelog sync completes
@@ -313,15 +313,15 @@ describe('request Ordering', () => {
       store.getState().setIsWaitingForChangelog(false);
       state = store.getState();
       checkpoints.push({
-        name: 'after-changelog-sync',
         blocked: state.isWaitingForChangelog || state.configChangeRoundNumber !== null,
+        name: 'after-changelog-sync',
       });
 
       expect(checkpoints).toEqual([
-        { name: 'after-config-change', blocked: false },
-        { name: 'after-configChangeRoundNumber', blocked: true },
-        { name: 'after-isWaitingForChangelog', blocked: true },
-        { name: 'after-changelog-sync', blocked: false },
+        { blocked: false, name: 'after-config-change' },
+        { blocked: true, name: 'after-configChangeRoundNumber' },
+        { blocked: true, name: 'after-isWaitingForChangelog' },
+        { blocked: false, name: 'after-changelog-sync' },
       ]);
     });
 
@@ -334,7 +334,7 @@ describe('request Ordering', () => {
       const state = store.getState();
       const shouldBlock = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
     });
   });
 
@@ -346,15 +346,15 @@ describe('request Ordering', () => {
 
       // First trigger
       const firstTrigger = store.getState().tryMarkPreSearchTriggered(1);
-      expect(firstTrigger).toBe(true);
+      expect(firstTrigger).toBeTruthy();
 
       // Second trigger same round - should fail
       const secondTrigger = store.getState().tryMarkPreSearchTriggered(1);
-      expect(secondTrigger).toBe(false);
+      expect(secondTrigger).toBeFalsy();
 
       // Different round - should succeed
       const thirdTrigger = store.getState().tryMarkPreSearchTriggered(2);
-      expect(thirdTrigger).toBe(true);
+      expect(thirdTrigger).toBeTruthy();
     });
 
     it('should clear pre-search tracking correctly', () => {
@@ -364,15 +364,15 @@ describe('request Ordering', () => {
 
       // Trigger
       store.getState().tryMarkPreSearchTriggered(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(true);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeTruthy();
 
       // Clear
       store.getState().clearPreSearchTracking(1);
-      expect(store.getState().hasPreSearchBeenTriggered(1)).toBe(false);
+      expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
 
       // Can trigger again
       const reTrigger = store.getState().tryMarkPreSearchTriggered(1);
-      expect(reTrigger).toBe(true);
+      expect(reTrigger).toBeTruthy();
     });
   });
 });
@@ -402,9 +402,9 @@ describe('full Flow Integration', () => {
     events.push('user-enables-websearch');
 
     // 2. Check for config changes (using fresh state!)
-    const { payload, hasChanges } = buildPatchPayload(store);
-    expect(hasChanges).toBe(true);
-    expect(payload.enableWebSearch).toBe(true);
+    const { hasChanges, payload } = buildPatchPayload(store);
+    expect(hasChanges).toBeTruthy();
+    expect(payload.enableWebSearch).toBeTruthy();
     events.push('config-change-detected');
 
     // 3. Set configChangeRoundNumber BEFORE PATCH
@@ -469,7 +469,7 @@ describe('full Flow Integration', () => {
 
     // Round 1: No config changes
     let { hasChanges } = buildPatchPayload(store);
-    expect(hasChanges).toBe(false);
+    expect(hasChanges).toBeFalsy();
     round1Events.push('no-config-change');
 
     // Pre-search not needed (web search off)
@@ -490,7 +490,7 @@ describe('full Flow Integration', () => {
     round2Events.push('user-enables-websearch');
 
     ({ hasChanges } = buildPatchPayload(store));
-    expect(hasChanges).toBe(true);
+    expect(hasChanges).toBeTruthy();
     round2Events.push('config-change-detected');
 
     // Set blocking flags
@@ -539,9 +539,9 @@ describe('full Flow Integration', () => {
     store.getState().setEnableWebSearch(false);
     events.push('user-disables-websearch');
 
-    const { payload, hasChanges } = buildPatchPayload(store);
-    expect(hasChanges).toBe(true);
-    expect(payload.enableWebSearch).toBe(false);
+    const { hasChanges, payload } = buildPatchPayload(store);
+    expect(hasChanges).toBeTruthy();
+    expect(payload.enableWebSearch).toBeFalsy();
     events.push('config-change-detected');
 
     // Set blocking flags and PATCH
@@ -593,19 +593,19 @@ describe('regression Tests', () => {
 
     // Capture "stale" state (what old buggy code would have)
     const staleWebSearch = store.getState().enableWebSearch;
-    expect(staleWebSearch).toBe(false);
+    expect(staleWebSearch).toBeFalsy();
 
     // User toggles (store updates, but stale closure doesn't see it)
     store.getState().setEnableWebSearch(true);
 
     // Old buggy code would compare thread vs stale: (false !== false) = false
     const buggyDetection = (thread.enableWebSearch ?? false) !== staleWebSearch;
-    expect(buggyDetection).toBe(false); // BUG: No change detected!
+    expect(buggyDetection).toBeFalsy(); // BUG: No change detected!
 
     // Fixed code uses fresh state read
-    const { webSearchChanged, payload } = buildPatchPayload(store);
-    expect(webSearchChanged).toBe(true); // FIXED: Change detected!
-    expect(payload.enableWebSearch).toBe(true);
+    const { payload, webSearchChanged } = buildPatchPayload(store);
+    expect(webSearchChanged).toBeTruthy(); // FIXED: Change detected!
+    expect(payload.enableWebSearch).toBeTruthy();
   });
 
   it('bug: should not execute pre-search before changelog syncs', () => {
@@ -626,7 +626,7 @@ describe('regression Tests', () => {
     const isBlocked = state.isWaitingForChangelog || state.configChangeRoundNumber !== null;
 
     // With fix: Should be blocked
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
 
     // Pre-search should NOT trigger while blocked
     // (Component returns early before calling tryMarkPreSearchTriggered)
@@ -650,18 +650,18 @@ describe('regression Tests', () => {
     const threadFromFresh = freshState.thread;
 
     // Verify we're reading from the store's thread reference
-    expect(threadFromFresh?.enableWebSearch).toBe(false); // Thread hasn't been patched yet
+    expect(threadFromFresh?.enableWebSearch).toBeFalsy(); // Thread hasn't been patched yet
     expect(threadFromFresh?.mode).toBe(ChatModes.BRAINSTORMING);
 
     // But form state has the new values
-    expect(freshState.enableWebSearch).toBe(true);
+    expect(freshState.enableWebSearch).toBeTruthy();
     expect(freshState.selectedMode).toBe(ChatModes.DEBATING);
 
     // Comparison should detect both changes
     const webSearchChanged = (threadFromFresh?.enableWebSearch ?? false) !== freshState.enableWebSearch;
     const modeChanged = (threadFromFresh?.mode ?? null) !== freshState.selectedMode;
 
-    expect(webSearchChanged).toBe(true);
-    expect(modeChanged).toBe(true);
+    expect(webSearchChanged).toBeTruthy();
+    expect(modeChanged).toBeTruthy();
   });
 });

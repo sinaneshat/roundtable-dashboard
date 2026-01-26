@@ -32,9 +32,9 @@ describe('checkout Flow', () => {
   describe('checkout Session Creation', () => {
     it('includes customerId in checkout params', () => {
       const checkoutParams = {
+        cancel_url: '/chat/pricing',
         customer: 'cus_123',
         success_url: '/chat/billing/subscription-success',
-        cancel_url: '/chat/pricing',
       };
 
       expect(checkoutParams).toHaveProperty('customer');

@@ -12,30 +12,30 @@ type EmailSectionProps = {
 };
 
 const spacingStyles: Record<string, CSSProperties> = {
-  sm: {
-    marginTop: spacing[4],
-    marginBottom: spacing[4],
+  lg: {
+    marginBottom: spacing[8],
+    marginTop: spacing[8],
   },
   md: {
-    marginTop: spacing[6],
     marginBottom: spacing[6],
+    marginTop: spacing[6],
   },
-  lg: {
-    marginTop: spacing[8],
-    marginBottom: spacing[8],
+  sm: {
+    marginBottom: spacing[4],
+    marginTop: spacing[4],
   },
 };
 
 const alignStyles: Record<string, CSSProperties> = {
-  left: { textAlign: 'left' },
   center: { textAlign: 'center' },
+  left: { textAlign: 'left' },
   right: { textAlign: 'right' },
 };
 
 export function EmailSection({
+  align = 'left',
   children,
   spacing: spacingProp = 'md',
-  align = 'left',
   style,
 }: EmailSectionProps) {
   const combinedStyle: CSSProperties = {

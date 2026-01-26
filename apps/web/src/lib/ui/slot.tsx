@@ -19,9 +19,7 @@ type MergedProps = {
 // ElementProps represents React element props which can contain any valid
 // HTML/React attribute. We cannot be more specific here without losing
 // the ability to merge props from arbitrary components.
-type ElementProps = {
-  [key: string]: unknown;
-};
+type ElementProps = Record<string, unknown>;
 
 function isSlottableChild(child: ReactNode): child is ReactElement {
   return isValidElement(child);
@@ -39,7 +37,7 @@ function hasClassNameProp(props: ElementProps): props is ElementProps & { classN
   return 'className' in props;
 }
 
-function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> | null }) {
+function Slot({ children, ref, ...props }: SlotProps & { ref?: Ref<HTMLElement> | null }) {
   // eslint-disable-next-line react/no-children-to-array -- Required for React 19 + Radix compatibility
   const childArray = Children.toArray(children);
   const slottableChild = childArray.find(isSlottableChild);
@@ -47,8 +45,9 @@ function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> 
   if (slottableChild) {
     const childPropsRaw = slottableChild.props;
 
-    if (!isElementProps(childPropsRaw))
+    if (!isElementProps(childPropsRaw)) {
       return null;
+    }
 
     const childProps = childPropsRaw;
 
@@ -61,8 +60,9 @@ function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> 
     const mergedProps: MergedProps = { ...props };
 
     for (const key of Object.keys(childProps)) {
-      if (key === 'className' || key === 'ref')
+      if (key === 'className' || key === 'ref') {
         continue;
+      }
       if (!(key in mergedProps)) {
         mergedProps[key] = childProps[key];
       }
@@ -75,8 +75,9 @@ function Slot({ ref, children, ...props }: SlotProps & { ref?: Ref<HTMLElement> 
     return cloneElement(slottableChild, mergedProps);
   }
 
-  if (isSlottableChild(children))
+  if (isSlottableChild(children)) {
     return children;
+  }
 
   return null;
 }

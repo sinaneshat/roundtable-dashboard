@@ -29,12 +29,15 @@ export const SIDEBAR_SKELETON_WIDTHS = [
  * Creates a fade-out effect for items further down the list
  */
 export function getSkeletonOpacity(index: number): number {
-  if (index < 4)
+  if (index < 4) {
     return 1;
-  if (index < 5)
+  }
+  if (index < 5) {
     return 0.7;
-  if (index < 6)
+  }
+  if (index < 6) {
     return 0.5;
+  }
   return 0.3;
 }
 

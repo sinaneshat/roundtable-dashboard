@@ -67,16 +67,16 @@ function captureCheckpoint(
   const showLoadingSpinner = state.waitingToStartStreaming;
 
   return {
-    name,
-    isInputBlocked,
-    showLoadingSpinner,
     flags: {
-      waitingToStartStreaming: state.waitingToStartStreaming,
       isCreatingThread: state.isCreatingThread,
-      isStreaming: state.isStreaming,
       isModeratorStreaming: state.isModeratorStreaming,
+      isStreaming: state.isStreaming,
       streamingRoundNumber: state.streamingRoundNumber,
+      waitingToStartStreaming: state.waitingToStartStreaming,
     },
+    isInputBlocked,
+    name,
+    showLoadingSpinner,
   };
 }
 
@@ -104,26 +104,26 @@ function simulateRoundSequence(
   if (options.webSearchEnabled) {
     store.getState().setStreamingRoundNumber(roundNumber);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: `presearch_${roundNumber}`,
         status: MessageStatuses.STREAMING,
         streamId: `presearch_${roundNumber}`,
-        preSearchId: `presearch_${roundNumber}`,
       },
+      roundNumber,
     });
     checkpoints.push(captureCheckpoint(store, `Round ${roundNumber}: Pre-search streaming`));
 
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: `presearch_${roundNumber}`,
         status: MessageStatuses.COMPLETE,
         streamId: `presearch_${roundNumber}`,
-        preSearchId: `presearch_${roundNumber}`,
       },
+      roundNumber,
     });
     checkpoints.push(captureCheckpoint(store, `Round ${roundNumber}: Pre-search complete`));
   }
@@ -161,24 +161,24 @@ describe('chat Input Event Sequence - Initial Round (Round 1)', () => {
 
     // Verify key checkpoints
     const submitClick = checkpoints.find(c => c.name.includes('Submit clicked'));
-    expect(submitClick?.isInputBlocked).toBe(true);
-    expect(submitClick?.showLoadingSpinner).toBe(true);
+    expect(submitClick?.isInputBlocked).toBeTruthy();
+    expect(submitClick?.showLoadingSpinner).toBeTruthy();
 
     const threadCreation = checkpoints.find(c => c.name.includes('Thread creation started'));
-    expect(threadCreation?.isInputBlocked).toBe(true);
+    expect(threadCreation?.isInputBlocked).toBeTruthy();
 
     const firstParticipant = checkpoints.find(c => c.name.includes('First participant streaming'));
-    expect(firstParticipant?.isInputBlocked).toBe(true);
-    expect(firstParticipant?.showLoadingSpinner).toBe(false); // Spinner stops
+    expect(firstParticipant?.isInputBlocked).toBeTruthy();
+    expect(firstParticipant?.showLoadingSpinner).toBeFalsy(); // Spinner stops
 
     const participantsComplete = checkpoints.find(c => c.name.includes('Participants complete'));
-    expect(participantsComplete?.isInputBlocked).toBe(true); // Still blocked by streamingRoundNumber
+    expect(participantsComplete?.isInputBlocked).toBeTruthy(); // Still blocked by streamingRoundNumber
 
     const moderatorStreaming = checkpoints.find(c => c.name.includes('Moderator streaming'));
-    expect(moderatorStreaming?.isInputBlocked).toBe(true);
+    expect(moderatorStreaming?.isInputBlocked).toBeTruthy();
 
     const roundComplete = checkpoints.find(c => c.name.includes('Round complete'));
-    expect(roundComplete?.isInputBlocked).toBe(false); // Re-enabled
+    expect(roundComplete?.isInputBlocked).toBeFalsy(); // Re-enabled
   });
 
   it('should follow documented event sequence WITH web search', () => {
@@ -186,17 +186,17 @@ describe('chat Input Event Sequence - Initial Round (Round 1)', () => {
     const checkpoints = simulateRoundSequence(store, 1, { webSearchEnabled: true });
 
     const preSearchStreaming = checkpoints.find(c => c.name.includes('Pre-search streaming'));
-    expect(preSearchStreaming?.isInputBlocked).toBe(true);
+    expect(preSearchStreaming?.isInputBlocked).toBeTruthy();
 
     const preSearchComplete = checkpoints.find(c => c.name.includes('Pre-search complete'));
-    expect(preSearchComplete?.isInputBlocked).toBe(true); // Still blocked by streamingRoundNumber
+    expect(preSearchComplete?.isInputBlocked).toBeTruthy(); // Still blocked by streamingRoundNumber
 
     const firstParticipant = checkpoints.find(c => c.name.includes('First participant streaming'));
-    expect(firstParticipant?.isInputBlocked).toBe(true);
-    expect(firstParticipant?.showLoadingSpinner).toBe(false);
+    expect(firstParticipant?.isInputBlocked).toBeTruthy();
+    expect(firstParticipant?.showLoadingSpinner).toBeFalsy();
 
     const roundComplete = checkpoints.find(c => c.name.includes('Round complete'));
-    expect(roundComplete?.isInputBlocked).toBe(false);
+    expect(roundComplete?.isInputBlocked).toBeFalsy();
   });
 
   it('should transition flags in correct order', () => {
@@ -204,25 +204,25 @@ describe('chat Input Event Sequence - Initial Round (Round 1)', () => {
     const checkpoints = simulateRoundSequence(store, 1, { webSearchEnabled: false });
 
     // Submit → waitingToStartStreaming=true
-    expect(checkpoints[0]?.flags.waitingToStartStreaming).toBe(true);
+    expect(checkpoints[0]?.flags.waitingToStartStreaming).toBeTruthy();
 
     // Thread creation → isCreatingThread=true
-    expect(checkpoints[1]?.flags.isCreatingThread).toBe(true);
+    expect(checkpoints[1]?.flags.isCreatingThread).toBeTruthy();
 
     // First participant → isStreaming=true, waitingToStartStreaming=false
     const firstParticipantIdx = checkpoints.findIndex(c => c.name.includes('First participant'));
-    expect(checkpoints[firstParticipantIdx]?.flags.isStreaming).toBe(true);
-    expect(checkpoints[firstParticipantIdx]?.flags.waitingToStartStreaming).toBe(false);
+    expect(checkpoints[firstParticipantIdx]?.flags.isStreaming).toBeTruthy();
+    expect(checkpoints[firstParticipantIdx]?.flags.waitingToStartStreaming).toBeFalsy();
 
     // Moderator → isModeratorStreaming=true
     const moderatorIdx = checkpoints.findIndex(c => c.name.includes('Moderator streaming'));
-    expect(checkpoints[moderatorIdx]?.flags.isModeratorStreaming).toBe(true);
+    expect(checkpoints[moderatorIdx]?.flags.isModeratorStreaming).toBeTruthy();
 
     // Complete → all flags cleared
     const completeIdx = checkpoints.findIndex(c => c.name.includes('Round complete'));
-    expect(checkpoints[completeIdx]?.flags.isStreaming).toBe(false);
-    expect(checkpoints[completeIdx]?.flags.isModeratorStreaming).toBe(false);
-    expect(checkpoints[completeIdx]?.flags.streamingRoundNumber).toBe(null);
+    expect(checkpoints[completeIdx]?.flags.isStreaming).toBeFalsy();
+    expect(checkpoints[completeIdx]?.flags.isModeratorStreaming).toBeFalsy();
+    expect(checkpoints[completeIdx]?.flags.streamingRoundNumber).toBeNull();
   });
 });
 
@@ -243,36 +243,44 @@ describe('chat Input Event Sequence - Follow-up Round (Round 2+)', () => {
 
     const r1Submit = round1Checkpoints.find(c => c.name.includes('Submit clicked'));
     const r2Submit = round2Checkpoints.find(c => c.name.includes('Submit clicked'));
-    if (!r1Submit)
+    if (!r1Submit) {
       throw new Error('expected r1Submit');
-    if (!r2Submit)
+    }
+    if (!r2Submit) {
       throw new Error('expected r2Submit');
+    }
     expect(r1Submit.isInputBlocked).toBe(r2Submit.isInputBlocked);
     expect(r1Submit.showLoadingSpinner).toBe(r2Submit.showLoadingSpinner);
 
     const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'));
     const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'));
-    if (!r1FirstParticipant)
+    if (!r1FirstParticipant) {
       throw new Error('expected r1FirstParticipant');
-    if (!r2FirstParticipant)
+    }
+    if (!r2FirstParticipant) {
       throw new Error('expected r2FirstParticipant');
+    }
     expect(r1FirstParticipant.isInputBlocked).toBe(r2FirstParticipant.isInputBlocked);
     expect(r1FirstParticipant.showLoadingSpinner).toBe(r2FirstParticipant.showLoadingSpinner);
 
     const r1Moderator = round1Checkpoints.find(c => c.name.includes('Moderator streaming'));
     const r2Moderator = round2Checkpoints.find(c => c.name.includes('Moderator streaming'));
-    if (!r1Moderator)
+    if (!r1Moderator) {
       throw new Error('expected r1Moderator');
-    if (!r2Moderator)
+    }
+    if (!r2Moderator) {
       throw new Error('expected r2Moderator');
+    }
     expect(r1Moderator.isInputBlocked).toBe(r2Moderator.isInputBlocked);
 
     const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'));
     const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'));
-    if (!r1Complete)
+    if (!r1Complete) {
       throw new Error('expected r1Complete');
-    if (!r2Complete)
+    }
+    if (!r2Complete) {
       throw new Error('expected r2Complete');
+    }
     expect(r1Complete.isInputBlocked).toBe(r2Complete.isInputBlocked);
   });
 
@@ -285,34 +293,42 @@ describe('chat Input Event Sequence - Follow-up Round (Round 2+)', () => {
 
     const r1PreSearch = round1Checkpoints.find(c => c.name.includes('Pre-search streaming'));
     const r2PreSearch = round2Checkpoints.find(c => c.name.includes('Pre-search streaming'));
-    if (!r1PreSearch)
+    if (!r1PreSearch) {
       throw new Error('expected r1PreSearch');
-    if (!r2PreSearch)
+    }
+    if (!r2PreSearch) {
       throw new Error('expected r2PreSearch');
+    }
     expect(r1PreSearch.isInputBlocked).toBe(r2PreSearch.isInputBlocked);
 
     const r1PreSearchComplete = round1Checkpoints.find(c => c.name.includes('Pre-search complete'));
     const r2PreSearchComplete = round2Checkpoints.find(c => c.name.includes('Pre-search complete'));
-    if (!r1PreSearchComplete)
+    if (!r1PreSearchComplete) {
       throw new Error('expected r1PreSearchComplete');
-    if (!r2PreSearchComplete)
+    }
+    if (!r2PreSearchComplete) {
       throw new Error('expected r2PreSearchComplete');
+    }
     expect(r1PreSearchComplete.isInputBlocked).toBe(r2PreSearchComplete.isInputBlocked);
 
     const r1FirstParticipant = round1Checkpoints.find(c => c.name.includes('First participant'));
     const r2FirstParticipant = round2Checkpoints.find(c => c.name.includes('First participant'));
-    if (!r1FirstParticipant)
+    if (!r1FirstParticipant) {
       throw new Error('expected r1FirstParticipant');
-    if (!r2FirstParticipant)
+    }
+    if (!r2FirstParticipant) {
       throw new Error('expected r2FirstParticipant');
+    }
     expect(r1FirstParticipant.showLoadingSpinner).toBe(r2FirstParticipant.showLoadingSpinner);
 
     const r1Complete = round1Checkpoints.find(c => c.name.includes('Round complete'));
     const r2Complete = round2Checkpoints.find(c => c.name.includes('Round complete'));
-    if (!r1Complete)
+    if (!r1Complete) {
       throw new Error('expected r1Complete');
-    if (!r2Complete)
+    }
+    if (!r2Complete) {
       throw new Error('expected r2Complete');
+    }
     expect(r1Complete.isInputBlocked).toBe(r2Complete.isInputBlocked);
   });
 
@@ -321,7 +337,7 @@ describe('chat Input Event Sequence - Follow-up Round (Round 2+)', () => {
     const checkpoints = simulateRoundSequence(store, 2, { webSearchEnabled: false });
 
     const hasThreadCreation = checkpoints.some(c => c.name.includes('Thread creation'));
-    expect(hasThreadCreation).toBe(false);
+    expect(hasThreadCreation).toBeFalsy();
   });
 });
 
@@ -335,19 +351,19 @@ describe('chat Input Event Sequence - Loading Spinner Timing', () => {
 
     // Submit
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Thread creation (spinner still showing)
     store.getState().setIsCreatingThread(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     store.getState().setIsCreatingThread(false);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // First stream chunk arrives → spinner stops
     store.getState().setIsStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 
   it('should show spinner from submit until first stream chunk (Round 2)', () => {
@@ -355,12 +371,12 @@ describe('chat Input Event Sequence - Loading Spinner Timing', () => {
 
     // Submit (no thread creation in Round 2)
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // First stream chunk arrives → spinner stops
     store.getState().setIsStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 
   it('should show spinner during pre-search, stop when participant streams (Round 1)', () => {
@@ -368,39 +384,39 @@ describe('chat Input Event Sequence - Loading Spinner Timing', () => {
 
     // Submit
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Pre-search streaming (spinner still showing)
     store.getState().setStreamingRoundNumber(1);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 1,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_1',
         status: MessageStatuses.STREAMING,
         streamId: 'presearch_1',
-        preSearchId: 'presearch_1',
       },
+      roundNumber: 1,
     });
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Pre-search complete (spinner still showing - waiting for participants)
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 1,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_1',
         status: MessageStatuses.COMPLETE,
         streamId: 'presearch_1',
-        preSearchId: 'presearch_1',
       },
+      roundNumber: 1,
     });
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // First participant streams → spinner stops
     store.getState().setIsStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 
   it('should show spinner during pre-search, stop when participant streams (Round 2)', () => {
@@ -408,26 +424,26 @@ describe('chat Input Event Sequence - Loading Spinner Timing', () => {
 
     // Submit
     store.getState().setWaitingToStartStreaming(true);
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // Pre-search streaming
     store.getState().setStreamingRoundNumber(2);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 2,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_2',
         status: MessageStatuses.STREAMING,
         streamId: 'presearch_2',
-        preSearchId: 'presearch_2',
       },
+      roundNumber: 2,
     });
-    expect(store.getState().waitingToStartStreaming).toBe(true);
+    expect(store.getState().waitingToStartStreaming).toBeTruthy();
 
     // First participant streams → spinner stops
     store.getState().setIsStreaming(true);
     store.getState().setWaitingToStartStreaming(false);
-    expect(store.getState().waitingToStartStreaming).toBe(false);
+    expect(store.getState().waitingToStartStreaming).toBeFalsy();
   });
 });
 
@@ -444,11 +460,11 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     const completeIdx = checkpoints.findIndex(c => c.name.includes('Round complete'));
 
     for (let i = 0; i < completeIdx; i++) {
-      expect(checkpoints[i]?.isInputBlocked).toBe(true);
+      expect(checkpoints[i]?.isInputBlocked).toBeTruthy();
     }
 
     // Last checkpoint should have unblocked input
-    expect(checkpoints[completeIdx]?.isInputBlocked).toBe(false);
+    expect(checkpoints[completeIdx]?.isInputBlocked).toBeFalsy();
   });
 
   it('should block input continuously from submit to round complete (Round 2)', () => {
@@ -458,10 +474,10 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     const completeIdx = checkpoints.findIndex(c => c.name.includes('Round complete'));
 
     for (let i = 0; i < completeIdx; i++) {
-      expect(checkpoints[i]?.isInputBlocked).toBe(true);
+      expect(checkpoints[i]?.isInputBlocked).toBeTruthy();
     }
 
-    expect(checkpoints[completeIdx]?.isInputBlocked).toBe(false);
+    expect(checkpoints[completeIdx]?.isInputBlocked).toBeFalsy();
   });
 
   it('should keep input blocked between phases (Round 1 with web search)', () => {
@@ -474,21 +490,21 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     // Pre-search complete, participants not started yet
     store.getState().setWaitingToStartStreaming(false);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 1,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_1',
         status: MessageStatuses.COMPLETE,
         streamId: 'presearch_1',
-        preSearchId: 'presearch_1',
       },
+      roundNumber: 1,
     });
     store.getState().setIsStreaming(false);
 
     // streamingRoundNumber is still set → input blocked
     const state = store.getState();
     const isBlocked = state.streamingRoundNumber !== null;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should keep input blocked between phases (Round 2 with web search)', () => {
@@ -501,21 +517,21 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     // Pre-search complete, participants not started yet
     store.getState().setWaitingToStartStreaming(false);
     store.getState().prefillStreamResumptionState('thread_1', {
-      roundNumber: 2,
       currentPhase: RoundPhases.PRE_SEARCH,
       preSearch: {
         enabled: true,
+        preSearchId: 'presearch_2',
         status: MessageStatuses.COMPLETE,
         streamId: 'presearch_2',
-        preSearchId: 'presearch_2',
       },
+      roundNumber: 2,
     });
     store.getState().setIsStreaming(false);
 
     // streamingRoundNumber is still set → input blocked
     const state = store.getState();
     const isBlocked = state.streamingRoundNumber !== null;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should keep input blocked between participants and moderator (Round 1)', () => {
@@ -529,7 +545,7 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     // streamingRoundNumber is still set → input blocked
     const state = store.getState();
     const isBlocked = state.streamingRoundNumber !== null;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 
   it('should keep input blocked between participants and moderator (Round 2)', () => {
@@ -543,7 +559,7 @@ describe('chat Input Event Sequence - Input Blocking Timing', () => {
     // streamingRoundNumber is still set → input blocked
     const state = store.getState();
     const isBlocked = state.streamingRoundNumber !== null;
-    expect(isBlocked).toBe(true);
+    expect(isBlocked).toBeTruthy();
   });
 });
 
@@ -559,12 +575,12 @@ describe('chat Input Event Sequence - Stop Button', () => {
     store.getState().setStreamingRoundNumber(1);
 
     // Stop button shown when isStreaming=true
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     // Input blocked, spinner not shown
     const checkpoint = captureCheckpoint(store, 'During streaming');
-    expect(checkpoint.isInputBlocked).toBe(true);
-    expect(checkpoint.showLoadingSpinner).toBe(false);
+    expect(checkpoint.isInputBlocked).toBeTruthy();
+    expect(checkpoint.showLoadingSpinner).toBeFalsy();
   });
 
   it('should show stop button (not submit) during streaming (Round 2)', () => {
@@ -573,11 +589,11 @@ describe('chat Input Event Sequence - Stop Button', () => {
     store.getState().setIsStreaming(true);
     store.getState().setStreamingRoundNumber(2);
 
-    expect(store.getState().isStreaming).toBe(true);
+    expect(store.getState().isStreaming).toBeTruthy();
 
     const checkpoint = captureCheckpoint(store, 'During streaming');
-    expect(checkpoint.isInputBlocked).toBe(true);
-    expect(checkpoint.showLoadingSpinner).toBe(false);
+    expect(checkpoint.isInputBlocked).toBeTruthy();
+    expect(checkpoint.showLoadingSpinner).toBeFalsy();
   });
 
   it('should show stop button during moderator streaming (Round 1)', () => {
@@ -586,10 +602,10 @@ describe('chat Input Event Sequence - Stop Button', () => {
     store.getState().setIsModeratorStreaming(true);
     store.getState().setStreamingRoundNumber(1);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
 
     const checkpoint = captureCheckpoint(store, 'During moderator');
-    expect(checkpoint.isInputBlocked).toBe(true);
+    expect(checkpoint.isInputBlocked).toBeTruthy();
   });
 
   it('should show stop button during moderator streaming (Round 2)', () => {
@@ -598,10 +614,10 @@ describe('chat Input Event Sequence - Stop Button', () => {
     store.getState().setIsModeratorStreaming(true);
     store.getState().setStreamingRoundNumber(2);
 
-    expect(store.getState().isModeratorStreaming).toBe(true);
+    expect(store.getState().isModeratorStreaming).toBeTruthy();
 
     const checkpoint = captureCheckpoint(store, 'During moderator');
-    expect(checkpoint.isInputBlocked).toBe(true);
+    expect(checkpoint.isInputBlocked).toBeTruthy();
   });
 });
 

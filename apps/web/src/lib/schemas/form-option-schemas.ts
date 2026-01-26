@@ -12,9 +12,9 @@ import { z } from 'zod';
 // ============================================================================
 
 export const FormOptionSchema = z.object({
+  description: z.string().optional(),
   label: z.string(),
   value: z.string(),
-  description: z.string().optional(),
 });
 
 export type FormOption = z.infer<typeof FormOptionSchema>;
@@ -40,10 +40,10 @@ export type NavItem = {
 
 // Schema version (without icon due to Zod limitations with React components)
 export const NavItemBaseSchema = z.object({
-  label: z.string(),
-  value: z.string(),
   description: z.string().optional(),
   href: z.string().optional(),
+  label: z.string(),
+  value: z.string(),
 });
 
 // Type guard

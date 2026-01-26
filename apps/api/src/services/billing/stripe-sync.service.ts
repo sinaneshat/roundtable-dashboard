@@ -44,16 +44,16 @@ import {
 import type { SyncedSubscriptionState } from './stripe-sync-schemas';
 
 const INTERVAL_CALCULATORS: Record<BillingInterval, (date: Date, count: number) => void> = {
-  [BillingIntervals.MONTH]: (d, c) => d.setMonth(d.getMonth() + c),
-  [BillingIntervals.YEAR]: (d, c) => d.setFullYear(d.getFullYear() + c),
-  [BillingIntervals.WEEK]: (d, c) => d.setDate(d.getDate() + (7 * c)),
   [BillingIntervals.DAY]: (d, c) => d.setDate(d.getDate() + c),
+  [BillingIntervals.MONTH]: (d, c) => d.setMonth(d.getMonth() + c),
+  [BillingIntervals.WEEK]: (d, c) => d.setDate(d.getDate() + (7 * c)),
+  [BillingIntervals.YEAR]: (d, c) => d.setFullYear(d.getFullYear() + c),
 };
 
 function calculatePeriodEnd(
   startTimestamp: number,
   interval: BillingInterval = BillingIntervals.MONTH,
-  intervalCount: number = 1,
+  intervalCount = 1,
 ): number {
   const startDate = new Date(startTimestamp * 1000);
   const endDate = new Date(startDate);
@@ -96,14 +96,14 @@ export async function syncStripeDataFromStripe(
     const stripe = await stripeService.ensureClient();
     subscriptions = await stripe.subscriptions.list({
       customer: customerId,
+      expand: ['data.default_payment_method', 'data.items.data.price'],
       limit: 1,
       status: 'all',
-      expand: ['data.default_payment_method', 'data.items.data.price'],
     });
   } catch {
     throw createError.internal(
       'Failed to sync subscription data',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_subscription', resourceId: customerId },
+      { errorType: 'external_service', operation: 'sync_subscription', resourceId: customerId, service: 'stripe' },
     );
   }
 
@@ -120,7 +120,7 @@ export async function syncStripeDataFromStripe(
   if (!firstItem) {
     throw createError.internal(
       'Subscription has no items',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_subscription', resourceId: subscription.id },
+      { errorType: 'external_service', operation: 'sync_subscription', resourceId: subscription.id, service: 'stripe' },
     );
   }
 
@@ -130,7 +130,7 @@ export async function syncStripeDataFromStripe(
   if (!product) {
     throw createError.internal(
       'Price has no associated product',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_subscription', resourceId: price.id },
+      { errorType: 'external_service', operation: 'sync_subscription', resourceId: price.id, service: 'stripe' },
     );
   }
 
@@ -184,14 +184,14 @@ export async function syncStripeDataFromStripe(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw createError.internal(
       `Failed to sync Stripe data: ${errorMessage}`,
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_parallel', resourceId: customerId },
+      { errorType: 'external_service', operation: 'sync_parallel', resourceId: customerId, service: 'stripe' },
     );
   }
 
   if ('deleted' in stripeCustomer && stripeCustomer.deleted) {
     throw createError.notFound(
       'Customer has been deleted in Stripe',
-      { errorType: 'external_service', service: 'stripe', operation: 'sync_customer', resourceId: customerId },
+      { errorType: 'external_service', operation: 'sync_customer', resourceId: customerId, service: 'stripe' },
     );
   }
 
@@ -199,11 +199,11 @@ export async function syncStripeDataFromStripe(
 
   const customerUpdate = db.update(tables.stripeCustomer)
     .set({
-      email: customerData.email || customer.email,
-      name: customerData.name || customer.name,
       defaultPaymentMethodId: typeof customerData.invoice_settings?.default_payment_method === 'string'
         ? customerData.invoice_settings.default_payment_method
         : customerData.invoice_settings?.default_payment_method?.id || null,
+      email: customerData.email || customer.email,
+      name: customerData.name || customer.name,
       updatedAt: new Date(),
     })
     .where(eq(tables.stripeCustomer.id, customerId));
@@ -211,88 +211,88 @@ export async function syncStripeDataFromStripe(
   const now = new Date();
 
   const productUpsert = db.insert(tables.stripeProduct).values({
-    id: product,
-    name: price.nickname || 'Subscription Plan',
-    description: null,
     active: price.active,
-    defaultPriceId: price.id,
-    metadata: null,
-    images: null,
-    features: null,
     createdAt: now,
+    defaultPriceId: price.id,
+    description: null,
+    features: null,
+    id: product,
+    images: null,
+    metadata: null,
+    name: price.nickname || 'Subscription Plan',
     updatedAt: now,
   }).onConflictDoUpdate({
-    target: tables.stripeProduct.id,
     set: {
       active: price.active,
       defaultPriceId: price.id,
       updatedAt: now,
     },
+    target: tables.stripeProduct.id,
   });
 
   const priceType: PriceType = price.type === PriceTypes.ONE_TIME ? PriceTypes.ONE_TIME : PriceTypes.RECURRING;
   const priceInterval: BillingInterval | null = price.recurring?.interval ?? null;
 
   const priceUpsert = db.insert(tables.stripePrice).values({
-    id: price.id,
-    productId: product,
     active: price.active,
+    createdAt: now,
     currency: price.currency,
-    unitAmount: price.unit_amount ?? null,
-    type: priceType,
+    id: price.id,
     interval: priceInterval,
     intervalCount: price.recurring?.interval_count ?? null,
-    trialPeriodDays: null,
     metadata: null,
-    createdAt: now,
+    productId: product,
+    trialPeriodDays: null,
+    type: priceType,
+    unitAmount: price.unit_amount ?? null,
     updatedAt: now,
   }).onConflictDoUpdate({
-    target: tables.stripePrice.id,
     set: {
       active: price.active,
       currency: price.currency,
-      unitAmount: price.unit_amount ?? null,
       interval: priceInterval,
       intervalCount: price.recurring?.interval_count ?? null,
+      unitAmount: price.unit_amount ?? null,
       updatedAt: now,
     },
+    target: tables.stripePrice.id,
   });
 
   const subscriptionUpsert = db.insert(tables.stripeSubscription).values({
-    id: subscription.id,
-    userId: customer.userId,
-    customerId: customer.id,
-    priceId: price.id,
-    status: subscription.status,
-    quantity: firstItem.quantity ?? 1,
-    currentPeriodStart: new Date(currentPeriodStart * 1000),
-    currentPeriodEnd: new Date(currentPeriodEnd * 1000),
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
     cancelAt: subscription.cancel_at ? new Date(subscription.cancel_at * 1000) : null,
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
     canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
-    endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
-    trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-    trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-    metadata: isStringRecord(subscription.metadata) ? subscription.metadata : null,
     createdAt: new Date(subscription.created * 1000),
+    currentPeriodEnd: new Date(currentPeriodEnd * 1000),
+    currentPeriodStart: new Date(currentPeriodStart * 1000),
+    customerId: customer.id,
+    endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
+    id: subscription.id,
+    metadata: isStringRecord(subscription.metadata) ? subscription.metadata : null,
+    priceId: price.id,
+    quantity: firstItem.quantity ?? 1,
+    status: subscription.status,
+    trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+    trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
     updatedAt: new Date(),
+    userId: customer.userId,
   }).onConflictDoUpdate({
-    target: tables.stripeSubscription.id,
     set: {
-      priceId: price.id,
-      status: subscription.status,
-      quantity: firstItem.quantity ?? 1,
-      currentPeriodStart: new Date(currentPeriodStart * 1000),
-      currentPeriodEnd: new Date(currentPeriodEnd * 1000),
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
       cancelAt: subscription.cancel_at ? new Date(subscription.cancel_at * 1000) : null,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
       canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
+      currentPeriodEnd: new Date(currentPeriodEnd * 1000),
+      currentPeriodStart: new Date(currentPeriodStart * 1000),
       endedAt: subscription.ended_at ? new Date(subscription.ended_at * 1000) : null,
-      trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-      trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
       metadata: isStringRecord(subscription.metadata) ? subscription.metadata : null,
+      priceId: price.id,
+      quantity: firstItem.quantity ?? 1,
+      status: subscription.status,
+      trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+      trialStart: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
       updatedAt: new Date(),
     },
+    target: tables.stripeSubscription.id,
   });
 
   const invoiceUpserts = invoices.data.map((invoice) => {
@@ -302,35 +302,35 @@ export async function syncStripeDataFromStripe(
     const isPaid = invoiceStatus === InvoiceStatuses.PAID;
 
     return db.insert(tables.stripeInvoice).values({
-      id: invoice.id,
-      customerId,
-      subscriptionId,
-      status: invoiceStatus,
       amountDue: invoice.amount_due,
       amountPaid: invoice.amount_paid,
-      currency: invoice.currency,
-      periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null,
-      periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null,
-      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
-      invoicePdf: invoice.invoice_pdf ?? null,
-      paid: isPaid,
       attemptCount: invoice.attempt_count,
       createdAt: new Date(invoice.created * 1000),
+      currency: invoice.currency,
+      customerId,
+      hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+      id: invoice.id,
+      invoicePdf: invoice.invoice_pdf ?? null,
+      paid: isPaid,
+      periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null,
+      periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null,
+      status: invoiceStatus,
+      subscriptionId,
       updatedAt: new Date(),
     }).onConflictDoUpdate({
-      target: tables.stripeInvoice.id,
       set: {
-        status: invoiceStatus,
         amountDue: invoice.amount_due,
         amountPaid: invoice.amount_paid,
-        periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null,
-        periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null,
+        attemptCount: invoice.attempt_count,
         hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
         invoicePdf: invoice.invoice_pdf ?? null,
         paid: isPaid,
-        attemptCount: invoice.attempt_count,
+        periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null,
+        periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null,
+        status: invoiceStatus,
         updatedAt: new Date(),
       },
+      target: tables.stripeInvoice.id,
     });
   });
 
@@ -345,30 +345,30 @@ export async function syncStripeDataFromStripe(
       : DEFAULT_PAYMENT_METHOD_TYPE;
 
     return db.insert(tables.stripePaymentMethod).values({
-      id: pm.id,
-      customerId,
-      type: paymentType,
+      bankLast4: pm.us_bank_account?.last4 || null,
+      bankName: pm.us_bank_account?.bank_name || null,
       cardBrand: pm.card?.brand || null,
-      cardLast4: pm.card?.last4 || null,
       cardExpMonth: pm.card?.exp_month || null,
       cardExpYear: pm.card?.exp_year || null,
-      bankName: pm.us_bank_account?.bank_name || null,
-      bankLast4: pm.us_bank_account?.last4 || null,
-      isDefault,
+      cardLast4: pm.card?.last4 || null,
       createdAt: new Date(pm.created * 1000),
+      customerId,
+      id: pm.id,
+      isDefault,
+      type: paymentType,
       updatedAt: new Date(),
     }).onConflictDoUpdate({
-      target: tables.stripePaymentMethod.id,
       set: {
+        bankLast4: pm.us_bank_account?.last4 || null,
+        bankName: pm.us_bank_account?.bank_name || null,
         cardBrand: pm.card?.brand || null,
-        cardLast4: pm.card?.last4 || null,
         cardExpMonth: pm.card?.exp_month || null,
         cardExpYear: pm.card?.exp_year || null,
-        bankName: pm.us_bank_account?.bank_name || null,
-        bankLast4: pm.us_bank_account?.last4 || null,
+        cardLast4: pm.card?.last4 || null,
         isDefault,
         updatedAt: new Date(),
       },
+      target: tables.stripePaymentMethod.id,
     });
   });
 
@@ -404,17 +404,17 @@ export async function syncStripeDataFromStripe(
   }
 
   const syncedState: SyncedSubscriptionState = {
-    status: subscription.status,
-    subscriptionId: subscription.id,
-    priceId: price.id,
-    productId: product,
-    currentPeriodStart,
-    currentPeriodEnd,
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     canceledAt: subscription.canceled_at ?? null,
-    trialStart: subscription.trial_start ?? null,
-    trialEnd: subscription.trial_end ?? null,
+    currentPeriodEnd,
+    currentPeriodStart,
     paymentMethod,
+    priceId: price.id,
+    productId: product,
+    status: subscription.status,
+    subscriptionId: subscription.id,
+    trialEnd: subscription.trial_end ?? null,
+    trialStart: subscription.trial_start ?? null,
   };
 
   // KV cache: invalidate old, cache new (Theo pattern)

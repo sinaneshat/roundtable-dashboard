@@ -41,11 +41,11 @@ function createMessageId(threadId: string, roundNumber: number, participantIndex
 function createUserMessageForRound(
   threadId: string,
   roundNumber: number,
-  content: string = `Message for round ${roundNumber}`,
+  content = `Message for round ${roundNumber}`,
 ) {
   return createTestUserMessage({
-    id: createMessageId(threadId, roundNumber),
     content,
+    id: createMessageId(threadId, roundNumber),
     roundNumber,
   });
 }
@@ -54,18 +54,18 @@ function createAssistantMessageForRound(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  modelId: string = 'gpt-4o',
-  content: string = `Response from participant ${participantIndex}`,
+  modelId = 'gpt-4o',
+  content = `Response from participant ${participantIndex}`,
   finishReason: typeof FinishReasons[keyof typeof FinishReasons] = FinishReasons.STOP,
 ) {
   return createTestAssistantMessage({
-    id: createMessageId(threadId, roundNumber, participantIndex),
     content,
-    roundNumber,
+    finishReason,
+    id: createMessageId(threadId, roundNumber, participantIndex),
+    model: modelId,
     participantId: `participant-${participantIndex}`,
     participantIndex,
-    model: modelId,
-    finishReason,
+    roundNumber,
   });
 }
 
@@ -73,34 +73,34 @@ function createStreamingAssistantMessage(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  modelId: string = 'gpt-4o',
-  partialContent: string = '',
+  modelId = 'gpt-4o',
+  partialContent = '',
 ) {
   // Create message manually to avoid helper's default finishReason
   messageIdCounter++;
   const msgId = `${threadId}_r${roundNumber}_p${participantIndex}_${messageIdCounter}`;
   return {
     id: msgId,
-    role: MessageRoles.ASSISTANT as const,
-    parts: [{ type: 'text' as const, text: partialContent }],
     metadata: {
-      role: MessageRoles.ASSISTANT,
-      roundNumber,
+      finishReason: undefined, // Still streaming - no finishReason yet
+      hasError: false,
+      isPartialResponse: true,
+      isTransient: false,
+      model: modelId,
       participantId: `participant-${participantIndex}`,
       participantIndex,
       participantRole: null,
-      model: modelId,
-      finishReason: undefined, // Still streaming - no finishReason yet
-      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      hasError: false,
-      isTransient: false,
-      isPartialResponse: true,
+      role: MessageRoles.ASSISTANT,
+      roundNumber,
+      usage: { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
     },
+    parts: [{ text: partialContent, type: 'text' as const }],
+    role: MessageRoles.ASSISTANT as const,
   };
 }
 
 function createPreSearch(
-  threadId: string,
+  _threadId: string,
   roundNumber: number,
   status: 'pending' | 'streaming' | 'complete' | 'failed' = 'complete',
 ): StoredPreSearch {
@@ -194,8 +194,8 @@ describe('stream Message Arrival Patterns', () => {
       const messages = store.getState().messages;
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages,
           changelog: [],
+          messages,
         }),
       );
 
@@ -220,8 +220,8 @@ describe('stream Message Arrival Patterns', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages: [],
           changelog: [],
+          messages: [],
           preSearches: [preSearch],
         }),
       );
@@ -239,8 +239,8 @@ describe('stream Message Arrival Patterns', () => {
 
       const { result } = renderHook(() =>
         useThreadTimeline({
-          messages: [userMsg],
           changelog: [],
+          messages: [userMsg],
           preSearches: [preSearch],
         }),
       );
@@ -260,8 +260,8 @@ describe('stream Message Arrival Patterns', () => {
       // Phase 1: Only pre-search
       const { result: phase1 } = renderHook(() =>
         useThreadTimeline({
-          messages: [],
           changelog: [],
+          messages: [],
           preSearches: [preSearch],
         }),
       );
@@ -272,8 +272,8 @@ describe('stream Message Arrival Patterns', () => {
       const userMsg = createUserMessageForRound(threadId, 0);
       const { result: phase2 } = renderHook(() =>
         useThreadTimeline({
-          messages: [userMsg],
           changelog: [],
+          messages: [userMsg],
           preSearches: [preSearch],
         }),
       );
@@ -307,8 +307,8 @@ describe('timeline Ordering Edge Cases', () => {
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [r0User, r0P0, r2User, r2P0, r5User, r5P0],
         changelog: [],
+        messages: [r0User, r0P0, r2User, r2P0, r5User, r5P0],
       }),
     );
 
@@ -325,8 +325,8 @@ describe('timeline Ordering Edge Cases', () => {
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [userMsg],
         changelog: [],
+        messages: [userMsg],
       }),
     );
 
@@ -343,27 +343,27 @@ describe('timeline Ordering Edge Cases', () => {
     // Duplicate changelog entries (same ID)
     const changelog = [
       {
-        id: 'changelog-1',
-        threadId,
-        roundNumber: 0,
+        changeData: { newMode: 'analyzing', oldMode: 'brainstorm' },
         changeType: 'mode_change' as const,
-        changeData: { oldMode: 'brainstorm', newMode: 'analyzing' },
         createdAt: new Date(),
+        id: 'changelog-1',
+        roundNumber: 0,
+        threadId,
       },
       {
-        id: 'changelog-1', // Duplicate ID
-        threadId,
-        roundNumber: 0,
+        changeData: { newMode: 'analyzing', oldMode: 'brainstorm' },
         changeType: 'mode_change' as const,
-        changeData: { oldMode: 'brainstorm', newMode: 'analyzing' },
         createdAt: new Date(),
+        id: 'changelog-1', // Duplicate ID
+        roundNumber: 0,
+        threadId,
       },
     ];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [userMsg],
         changelog,
+        messages: [userMsg],
       }),
     );
 
@@ -382,18 +382,18 @@ describe('timeline Ordering Edge Cases', () => {
 
     // Round 1 has changelog but user hasn't sent message yet
     const r1Changelog = [{
-      id: 'changelog-r1',
-      threadId,
-      roundNumber: 1,
-      changeType: 'participant_added' as const,
       changeData: {},
+      changeType: 'participant_added' as const,
       createdAt: new Date(),
+      id: 'changelog-r1',
+      roundNumber: 1,
+      threadId,
     }];
 
     const { result } = renderHook(() =>
       useThreadTimeline({
-        messages: [r0User, r0P0],
         changelog: r1Changelog,
+        messages: [r0User, r0P0],
       }),
     );
 

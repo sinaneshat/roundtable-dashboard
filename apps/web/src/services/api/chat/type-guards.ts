@@ -19,6 +19,17 @@ import type {
 } from './threads';
 
 // ============================================================================
+// TYPE GUARD SCHEMAS - For narrowed changelog data types
+// ============================================================================
+
+/**
+ * Memory created changelog data type
+ */
+type MemoryCreatedChangelog = DbChangelogData & {
+  type: typeof ChangelogChangeTypes.MEMORY_CREATED;
+};
+
+// ============================================================================
 // Type-Safe Property Access Helper
 // ============================================================================
 
@@ -56,13 +67,16 @@ export function isUserMessageMetadata(metadata: DbMessageMetadata): metadata is 
  * Excludes moderator messages (isModerator: true)
  */
 export function isAssistantMessageMetadata(metadata: DbMessageMetadata): metadata is DbAssistantMessageMetadata {
-  if (metadata.role !== MessageRoles.ASSISTANT)
+  if (metadata.role !== MessageRoles.ASSISTANT) {
     return false;
-  if (!('participantId' in metadata))
+  }
+  if (!('participantId' in metadata)) {
     return false;
+  }
   // Exclude moderator messages: check if isModerator exists and is true
-  if ('isModerator' in metadata && getProperty(metadata, 'isModerator') === true)
+  if ('isModerator' in metadata && getProperty(metadata, 'isModerator') === true) {
     return false;
+  }
   return true;
 }
 
@@ -70,10 +84,12 @@ export function isAssistantMessageMetadata(metadata: DbMessageMetadata): metadat
  * Check if metadata is for a pre-search system message
  */
 export function isPreSearchMessageMetadata(metadata: DbMessageMetadata): metadata is DbPreSearchMessageMetadata {
-  if (metadata.role !== UIMessageRoles.SYSTEM)
+  if (metadata.role !== UIMessageRoles.SYSTEM) {
     return false;
-  if (!('isPreSearch' in metadata))
+  }
+  if (!('isPreSearch' in metadata)) {
     return false;
+  }
   return getProperty(metadata, 'isPreSearch') === true;
 }
 
@@ -81,10 +97,12 @@ export function isPreSearchMessageMetadata(metadata: DbMessageMetadata): metadat
  * Check if metadata is for a moderator message
  */
 export function isModeratorMessageMetadata(metadata: DbMessageMetadata): metadata is DbModeratorMessageMetadata {
-  if (metadata.role !== MessageRoles.ASSISTANT)
+  if (metadata.role !== MessageRoles.ASSISTANT) {
     return false;
-  if (!('isModerator' in metadata))
+  }
+  if (!('isModerator' in metadata)) {
     return false;
+  }
   return getProperty(metadata, 'isModerator') === true;
 }
 
@@ -138,6 +156,6 @@ export function isWebSearchChange(data: DbChangelogData): data is Extract<DbChan
  * Check if changelog data is a memory created event
  * Note: Uses type intersection since memory_created may not be in RPC-inferred types
  */
-export function isMemoryCreatedChange(data: DbChangelogData): data is DbChangelogData & { type: typeof ChangelogChangeTypes.MEMORY_CREATED } {
+export function isMemoryCreatedChange(data: DbChangelogData): data is MemoryCreatedChangelog {
   return data.type === ChangelogChangeTypes.MEMORY_CREATED;
 }

@@ -13,18 +13,18 @@ import { z } from 'zod';
 // ============================================================================
 
 export const FilePreviewSchema = z.object({
-  id: z.string(),
+  error: z.string().optional(),
   file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
+  id: z.string(),
+  loading: z.boolean(),
+  textPreview: z.string().optional(),
   type: FilePreviewTypeSchema,
   url: z.string().optional(),
-  textPreview: z.string().optional(),
-  loading: z.boolean(),
-  error: z.string().optional(),
 });
 
 export const UseFilePreviewOptionsSchema = z.object({
-  maxTextPreviewLength: z.number().optional(),
   autoGenerate: z.boolean().optional(),
+  maxTextPreviewLength: z.number().optional(),
 });
 
 // ============================================================================
@@ -73,7 +73,7 @@ async function readTextContent(file: File, maxLength: number): Promise<string> {
 // ============================================================================
 
 export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePreviewReturn {
-  const { maxTextPreviewLength = 500, autoGenerate = true } = options;
+  const { autoGenerate = true, maxTextPreviewLength = 500 } = options;
 
   const [previews, setPreviews] = useState<FilePreview[]>([]);
   const objectUrlsRef = useRef<Set<string>>(new Set());
@@ -97,12 +97,12 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
           case FilePreviewTypes.IMAGE: {
             const url = URL.createObjectURL(file);
             objectUrlsRef.current.add(url);
-            return { url, loading: false };
+            return { loading: false, url };
           }
           case FilePreviewTypes.TEXT:
           case FilePreviewTypes.CODE: {
             const textPreview = await readTextContent(file, maxTextPreviewLength);
-            return { textPreview, loading: false };
+            return { loading: false, textPreview };
           }
           case FilePreviewTypes.PDF:
           case FilePreviewTypes.DOCUMENT:
@@ -112,8 +112,8 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
       } catch (error) {
         console.error('[File Preview] Preview generation failed:', error);
         return {
-          loading: false,
           error: error instanceof Error ? error.message : 'Preview generation failed',
+          loading: false,
         };
       }
     },
@@ -123,10 +123,10 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
   const addFiles = useCallback(
     (files: File[]) => {
       const newPreviews: FilePreview[] = files.map(file => ({
-        id: generatePreviewId(),
         file,
-        type: getPreviewTypeFromMime(file.type),
+        id: generatePreviewId(),
         loading: autoGenerate,
+        type: getPreviewTypeFromMime(file.type),
       }));
 
       setPreviews(prev => [...prev, ...newPreviews]);
@@ -136,20 +136,22 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
           const generated = await generatePreview(preview.file, preview.id);
           setPreviews((prev) => {
             const idx = prev.findIndex(p => p.id === preview.id);
-            if (idx === -1)
+            if (idx === -1) {
               return prev;
+            }
             const updated = [...prev];
             const existing = updated[idx];
-            if (!existing)
+            if (!existing) {
               return prev;
+            }
             updated[idx] = {
-              id: existing.id,
-              file: existing.file,
-              type: existing.type,
-              loading: generated.loading ?? existing.loading,
-              url: generated.url ?? existing.url,
-              textPreview: generated.textPreview ?? existing.textPreview,
               error: generated.error ?? existing.error,
+              file: existing.file,
+              id: existing.id,
+              loading: generated.loading ?? existing.loading,
+              textPreview: generated.textPreview ?? existing.textPreview,
+              type: existing.type,
+              url: generated.url ?? existing.url,
             };
             return updated;
           });
@@ -186,45 +188,50 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
     async (id: string) => {
       setPreviews((prev) => {
         const idx = prev.findIndex(p => p.id === id);
-        if (idx === -1)
+        if (idx === -1) {
           return prev;
+        }
         const updated = [...prev];
         const existing = updated[idx];
-        if (!existing)
+        if (!existing) {
           return prev;
+        }
         updated[idx] = {
-          id: existing.id,
-          file: existing.file,
-          type: existing.type,
-          loading: true,
-          url: existing.url,
-          textPreview: existing.textPreview,
           error: undefined,
+          file: existing.file,
+          id: existing.id,
+          loading: true,
+          textPreview: existing.textPreview,
+          type: existing.type,
+          url: existing.url,
         };
         return updated;
       });
 
       const preview = previews.find(p => p.id === id);
-      if (!preview)
+      if (!preview) {
         return;
+      }
 
       const generated = await generatePreview(preview.file, id);
       setPreviews((prev) => {
         const idx = prev.findIndex(p => p.id === id);
-        if (idx === -1)
+        if (idx === -1) {
           return prev;
+        }
         const updated = [...prev];
         const existing = updated[idx];
-        if (!existing)
+        if (!existing) {
           return prev;
+        }
         updated[idx] = {
-          id: existing.id,
-          file: existing.file,
-          type: existing.type,
-          loading: generated.loading ?? existing.loading,
-          url: generated.url ?? existing.url,
-          textPreview: generated.textPreview ?? existing.textPreview,
           error: generated.error ?? existing.error,
+          file: existing.file,
+          id: existing.id,
+          loading: generated.loading ?? existing.loading,
+          textPreview: generated.textPreview ?? existing.textPreview,
+          type: existing.type,
+          url: generated.url ?? existing.url,
         };
         return updated;
       });
@@ -242,13 +249,13 @@ export function useFilePreview(options: UseFilePreviewOptions = {}): UseFilePrev
   const isLoading = useMemo(() => previews.some(p => p.loading), [previews]);
 
   return {
-    previews,
     addFiles,
-    removePreview,
     clearPreviews,
-    regeneratePreview,
     getPreviewByFile,
     isLoading,
+    previews,
+    regeneratePreview,
+    removePreview,
   };
 }
 

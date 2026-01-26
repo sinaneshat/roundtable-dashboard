@@ -15,10 +15,10 @@ type EmailFooterProps = {
 
 export function EmailFooter({
   companyName = BRAND.displayName,
-  unsubscribeUrl,
+  contactEmail = BRAND.support,
   privacyUrl,
   termsUrl,
-  contactEmail = BRAND.support,
+  unsubscribeUrl,
 }: EmailFooterProps) {
   return (
     <>

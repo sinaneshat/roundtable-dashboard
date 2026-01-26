@@ -74,30 +74,30 @@ type ThreadTimelineProps = {
 };
 
 export function ThreadTimeline({
-  timelineItems,
-  user,
-  participants,
-  threadId,
-  threadTitle,
-  isStreaming = false,
+  completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
   currentParticipantIndex = 0,
   currentStreamingParticipant = null,
-  streamingRoundNumber = null,
-  onRetry,
-  isReadOnly = false,
-  preSearches = EMPTY_PRE_SEARCHES,
-  demoPreSearchOpen,
-  isDataReady = true,
-  maxContentHeight,
-  skipEntranceAnimations = false,
-  completedRoundNumbers = EMPTY_COMPLETED_ROUNDS,
-  isModeratorStreaming = false,
   demoMode = false,
-  getIsStreamingFromStore,
+  demoPreSearchOpen,
   disableVirtualization = false,
+  getIsStreamingFromStore,
   initialScrollToBottom = false,
+  isDataReady = true,
+  isModeratorStreaming = false,
+  isReadOnly = false,
+  isStreaming = false,
+  maxContentHeight,
   memoryEventsByRound,
   onDeleteMemory,
+  onRetry,
+  participants,
+  preSearches = EMPTY_PRE_SEARCHES,
+  skipEntranceAnimations = false,
+  streamingRoundNumber = null,
+  threadId,
+  threadTitle,
+  timelineItems,
+  user,
 }: ThreadTimelineProps) {
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
   const mountTimeRef = useRef(Date.now());
@@ -126,22 +126,22 @@ export function ThreadTimeline({
 
   // Official TanStack Virtual pattern: get virtualizer, call methods directly in render
   const {
-    virtualizer,
-    measureElement,
     isVirtualizationEnabled,
+    measureElement,
+    virtualizer,
   } = useVirtualizedTimeline({
-    timelineItems,
-    listRef,
     estimateSize: 200,
+    getIsStreamingFromStore,
+    // SSR: Start scrolled to bottom for thread pages
+    initialScrollToBottom: !disableVirtualization && initialScrollToBottom,
+    isDataReady: disableVirtualization ? false : isDataReady,
+    isStreaming: isActivelyStreaming,
+    listRef,
     overscan: 5,
     // paddingEnd: 0 for virtualized mode - CSS pb-[20rem] on wrapper handles bottom spacing
     // demoMode uses small padding for compact embedded layout
     paddingEnd: demoMode ? 24 : 0,
-    isDataReady: disableVirtualization ? false : isDataReady,
-    isStreaming: isActivelyStreaming,
-    getIsStreamingFromStore,
-    // SSR: Start scrolled to bottom for thread pages
-    initialScrollToBottom: !disableVirtualization && initialScrollToBottom,
+    timelineItems,
   });
 
   const animatedItemsRef = useRef<Set<string>>(new Set());
@@ -173,8 +173,8 @@ export function ThreadTimeline({
             <UnifiedErrorBoundary context="configuration">
               <ConfigurationChangesGroup
                 group={{
-                  timestamp: item.data[0] && typeof item.data[0].createdAt === 'string' ? item.data[0].createdAt : (item.data[0] ? new Date(item.data[0].createdAt).toISOString() : new Date().toISOString()),
                   changes: item.data,
+                  timestamp: item.data[0] && typeof item.data[0].createdAt === 'string' ? item.data[0].createdAt : (item.data[0] ? new Date(item.data[0].createdAt).toISOString() : new Date().toISOString()),
                 }}
                 isReadOnly={isReadOnly}
               />
@@ -328,14 +328,15 @@ export function ThreadTimeline({
         // getTotalSize() updates as items are measured, so height naturally grows
         // Using minHeight caused layout recalculations when streaming stopped
         height: `${totalSize}px`,
-        width: '100%',
         position: 'relative',
+        width: '100%',
       }}
     >
       {virtualItems.map((virtualItem) => {
         const item = timelineItems[virtualItem.index];
-        if (!item)
+        if (!item) {
           return null;
+        }
 
         return (
           <div
@@ -343,13 +344,13 @@ export function ThreadTimeline({
             data-index={virtualItem.index}
             ref={measureElement}
             style={{
+              left: 0,
               position: 'absolute',
               top: 0,
-              left: 0,
-              width: '100%',
               // NO height set - let content determine height for dynamic measurement
               // measureElement will capture actual height and update virtualItem.size
               transform: `translateY(${virtualItem.start - virtualizer.options.scrollMargin}px)`,
+              width: '100%',
             }}
           >
             {renderTimelineItemContent(item, virtualItem.index)}

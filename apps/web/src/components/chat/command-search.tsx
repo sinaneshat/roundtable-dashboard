@@ -36,11 +36,11 @@ type SearchResultItemProps = {
 };
 
 function SearchResultItem({
-  thread,
   index,
-  selectedIndex,
   onClose,
   onSelect,
+  selectedIndex,
+  thread,
 }: SearchResultItemProps) {
   return (
     <Link
@@ -122,8 +122,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   }, [isOpen]);
 
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
-    if (!isOpen)
+    if (!isOpen) {
       return;
+    }
     switch (e.key) {
       case KeyboardKeys.ARROW_DOWN:
         e.preventDefault();
@@ -136,7 +137,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       case KeyboardKeys.ENTER:
         e.preventDefault();
         if (threads[selectedIndex]) {
-          navigate({ to: '/chat/$slug', params: { slug: threads[selectedIndex].slug } });
+          navigate({ params: { slug: threads[selectedIndex].slug }, to: '/chat/$slug' });
           handleClose();
         }
         break;
@@ -159,8 +160,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   });
 
   useEffect(() => {
-    if (!isOpen)
+    if (!isOpen) {
       return;
+    }
     const cancelPaint = afterPaint(() => {
       document.addEventListener('mousedown', onClickOutside);
     });
@@ -171,9 +173,10 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
   }, [isOpen]);
 
   const onScroll = useEffectEvent(() => {
-    if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage)
+    if (!scrollViewportRef.current || !hasNextPage || isFetchingNextPage) {
       return;
-    const { scrollTop, scrollHeight, clientHeight } = scrollViewportRef.current;
+    }
+    const { clientHeight, scrollHeight, scrollTop } = scrollViewportRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
     if (scrollPercentage > 0.8) {
       fetchNextPage();
@@ -182,11 +185,13 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
 
   useEffect(() => {
     const scrollArea = scrollAreaRef.current;
-    if (!scrollArea)
+    if (!scrollArea) {
       return;
+    }
     const viewport = scrollArea.querySelector('[data-slot="scroll-area-viewport"]');
-    if (!viewport || !(viewport instanceof HTMLDivElement))
+    if (!viewport || !(viewport instanceof HTMLDivElement)) {
       return;
+    }
     scrollViewportRef.current = viewport;
     viewport.addEventListener('scroll', onScroll);
     return () => viewport.removeEventListener('scroll', onScroll);

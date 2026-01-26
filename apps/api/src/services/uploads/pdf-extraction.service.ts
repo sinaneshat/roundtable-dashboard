@@ -73,7 +73,7 @@ async function ensurePdfJsInitialized(): Promise<void> {
 
   try {
     console.error('[PDF Extraction] Initializing PDF.js module...');
-    await definePDFJSModule(() => import('unpdf/pdfjs'));
+    await definePDFJSModule(async () => await import('unpdf/pdfjs'));
     pdfJsInitialized = true;
     console.error('[PDF Extraction] PDF.js initialized successfully');
   } catch (error) {
@@ -81,9 +81,9 @@ async function ensurePdfJsInitialized(): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
     console.error('[PDF Extraction] Failed to initialize PDF.js:', {
+      errorType: error?.constructor?.name,
       message: errorMessage,
       stack: errorStack,
-      errorType: error?.constructor?.name,
     });
     throw error;
   }
@@ -95,9 +95,9 @@ async function ensurePdfJsInitialized(): Promise<void> {
 
 export type PdfExtractionResult = {
   success: boolean;
-  text?: string;
-  totalPages?: number;
-  error?: string;
+  text?: string | undefined;
+  totalPages?: number | undefined;
+  error?: string | undefined;
 };
 
 export type ProcessPdfUploadParams = {
@@ -129,7 +129,7 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
     await ensurePdfJsInitialized();
 
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
-    const { totalPages, text } = await extractText(pdf, { mergePages: true });
+    const { text, totalPages } = await extractText(pdf, { mergePages: true });
 
     // Check if extraction yielded meaningful content
     // Scanned PDFs (image-only) typically have very little or no text
@@ -138,8 +138,8 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
 
     if (!hasMinimumContent) {
       return {
-        success: false,
         error: `PDF appears to be scanned/image-only (only ${text.length} chars extracted from ${totalPages} pages). Visual AI processing recommended.`,
+        success: false,
         totalPages,
       };
     }
@@ -157,8 +157,8 @@ export async function extractPdfText(buffer: ArrayBuffer): Promise<PdfExtraction
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {
-      success: false,
       error: errorMessage,
+      success: false,
     };
   }
 }
@@ -185,32 +185,32 @@ export async function extractPdfTextWithCloudflareAI(
     const blob = new Blob([arrayBuffer], { type: PDF_MIME_TYPE });
 
     const result = await ai.toMarkdown([{
-      name: 'document.pdf',
       blob,
+      name: 'document.pdf',
     }]);
 
     // toMarkdown returns array of results
     const docResult = result[0];
     if (!docResult) {
       return {
-        success: false,
         error: 'Cloudflare AI returned empty result',
+        success: false,
       };
     }
 
     // Check if conversion returned an error
     if (docResult.format === 'error') {
       return {
-        success: false,
         error: `Cloudflare AI conversion failed: ${docResult.error}`,
+        success: false,
       };
     }
 
     const text = docResult.data;
     if (!text || text.length < MIN_CHARS_PER_PAGE) {
       return {
-        success: false,
         error: `PDF appears to be scanned/image-only (only ${text?.length ?? 0} chars extracted). Visual AI processing recommended.`,
+        success: false,
       };
     }
 
@@ -228,8 +228,8 @@ export async function extractPdfTextWithCloudflareAI(
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[PDF Extraction] Cloudflare AI extraction failed:', errorMessage);
     return {
-      success: false,
       error: `Cloudflare AI extraction failed: ${errorMessage}`,
+      success: false,
     };
   }
 }
@@ -262,7 +262,7 @@ export function shouldExtractPdfTextWithAI(mimeType: string, fileSize: number): 
  * Designed to be called in background (waitUntil) after upload completion.
  */
 export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<PdfExtractionResult> {
-  const { uploadId, r2Key, fileSize, mimeType, r2Bucket, db, ai } = params;
+  const { ai, db, fileSize, mimeType, r2Bucket, r2Key, uploadId } = params;
 
   // Skip non-PDFs
   if (mimeType !== PDF_MIME_TYPE) {
@@ -275,8 +275,8 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
 
   if (!canUseInWorker && !canUseCloudflareAI) {
     return {
-      success: false,
       error: `File too large for text extraction (max ${MAX_PDF_SIZE_FOR_AI_EXTRACTION / 1024 / 1024}MB)`,
+      success: false,
     };
   }
 
@@ -291,8 +291,8 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
       const r2Object = await r2Bucket.get(r2Key);
       if (!r2Object) {
         return {
-          success: false,
           error: 'File not found in storage',
+          success: false,
         };
       }
 
@@ -304,8 +304,8 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
       const { data } = await getFile(r2Bucket, r2Key);
       if (!data) {
         return {
-          success: false,
           error: 'File not found in storage',
+          success: false,
         };
       }
 
@@ -318,9 +318,9 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
         .update(tables.upload)
         .set({
           metadata: {
+            extractedAt: new Date().toISOString(),
             extractedText: result.text,
             totalPages: result.totalPages,
-            extractedAt: new Date().toISOString(),
           },
           updatedAt: new Date(),
         })
@@ -331,10 +331,10 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
         .update(tables.upload)
         .set({
           metadata: {
-            extractionError: result.error,
-            totalPages: result.totalPages,
             extractedAt: new Date().toISOString(),
+            extractionError: result.error,
             requiresVision: true, // Mark as needing visual AI processing
+            totalPages: result.totalPages,
           },
           updatedAt: new Date(),
         })
@@ -350,16 +350,16 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
       .update(tables.upload)
       .set({
         metadata: {
-          extractionError: errorMessage,
           extractedAt: new Date().toISOString(),
+          extractionError: errorMessage,
         },
         updatedAt: new Date(),
       })
       .where(eq(tables.upload.id, uploadId));
 
     return {
-      success: false,
       error: errorMessage,
+      success: false,
     };
   }
 }

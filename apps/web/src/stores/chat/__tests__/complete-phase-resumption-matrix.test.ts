@@ -98,12 +98,12 @@ function createServerResumptionState(
   } = {},
 ): StreamResumptionState {
   const {
-    preSearchStatus = null,
-    preSearchEnabled = false,
-    participantCount = 3,
-    completedParticipants = [],
     activeParticipantIndex = null,
+    completedParticipants = [],
     moderatorStatus = null,
+    participantCount = 3,
+    preSearchEnabled = false,
+    preSearchStatus = null,
   } = options;
 
   const participantStatuses: Record<string, 'active' | 'completed' | 'failed'> = {};
@@ -124,7 +124,6 @@ function createServerResumptionState(
       : null;
 
   return {
-    roundNumber,
     currentPhase: phase,
     hasActiveStream: phase === RoundPhases.PRE_SEARCH
       ? preSearchStatus === 'streaming'
@@ -133,6 +132,32 @@ function createServerResumptionState(
         : phase === RoundPhases.MODERATOR
           ? moderatorStatus === 'streaming'
           : false,
+    moderator: phase === RoundPhases.MODERATOR || allComplete
+      ? {
+          moderatorId: moderatorStatus ? `moderator_${roundNumber}` : null,
+          status: moderatorStatus,
+          streamId: moderatorStatus === 'streaming' ? `moderator_thread_123_r${roundNumber}` : null,
+        }
+      : null,
+    participants: {
+      allComplete,
+      currentParticipantIndex: activeParticipantIndex,
+      hasActiveStream: hasActiveParticipantStream,
+      nextParticipantToTrigger: nextToTrigger,
+      participantStatuses: Object.keys(participantStatuses).length > 0 ? participantStatuses : null,
+      streamId: hasActiveParticipantStream ? `thread_123_r${roundNumber}_p${activeParticipantIndex}` : null,
+      totalParticipants: participantCount,
+    },
+    preSearch: preSearchEnabled
+      ? {
+          enabled: true,
+          preSearchId: `ps_${roundNumber}`,
+          status: preSearchStatus,
+          streamId: preSearchStatus === 'streaming' ? `presearch_thread_123_${roundNumber}` : null,
+        }
+      : null,
+    roundComplete: phase === RoundPhases.COMPLETE,
+    roundNumber,
     streamId: phase === RoundPhases.PRE_SEARCH
       ? `presearch_thread_123_${roundNumber}`
       : phase === RoundPhases.PARTICIPANTS && activeParticipantIndex !== null
@@ -140,47 +165,22 @@ function createServerResumptionState(
         : phase === RoundPhases.MODERATOR
           ? `moderator_thread_123_r${roundNumber}`
           : null,
-    preSearch: preSearchEnabled
-      ? {
-          enabled: true,
-          status: preSearchStatus,
-          streamId: preSearchStatus === 'streaming' ? `presearch_thread_123_${roundNumber}` : null,
-          preSearchId: `ps_${roundNumber}`,
-        }
-      : null,
-    participants: {
-      hasActiveStream: hasActiveParticipantStream,
-      streamId: hasActiveParticipantStream ? `thread_123_r${roundNumber}_p${activeParticipantIndex}` : null,
-      totalParticipants: participantCount,
-      currentParticipantIndex: activeParticipantIndex,
-      participantStatuses: Object.keys(participantStatuses).length > 0 ? participantStatuses : null,
-      nextParticipantToTrigger: nextToTrigger,
-      allComplete,
-    },
-    moderator: phase === RoundPhases.MODERATOR || allComplete
-      ? {
-          status: moderatorStatus,
-          streamId: moderatorStatus === 'streaming' ? `moderator_thread_123_r${roundNumber}` : null,
-          moderatorId: moderatorStatus ? `moderator_${roundNumber}` : null,
-        }
-      : null,
-    roundComplete: phase === RoundPhases.COMPLETE,
   };
 }
 
 function createInitialStoreState(): StoreState {
   return {
-    isStreaming: false,
-    waitingToStartStreaming: false,
-    pendingMessage: null,
+    currentResumptionPhase: null,
     hasEarlyOptimisticMessage: false,
     hasSentPendingMessage: false,
-    currentResumptionPhase: null,
-    streamResumptionPrefilled: false,
-    nextParticipantToTrigger: null,
-    streamingRoundNumber: null,
     isModeratorStreaming: false,
+    isStreaming: false,
+    nextParticipantToTrigger: null,
+    pendingMessage: null,
+    streamingRoundNumber: null,
+    streamResumptionPrefilled: false,
     triggeredModeratorRounds: new Set(),
+    waitingToStartStreaming: false,
   };
 }
 
@@ -191,11 +191,11 @@ function simulatePrefillFromServer(
   return {
     ...state,
     currentResumptionPhase: serverState.currentPhase,
-    streamResumptionPrefilled: true,
-    streamingRoundNumber: serverState.roundNumber,
-    nextParticipantToTrigger: serverState.participants.nextParticipantToTrigger,
-    waitingToStartStreaming: serverState.hasActiveStream || serverState.participants.nextParticipantToTrigger !== null,
     isModeratorStreaming: serverState.currentPhase === RoundPhases.MODERATOR,
+    nextParticipantToTrigger: serverState.participants.nextParticipantToTrigger,
+    streamingRoundNumber: serverState.roundNumber,
+    streamResumptionPrefilled: true,
+    waitingToStartStreaming: serverState.hasActiveStream || serverState.participants.nextParticipantToTrigger !== null,
   };
 }
 
@@ -232,7 +232,7 @@ describe('interruption Point 2: Thread created, pre-search PENDING', () => {
 
     expect(serverState.currentPhase).toBe(RoundPhases.PRE_SEARCH);
     expect(serverState.preSearch?.status).toBe('pending');
-    expect(serverState.hasActiveStream).toBe(false);
+    expect(serverState.hasActiveStream).toBeFalsy();
   });
 
   it('should prefill store to trigger pre-search execution', () => {
@@ -244,8 +244,8 @@ describe('interruption Point 2: Thread created, pre-search PENDING', () => {
     const prefilledState = simulatePrefillFromServer(initialState, serverState);
 
     expect(prefilledState.currentResumptionPhase).toBe(RoundPhases.PRE_SEARCH);
-    expect(prefilledState.streamResumptionPrefilled).toBe(true);
-    expect(prefilledState.waitingToStartStreaming).toBe(true);
+    expect(prefilledState.streamResumptionPrefilled).toBeTruthy();
+    expect(prefilledState.waitingToStartStreaming).toBeTruthy();
   });
 
   it('should NOT trigger participants while pre-search is pending', () => {
@@ -257,7 +257,7 @@ describe('interruption Point 2: Thread created, pre-search PENDING', () => {
     const shouldTriggerParticipants = serverState.currentPhase === RoundPhases.PARTICIPANTS
       && serverState.participants.nextParticipantToTrigger !== null;
 
-    expect(shouldTriggerParticipants).toBe(false);
+    expect(shouldTriggerParticipants).toBeFalsy();
   });
 });
 
@@ -274,7 +274,7 @@ describe('interruption Point 3: Pre-search STREAMING', () => {
 
     expect(serverState.currentPhase).toBe(RoundPhases.PRE_SEARCH);
     expect(serverState.preSearch?.status).toBe('streaming');
-    expect(serverState.hasActiveStream).toBe(true);
+    expect(serverState.hasActiveStream).toBeTruthy();
     expect(serverState.streamId).toBe('presearch_thread_123_0');
   });
 
@@ -298,7 +298,7 @@ describe('interruption Point 3: Pre-search STREAMING', () => {
     const shouldWaitForPreSearch = preSearch.status === MessageStatuses.PENDING
       || preSearch.status === MessageStatuses.STREAMING;
 
-    expect(shouldWaitForPreSearch).toBe(true);
+    expect(shouldWaitForPreSearch).toBeTruthy();
   });
 
   it('should resume pre-search stream from KV buffer', () => {
@@ -326,7 +326,7 @@ describe('interruption Point 4: Pre-search COMPLETE, participant 0 not started',
       && preSearch.userQuery
       && messages.length === 0;
 
-    expect(hasOrphanedPreSearch).toBe(true);
+    expect(hasOrphanedPreSearch).toBeTruthy();
   });
 
   it('should recover user query and trigger participant 0', () => {
@@ -334,9 +334,9 @@ describe('interruption Point 4: Pre-search COMPLETE, participant 0 not started',
     preSearch.userQuery = 'Recovered query';
 
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
+      completedParticipants: [],
       preSearchEnabled: true,
       preSearchStatus: 'complete',
-      completedParticipants: [],
     });
 
     expect(serverState.currentPhase).toBe(RoundPhases.PARTICIPANTS);
@@ -348,8 +348,8 @@ describe('interruption Point 4: Pre-search COMPLETE, participant 0 not started',
     preSearch.userQuery = 'Recovered query';
 
     const optimisticMessage = createTestUserMessage({
-      id: 'optimistic-user-0',
       content: preSearch.userQuery,
+      id: 'optimistic-user-0',
       roundNumber: 0,
     });
 
@@ -368,7 +368,7 @@ describe('interruption Point 5: Participant 0 STREAMING', () => {
     });
 
     expect(serverState.currentPhase).toBe(RoundPhases.PARTICIPANTS);
-    expect(serverState.participants.hasActiveStream).toBe(true);
+    expect(serverState.participants.hasActiveStream).toBeTruthy();
     expect(serverState.participants.currentParticipantIndex).toBe(0);
     expect(serverState.streamId).toBe('thread_123_r0_p0');
   });
@@ -402,7 +402,7 @@ describe('interruption Point 5: Participant 0 STREAMING', () => {
     const shouldTriggerNewParticipant = !serverState.participants.hasActiveStream
       && serverState.participants.nextParticipantToTrigger !== null;
 
-    expect(shouldTriggerNewParticipant).toBe(false);
+    expect(shouldTriggerNewParticipant).toBeFalsy();
   });
 });
 
@@ -413,19 +413,19 @@ describe('interruption Point 5: Participant 0 STREAMING', () => {
 describe('interruption Point 6: Participant 0 COMPLETE, participant 1 not started', () => {
   it('should detect completed participant 0 and next to trigger is 1', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
       completedParticipants: [0],
+      participantCount: 3,
     });
 
     expect(serverState.participants.participantStatuses?.['0']).toBe('completed');
     expect(serverState.participants.nextParticipantToTrigger).toBe(1);
-    expect(serverState.participants.hasActiveStream).toBe(false);
+    expect(serverState.participants.hasActiveStream).toBeFalsy();
   });
 
   it('should return 204 from GET /stream when no active stream', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
       completedParticipants: [0],
+      participantCount: 3,
     });
 
     const httpStatus = serverState.participants.hasActiveStream ? 200 : 204;
@@ -435,26 +435,26 @@ describe('interruption Point 6: Participant 0 COMPLETE, participant 1 not starte
 
   it('should trigger continueFromParticipant(1) via useRoundResumption', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
       completedParticipants: [0],
+      participantCount: 3,
     });
     const initialState = createInitialStoreState();
     const prefilledState = simulatePrefillFromServer(initialState, serverState);
 
     expect(prefilledState.nextParticipantToTrigger).toBe(1);
-    expect(prefilledState.waitingToStartStreaming).toBe(true);
+    expect(prefilledState.waitingToStartStreaming).toBeTruthy();
   });
 
   it('should verify participant 0 message exists before triggering 1', () => {
     const messages = [
-      createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'P0 response',
-        roundNumber: 0,
+        finishReason: FinishReasons.STOP,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
-        finishReason: FinishReasons.STOP,
+        roundNumber: 0,
       }),
     ];
 
@@ -470,9 +470,9 @@ describe('interruption Point 6: Participant 0 COMPLETE, participant 1 not starte
 describe('interruption Point 7: Participant N STREAMING (N > 0)', () => {
   it('should detect active participant 1 stream with participant 0 complete', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
-      completedParticipants: [0],
       activeParticipantIndex: 1,
+      completedParticipants: [0],
+      participantCount: 3,
     });
 
     expect(serverState.participants.participantStatuses?.['0']).toBe('completed');
@@ -483,9 +483,9 @@ describe('interruption Point 7: Participant N STREAMING (N > 0)', () => {
 
   it('should resume participant 1 stream via AI SDK', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
-      completedParticipants: [0],
       activeParticipantIndex: 1,
+      completedParticipants: [0],
+      participantCount: 3,
     });
 
     const httpStatus = serverState.participants.hasActiveStream ? 200 : 204;
@@ -510,7 +510,7 @@ describe('interruption Point 7: Participant N STREAMING (N > 0)', () => {
       }
     }
 
-    expect(nextToTrigger).toBe(null);
+    expect(nextToTrigger).toBeNull();
   });
 });
 
@@ -521,38 +521,38 @@ describe('interruption Point 7: Participant N STREAMING (N > 0)', () => {
 describe('interruption Point 8: Last participant STREAMING', () => {
   it('should detect last participant streaming', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
-      completedParticipants: [0, 1],
       activeParticipantIndex: 2,
+      completedParticipants: [0, 1],
+      participantCount: 3,
     });
 
     expect(serverState.participants.participantStatuses?.['0']).toBe('completed');
     expect(serverState.participants.participantStatuses?.['1']).toBe('completed');
     expect(serverState.participants.participantStatuses?.['2']).toBe('active');
-    expect(serverState.participants.allComplete).toBe(false);
+    expect(serverState.participants.allComplete).toBeFalsy();
   });
 
   it('should NOT trigger moderator while last participant still streaming', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
-      completedParticipants: [0, 1],
       activeParticipantIndex: 2,
+      completedParticipants: [0, 1],
+      participantCount: 3,
     });
 
     const shouldTriggerModerator = serverState.participants.allComplete
       && serverState.moderator === null;
 
-    expect(shouldTriggerModerator).toBe(false);
+    expect(shouldTriggerModerator).toBeFalsy();
   });
 
   it('should resume last participant stream via AI SDK', () => {
     const serverState = createServerResumptionState(RoundPhases.PARTICIPANTS, 0, {
-      participantCount: 3,
-      completedParticipants: [0, 1],
       activeParticipantIndex: 2,
+      completedParticipants: [0, 1],
+      participantCount: 3,
     });
 
-    expect(serverState.participants.hasActiveStream).toBe(true);
+    expect(serverState.participants.hasActiveStream).toBeTruthy();
     expect(serverState.streamId).toBe('thread_123_r0_p2');
   });
 });
@@ -564,34 +564,34 @@ describe('interruption Point 8: Last participant STREAMING', () => {
 describe('interruption Point 9: Last participant COMPLETE, moderator not started', () => {
   it('should detect all participants complete with no moderator', () => {
     const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'pending',
+      participantCount: 3,
     });
 
-    expect(serverState.participants.allComplete).toBe(true);
+    expect(serverState.participants.allComplete).toBeTruthy();
     expect(serverState.currentPhase).toBe(RoundPhases.MODERATOR);
     expect(serverState.moderator?.status).toBe('pending');
   });
 
   it('should trigger moderator via useIncompleteRoundResumption', () => {
     const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'pending',
+      participantCount: 3,
     });
     const initialState = createInitialStoreState();
     const prefilledState = simulatePrefillFromServer(initialState, serverState);
 
     expect(prefilledState.currentResumptionPhase).toBe(RoundPhases.MODERATOR);
-    expect(prefilledState.isModeratorStreaming).toBe(true);
+    expect(prefilledState.isModeratorStreaming).toBeTruthy();
   });
 
   it('should return 204 with moderator phase header', () => {
     const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'pending',
+      participantCount: 3,
     });
 
     const httpStatus = serverState.currentPhase !== RoundPhases.PARTICIPANTS ? 204 : 200;
@@ -609,22 +609,22 @@ describe('interruption Point 9: Last participant COMPLETE, moderator not started
 describe('interruption Point 10: Moderator STREAMING', () => {
   it('should detect streaming moderator from server state', () => {
     const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'streaming',
+      participantCount: 3,
     });
 
     expect(serverState.currentPhase).toBe(RoundPhases.MODERATOR);
     expect(serverState.moderator?.status).toBe('streaming');
-    expect(serverState.hasActiveStream).toBe(true);
+    expect(serverState.hasActiveStream).toBeTruthy();
     expect(serverState.streamId).toBe('moderator_thread_123_r0');
   });
 
   it('should return 204 for moderator phase (handled by useModeratorStream)', () => {
     const serverState = createServerResumptionState(RoundPhases.MODERATOR, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'streaming',
+      participantCount: 3,
     });
 
     // Moderator uses useObject, not AI SDK UIMessage stream
@@ -639,7 +639,7 @@ describe('interruption Point 10: Moderator STREAMING', () => {
     // Moderator streaming is tracked but moderators are now chat messages with isModerator: true
     state.triggeredModeratorRounds.add(0);
 
-    expect(state.triggeredModeratorRounds.has(0)).toBe(true);
+    expect(state.triggeredModeratorRounds.has(0)).toBeTruthy();
     // useModeratorStream handles resumption via chat messages (inline rendering)
   });
 });
@@ -651,26 +651,26 @@ describe('interruption Point 10: Moderator STREAMING', () => {
 describe('interruption Point 11: Moderator COMPLETE (round complete)', () => {
   it('should detect complete round with no resumption needed', () => {
     const serverState = createServerResumptionState(RoundPhases.COMPLETE, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'complete',
+      participantCount: 3,
     });
 
     expect(serverState.currentPhase).toBe(RoundPhases.COMPLETE);
-    expect(serverState.roundComplete).toBe(true);
-    expect(serverState.hasActiveStream).toBe(false);
+    expect(serverState.roundComplete).toBeTruthy();
+    expect(serverState.hasActiveStream).toBeFalsy();
   });
 
   it('should NOT trigger any resumption for complete round', () => {
     const serverState = createServerResumptionState(RoundPhases.COMPLETE, 0, {
-      participantCount: 3,
       completedParticipants: [0, 1, 2],
       moderatorStatus: 'complete',
+      participantCount: 3,
     });
 
     const shouldResume = !serverState.roundComplete && serverState.hasActiveStream;
 
-    expect(shouldResume).toBe(false);
+    expect(shouldResume).toBeFalsy();
   });
 
   it('should allow new message submission after round complete', () => {
@@ -680,7 +680,7 @@ describe('interruption Point 11: Moderator COMPLETE (round complete)', () => {
 
     const canSubmit = isRoundComplete && !isStreaming && pendingMessage === null;
 
-    expect(canSubmit).toBe(true);
+    expect(canSubmit).toBeTruthy();
   });
 });
 
@@ -699,7 +699,7 @@ describe('race Conditions: AI SDK Resume vs Incomplete Round Resumption', () => 
     const shouldIncompleteRoundTrigger
       = !aiSdkIsStreaming || aiSdkStreamingParticipant !== incompleteRoundNextParticipant;
 
-    expect(shouldIncompleteRoundTrigger).toBe(false);
+    expect(shouldIncompleteRoundTrigger).toBeFalsy();
   });
 
   it('should use resumptionAttemptedRef to prevent duplicate triggers', () => {
@@ -708,12 +708,12 @@ describe('race Conditions: AI SDK Resume vs Incomplete Round Resumption', () => 
 
     // First attempt
     const canAttemptFirst = resumptionAttemptedRef.current !== threadId;
-    expect(canAttemptFirst).toBe(true);
+    expect(canAttemptFirst).toBeTruthy();
     resumptionAttemptedRef.current = threadId;
 
     // Second attempt should be blocked
     const canAttemptSecond = resumptionAttemptedRef.current !== threadId;
-    expect(canAttemptSecond).toBe(false);
+    expect(canAttemptSecond).toBeFalsy();
   });
 
   it('should check isStreaming before triggering new participant', () => {
@@ -722,7 +722,7 @@ describe('race Conditions: AI SDK Resume vs Incomplete Round Resumption', () => 
 
     const shouldTrigger = !isStreaming && nextParticipantToTrigger !== null;
 
-    expect(shouldTrigger).toBe(false);
+    expect(shouldTrigger).toBeFalsy();
   });
 });
 
@@ -733,7 +733,7 @@ describe('race Conditions: Pre-search Completion → Participant Triggering', ()
     const shouldWaitForPreSearch = preSearchStatus === MessageStatuses.PENDING
       || preSearchStatus === MessageStatuses.STREAMING;
 
-    expect(shouldWaitForPreSearch).toBe(true);
+    expect(shouldWaitForPreSearch).toBeTruthy();
   });
 
   it('should trigger participants immediately after pre-search completes', () => {
@@ -742,7 +742,7 @@ describe('race Conditions: Pre-search Completion → Participant Triggering', ()
     const shouldWaitForPreSearch = preSearchStatus === MessageStatuses.PENDING
       || preSearchStatus === MessageStatuses.STREAMING;
 
-    expect(shouldWaitForPreSearch).toBe(false);
+    expect(shouldWaitForPreSearch).toBeFalsy();
   });
 
   it('should use preSearchPhaseResumptionAttemptedRef to prevent duplicate triggers', () => {
@@ -750,11 +750,11 @@ describe('race Conditions: Pre-search Completion → Participant Triggering', ()
     const key = 'thread-123_presearch_0';
 
     const canAttempt = ref.current !== key;
-    expect(canAttempt).toBe(true);
+    expect(canAttempt).toBeTruthy();
     ref.current = key;
 
     const canAttemptAgain = ref.current !== key;
-    expect(canAttemptAgain).toBe(false);
+    expect(canAttemptAgain).toBeFalsy();
   });
 });
 
@@ -776,21 +776,21 @@ describe('race Conditions: Participant Completion → Next Participant', () => {
 
     const hasActiveStream = Object.values(participantStatuses).includes('active');
 
-    expect(hasActiveStream).toBe(true);
+    expect(hasActiveStream).toBeTruthy();
   });
 
   it('should detect in-progress participants (streaming parts) as active', () => {
     const message = createTestAssistantMessage({
-      id: 'thread-123_r0_p0',
       content: 'Partial...',
-      roundNumber: 0,
+      finishReason: FinishReasons.UNKNOWN,
+      id: 'thread-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN,
+      roundNumber: 0,
     });
 
     // Simulate streaming state
-    const _isStillStreaming = (message as { parts: Array<{ state?: string }> }).parts?.some(
+    const _isStillStreaming = (message as { parts: { state?: string }[] }).parts?.some(
       p => 'state' in p && p.state === 'streaming',
     ) || false;
 
@@ -798,7 +798,7 @@ describe('race Conditions: Participant Completion → Next Participant', () => {
     // But finishReason is UNKNOWN, indicating incomplete
     const isIncomplete = message.metadata.finishReason === FinishReasons.UNKNOWN;
 
-    expect(isIncomplete).toBe(true);
+    expect(isIncomplete).toBeTruthy();
   });
 });
 
@@ -810,7 +810,7 @@ describe('race Conditions: Last Participant → Moderator', () => {
     const allComplete = Object.values(participantStatuses).filter(s => s === 'completed').length
       === totalParticipants;
 
-    expect(allComplete).toBe(false);
+    expect(allComplete).toBeFalsy();
   });
 
   it('should trigger moderator via onComplete callback', () => {
@@ -822,7 +822,7 @@ describe('race Conditions: Last Participant → Moderator', () => {
       && allParticipantsComplete
       && moderatorStatus === null;
 
-    expect(shouldTriggerModerator).toBe(true);
+    expect(shouldTriggerModerator).toBeTruthy();
   });
 
   it('should use moderatorPhaseResumptionAttemptedRef to prevent duplicate triggers', () => {
@@ -830,11 +830,11 @@ describe('race Conditions: Last Participant → Moderator', () => {
     const key = 'thread-123_moderator_0';
 
     const canAttempt = ref.current !== key;
-    expect(canAttempt).toBe(true);
+    expect(canAttempt).toBeTruthy();
     ref.current = key;
 
     const canAttemptAgain = ref.current !== key;
-    expect(canAttemptAgain).toBe(false);
+    expect(canAttemptAgain).toBeFalsy();
   });
 });
 
@@ -858,7 +858,7 @@ describe('race Conditions: Multiple Effects', () => {
     // Participant resumption effect should skip when phase is pre_search
     const shouldRunParticipantEffect = currentResumptionPhase === RoundPhases.PARTICIPANTS;
 
-    expect(shouldRunParticipantEffect).toBe(false);
+    expect(shouldRunParticipantEffect).toBeFalsy();
   });
 
   it('should clear stale isStreaming after timeout', async () => {
@@ -874,16 +874,16 @@ describe('race Conditions: Multiple Effects', () => {
 
     vi.advanceTimersByTime(STALE_TIMEOUT);
 
-    expect(isStreaming).toBe(false);
+    expect(isStreaming).toBeFalsy();
 
     vi.useRealTimers();
   });
 
   it('should clear stale waitingToStartStreaming without pendingMessage', () => {
     let state = {
-      waitingToStartStreaming: true,
-      pendingMessage: null as string | null,
       isStreaming: false,
+      pendingMessage: null as string | null,
+      waitingToStartStreaming: true,
     };
 
     const isStale = state.waitingToStartStreaming
@@ -894,7 +894,7 @@ describe('race Conditions: Multiple Effects', () => {
       state = { ...state, waitingToStartStreaming: false };
     }
 
-    expect(state.waitingToStartStreaming).toBe(false);
+    expect(state.waitingToStartStreaming).toBeFalsy();
   });
 });
 
@@ -906,7 +906,7 @@ describe('race Conditions: Submission Guards', () => {
     const isSubmissionInProgress = hasEarlyOptimisticMessage
       || (pendingMessage !== null);
 
-    expect(isSubmissionInProgress).toBe(true);
+    expect(isSubmissionInProgress).toBeTruthy();
   });
 
   it('should block resumption during pendingMessage with !hasSentPendingMessage', () => {
@@ -915,7 +915,7 @@ describe('race Conditions: Submission Guards', () => {
 
     const isSubmissionInProgress = pendingMessage !== null && !hasSentPendingMessage;
 
-    expect(isSubmissionInProgress).toBe(true);
+    expect(isSubmissionInProgress).toBeTruthy();
   });
 
   it('should NOT block resumption after pendingMessage is sent', () => {
@@ -924,7 +924,7 @@ describe('race Conditions: Submission Guards', () => {
 
     const isSubmissionInProgress = pendingMessage !== null && !hasSentPendingMessage;
 
-    expect(isSubmissionInProgress).toBe(false);
+    expect(isSubmissionInProgress).toBeFalsy();
   });
 });
 
@@ -948,31 +948,31 @@ describe('kV Buffer Consistency', () => {
 
   it('should check for existing message before creating new one', () => {
     const messages = [
-      createTestUserMessage({ id: 'user-0', content: 'Test', roundNumber: 0 }),
+      createTestUserMessage({ content: 'Test', id: 'user-0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'thread-123_r0_p0',
         content: 'Existing',
-        roundNumber: 0,
+        id: 'thread-123_r0_p0',
         participantId: 'participant-0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
     ];
 
     const expectedId = 'thread-123_r0_p0';
     const messageExists = messages.some(m => m.id === expectedId);
 
-    expect(messageExists).toBe(true);
+    expect(messageExists).toBeTruthy();
   });
 
   it('should detect empty interrupted responses (finishReason: unknown, no content)', () => {
     const message = createTestAssistantMessage({
-      id: 'thread-123_r0_p0',
       content: '',
-      roundNumber: 0,
+      finishReason: FinishReasons.UNKNOWN,
+      id: 'thread-123_r0_p0',
       participantId: 'participant-0',
       participantIndex: 0,
-      finishReason: FinishReasons.UNKNOWN,
       parts: [],
+      roundNumber: 0,
     });
 
     const hasContent = message.parts.some(
@@ -980,8 +980,8 @@ describe('kV Buffer Consistency', () => {
     );
     const isInterrupted = message.metadata.finishReason === FinishReasons.UNKNOWN;
 
-    expect(hasContent).toBe(false);
-    expect(isInterrupted).toBe(true);
+    expect(hasContent).toBeFalsy();
+    expect(isInterrupted).toBeTruthy();
   });
 });
 
@@ -998,7 +998,7 @@ describe('participant Configuration Changes', () => {
       modelId => !currentModelIds.has(modelId),
     );
 
-    expect(hasConfigChange).toBe(true);
+    expect(hasConfigChange).toBeTruthy();
   });
 
   it('should skip resumption when participant config changed', () => {
@@ -1006,7 +1006,7 @@ describe('participant Configuration Changes', () => {
 
     const shouldResume = !participantsChangedSinceRound;
 
-    expect(shouldResume).toBe(false);
+    expect(shouldResume).toBeFalsy();
   });
 
   it('should check enabled participants only', () => {
@@ -1029,15 +1029,15 @@ describe('participant Configuration Changes', () => {
 describe('multi-Round Resumption', () => {
   it('should only resume the latest round', () => {
     const messages = [
-      createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'R0P0',
-        roundNumber: 0,
+        id: 'p0-r0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
-      createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
       // Round 1 is incomplete
     ];
 
@@ -1053,29 +1053,29 @@ describe('multi-Round Resumption', () => {
   it('should ignore incomplete earlier rounds', () => {
     const messages = [
       // Round 0 - incomplete (missing P1)
-      createTestUserMessage({ id: 'u0', content: 'R0', roundNumber: 0 }),
+      createTestUserMessage({ content: 'R0', id: 'u0', roundNumber: 0 }),
       createTestAssistantMessage({
-        id: 'p0-r0',
         content: 'R0P0',
-        roundNumber: 0,
+        id: 'p0-r0',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 0,
       }),
       // Round 1 - complete
-      createTestUserMessage({ id: 'u1', content: 'R1', roundNumber: 1 }),
+      createTestUserMessage({ content: 'R1', id: 'u1', roundNumber: 1 }),
       createTestAssistantMessage({
-        id: 'p0-r1',
         content: 'R1P0',
-        roundNumber: 1,
+        id: 'p0-r1',
         participantId: 'p0',
         participantIndex: 0,
+        roundNumber: 1,
       }),
       createTestAssistantMessage({
-        id: 'p1-r1',
         content: 'R1P1',
-        roundNumber: 1,
+        id: 'p1-r1',
         participantId: 'p1',
         participantIndex: 1,
+        roundNumber: 1,
       }),
     ];
 

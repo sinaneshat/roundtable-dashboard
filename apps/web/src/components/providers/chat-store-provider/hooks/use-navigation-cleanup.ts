@@ -33,8 +33,8 @@ type UseNavigationCleanupParams = {
  * Handles state cleanup on navigation between routes
  */
 export function useNavigationCleanup({
-  store,
   prevPathnameRef,
+  store,
 }: UseNavigationCleanupParams) {
   const { pathname } = useLocation();
   const queryClient = useQueryClient();

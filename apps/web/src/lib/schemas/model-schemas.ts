@@ -61,8 +61,8 @@ export const ModelSchema = z.custom<Model>(
  */
 export const OrderedModelSchema = z.object({
   model: ModelSchema,
-  participant: ParticipantConfigSchema.nullable(),
   order: z.number().int().nonnegative(),
+  participant: ParticipantConfigSchema.nullable(),
 });
 
 export type OrderedModel = z.infer<typeof OrderedModelSchema>;

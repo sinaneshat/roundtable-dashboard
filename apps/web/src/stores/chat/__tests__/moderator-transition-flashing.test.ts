@@ -38,14 +38,14 @@ describe('moderator Transition - No Flashing', () => {
 
       // Verify round is in progress
       expect(getStoreState(store).streamingRoundNumber).toBe(1);
-      expect(getStoreState(store).isStreaming).toBe(true);
+      expect(getStoreState(store).isStreaming).toBeTruthy();
 
       // Participants complete - isStreaming becomes false
       state.setIsStreaming(false);
 
       // CRITICAL: streamingRoundNumber should NOT be cleared yet
       expect(getStoreState(store).streamingRoundNumber).toBe(1);
-      expect(getStoreState(store).isStreaming).toBe(false);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
     });
 
     it('should keep streamingRoundNumber until completeStreaming is called', () => {
@@ -71,7 +71,7 @@ describe('moderator Transition - No Flashing', () => {
       // Only NOW should the round be complete
       state.completeStreaming();
 
-      expect(getStoreState(store).streamingRoundNumber).toBe(null);
+      expect(getStoreState(store).streamingRoundNumber).toBeNull();
     });
   });
 
@@ -96,7 +96,7 @@ describe('moderator Transition - No Flashing', () => {
         1, // roundNumber
         1, // streamingRoundNumber
       );
-      expect(isActive).toBe(true);
+      expect(isActive).toBeTruthy();
     });
 
     it('should be true during moderator streaming', () => {
@@ -106,7 +106,7 @@ describe('moderator Transition - No Flashing', () => {
         1, // roundNumber
         1, // streamingRoundNumber
       );
-      expect(isActive).toBe(true);
+      expect(isActive).toBeTruthy();
     });
 
     it('should be true during transition (participants done, moderator not started)', () => {
@@ -117,7 +117,7 @@ describe('moderator Transition - No Flashing', () => {
         1, // roundNumber
         1, // streamingRoundNumber - MUST be non-null to prevent flash
       );
-      expect(isActive).toBe(true);
+      expect(isActive).toBeTruthy();
     });
 
     it('should be false when streamingRoundNumber is null (flash scenario)', () => {
@@ -128,7 +128,7 @@ describe('moderator Transition - No Flashing', () => {
         1, // roundNumber
         null, // streamingRoundNumber - BAD: causes flash
       );
-      expect(isActive).toBe(false);
+      expect(isActive).toBeFalsy();
     });
   });
 
@@ -138,13 +138,13 @@ describe('moderator Transition - No Flashing', () => {
       const state = getStoreState(store);
 
       // Track state at each step
-      const stateLog: Array<{
+      const stateLog: {
         step: string;
         isStreaming: boolean;
         isModeratorStreaming: boolean;
         streamingRoundNumber: number | null;
         shouldShowPendingCards: boolean;
-      }> = [];
+      }[] = [];
 
       function logState(step: string) {
         const s = getStoreState(store);
@@ -153,11 +153,11 @@ describe('moderator Transition - No Flashing', () => {
         const shouldShowPendingCards = isAnyStreamingActive; // Simplified, actual logic has more conditions
 
         stateLog.push({
-          step,
-          isStreaming: s.isStreaming,
           isModeratorStreaming: s.isModeratorStreaming,
-          streamingRoundNumber: s.streamingRoundNumber,
+          isStreaming: s.isStreaming,
           shouldShowPendingCards,
+          step,
+          streamingRoundNumber: s.streamingRoundNumber,
         });
       }
 
@@ -183,11 +183,11 @@ describe('moderator Transition - No Flashing', () => {
       logState('Round complete - cleanup done');
 
       // Verify: shouldShowPendingCards should be true for ALL steps except the final cleanup
-      expect(stateLog[0].shouldShowPendingCards).toBe(true);
-      expect(stateLog[1].shouldShowPendingCards).toBe(true); // CRITICAL: This is the gap
-      expect(stateLog[2].shouldShowPendingCards).toBe(true);
-      expect(stateLog[3].shouldShowPendingCards).toBe(true);
-      expect(stateLog[4].shouldShowPendingCards).toBe(false); // Only now should it be false
+      expect(stateLog[0].shouldShowPendingCards).toBeTruthy();
+      expect(stateLog[1].shouldShowPendingCards).toBeTruthy(); // CRITICAL: This is the gap
+      expect(stateLog[2].shouldShowPendingCards).toBeTruthy();
+      expect(stateLog[3].shouldShowPendingCards).toBeTruthy();
+      expect(stateLog[4].shouldShowPendingCards).toBeFalsy(); // Only now should it be false
     });
 
     it('should never have a gap where all streaming flags are false during active round', () => {
@@ -222,7 +222,7 @@ describe('moderator Transition - No Flashing', () => {
       checkForFlash(); // Still should be active (streamingRoundNumber is set)
 
       // No flash should occur until completeStreaming
-      expect(flashDetected.slice(0, 4).every(f => f === false)).toBe(true);
+      expect(flashDetected.slice(0, 4).every(f => f === false)).toBeTruthy();
     });
   });
 
@@ -232,16 +232,16 @@ describe('moderator Transition - No Flashing', () => {
       const state = getStoreState(store);
 
       // Setup subscriptions to detect rapid changes
-      const stateSnapshots: Array<{
+      const stateSnapshots: {
         isStreaming: boolean;
         isModeratorStreaming: boolean;
         streamingRoundNumber: number | null;
-      }> = [];
+      }[] = [];
 
       store.subscribe((newState) => {
         stateSnapshots.push({
-          isStreaming: newState.isStreaming,
           isModeratorStreaming: newState.isModeratorStreaming,
+          isStreaming: newState.isStreaming,
           streamingRoundNumber: newState.streamingRoundNumber,
         });
       });
@@ -258,7 +258,7 @@ describe('moderator Transition - No Flashing', () => {
         return !s.isStreaming && !s.isModeratorStreaming && !isStreamingRound;
       });
 
-      expect(hasFlash).toBe(false);
+      expect(hasFlash).toBeFalsy();
     });
   });
 
@@ -275,7 +275,7 @@ describe('moderator Transition - No Flashing', () => {
       state.setIsStreaming(false);
 
       // Assert
-      expect(getStoreState(store).isStreaming).toBe(false);
+      expect(getStoreState(store).isStreaming).toBeFalsy();
       expect(getStoreState(store).streamingRoundNumber).toBe(1); // MUST remain 1
     });
 
@@ -291,7 +291,7 @@ describe('moderator Transition - No Flashing', () => {
       state.setIsModeratorStreaming(false);
 
       // Assert
-      expect(getStoreState(store).isModeratorStreaming).toBe(false);
+      expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
       expect(getStoreState(store).streamingRoundNumber).toBe(1); // MUST remain 1
     });
   });
@@ -323,9 +323,9 @@ describe('completeStreaming timing', () => {
     // Now completeStreaming can be called
     state.completeStreaming();
 
-    expect(getStoreState(store).streamingRoundNumber).toBe(null);
-    expect(getStoreState(store).isStreaming).toBe(false);
-    expect(getStoreState(store).isModeratorStreaming).toBe(false);
+    expect(getStoreState(store).streamingRoundNumber).toBeNull();
+    expect(getStoreState(store).isStreaming).toBeFalsy();
+    expect(getStoreState(store).isModeratorStreaming).toBeFalsy();
   });
 
   it('should not be called between participants and moderator', () => {
@@ -385,12 +385,12 @@ describe('flow state machine flash prevention', () => {
     const completeStreamingWrapper = () => {
       const currentState = store.getState();
       completeStreamingCalls.push({
-        time: Date.now(),
         phase: currentState.isModeratorStreaming
           ? 'moderator_streaming'
           : currentState.isStreaming
             ? 'participant_streaming'
             : 'transition_gap',
+        time: Date.now(),
       });
       originalCompleteStreaming();
     };
@@ -428,7 +428,7 @@ describe('flow state machine flash prevention', () => {
     expect(completeStreamingCalls[0].phase).toBe('transition_gap');
 
     // Verify streamingRoundNumber is now cleared
-    expect(getStoreState(store).streamingRoundNumber).toBe(null);
+    expect(getStoreState(store).streamingRoundNumber).toBeNull();
   });
 
   it('should keep isAnyStreamingActive=true throughout entire round lifecycle', () => {
@@ -466,7 +466,7 @@ describe('flow state machine flash prevention', () => {
 
     // Step 5: Now cleanup happens
     state.completeStreaming();
-    expect(calculateIsAnyStreamingActive()).toBe(false);
+    expect(calculateIsAnyStreamingActive()).toBeFalsy();
   });
 });
 

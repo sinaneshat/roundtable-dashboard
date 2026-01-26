@@ -48,10 +48,10 @@ export type { WebSearchResultItem as PreSearchResultItem };
 // ============================================================================
 
 export const PreSearchQueryMetadataSchema = z.object({
+  index: z.number().int().nonnegative(),
   query: z.string(),
   rationale: z.string(),
   searchDepth: WebSearchDepthSchema,
-  index: z.number().int().nonnegative(),
 });
 
 export type PreSearchQueryMetadata = z.infer<
@@ -70,18 +70,18 @@ export const PreSearchResultItemSchemaEnhanced = WebSearchResultItemSchema;
 
 export const PreSearchQueryStateSchema = z.object({
   index: z.number().int().nonnegative(),
-  total: z.number().int().positive(),
   query: z.string(),
   rationale: z.string(),
-  searchDepth: WebSearchDepthSchema,
-  status: PreSearchQueryStateStatusSchema,
   result: z
     .object({
       answer: z.string().nullable().optional(),
-      results: z.array(PreSearchResultItemSchemaEnhanced).optional(),
       responseTime: z.number().optional(),
+      results: z.array(PreSearchResultItemSchemaEnhanced).optional(),
     })
     .optional(),
+  searchDepth: WebSearchDepthSchema,
+  status: PreSearchQueryStateStatusSchema,
+  total: z.number().int().positive(),
 });
 
 export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
@@ -109,38 +109,38 @@ export function messageHasError(
 // ============================================================================
 
 export const PartialUserMetadataSchema = z.object({
+  createdAt: z.string().datetime().optional(),
   role: z.literal(MessageRoles.USER),
   roundNumber: z.number().int().nonnegative(),
-  createdAt: z.string().datetime().optional(),
 });
 
 export type PartialUserMetadata = z.infer<typeof PartialUserMetadataSchema>;
 
 export const PartialAssistantMetadataSchema = z.object({
-  role: z.literal(MessageRoles.ASSISTANT),
-  roundNumber: z.number().int().nonnegative(),
+  aborted: z.boolean().optional(),
+  createdAt: z.string().datetime().optional(),
+  error: z.string().optional(),
+  errorCategory: z.string().optional(),
+  errorMessage: z.string().optional(),
+  errorType: ErrorTypeSchema.optional(),
+  finishReason: FinishReasonSchema.optional(),
+  hasError: z.boolean().optional(),
+  isEmptyResponse: z.boolean().optional(),
+  isPartialResponse: z.boolean().optional(),
+  isTransient: z.boolean().optional(),
+  model: z.string().min(1).optional(),
+  // OpenRouter error responses contain variable structure from provider
+  openRouterError: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   participantId: z.string().min(1),
   participantIndex: z.number().int().nonnegative().optional(),
   participantRole: z.string().nullable().optional(),
-  model: z.string().min(1).optional(),
-  finishReason: FinishReasonSchema.optional(),
-  usage: UsageSchema.optional(),
-  hasError: z.boolean().optional(),
-  isTransient: z.boolean().optional(),
-  isPartialResponse: z.boolean().optional(),
-  errorType: ErrorTypeSchema.optional(),
-  errorMessage: z.string().optional(),
-  errorCategory: z.string().optional(),
-  createdAt: z.string().datetime().optional(),
   providerMessage: z.string().optional(),
-  // OpenRouter error responses contain variable structure from provider
-  openRouterError: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-  retryAttempts: z.number().int().nonnegative().optional(),
-  isEmptyResponse: z.boolean().optional(),
-  statusCode: z.number().int().optional(),
   responseBody: z.string().optional(),
-  error: z.string().optional(),
-  aborted: z.boolean().optional(),
+  retryAttempts: z.number().int().nonnegative().optional(),
+  role: z.literal(MessageRoles.ASSISTANT),
+  roundNumber: z.number().int().nonnegative(),
+  statusCode: z.number().int().optional(),
+  usage: UsageSchema.optional(),
 });
 
 export type PartialAssistantMetadata = z.infer<

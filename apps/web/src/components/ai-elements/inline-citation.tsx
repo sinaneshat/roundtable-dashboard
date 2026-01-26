@@ -53,35 +53,35 @@ type SourceTypeConfig = {
 };
 
 const SOURCE_TYPE_CONFIG: Record<CitationSourceType, SourceTypeConfig> = {
-  [CitationSourceTypes.MEMORY]: {
-    icon: Icons.sparkles,
-    label: 'Memory',
-    color: 'text-purple-500',
-  },
-  [CitationSourceTypes.THREAD]: {
-    icon: Icons.messageSquare,
-    label: 'Thread',
-    color: 'text-blue-500',
-  },
   [CitationSourceTypes.ATTACHMENT]: {
+    color: 'text-green-500',
     icon: Icons.fileText,
     label: 'File',
-    color: 'text-green-500',
   },
-  [CitationSourceTypes.SEARCH]: {
-    icon: Icons.globe,
-    label: 'Search',
-    color: 'text-amber-500',
+  [CitationSourceTypes.MEMORY]: {
+    color: 'text-purple-500',
+    icon: Icons.sparkles,
+    label: 'Memory',
   },
   [CitationSourceTypes.MODERATOR]: {
+    color: 'text-cyan-500',
     icon: Icons.search,
     label: 'Moderator',
-    color: 'text-cyan-500',
   },
   [CitationSourceTypes.RAG]: {
+    color: 'text-indigo-500',
     icon: Icons.database,
     label: 'Indexed File',
-    color: 'text-indigo-500',
+  },
+  [CitationSourceTypes.SEARCH]: {
+    color: 'text-amber-500',
+    icon: Icons.globe,
+    label: 'Search',
+  },
+  [CitationSourceTypes.THREAD]: {
+    color: 'text-blue-500',
+    icon: Icons.messageSquare,
+    label: 'Thread',
   },
 };
 
@@ -94,7 +94,7 @@ type InlineCitationProps = {
   readonly children?: ReactNode;
 } & Omit<ComponentPropsWithoutRef<'span'>, 'className' | 'children'>;
 
-function InlineCitation({ className, children, ...props }: InlineCitationProps) {
+function InlineCitation({ children, className, ...props }: InlineCitationProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const contextValue = useMemo(
@@ -143,10 +143,10 @@ type InlineCitationCardTriggerProps = {
 };
 
 function InlineCitationCardTrigger({
-  displayNumber,
-  sourceType,
-  sources = [],
   className,
+  displayNumber,
+  sources = [],
+  sourceType,
 }: InlineCitationCardTriggerProps) {
   const config = SOURCE_TYPE_CONFIG[sourceType];
 
@@ -167,12 +167,12 @@ function InlineCitationCardTrigger({
 
     // For other source types, show short label
     const shortLabels: Record<CitationSourceType, string> = {
-      [CitationSourceTypes.MEMORY]: 'mem',
-      [CitationSourceTypes.THREAD]: 'chat',
       [CitationSourceTypes.ATTACHMENT]: 'file',
-      [CitationSourceTypes.SEARCH]: 'web',
+      [CitationSourceTypes.MEMORY]: 'mem',
       [CitationSourceTypes.MODERATOR]: 'mod',
       [CitationSourceTypes.RAG]: 'doc',
+      [CitationSourceTypes.SEARCH]: 'web',
+      [CitationSourceTypes.THREAD]: 'chat',
     };
 
     return shortLabels[sourceType] || (displayNumber?.toString() ?? '?');
@@ -244,18 +244,18 @@ type InlineCitationSourceProps = {
 };
 
 function InlineCitationSource({
-  title,
-  sourceType,
-  description,
-  url,
-  threadTitle,
+  citationId,
   className,
+  description,
   downloadUrl,
   filename,
-  mimeType,
   fileSize,
   isResolved: _isResolved = true,
-  citationId,
+  mimeType,
+  sourceType,
+  threadTitle,
+  title,
+  url,
 }: InlineCitationSourceProps) {
   const t = useTranslations();
   const config = SOURCE_TYPE_CONFIG[sourceType];
@@ -418,22 +418,24 @@ type InlineCitationCarouselIndexProps = {
   readonly children?: ReactNode;
 };
 
-function InlineCitationCarouselIndex({ className, children }: InlineCitationCarouselIndexProps) {
+function InlineCitationCarouselIndex({ children, className }: InlineCitationCarouselIndexProps) {
   const { api } = useCarousel();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
 
   const onSelect = useCallback(() => {
-    if (!api)
+    if (!api) {
       return;
+    }
     setCurrent(api.selectedScrollSnap() + 1);
     setCount(api.scrollSnapList().length);
   }, [api]);
 
   // Subscribe to carousel changes
   useMemo(() => {
-    if (!api)
+    if (!api) {
       return;
+    }
     onSelect();
     api.on('select', onSelect);
     api.on('reInit', onSelect);
@@ -535,7 +537,7 @@ type SourcesFooterProps = {
   readonly className?: string;
 };
 
-function SourcesFooter({ sources, className }: SourcesFooterProps) {
+function SourcesFooter({ className, sources }: SourcesFooterProps) {
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
 

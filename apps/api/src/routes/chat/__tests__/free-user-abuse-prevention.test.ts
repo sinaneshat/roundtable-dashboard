@@ -23,9 +23,9 @@ describe('free User Abuse Prevention', () => {
       // Even if user creates thread and does nothing, it blocks new threads
       const existingThread = {
         id: 'thread-1',
-        userId: 'user-1',
         messageCount: 0,
         roundCount: 0,
+        userId: 'user-1',
       };
 
       const hasThread = existingThread.id !== null;
@@ -38,8 +38,8 @@ describe('free User Abuse Prevention', () => {
         return threads.some(t => t.deletedAt === null);
       };
 
-      const deletedThread = { id: 't1', deletedAt: new Date() };
-      const activeThread = { id: 't2', deletedAt: null };
+      const deletedThread = { deletedAt: new Date(), id: 't1' };
+      const activeThread = { deletedAt: null, id: 't2' };
 
       expect(checkNonDeletedThreadExists([deletedThread])).toBe(false);
       expect(checkNonDeletedThreadExists([activeThread])).toBe(true);
@@ -114,15 +114,15 @@ describe('free User Abuse Prevention', () => {
         { type: CreditTransactionTypes.CREDIT_GRANT },
       ])).toBe(false);
       expect(hasFreeRoundCompleteMarker([
-        { type: CreditTransactionTypes.DEDUCTION, action: CreditActions.FREE_ROUND_COMPLETE },
+        { action: CreditActions.FREE_ROUND_COMPLETE, type: CreditTransactionTypes.DEDUCTION },
       ])).toBe(true);
     });
 
     it('round completion zeroes out free user credits', () => {
       const zeroOutFreeUserCredits = (currentBalance: number) => {
         return {
-          newBalance: 0,
           creditsZeroed: currentBalance,
+          newBalance: 0,
         };
       };
 
@@ -169,15 +169,15 @@ describe('free User Abuse Prevention', () => {
         balance: number,
       ) => {
         if (expectedVersion !== actualVersion) {
-          return { success: false, error: 'version_mismatch' };
+          return { error: 'version_mismatch', success: false };
         }
         if (balance < amount) {
-          return { success: false, error: 'insufficient_balance' };
+          return { error: 'insufficient_balance', success: false };
         }
         return {
-          success: true,
           newBalance: balance - amount,
           newVersion: actualVersion + 1,
+          success: true,
         };
       };
 
@@ -241,12 +241,15 @@ describe('free User Abuse Prevention', () => {
         hasExistingThread: boolean,
         freeRoundComplete: boolean,
       ) => {
-        if (planType === PlanTypes.PAID)
+        if (planType === PlanTypes.PAID) {
           return true;
-        if (hasExistingThread)
+        }
+        if (hasExistingThread) {
           return false;
-        if (freeRoundComplete)
+        }
+        if (freeRoundComplete) {
           return false;
+        }
         return true;
       };
 
@@ -362,8 +365,8 @@ describe('free User Abuse Prevention', () => {
 
     it('free tier limits are ONE thread and ONE round', () => {
       const FREE_TIER_LIMITS = {
-        maxThreads: 1,
         maxRounds: 1,
+        maxThreads: 1,
       };
 
       expect(FREE_TIER_LIMITS.maxThreads).toBe(1);
@@ -423,10 +426,12 @@ describe('free User Abuse Prevention', () => {
         planType: typeof PlanTypes[keyof typeof PlanTypes],
         freeRoundComplete: boolean,
       ) => {
-        if (planType === PlanTypes.PAID)
+        if (planType === PlanTypes.PAID) {
           return true;
-        if (freeRoundComplete)
+        }
+        if (freeRoundComplete) {
           return false;
+        }
         return true;
       };
 
@@ -449,9 +454,10 @@ describe('free User Abuse Prevention', () => {
       const operations = ['sendMessage', 'createThread', 'streamResponse'];
       const freeRoundComplete = true;
 
-      const canPerformOperation = (op: string, complete: boolean) => {
-        if (complete)
+      const canPerformOperation = (_op: string, complete: boolean) => {
+        if (complete) {
           return false;
+        }
         return true;
       };
 
@@ -468,12 +474,15 @@ describe('free User Abuse Prevention', () => {
         hasExistingThread: boolean,
         freeRoundComplete: boolean,
       ) => {
-        if (planType === PlanTypes.PAID)
+        if (planType === PlanTypes.PAID) {
           return true;
-        if (hasExistingThread)
+        }
+        if (hasExistingThread) {
           return false;
-        if (freeRoundComplete)
+        }
+        if (freeRoundComplete) {
           return false;
+        }
         return true;
       };
 
@@ -543,9 +552,9 @@ describe('free User Abuse Prevention', () => {
 
     it('credit enforcement prevents operations with zero balance', () => {
       const creditBalance = {
+        available: 0,
         balance: 0,
         reserved: 0,
-        available: 0,
       };
 
       const requiredCredits = 100;
@@ -560,8 +569,8 @@ describe('free User Abuse Prevention', () => {
         const creditsZeroed = balance;
 
         return {
-          newBalance,
           creditsZeroed,
+          newBalance,
         };
       };
 
@@ -612,10 +621,10 @@ describe('free User Abuse Prevention', () => {
   describe('free Round Complete Transaction Mechanics', () => {
     it('transaction type is DEDUCTION', () => {
       const transaction = {
-        type: CreditTransactionTypes.DEDUCTION,
         action: CreditActions.FREE_ROUND_COMPLETE,
         amount: -4900,
         balanceAfter: 0,
+        type: CreditTransactionTypes.DEDUCTION,
       };
 
       expect(transaction.type).toBe(CreditTransactionTypes.DEDUCTION);
@@ -712,8 +721,8 @@ describe('free User Abuse Prevention', () => {
     it('balance is exactly zero after round complete', () => {
       const zeroBalance = (currentBalance: number) => {
         return {
-          newBalance: 0,
           deducted: currentBalance,
+          newBalance: 0,
         };
       };
 
@@ -726,9 +735,9 @@ describe('free User Abuse Prevention', () => {
     it('reserved credits also zeroed out', () => {
       const zeroAllCredits = () => {
         return {
+          available: 0,
           balance: 0,
           reserved: 0,
-          available: 0,
         };
       };
 
@@ -771,9 +780,9 @@ describe('free User Abuse Prevention', () => {
       // Each operation requires credits, creating natural rate limiting
       const attemptOperation = (balance: number, cost: number) => {
         if (balance < cost) {
-          return { success: false, error: 'insufficient_credits' };
+          return { error: 'insufficient_credits', success: false };
         }
-        return { success: true, newBalance: balance - cost };
+        return { newBalance: balance - cost, success: true };
       };
 
       // First operation succeeds
@@ -809,12 +818,12 @@ describe('free User Abuse Prevention', () => {
         deduction: number,
       ) => {
         if (currentVersion !== expectedVersion) {
-          return { success: false, retry: true };
+          return { retry: true, success: false };
         }
         return {
-          success: true,
           newBalance: balance - deduction,
           newVersion: currentVersion + 1,
+          success: true,
         };
       };
 
@@ -862,13 +871,13 @@ describe('free User Abuse Prevention', () => {
       };
 
       const normalUsage = Array.from({ length: 5 }).fill(null).map(() => ({
-        type: CreditTransactionTypes.DEDUCTION,
         createdAt: new Date(),
+        type: CreditTransactionTypes.DEDUCTION,
       }));
 
       const suspiciousUsage = Array.from({ length: 15 }).fill(null).map(() => ({
-        type: CreditTransactionTypes.DEDUCTION,
         createdAt: new Date(),
+        type: CreditTransactionTypes.DEDUCTION,
       }));
 
       expect(detectAbusePattern(normalUsage)).toBe(false);
@@ -897,20 +906,20 @@ describe('free User Abuse Prevention', () => {
     it('audit trail tracks all credit operations', () => {
       const auditOperations = (transactions: { type: string; action: string | null }[]) => {
         const operations = {
-          grants: transactions.filter(t => t.type === CreditTransactionTypes.CREDIT_GRANT).length,
           deductions: transactions.filter(t => t.type === CreditTransactionTypes.DEDUCTION).length,
-          reservations: transactions.filter(t => t.type === CreditTransactionTypes.RESERVATION).length,
+          grants: transactions.filter(t => t.type === CreditTransactionTypes.CREDIT_GRANT).length,
           releases: transactions.filter(t => t.type === CreditTransactionTypes.RELEASE).length,
+          reservations: transactions.filter(t => t.type === CreditTransactionTypes.RESERVATION).length,
         };
 
         return operations;
       };
 
       const transactionHistory = [
-        { type: CreditTransactionTypes.CREDIT_GRANT, action: CreditActions.SIGNUP_BONUS },
-        { type: CreditTransactionTypes.RESERVATION, action: null },
-        { type: CreditTransactionTypes.DEDUCTION, action: null },
-        { type: CreditTransactionTypes.RELEASE, action: null },
+        { action: CreditActions.SIGNUP_BONUS, type: CreditTransactionTypes.CREDIT_GRANT },
+        { action: null, type: CreditTransactionTypes.RESERVATION },
+        { action: null, type: CreditTransactionTypes.DEDUCTION },
+        { action: null, type: CreditTransactionTypes.RELEASE },
       ];
 
       const audit = auditOperations(transactionHistory);
@@ -929,8 +938,9 @@ describe('free User Abuse Prevention', () => {
       ) => {
         // Negative available balance indicates data corruption
         const available = balance - reserved;
-        if (available < 0)
+        if (available < 0) {
           return { anomaly: true, type: 'negative_available' };
+        }
 
         // Free user with excessive balance is suspicious
         if (planType === PlanTypes.FREE && balance > CREDIT_CONFIG.SIGNUP_CREDITS) {
@@ -973,14 +983,14 @@ describe('free User Abuse Prevention', () => {
       };
 
       expect(getSessionUserId('valid-token')).toBe('user-123');
-      expect(getSessionUserId('forged-token')).toBe(null);
+      expect(getSessionUserId('forged-token')).toBeNull();
     });
 
     it('multiple sessions share same user limits', () => {
       // All sessions for same userId query same credit balance
       const userId = 'user-123';
-      const session1 = { userId, sessionId: 'session-1' };
-      const session2 = { userId, sessionId: 'session-2' };
+      const session1 = { sessionId: 'session-1', userId };
+      const session2 = { sessionId: 'session-2', userId };
 
       expect(session1.userId).toBe(session2.userId);
     });
@@ -1009,8 +1019,9 @@ describe('free User Abuse Prevention', () => {
         lastRefillDate: Date,
         now: Date,
       ) => {
-        if (planType !== PlanTypes.PAID)
+        if (planType !== PlanTypes.PAID) {
           return false;
+        }
 
         const nextRefillDate = new Date(lastRefillDate);
         nextRefillDate.setMonth(nextRefillDate.getMonth() + 1);
@@ -1028,12 +1039,12 @@ describe('free User Abuse Prevention', () => {
     });
 
     it('reservation release enables retry after failure', () => {
-      const handleStreamFailure = (reservedCredits: number, balance: number) => {
+      const handleStreamFailure = (_reservedCredits: number, balance: number) => {
         // On failure, release reservation and restore available balance
         return {
+          available: balance,
           balance,
           reserved: 0,
-          available: balance,
         };
       };
 
@@ -1043,15 +1054,15 @@ describe('free User Abuse Prevention', () => {
     });
 
     it('upgrade to paid plan removes all free tier restrictions', () => {
-      const applyUpgradeEffects = (userId: string, currentBalance: number) => {
+      const applyUpgradeEffects = (_userId: string, currentBalance: number) => {
         const paidPlan = CREDIT_CONFIG.PLANS.paid;
 
         return {
-          planType: PlanTypes.PAID,
           balance: currentBalance + paidPlan.monthlyCredits,
           monthlyCredits: paidPlan.monthlyCredits,
-          threadLimit: Infinity,
+          planType: PlanTypes.PAID,
           roundLimit: Infinity,
+          threadLimit: Infinity,
         };
       };
 
@@ -1092,10 +1103,10 @@ describe('free User Abuse Prevention', () => {
 
       const validateReservation = (amount: number, balance: number) => {
         if (amount > MAX_RESERVATION) {
-          return { valid: false, error: 'excessive_reservation' };
+          return { error: 'excessive_reservation', valid: false };
         }
         if (amount > balance) {
-          return { valid: false, error: 'insufficient_balance' };
+          return { error: 'insufficient_balance', valid: false };
         }
         return { valid: true };
       };
@@ -1107,9 +1118,9 @@ describe('free User Abuse Prevention', () => {
     it('concurrent thread creation attempts blocked by check', () => {
       // First thread creation sets hasThread = true
       // Concurrent requests will all fail thread limit check
-      const attemptThreadCreation = (userId: string, existingThreadCount: number) => {
+      const attemptThreadCreation = (_userId: string, existingThreadCount: number) => {
         if (existingThreadCount > 0) {
-          return { success: false, error: 'thread_limit_reached' };
+          return { error: 'thread_limit_reached', success: false };
         }
         return { success: true };
       };
@@ -1130,7 +1141,7 @@ describe('free User Abuse Prevention', () => {
           }
         }
 
-        return { successful: successful.length, blocked: requests - successful.length };
+        return { blocked: requests - successful.length, successful: successful.length };
       };
 
       const result = processRequests(10, 100, 500);
@@ -1144,9 +1155,9 @@ describe('free User Abuse Prevention', () => {
       };
 
       const threads = [
-        { id: 't1', deletedAt: null },
-        { id: 't2', deletedAt: new Date() },
-        { id: 't3', deletedAt: new Date() },
+        { deletedAt: null, id: 't1' },
+        { deletedAt: new Date(), id: 't2' },
+        { deletedAt: new Date(), id: 't3' },
       ];
 
       expect(countActiveThreads(threads)).toBe(1);
@@ -1187,8 +1198,8 @@ describe('free User Abuse Prevention', () => {
   describe('abuse Prevention Logic Tests', () => {
     it('free user journey: thread limit prevents second thread', async () => {
       const journey = {
-        step1: { hasThread: false, canCreate: true },
-        step2: { hasThread: true, canCreate: false },
+        step1: { canCreate: true, hasThread: false },
+        step2: { canCreate: false, hasThread: true },
       };
 
       expect(journey.step1.canCreate).toBe(true);
@@ -1207,9 +1218,9 @@ describe('free User Abuse Prevention', () => {
     it('paid users bypass all free user restrictions', async () => {
       const checkRestrictions = (planType: typeof PlanTypes[keyof typeof PlanTypes]) => {
         return {
-          threadLimit: planType === PlanTypes.FREE ? 1 : Infinity,
-          roundLimit: planType === PlanTypes.FREE ? 1 : Infinity,
           enforceFreeRoundComplete: planType === PlanTypes.FREE,
+          roundLimit: planType === PlanTypes.FREE ? 1 : Infinity,
+          threadLimit: planType === PlanTypes.FREE ? 1 : Infinity,
         };
       };
 

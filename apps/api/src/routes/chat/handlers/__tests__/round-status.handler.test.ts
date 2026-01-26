@@ -39,19 +39,19 @@ describe('round-status handler', () => {
     it('returns correct nextParticipantIndex when participants incomplete', () => {
       // Test the expected response shape
       const response: RoundStatus = {
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 3,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        nextParticipantIndex: 1,
-        needsModerator: false,
-        needsPreSearch: false,
-        userQuery: undefined,
         attachmentIds: undefined,
         canRecover: true,
-        recoveryAttempts: 0,
+        completedParticipants: 1,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        needsModerator: false,
+        needsPreSearch: false,
+        nextParticipantIndex: 1,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 3,
+        userQuery: undefined,
       };
 
       expect(response.nextParticipantIndex).toBe(1);
@@ -61,19 +61,19 @@ describe('round-status handler', () => {
 
     it('returns needsModerator true when all participants complete', () => {
       const response: RoundStatus = {
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.MODERATOR,
-        totalParticipants: 3,
-        completedParticipants: 3,
-        failedParticipants: 0,
-        nextParticipantIndex: null,
-        needsModerator: true,
-        needsPreSearch: false,
-        userQuery: undefined,
         attachmentIds: undefined,
         canRecover: true,
-        recoveryAttempts: 0,
+        completedParticipants: 3,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        needsModerator: true,
+        needsPreSearch: false,
+        nextParticipantIndex: null,
+        phase: RoundExecutionPhases.MODERATOR,
+        recoveryAttempts: 0,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 3,
+        userQuery: undefined,
       };
 
       expect(response.nextParticipantIndex).toBeNull();
@@ -82,19 +82,19 @@ describe('round-status handler', () => {
 
     it('returns needsPreSearch true when web search enabled and pending', () => {
       const response: RoundStatus = {
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 0,
-        failedParticipants: 0,
-        nextParticipantIndex: 0,
-        needsModerator: false,
-        needsPreSearch: true,
-        userQuery: 'What are best practices for React?',
         attachmentIds: undefined,
         canRecover: true,
-        recoveryAttempts: 0,
+        completedParticipants: 0,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        needsModerator: false,
+        needsPreSearch: true,
+        nextParticipantIndex: 0,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 2,
+        userQuery: 'What are best practices for React?',
       };
 
       expect(response.needsPreSearch).toBe(true);
@@ -103,19 +103,19 @@ describe('round-status handler', () => {
 
     it('returns canRecover false when max recovery attempts exceeded', () => {
       const response: RoundStatus = {
-        status: RoundExecutionStatuses.FAILED,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        nextParticipantIndex: 1,
-        needsModerator: false,
-        needsPreSearch: false,
-        userQuery: undefined,
         attachmentIds: undefined,
         canRecover: false,
-        recoveryAttempts: 4,
+        completedParticipants: 1,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        needsModerator: false,
+        needsPreSearch: false,
+        nextParticipantIndex: 1,
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 4,
+        status: RoundExecutionStatuses.FAILED,
+        totalParticipants: 2,
+        userQuery: undefined,
       };
 
       expect(response.canRecover).toBe(false);
@@ -127,12 +127,8 @@ describe('round-status handler', () => {
     it('should call computeRoundStatus with correct params', async () => {
       const mockDb = {
         query: {
-          chatThread: {
-            findFirst: vi.fn().mockResolvedValue({
-              id: 'thread-123',
-              userId: 'user-123',
-              enableWebSearch: false,
-            }),
+          chatMessage: {
+            findFirst: vi.fn().mockResolvedValue(null),
           },
           chatParticipant: {
             findMany: vi.fn().mockResolvedValue([
@@ -143,8 +139,12 @@ describe('round-status handler', () => {
           chatPreSearch: {
             findFirst: vi.fn().mockResolvedValue(null),
           },
-          chatMessage: {
-            findFirst: vi.fn().mockResolvedValue(null),
+          chatThread: {
+            findFirst: vi.fn().mockResolvedValue({
+              enableWebSearch: false,
+              id: 'thread-123',
+              userId: 'user-123',
+            }),
           },
         },
       };
@@ -152,40 +152,40 @@ describe('round-status handler', () => {
       mockGetDbAsync.mockResolvedValue(mockDb as never);
 
       mockComputeRoundStatus.mockResolvedValue({
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
         completedParticipants: 1,
+        error: null,
         failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
         hasModeratorMessage: false,
         isComplete: false,
-        error: null,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        status: RoundExecutionStatuses.RUNNING,
+        totalParticipants: 2,
       });
 
       mockGetRoundExecutionState.mockResolvedValue({
-        threadId: 'thread-123',
-        roundNumber: 1,
-        status: RoundExecutionStatuses.RUNNING,
-        phase: RoundExecutionPhases.PARTICIPANTS,
-        totalParticipants: 2,
-        completedParticipants: 1,
-        failedParticipants: 0,
-        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
-        moderatorStatus: null,
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-        error: null,
-        triggeredParticipants: [0],
         attachmentIds: undefined,
-        recoveryAttempts: 0,
+        completedAt: null,
+        completedParticipants: 1,
+        error: null,
+        failedParticipants: 0,
         maxRecoveryAttempts: 3,
+        moderatorStatus: null,
+        participantStatuses: { 0: ParticipantStreamStatuses.COMPLETED },
+        phase: RoundExecutionPhases.PARTICIPANTS,
+        recoveryAttempts: 0,
+        roundNumber: 1,
+        startedAt: new Date().toISOString(),
+        status: RoundExecutionStatuses.RUNNING,
+        threadId: 'thread-123',
+        totalParticipants: 2,
+        triggeredParticipants: [0],
       });
 
       mockIncrementRecoveryAttempts.mockResolvedValue({
-        canRecover: true,
         attempts: 1,
+        canRecover: true,
         maxAttempts: 3,
       });
 

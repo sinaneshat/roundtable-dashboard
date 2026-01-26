@@ -33,38 +33,38 @@ import { createChatStore } from '../store';
 
 function createThread(overrides?: Partial<ChatThread>): ChatThread {
   return {
-    id: 'thread-123',
-    userId: 'user-123',
-    title: 'Test Thread',
-    slug: 'test-thread',
-    previousSlug: null,
-    projectId: null,
-    mode: ChatModes.ANALYZING,
-    status: 'active',
+    createdAt: new Date(),
     enableWebSearch: false,
+    id: 'thread-123',
+    isAiGeneratedTitle: false,
     isFavorite: false,
     isPublic: false,
-    isAiGeneratedTitle: false,
-    metadata: null,
-    version: 1,
-    createdAt: new Date(),
-    updatedAt: new Date(),
     lastMessageAt: new Date(),
+    metadata: null,
+    mode: ChatModes.ANALYZING,
+    previousSlug: null,
+    projectId: null,
+    slug: 'test-thread',
+    status: 'active',
+    title: 'Test Thread',
+    updatedAt: new Date(),
+    userId: 'user-123',
+    version: 1,
     ...overrides,
   } as ChatThread;
 }
 
 function createParticipant(index: number, modelId = `model-${index}`): ChatParticipant {
   return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId,
-    role: `Participant ${index}`,
-    customRoleId: null,
-    priority: index,
-    isEnabled: true,
-    settings: null,
     createdAt: new Date(),
+    customRoleId: null,
+    id: `participant-${index}`,
+    isEnabled: true,
+    modelId,
+    priority: index,
+    role: `Participant ${index}`,
+    settings: null,
+    threadId: 'thread-123',
     updatedAt: new Date(),
   } as ChatParticipant;
 }
@@ -87,52 +87,52 @@ describe('isPatchInProgress Flag Behavior', () => {
 
   describe('initial State', () => {
     it('isPatchInProgress is false by default', () => {
-      expect(store.getState().isPatchInProgress).toBe(false);
+      expect(store.getState().isPatchInProgress).toBeFalsy();
     });
   });
 
   describe('flag Setting', () => {
     it('setIsPatchInProgress(true) sets the flag', () => {
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
     });
 
     it('setIsPatchInProgress(false) clears the flag', () => {
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
 
       store.getState().setIsPatchInProgress(false);
-      expect(store.getState().isPatchInProgress).toBe(false);
+      expect(store.getState().isPatchInProgress).toBeFalsy();
     });
 
     it('flag can be toggled multiple times', () => {
-      expect(store.getState().isPatchInProgress).toBe(false);
+      expect(store.getState().isPatchInProgress).toBeFalsy();
 
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
 
       store.getState().setIsPatchInProgress(false);
-      expect(store.getState().isPatchInProgress).toBe(false);
+      expect(store.getState().isPatchInProgress).toBeFalsy();
 
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
     });
   });
 
   describe('flag Reset on Navigation', () => {
     it('resetToOverview clears isPatchInProgress', () => {
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
 
       store.getState().resetToOverview();
-      expect(store.getState().isPatchInProgress).toBe(false);
+      expect(store.getState().isPatchInProgress).toBeFalsy();
     });
 
     it('initializeThread preserves isPatchInProgress during active operations', () => {
       // initializeThread preserves streaming state during active operations
       // This is intentional - if PATCH is in progress, navigation should not clear it
       store.getState().setIsPatchInProgress(true);
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
 
       store.getState().initializeThread(
         createThread({ id: 'different-thread' }),
@@ -143,7 +143,7 @@ describe('isPatchInProgress Flag Behavior', () => {
       // ✅ EXPECTED: isPatchInProgress is preserved during initializeThread
       // This is correct behavior - initializeThread preserves active streaming state
       // The PATCH handler (form-actions.ts) is responsible for clearing this flag
-      expect(store.getState().isPatchInProgress).toBe(true);
+      expect(store.getState().isPatchInProgress).toBeTruthy();
     });
   });
 });
@@ -170,8 +170,8 @@ describe('streaming Blocking When PATCH In Progress', () => {
       const state = store.getState();
 
       // Conditions for streaming: waiting to start, ready, no blocks
-      expect(state.isPatchInProgress).toBe(false);
-      expect(state.isWaitingForChangelog).toBe(false);
+      expect(state.isPatchInProgress).toBeFalsy();
+      expect(state.isWaitingForChangelog).toBeFalsy();
       expect(state.configChangeRoundNumber).toBeNull();
 
       // All blocking conditions are clear - streaming should be allowed
@@ -180,7 +180,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || state.isWaitingForChangelog
           || state.isPatchInProgress;
 
-      expect(shouldBlock).toBe(false);
+      expect(shouldBlock).toBeFalsy();
     });
 
     it('streaming is blocked when isPatchInProgress is true', () => {
@@ -192,7 +192,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || state.isWaitingForChangelog
           || state.isPatchInProgress;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('streaming is blocked when configChangeRoundNumber is set', () => {
@@ -204,7 +204,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || state.isWaitingForChangelog
           || state.isPatchInProgress;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('streaming is blocked when isWaitingForChangelog is true', () => {
@@ -216,7 +216,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || state.isWaitingForChangelog
           || state.isPatchInProgress;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
     });
 
     it('streaming is blocked when multiple flags are set', () => {
@@ -230,7 +230,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || state.isWaitingForChangelog
           || state.isPatchInProgress;
 
-      expect(shouldBlock).toBe(true);
+      expect(shouldBlock).toBeTruthy();
 
       // Clear one flag - still blocked
       store.getState().setIsPatchInProgress(false);
@@ -241,7 +241,7 @@ describe('streaming Blocking When PATCH In Progress', () => {
           || stateAfter.isWaitingForChangelog
           || stateAfter.isPatchInProgress;
 
-      expect(stillBlocked).toBe(true);
+      expect(stillBlocked).toBeTruthy();
     });
   });
 });
@@ -269,19 +269,19 @@ describe('race Condition Prevention', () => {
 
     // 1. User submits message - PATCH starts
     actions.setIsPatchInProgress(true);
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     // 2. Streaming effect runs but should be blocked
     const shouldBlockStreaming = store.getState().isPatchInProgress;
-    expect(shouldBlockStreaming).toBe(true);
+    expect(shouldBlockStreaming).toBeTruthy();
 
     // 3. PATCH completes successfully - flag cleared
     actions.setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
 
     // 4. Now streaming can proceed
     const canStreamNow = !store.getState().isPatchInProgress;
-    expect(canStreamNow).toBe(true);
+    expect(canStreamNow).toBeTruthy();
   });
 
   it('simulates PATCH failure - flag still cleared', async () => {
@@ -289,12 +289,12 @@ describe('race Condition Prevention', () => {
 
     // 1. PATCH starts
     actions.setIsPatchInProgress(true);
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     // 2. PATCH fails (in real code: catch block clears flag)
     // Even on failure, flag should be cleared to unblock UI
     actions.setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
   });
 
   it('simulates concurrent PATCH operations', async () => {
@@ -305,11 +305,11 @@ describe('race Condition Prevention', () => {
 
     // Second PATCH attempt should wait (in practice, UI prevents this)
     // But flag state is correct regardless
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     // First PATCH completes
     actions.setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
   });
 
   it('flag survives rapid state updates', () => {
@@ -322,11 +322,11 @@ describe('race Condition Prevention', () => {
     actions.setIsStreaming(true);
 
     // Flag should still be set
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     // After PATCH completes
     actions.setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
   });
 });
 
@@ -353,15 +353,15 @@ describe('isPatchInProgress Integration', () => {
     store.getState().setConfigChangeRoundNumber(1);
 
     // Verify all are set
-    expect(store.getState().isPatchInProgress).toBe(true);
-    expect(store.getState().isWaitingForChangelog).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
+    expect(store.getState().isWaitingForChangelog).toBeTruthy();
     expect(store.getState().configChangeRoundNumber).toBe(1);
 
     // Navigation should clear these
     store.getState().resetToOverview();
 
-    expect(store.getState().isPatchInProgress).toBe(false);
-    expect(store.getState().isWaitingForChangelog).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
+    expect(store.getState().isWaitingForChangelog).toBeFalsy();
     expect(store.getState().configChangeRoundNumber).toBeNull();
   });
 
@@ -373,8 +373,8 @@ describe('isPatchInProgress Integration', () => {
     store.getState().completeStreaming();
 
     // isPatchInProgress should not be affected by streaming completion
-    expect(store.getState().isPatchInProgress).toBe(true);
-    expect(store.getState().isStreaming).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
+    expect(store.getState().isStreaming).toBeFalsy();
   });
 });
 
@@ -417,22 +417,22 @@ describe('edge Cases', () => {
     store.getState().setIsPatchInProgress(true);
     store.getState().setIsPatchInProgress(true);
     store.getState().setIsPatchInProgress(true);
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
 
     // Set false multiple times
     store.getState().setIsPatchInProgress(false);
     store.getState().setIsPatchInProgress(false);
     store.getState().setIsPatchInProgress(false);
-    expect(store.getState().isPatchInProgress).toBe(false);
+    expect(store.getState().isPatchInProgress).toBeFalsy();
   });
 
   it('flag works with uninitialized store', () => {
     const freshStore = createChatStore();
 
     // Flag should work even without initializeThread
-    expect(freshStore.getState().isPatchInProgress).toBe(false);
+    expect(freshStore.getState().isPatchInProgress).toBeFalsy();
     freshStore.getState().setIsPatchInProgress(true);
-    expect(freshStore.getState().isPatchInProgress).toBe(true);
+    expect(freshStore.getState().isPatchInProgress).toBeTruthy();
   });
 
   it('flag persists through participant updates', () => {
@@ -445,6 +445,6 @@ describe('edge Cases', () => {
     ]);
 
     // Flag should still be set
-    expect(store.getState().isPatchInProgress).toBe(true);
+    expect(store.getState().isPatchInProgress).toBeTruthy();
   });
 });
