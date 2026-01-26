@@ -137,10 +137,9 @@ function NavigationHeaderComponent({
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
 
-  const { animatingThreadId, animationNewTitle, animationPhase, createdThreadId, displayedTitle, showInitialUI, storeThreadId, storeThreadTitle, thread } = useChatStore(
+  const { animatingThreadId, animationPhase, createdThreadId, displayedTitle, showInitialUI, storeThreadId, storeThreadTitle, thread } = useChatStore(
     useShallow(s => ({
       animatingThreadId: s.animatingThreadId,
-      animationNewTitle: s.newTitle,
       animationPhase: s.animationPhase,
       createdThreadId: s.createdThreadId,
       displayedTitle: s.displayedTitle,
@@ -218,6 +217,11 @@ function NavigationHeaderComponent({
   const effectiveThreadTitle = storeThreadTitle
     ?? routeThreadTitle
     ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null);
+
+  // Determine current thread ID for animation scoping
+  // Animation should only show if we're viewing the thread being animated
+  const currentThreadId = storeThreadId ?? routeThread?.id;
+  const isAnimatingCurrentThread = animatingThreadId === currentThreadId && currentThreadId !== null;
 
   const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
   const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
@@ -345,14 +349,14 @@ function NavigationHeaderComponent({
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
-                      ? (animatingThreadId && (animationPhase === 'deleting' || animationPhase === 'typing')
+                      ? (isAnimatingCurrentThread && (animationPhase === 'deleting' || animationPhase === 'typing')
                           ? (
                               <>
                                 {displayedTitle}
                                 <span className="animate-blink inline-block w-[2px] h-[1em] bg-current ml-[1px] align-middle" aria-hidden="true" />
                               </>
                             )
-                          : (animationNewTitle ?? currentPage.titleKey))
+                          : (effectiveThreadTitle ?? currentPage.titleKey))
                       : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   </BreadcrumbPage>
                 </BreadcrumbItem>

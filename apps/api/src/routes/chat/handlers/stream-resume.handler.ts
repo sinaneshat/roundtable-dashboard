@@ -10,6 +10,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { extractSessionToken } from '@/lib/auth';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
+import { rlog } from '@/lib/utils/dev-logger';
 import { clearThreadActiveStream, createLiveParticipantResumeStream, createWaitingParticipantStream, getActiveParticipantStreamId, getActivePreSearchStreamId, getNextParticipantToStream, getParticipantStreamChunks, getParticipantStreamMetadata, getPreSearchStreamChunks, getPreSearchStreamMetadata, getThreadActiveStream, updateParticipantStatus } from '@/services/streaming';
 import type { ApiEnv } from '@/types';
 import type { CheckRoundCompletionQueueMessage } from '@/types/queues';
@@ -127,7 +128,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     const { user } = c.auth();
     const { threadId } = c.validated.params;
 
-    console.error(`[STREAM-RESUME] ENTER tid=${threadId.slice(-8)} user=${user.id.slice(0, 8)}`);
+    rlog.resume('enter', `tid=${threadId.slice(-8)} user=${user.id.slice(0, 8)}`);
 
     // ✅ SESSION TOKEN: Extract for queue-based round orchestration
     const sessionToken = extractSessionToken(c.req.header('cookie'));
@@ -162,7 +163,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     });
     const currentRound = latestMessage?.roundNumber ?? 0;
 
-    console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} r=${currentRound} latestMsg=${latestMessage ? 'found' : 'none'}`);
+    rlog.resume('check', `tid=${threadId.slice(-8)} r=${currentRound} latestMsg=${latestMessage ? 'found' : 'none'}`);
 
     const preSearchStreamId = await getActivePreSearchStreamId(threadId, currentRound, c.env);
     if (preSearchStreamId) {
@@ -187,7 +188,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     const activeStream = await getThreadActiveStream(threadId, c.env);
 
-    console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} activeStream=${activeStream ? `P${activeStream.participantIndex} r${activeStream.roundNumber}` : 'none'}`);
+    rlog.resume('check', `tid=${threadId.slice(-8)} activeStream=${activeStream ? `P${activeStream.participantIndex} r${activeStream.roundNumber}` : 'none'}`);
 
     if (activeStream?.roundNumber === currentRound) {
       const nextParticipant = await getNextParticipantToStream(threadId, c.env);
@@ -360,7 +361,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
     // ✅ AI SDK PATTERN: Server-side waiting stream instead of 204 + client retry
     // Check if a round is in progress and we should wait for a stream
-    console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} checking dbValidatedNextParticipant...`);
+    rlog.resume('check', `tid=${threadId.slice(-8)} checking dbValidatedNextParticipant...`);
     const dbValidatedNextParticipant = await getDbValidatedNextParticipant(
       threadId,
       currentRound,
@@ -368,18 +369,18 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       0, // Start from P0
     );
 
-    console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} dbValidatedNextParticipant=${dbValidatedNextParticipant ? `P${dbValidatedNextParticipant.participantIndex}` : 'null (all complete)'}`);
+    rlog.resume('check', `tid=${threadId.slice(-8)} dbValidatedNext=${dbValidatedNextParticipant ? `P${dbValidatedNextParticipant.participantIndex}` : 'null (all complete)'}`);
 
     if (dbValidatedNextParticipant) {
       // ✅ FIX: P0 should be triggered by frontend, not waited for
       // Only create waiting streams for P1+ (backend-triggered participants)
       if (dbValidatedNextParticipant.participantIndex === 0) {
-        console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} P0 hasn't started - returning 204 (frontend triggers P0)`);
+        rlog.resume('check', `tid=${threadId.slice(-8)} P0 hasn't started - returning 204 (frontend triggers P0)`);
         return Responses.noContentWithHeaders();
       }
 
       // P1+ - create a waiting stream (backend will trigger these via queue)
-      console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} P${dbValidatedNextParticipant.participantIndex} incomplete - creating waiting stream`);
+      rlog.resume('check', `tid=${threadId.slice(-8)} P${dbValidatedNextParticipant.participantIndex} incomplete - creating waiting stream`);
 
       const waitingStream = createWaitingParticipantStream(
         threadId,
@@ -401,7 +402,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
       });
     }
 
-    console.error(`[STREAM-RESUME] tid=${threadId.slice(-8)} all complete or no participants - returning 204`);
+    rlog.resume('check', `tid=${threadId.slice(-8)} all complete or no participants - returning 204`);
     return Responses.noContentWithHeaders();
   },
 );

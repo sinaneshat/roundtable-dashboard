@@ -315,6 +315,28 @@ export type ChatStoreActions = {
   ) => void;
   clearSubscriptionState: () => void;
 
+  // === STREAMING TEXT (P1+ gradual UI updates) ===
+  /**
+   * Append streaming text to a participant's placeholder message.
+   * Creates placeholder if not exists, appends text if exists.
+   * Used for P1+ participants to show gradual streaming in UI.
+   */
+  appendEntityStreamingText: (
+    participantIndex: number,
+    text: string,
+    roundNumber: number,
+  ) => void;
+
+  /**
+   * Append streaming text to the moderator's placeholder message.
+   * Creates placeholder if not exists, appends text if exists.
+   * Used for gradual moderator streaming in UI.
+   */
+  appendModeratorStreamingText: (
+    text: string,
+    roundNumber: number,
+  ) => void;
+
   // === OPERATIONS ===
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], messages: UIMessage[]) => void;
   resetForThreadNavigation: () => void;

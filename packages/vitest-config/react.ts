@@ -1,7 +1,7 @@
 /// <reference types="vitest/config" />
 import type { UserConfig } from 'vitest/config';
 
-import { baseConfig } from './base';
+import { baseConfig } from './base.ts';
 
 /**
  * React/jsdom Vitest configuration for frontend packages.

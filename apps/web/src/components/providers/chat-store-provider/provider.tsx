@@ -21,12 +21,9 @@ import { useShallow } from 'zustand/react/shallow';
 import type { EntityType } from '@/hooks/utils';
 import { useMultiParticipantChat, useRoundSubscription } from '@/hooks/utils';
 import { useModeratorStream } from '@/hooks/utils/use-moderator-stream';
-import { queryKeys } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import { chatMessagesToUIMessages } from '@/lib/utils/message-transforms';
-import { getThreadMessagesService } from '@/services/api';
 import { ChatPhases, createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
@@ -83,16 +80,17 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const shouldSubscribe = useMemo(() => {
     const hasThread = Boolean(effectiveThreadId);
     const hasRound = currentRoundNumber !== null && currentRoundNumber >= 0;
-    const isActivePhase = phase === ChatPhases.PARTICIPANTS || phase === ChatPhases.MODERATOR || waitingToStartStreaming;
+    // Only enable subscriptions AFTER P0 trigger sets phase to PARTICIPANTS
+    const isActivePhase = phase === ChatPhases.PARTICIPANTS || phase === ChatPhases.MODERATOR;
     return hasThread && hasRound && isActivePhase;
-  }, [effectiveThreadId, currentRoundNumber, phase, waitingToStartStreaming]);
+  }, [effectiveThreadId, currentRoundNumber, phase]);
 
   // ============================================================================
   // ROUND SUBSCRIPTION - Backend-First Pattern
   // ============================================================================
 
   // Subscription callbacks - track streaming progress
-  const handleChunk = useCallback((entity: EntityType, _text: string, seq: number) => {
+  const handleChunk = useCallback((entity: EntityType, text: string, seq: number) => {
     // Only log first chunk per entity to reduce noise
     if (seq === 1) {
       rlog.stream('start', `${entity} streaming`);
@@ -102,16 +100,30 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       store.getState().updateEntitySubscriptionStatus('presearch', 'streaming', seq);
     } else if (entity === 'moderator') {
       store.getState().updateEntitySubscriptionStatus('moderator', 'streaming', seq);
+      // FIX: Re-enable moderator text appending - now uses same ID as useModeratorStream
+      // (${threadId}_r${roundNumber}_moderator) so it updates the existing placeholder
+      // instead of creating a duplicate. This is needed for gradual streaming when
+      // useModeratorStream gets 204 (another request handling) and subscription handles streaming.
+      if (text) {
+        store.getState().appendModeratorStreamingText(text, currentRoundNumber ?? 0);
+      }
     } else if (entity.startsWith('participant_')) {
       const index = Number.parseInt(entity.replace('participant_', ''), 10);
       store.getState().updateEntitySubscriptionStatus(index, 'streaming', seq);
+
+      // FIX: Only create streaming placeholders for P1+ participants
+      // P0 is handled by AI SDK which manages its own rendering directly
+      // Creating streaming_p0_r0 alongside AI SDK's message causes duplicates
+      // P1+ need streaming placeholders because they're not handled by AI SDK
+      if (text && index > 0) {
+        store.getState().appendEntityStreamingText(index, text, currentRoundNumber ?? 0);
+      }
     }
-  }, [store]);
+  }, [store, currentRoundNumber]);
 
   const handleEntityComplete = useCallback(async (entity: EntityType, lastSeq: number) => {
     rlog.stream('end', `${entity} complete lastSeq=${lastSeq}`);
     const state = store.getState();
-    const threadId = state.thread?.id || createdThreadId;
 
     if (entity === 'presearch') {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
@@ -123,27 +135,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       const index = Number.parseInt(entity.replace('participant_', ''), 10);
       state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
 
-      // P1+ participants: fetch messages from server to get their content
-      // P0 is handled by AI SDK, but for P1+ we need to fetch from server
-      if (index > 0 && threadId) {
-        rlog.sync('p-fetch', `P${index} complete - fetching messages from server`);
-        try {
-          const result = await queryClient.fetchQuery({
-            queryFn: () => getThreadMessagesService({ param: { id: threadId } }),
-            queryKey: queryKeys.threads.messages(threadId),
-            staleTime: 0,
-          });
-
-          if (result.success && result.data.items) {
-            const freshState = store.getState();
-            const uiMessages = chatMessagesToUIMessages(result.data.items, freshState.participants);
-            rlog.sync('p-fetch', `P${index} fetched ${uiMessages.length} messages`);
-            freshState.setMessages(uiMessages);
-          }
-        } catch (error) {
-          rlog.stuck('p-fetch', `P${index} message fetch failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
+      // NOTE: We no longer fetch messages from server on participant completion.
+      // Previously, this fetch would overwrite the gradually-streamed text,
+      // causing responses to appear "all at once" instead of streaming smoothly.
+      // The streamed text accumulated via appendEntityStreamingText is now preserved.
+      // Server messages are synced separately after the round completes.
 
       // Check if this was the last participant
       const subState = store.getState().subscriptionState;
@@ -156,7 +152,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         store.getState().onParticipantComplete(index);
       }
     }
-  }, [store, createdThreadId, queryClient]);
+  }, [store]);
 
   const handleRoundComplete = useCallback(() => {
     rlog.phase('subscription', `Round ${currentRoundNumber} COMPLETE`);
@@ -277,8 +273,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       return;
     }
 
-    // Dedupe check - prevent double-triggering for same thread
-    const triggerKey = `${effectiveThreadId}_p0`;
+    // Compute round number early for dedupe key
+    const roundNumber = getCurrentRoundNumber(storeMessages);
+
+    // Dedupe check - prevent double-triggering for same thread+round
+    const triggerKey = `${effectiveThreadId}_r${roundNumber}_p0`;
     if (lastTriggerKeyRef.current === triggerKey && hasTriggeredRef.current) {
       return;
     }
@@ -288,7 +287,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     lastTriggerKeyRef.current = triggerKey;
 
     // Start P0 streaming
-    const roundNumber = getCurrentRoundNumber(storeMessages);
     const enabledCount = participants.filter(p => p.isEnabled).length;
 
     rlog.phase('trigger', `START r${roundNumber} pIdx=0 phase→PARTICIPANTS enabledCount=${enabledCount}`);

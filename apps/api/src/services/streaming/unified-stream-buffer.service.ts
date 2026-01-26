@@ -48,6 +48,21 @@ import {
 } from '@/types/streaming';
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Format participant label for logging - converts sentinel values to readable names
+ * -1 (NO_PARTICIPANT_SENTINEL) and -99 (MODERATOR_PARTICIPANT_INDEX) → "Moderator"
+ */
+function formatParticipantLabel(participantIndex: number): string {
+  if (participantIndex < 0) {
+    return 'Moderator';
+  }
+  return `P${participantIndex}`;
+}
+
+// ============================================================================
 // KV KEY GENERATION - DISCRIMINATED BY STREAM PHASE
 // ============================================================================
 
@@ -555,7 +570,7 @@ export function createLiveParticipantResumeStream(
     filterReasoningOnReplay = false,
     maxPollDurationMs = 10 * 60 * 1000, // 10 minutes - generous for long AI streams
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds - just under Cloudflare's 100s idle timeout
-    pollIntervalMs = 100,
+    pollIntervalMs = 30, // 30ms for smoother streaming UX (was 100ms)
     startFromChunkIndex = 0,
   } = options;
   const encoder = new TextEncoder();
@@ -617,6 +632,11 @@ export function createLiveParticipantResumeStream(
               if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                 return;
               }
+              // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
+              // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+              await new Promise((resolve) => {
+                setTimeout(resolve, 5);
+              });
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -649,6 +669,13 @@ export function createLiveParticipantResumeStream(
                 if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                   return;
                 }
+                // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
+                // This allows the browser to receive and process each chunk individually
+                // instead of receiving all chunks in a single burst
+                // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+                await new Promise((resolve) => {
+                  setTimeout(resolve, 5);
+                });
               }
             }
             lastChunkIndex = chunks.length;
@@ -709,7 +736,7 @@ export function createWaitingParticipantStream(
     filterReasoningOnReplay = false,
     maxPollDurationMs = 10 * 60 * 1000, // 10 minutes
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds
-    pollIntervalMs = 100,
+    pollIntervalMs = 30, // 30ms for smoother streaming UX (was 100ms)
     startFromChunkIndex = 0,
     waitForStreamTimeoutMs = 30 * 1000, // 30 seconds to wait for stream to appear
   } = options;
@@ -753,15 +780,52 @@ export function createWaitingParticipantStream(
       let streamId: string | null = null;
 
       // Phase 1: Wait for stream to appear (server-side waiting, not client retry)
-      console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - waiting for stream to appear`);
+      const pLabel = formatParticipantLabel(participantIndex);
+      console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for stream to appear`);
 
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
-          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - timeout waiting for stream`);
+          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout waiting for stream`);
           const errorEvent = `data: {"type":"error","error":"Stream not available after ${waitForStreamTimeoutMs}ms"}\n\n`;
           safeEnqueue(controller, encoder.encode(errorEvent));
           safeClose(controller);
           return;
+        }
+
+        // ✅ SEQUENTIAL GUARD: Enforce proper ordering
+        // - For P1+, verify previous participants have completed
+        // - For moderator (negative index), verify ALL participants have completed
+        // This prevents race conditions where P1 starts before P0 finishes
+        const activeStream = await getThreadActiveStream(threadId, env);
+        if (activeStream?.roundNumber === roundNumber && activeStream.participantStatuses) {
+          const statuses = activeStream.participantStatuses;
+          const participantIndices = Object.keys(statuses).map(Number).filter(i => i >= 0);
+
+          if (participantIndex < 0) {
+            // Moderator: ALL participants must be complete
+            const allParticipantsComplete = participantIndices.length > 0 && participantIndices.every((i) => {
+              const status = statuses[i];
+              return status === 'completed' || status === 'failed';
+            });
+
+            if (!allParticipantsComplete) {
+              // Participants not done yet - keep waiting for moderator
+              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+              continue;
+            }
+          } else if (participantIndex > 0) {
+            // P1+: Previous participants must be complete
+            const allPreviousComplete = Array.from({ length: participantIndex }).every((_, i) => {
+              const status = statuses[i];
+              return status === 'completed' || status === 'failed';
+            });
+
+            if (!allPreviousComplete) {
+              // Previous participants not done yet - keep waiting
+              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+              continue;
+            }
+          }
         }
 
         // Check if stream has started
@@ -785,7 +849,7 @@ export function createWaitingParticipantStream(
         return;
       }
 
-      console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
+      console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
 
       // Phase 2: Stream data (same as createLiveParticipantResumeStream)
       let lastChunkIndex = startFromChunkIndex;
@@ -799,11 +863,15 @@ export function createWaitingParticipantStream(
             const chunk = initialChunks[i];
             if (chunk && shouldSendChunk(chunk)) {
               if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+              // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
+              // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+              await new Promise((resolve) => {
+                setTimeout(resolve, 5);
+              });
             }
           }
           lastChunkIndex = initialChunks.length;
           lastNewDataTime = Date.now();
-          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - sent ${initialChunks.length} initial chunks`);
         }
 
         // Check if already completed
@@ -812,7 +880,7 @@ export function createWaitingParticipantStream(
           initialMetadata?.status === StreamStatuses.COMPLETED
           || initialMetadata?.status === StreamStatuses.FAILED
         ) {
-          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - already ${initialMetadata.status}`);
+          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - already ${initialMetadata.status}`);
           safeClose(controller);
           return;
         }
@@ -832,6 +900,11 @@ export function createWaitingParticipantStream(
               const chunk = chunks[i];
               if (chunk && shouldSendChunk(chunk)) {
                 if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+                // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
+                // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+                await new Promise((resolve) => {
+                  setTimeout(resolve, 5);
+                });
               }
             }
             lastChunkIndex = chunks.length;
@@ -839,7 +912,7 @@ export function createWaitingParticipantStream(
           }
 
           if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
-            console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
+            console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
             safeClose(controller);
             return;
           }

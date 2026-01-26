@@ -896,8 +896,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
           // ✅ DEBUG: Concise retry decision log
           const errMsg = getErrorMessage(error).substring(0, 100);
-          const respBody = aiError?.responseBody?.substring(0, 200) || '-';
-          console.error(`[Stream:P${participantIndex}] RETRY? model=${participant.modelId} status=${statusCode ?? '-'} name=${errorName} msg=${errMsg} body=${respBody}`);
+          rlog.stream('check', `P${participantIndex} RETRY? model=${participant.modelId} status=${statusCode ?? '-'} name=${errorName} msg=${errMsg}`);
 
           // Don't retry AI SDK type validation errors - these are provider response format issues
           // that won't be fixed by retrying. The stream already partially succeeded.
@@ -1027,11 +1026,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const existingStatus = activeStream?.participantStatuses?.[effectiveParticipantIndex];
 
       if (existingStatus === ParticipantStreamStatuses.ACTIVE || existingStatus === ParticipantStreamStatuses.COMPLETED) {
-        console.error('[STREAM] SKIP: participant already active/completed in KV', {
-          existingStatus,
-          participantIndex: effectiveParticipantIndex,
-          roundNumber: currentRoundNumber,
-        });
+        rlog.race('skip', `P${effectiveParticipantIndex} r${currentRoundNumber} already ${existingStatus} in KV`);
         return Responses.raw(c, {
           message: `Participant ${effectiveParticipantIndex} already ${existingStatus}`,
           skipped: true,
@@ -1095,11 +1090,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
         if (hasContent) {
           // Already exists with content - return the message data (skip streaming)
-          console.error(`[STREAM] SKIP: participant message exists`, {
-            messageId: streamMessageId,
-            participantIndex: effectiveParticipantIndex,
-            roundNumber: currentRoundNumber,
-          });
+          rlog.race('skip', `P${effectiveParticipantIndex} r${currentRoundNumber} message exists msgId=${streamMessageId.slice(-8)}`);
           return Responses.raw(c, {
             id: existingMessage.id,
             metadata: existingMessage.metadata,
@@ -1111,11 +1102,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         }
 
         // Message exists but is incomplete - delete and regenerate
-        console.error(`[STREAM] Incomplete message found, deleting and regenerating`, {
-          messageId: streamMessageId,
-          participantIndex: effectiveParticipantIndex,
-          roundNumber: currentRoundNumber,
-        });
+        rlog.stream('check', `P${effectiveParticipantIndex} r${currentRoundNumber} incomplete msg found, regenerating`);
         await db.delete(tables.chatMessage).where(eq(tables.chatMessage.id, streamMessageId));
       }
 
@@ -1201,7 +1188,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           ? m.content.map((p: { type?: string }) => p.type?.[0] || '?').join('')
           : 't',
       ).join(',');
-      console.error(`[Stream:P${participantIndex}] START model=${participant.modelId} msgs=${modelMessages.length} parts=[${msgParts}] tokens~${estimatedInputTokens} attach=${resolvedAttachmentIds?.length ?? 0}`);
+      rlog.stream('start', `P${participantIndex} model=${participant.modelId} msgs=${modelMessages.length} parts=[${msgParts}] tokens~${estimatedInputTokens}`);
 
       // ✅ STREAM RESPONSE: Single stream with built-in AI SDK retry logic
       const finalResult = streamText({
@@ -1317,11 +1304,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
             if (needsModerator && c.env.ROUND_ORCHESTRATION_QUEUE) {
-              console.error('[STREAM] onError: last participant failed, queueing moderator', {
-                participantIndex: currentParticipantIdx,
-                roundNumber: currentRoundNumber,
-                threadId: threadId.slice(-8),
-              });
+              rlog.moderator('queue-start', `P${currentParticipantIdx} r${currentRoundNumber} failed, queueing moderator`);
 
               const queueMessage: TriggerModeratorQueueMessage = {
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator-error`,
@@ -1335,7 +1318,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
               try {
                 await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
-                console.error('[STREAM] onError: moderator queue send SUCCESS');
+                rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued after P${currentParticipantIdx} error`);
               } catch (queueError) {
                 console.error('[STREAM] onError: moderator queue send FAILED', queueError);
               }
@@ -1704,16 +1687,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
             // ✅ DEBUG: Log round completion check for memory extraction debugging
-            console.error('[Streaming] Round completion check', {
-              allParticipantsComplete,
-              hasMoreParticipants,
-              hasProjectId: !!thread.projectId,
-              needsModerator,
-              participantCount: participants.length,
-              projectId: thread.projectId,
-              roundNumber: currentRoundNumber,
-              threadId,
-            });
+            rlog.phase('round-check', `r${currentRoundNumber} P${currentParticipantIdx} allComplete=${allParticipantsComplete} more=${hasMoreParticipants} mod=${needsModerator}`);
 
             // ✅ FRAME LOGGING: Participant completion with handoff tracking
             const isRound1 = currentRoundNumber === 0;
@@ -1770,11 +1744,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               }
             } else if (needsModerator) {
               // ✅ DEBUG: Log moderator trigger attempt
-              console.error('[STREAM-MOD] needsModerator=true, queueing', {
-                hasQueue: !!c.env.ROUND_ORCHESTRATION_QUEUE,
-                roundNumber: currentRoundNumber,
-                threadId: threadId.slice(-8),
-              });
+              rlog.moderator('queue-start', `r${currentRoundNumber} needsModerator=true hasQueue=${!!c.env.ROUND_ORCHESTRATION_QUEUE}`);
 
             // ✅ TRIGGER MODERATOR via Queue
               const queueMessage: TriggerModeratorQueueMessage = {
@@ -1791,12 +1761,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               if (c.env.ROUND_ORCHESTRATION_QUEUE) {
                 try {
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
-                  console.error('[STREAM-MOD] Queue send SUCCESS');
+                  rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued`);
                 } catch (error) {
                   console.error('[RoundOrchestration] Failed to queue moderator:', error);
                 }
               } else {
-                console.error('[STREAM-MOD] NO QUEUE - moderator will not trigger!');
+                rlog.stuck('moderator', `r${currentRoundNumber} NO QUEUE - moderator will not trigger!`);
               }
             } else if (allParticipantsComplete && thread.projectId) {
               // =========================================================================
@@ -1835,13 +1805,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 userQuestion: userQuestionText,
               }).then(async (result) => {
                 if (result.extracted.length > 0) {
-                  console.error('[Streaming] Memories extracted for non-moderator thread', {
-                    memoryCount: result.extracted.length,
-                    memoryIds: result.memoryIds,
-                    projectId: thread.projectId,
-                    roundNumber: currentRoundNumber,
-                    threadId,
-                  });
+                  rlog.phase('memory', `r${currentRoundNumber} extracted ${result.extracted.length} memories for non-moderator thread`);
 
                   // ✅ Store memory event in KV for frontend to poll
                   const memoryEventKey = `memory-event:${threadId}:${currentRoundNumber}`;
@@ -1862,10 +1826,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                       JSON.stringify(memoryEventData),
                       { expirationTtl: 300 }, // 5 min TTL
                     );
-                    console.error('[Streaming] Memory event stored in KV', {
-                      key: memoryEventKey,
-                      memoryCount: result.extracted.length,
-                    });
+                    rlog.phase('memory', `r${currentRoundNumber} memory event stored in KV count=${result.extracted.length}`);
                   } catch (kvError) {
                     console.error('[Streaming] Failed to store memory event in KV:', kvError);
                   }

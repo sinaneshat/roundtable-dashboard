@@ -38,7 +38,6 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
   const queryClient = useQueryClient();
 
   const {
-    completeStreaming,
     hasModeratorStreamBeenTriggered,
     markModeratorStreamTriggered,
     messages,
@@ -48,7 +47,6 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
   } = useStore(
     store,
     useShallow(s => ({
-      completeStreaming: s.completeStreaming,
       hasModeratorStreamBeenTriggered: s.hasModeratorStreamBeenTriggered,
       markModeratorStreamTriggered: s.markModeratorStreamTriggered,
       messages: s.messages,
@@ -173,6 +171,16 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
       if (response.status === 204) {
         rlog.moderator('stream', '204 received - another request handling moderator, polling for completion');
 
+        // ✅ FIX: Check if subscription system is already handling moderator
+        // If subscription is streaming or complete, skip polling to avoid race condition
+        const subState = store.getState().subscriptionState;
+        if (subState.moderator.status === 'streaming' || subState.moderator.status === 'complete') {
+          rlog.moderator('stream', `204 but subscription already ${subState.moderator.status} - skipping poll`);
+          setState(prev => ({ ...prev, isStreaming: false }));
+          setIsModeratorStreaming(false);
+          return;
+        }
+
         // Poll for moderator message to appear in the database
         const pollForModerator = async (): Promise<boolean> => {
           const maxAttempts = 30; // 30 * 1000ms = 30 seconds max
@@ -194,8 +202,14 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
 
               if (moderatorMsg) {
                 rlog.moderator('poll', `found moderator after ${attempt + 1} attempts`);
-                const uiMessages = chatMessagesToUIMessages(result.data.items, participants);
-                setMessages(uiMessages);
+
+                // FIX: Use full replace instead of merge-update
+                // This brings in ALL server messages (including P1) and removes streaming placeholders
+                // The previous merge-update caused P1's server message to be missing and
+                // streaming_* placeholders to persist
+                const allServerMessages = chatMessagesToUIMessages(result.data.items, participants);
+                setMessages(allServerMessages);
+                rlog.moderator('poll', `replaced with ${allServerMessages.length} server messages`);
                 return true;
               }
             }
@@ -209,10 +223,10 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
           rlog.stuck('moderator-poll-timeout', `r${roundNumber} moderator not found after polling`);
         }
 
-        // Don't run the stream reading logic below
+        // Don't run the stream reading logic below - subscription system handles completion
         setState(prev => ({ ...prev, isStreaming: false }));
         setIsModeratorStreaming(false);
-        completeStreaming();
+        // ✅ FIX: Removed completeStreaming() - subscription system handles completion
         return;
       }
 
@@ -398,6 +412,8 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
           rlog.moderator('converted', `[${i}] id=${m.id?.slice(-8)} pIdx=${meta?.participantIndex} pId=${typeof meta?.participantId === 'string' ? meta.participantId.slice(-8) : 'null'}`);
         });
 
+        // After stream completion, server data is authoritative - use full replace
+        // The flashing issue only occurs during polling (204 case), not here
         setMessages(uiMessages);
         rlog.moderator('stream', `FETCHED final msgs=${uiMessages.length}`);
       }
@@ -430,9 +446,10 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
         isStreaming: false,
       }));
     } finally {
-      rlog.moderator('stream', 'FINALLY: phase→COMPLETE');
+      // ✅ FIX: Only cleanup local state - subscription system handles completion
+      // Removing completeStreaming() call prevents duplicate phase transitions
+      rlog.moderator('stream', 'FINALLY: cleanup only');
       setIsModeratorStreaming(false);
-      completeStreaming();
       abortRef.current = null;
     }
   }, [
@@ -441,7 +458,6 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
     hasModeratorStreamBeenTriggered,
     markModeratorStreamTriggered,
     setIsModeratorStreaming,
-    completeStreaming,
     queryClient,
     participants,
     setMessages,

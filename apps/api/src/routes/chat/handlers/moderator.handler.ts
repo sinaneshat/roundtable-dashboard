@@ -596,11 +596,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     await c.env.KV.put(moderatorLockKey, Date.now().toString(), { expirationTtl: 60 });
 
     // ✅ DEBUG: Log moderator handler entry (only reaches here if not locked)
-    console.error('[MOD-HANDLER] ENTER', {
-      roundNumber,
-      threadId: threadId.slice(-8),
-      userId: user.id.slice(0, 8),
-    });
+    rlog.moderator('enter', `r${roundNumber} tid=${threadId.slice(-8)} user=${user.id.slice(0, 8)}`);
     // Note: body.participantMessageIds is validated but D1 is source of truth for finding messages
 
     const db = await getDbAsync();

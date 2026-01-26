@@ -22,7 +22,7 @@
  * Simple phase machine: idle → participants → moderator → complete → idle
  */
 
-import { ScreenModes } from '@roundtable/shared';
+import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, ScreenModes, UIMessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { enableMapSet } from 'immer';
 import { devtools } from 'zustand/middleware';
@@ -162,7 +162,21 @@ export function createChatStore() {
         completeStreaming: () => {
           const state = get();
           const roundNumber = state.currentRoundNumber ?? 0;
+
+          // ✅ GUARD: Prevent duplicate completion - skip if already COMPLETE
+          if (state.phase === ChatPhases.COMPLETE) {
+            rlog.stream('check', `completeStreaming SKIP - already COMPLETE r${roundNumber}`);
+            return;
+          }
+
           rlog.stream('end', `completeStreaming r${roundNumber} phase=${state.phase}`);
+
+          // NOTE: We intentionally do NOT clean up streaming placeholders here.
+          // The setMessages call in useModeratorStream (both 200 and 204 paths) will
+          // replace ALL messages with server data, which naturally removes placeholders.
+          // Cleaning up here would cause a flash where placeholder text disappears
+          // then reappears when server messages arrive.
+          const cleanedMessages = state.messages;
 
           if (state.phase === ChatPhases.MODERATOR) {
             // ✅ FRAME 6/12: Log round completion when transitioning from MODERATOR
@@ -178,10 +192,14 @@ export function createChatStore() {
 
             set({
               ...STREAMING_COMPLETE_RESET,
+              messages: cleanedMessages,
               phase: ChatPhases.COMPLETE as ChatPhase,
             }, false, 'operations/completeStreaming');
           } else {
-            set(STREAMING_COMPLETE_RESET, false, 'operations/completeStreaming');
+            set({
+              ...STREAMING_COMPLETE_RESET,
+              messages: cleanedMessages,
+            }, false, 'operations/completeStreaming');
           }
         },
         completeTitleAnimation: () => {
@@ -325,42 +343,44 @@ export function createChatStore() {
          */
         onParticipantComplete: (participantIndex: number) => {
           const state = get();
+
+          // ✅ GUARD: Prevent transition if not in PARTICIPANTS phase
+          // This handles late callbacks after round is already complete
+          if (state.phase !== ChatPhases.PARTICIPANTS) {
+            rlog.phase('onParticipantComplete', `SKIP - not in PARTICIPANTS phase (current=${state.phase})`);
+            return;
+          }
+
           const enabledCount = state.participants.filter(p => p.isEnabled).length;
-          const isLastParticipant = participantIndex >= enabledCount - 1;
           const roundNumber = state.currentRoundNumber ?? 0;
           const isRound1 = roundNumber === 0;
 
-          if (isLastParticipant) {
+          // ✅ FIX: Check actual subscription state, not just index
+          // This correctly handles out-of-order completion (e.g., P1 finishes before P0)
+          const subState = state.subscriptionState;
+          const allParticipantsComplete = subState.participants.length > 0
+            && subState.participants.every(p => p.status === 'complete' || p.status === 'error');
+
+          if (allParticipantsComplete) {
             // Frame 5 (R1) / Frame 11→moderator transition (R2)
             // "All Participants Complete → Moderator Starts"
             if (isRound1) {
-              rlog.frame(5, 'all-participants-complete', `P${participantIndex} was LAST → Moderator will start`);
+              rlog.frame(5, 'all-participants-complete', `All ${enabledCount} participants complete → Moderator will start`);
             } else {
-              rlog.frame(11, 'all-participants-complete', `P${participantIndex} was LAST → Moderator will start`);
+              rlog.frame(11, 'all-participants-complete', `All ${enabledCount} participants complete → Moderator will start`);
             }
 
             rlog.phase('onParticipantComplete', `PARTICIPANTS→MODERATOR r${roundNumber} (all ${enabledCount} done)`);
-            rlog.handoff('baton-to-moderator', `P${participantIndex} → Moderator`);
+            rlog.handoff('baton-to-moderator', `All participants → Moderator`);
 
             set({
-              currentParticipantIndex: participantIndex,
+              currentParticipantIndex: enabledCount - 1, // Set to last participant index
               phase: ChatPhases.MODERATOR as ChatPhase,
             }, false, 'phase/toModerator');
           } else {
-            // Frame 4: "Participant 1 Complete → Participant 2 Starts"
-            const nextIndex = participantIndex + 1;
-
-            if (isRound1) {
-              rlog.frame(4, 'participant-handoff', `P${participantIndex}→P${nextIndex} (baton passed)`);
-            } else {
-              rlog.frame(11, 'participant-handoff', `P${participantIndex}→P${nextIndex}`);
-            }
-
-            rlog.handoff('baton-pass', `P${participantIndex} done → P${nextIndex} starts`);
-
-            set({
-              currentParticipantIndex: nextIndex,
-            }, false, 'phase/nextParticipant');
+            // Not all participants complete yet - this callback may have been called for
+            // an individual participant completion, log it but don't transition
+            rlog.phase('onParticipantComplete', `P${participantIndex} complete, waiting for others (${subState.participants.filter(p => p.status === 'complete' || p.status === 'error').length}/${enabledCount})`);
           }
         },
 
@@ -655,6 +675,112 @@ export function createChatStore() {
               }
             }
           }, false, `subscription/update-${entity}`);
+        },
+
+        /**
+         * Append streaming text to a participant's placeholder message.
+         * Creates placeholder if not exists, appends text if exists.
+         * Used for P1+ participants to show gradual streaming in UI.
+         */
+        appendEntityStreamingText: (participantIndex: number, text: string, roundNumber: number) => {
+          if (!text) {
+            return; // Skip empty text chunks
+          }
+
+          set((draft) => {
+            // Generate streaming message ID - matches pattern used elsewhere
+            const streamingMsgId = `streaming_p${participantIndex}_r${roundNumber}`;
+
+            // Find existing streaming placeholder
+            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+
+            if (existingIdx >= 0) {
+              // Append text to existing placeholder
+              const msg = draft.messages[existingIdx];
+              if (msg && msg.parts && msg.parts.length > 0) {
+                const firstPart = msg.parts[0];
+                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
+                  firstPart.text = firstPart.text + text;
+                }
+              }
+            } else {
+              // Create new streaming placeholder
+              // Look up participant info from participants array
+              const participant = draft.participants[participantIndex];
+              const modelId = participant?.modelId ?? 'unknown';
+              const participantId = participant?.id;
+
+              const streamingMessage: UIMessage = {
+                id: streamingMsgId,
+                metadata: {
+                  isStreaming: true,
+                  model: modelId,
+                  participantId,
+                  participantIndex,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text, type: MessagePartTypes.TEXT }],
+                role: UIMessageRoles.ASSISTANT,
+              };
+
+              draft.messages.push(streamingMessage);
+              rlog.stream('start', `P${participantIndex} r${roundNumber} streaming placeholder created`);
+            }
+          }, false, `streaming/appendText-p${participantIndex}`);
+        },
+
+        /**
+         * Append streaming text to the moderator's placeholder message.
+         * Creates placeholder if not exists, appends text if exists.
+         * Used for gradual moderator streaming in UI.
+         */
+        appendModeratorStreamingText: (text: string, roundNumber: number) => {
+          if (!text) {
+            return; // Skip empty text chunks
+          }
+
+          set((draft) => {
+            // FIX: Use the same ID format as useModeratorStream to avoid duplicate placeholders
+            // useModeratorStream creates: ${threadId}_r${roundNumber}_moderator
+            // Previously this used: streaming_moderator_r${roundNumber} which caused duplicates
+            const threadId = draft.thread?.id;
+            const streamingMsgId = threadId
+              ? `${threadId}_r${roundNumber}_moderator`
+              : `streaming_moderator_r${roundNumber}`; // Fallback if no thread yet
+
+            // Find existing streaming placeholder
+            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+
+            if (existingIdx >= 0) {
+              // Append text to existing placeholder
+              const msg = draft.messages[existingIdx];
+              if (msg && msg.parts && msg.parts.length > 0) {
+                const firstPart = msg.parts[0];
+                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
+                  firstPart.text = firstPart.text + text;
+                }
+              }
+            } else {
+              // Create new streaming placeholder for moderator
+              const streamingMessage: UIMessage = {
+                id: streamingMsgId,
+                metadata: {
+                  isStreaming: true,
+                  model: 'moderator',
+                  participantId: MODERATOR_NAME,
+                  participantIndex: MODERATOR_PARTICIPANT_INDEX,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text, type: MessagePartTypes.TEXT }],
+                role: UIMessageRoles.ASSISTANT,
+              };
+
+              draft.messages.push(streamingMessage);
+              rlog.stream('start', `Moderator r${roundNumber} streaming placeholder created`);
+            }
+          }, false, `streaming/appendText-moderator`);
         },
 
         // ============================================================

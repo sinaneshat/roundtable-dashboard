@@ -254,7 +254,8 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
 
     if (!participantStreamId) {
       // Stream not started yet - create waiting stream that polls for it
-      console.error(`[ENTITY-SUB] P${participantIndex} r${roundNumber} - no active stream, creating waiting stream`);
+      const pLabel = participantIndex < 0 ? 'Moderator' : `P${participantIndex}`;
+      console.log(`[ENTITY-SUB] ${pLabel} r${roundNumber} - no active stream, creating waiting stream`);
 
       const waitingStream = createWaitingParticipantStream(
         threadId,
@@ -395,7 +396,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
 
     if (!moderatorStreamId) {
       // Stream not started yet - create waiting stream
-      console.error(`[ENTITY-SUB] Moderator r${roundNumber} - no active stream, creating waiting stream`);
+      console.log(`[ENTITY-SUB] Moderator r${roundNumber} - no active stream, creating waiting stream`);
 
       const waitingStream = createWaitingParticipantStream(
         threadId,

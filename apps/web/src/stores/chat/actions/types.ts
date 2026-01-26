@@ -89,7 +89,7 @@ export const ChatThreadCacheSchema = z.object({
   updatedAt: z.union([z.date(), z.string()]),
   userId: z.string().min(1).optional(),
   version: z.number().int().nonnegative().optional(),
-}).strict();
+}); // Note: Not strict - threads may have additional fields from API
 
 /** Participant settings schema - allows extensible configuration */
 const ParticipantSettingsSchema = z.record(z.string(), z.union([
@@ -190,19 +190,18 @@ export const PaginatedPageCacheSchema = z.object({
       items: z.array(ChatThreadCacheSchema).optional(),
       pagination: z.object({
         nextCursor: z.string().nullable().optional(),
-      }).strict().optional(),
+      }).optional(),
     })
-    .strict()
     .optional(),
   success: z.boolean(),
-}).strict();
+}); // Note: Not strict - cache may have extra fields
 
 export type PaginatedPageCache = z.infer<typeof PaginatedPageCacheSchema>;
 
 export const InfiniteQueryCacheSchema = z.object({
   pageParams: z.array(z.string().nullable().optional()).optional(),
   pages: z.array(PaginatedPageCacheSchema).min(1),
-}).strict();
+}); // Note: Not strict - React Query cache may have extra internal fields
 
 export type InfiniteQueryCache = z.infer<typeof InfiniteQueryCacheSchema>;
 
@@ -245,9 +244,9 @@ export function validateThreadDetailResponseCache(data: unknown): ThreadDetailRe
 export const ThreadsListCachePageSchema = z.object({
   data: z.object({
     items: z.array(ChatThreadCacheSchema),
-  }).strict().optional(),
+  }).optional(),
   success: z.boolean(),
-}).strict();
+}); // Note: Not strict - cache may have extra fields
 
 export type ThreadsListCachePage = z.infer<typeof ThreadsListCachePageSchema>;
 
@@ -324,7 +323,7 @@ export type ThreadSlugStatusPayload = z.infer<typeof ThreadSlugStatusPayloadSche
 export const ThreadSlugStatusResponseSchema = z.object({
   data: ThreadSlugStatusPayloadSchema,
   success: z.literal(true),
-}).strict();
+}); // Note: Not strict - API may include meta fields
 
 export type ThreadSlugStatusResponse = z.infer<typeof ThreadSlugStatusResponseSchema>;
 

@@ -189,7 +189,8 @@ export function useRoundSubscription({
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
     const presearchComplete = !enablePreSearch || presearchSub.state.status === 'complete' || presearchSub.state.status === 'disabled';
-    const allParticipantsComplete = participantStates.every(
+    // Guard against empty array: .every() returns true on [], which would prematurely complete
+    const allParticipantsComplete = participantStates.length > 0 && participantStates.every(
       s => s.status === 'complete' || s.status === 'error',
     );
     const moderatorComplete = moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error';

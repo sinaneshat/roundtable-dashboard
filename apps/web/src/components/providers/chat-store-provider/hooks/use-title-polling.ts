@@ -19,6 +19,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 import { validateInfiniteQueryCache, validateSlugStatusResponse } from '@/stores/chat/actions/types';
 
@@ -86,6 +87,7 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
   useEffect(() => {
     if (createdThreadId && createdThreadId !== handledTitleRef.current) {
       if (pollingStartedForRef.current !== createdThreadId) {
+        rlog.init('titlePolling', `start tid=${createdThreadId.slice(-8)}`);
         pollingStartedForRef.current = createdThreadId;
         startPolling(createdThreadId, createdThreadProjectId);
       }
@@ -116,6 +118,8 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
       return;
     }
     handledTitleRef.current = pendingThreadId;
+
+    rlog.init('titlePolling', `ready tid=${pendingThreadId.slice(-8)} title="${slugData.title}"`);
 
     // Capture project ID before clearing state
     const projectId = pendingProjectId;
@@ -172,6 +176,7 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
     }
 
     // Optimistically update sidebar cache with new title (always - regardless of current view)
+    let cacheUpdated = false;
     queryClient.setQueriesData(
       {
         predicate: isListOrSidebarQuery,
@@ -194,6 +199,9 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
               if (thread.id !== pendingThreadId) {
                 return thread;
               }
+
+              cacheUpdated = true;
+              rlog.init('titlePolling', `cache-update tid=${thread.id.slice(-8)} "${thread.title}" → "${slugData.title}"`);
 
               // Preserve old slug as previousSlug so isChatActive() can match the URL
               // This ensures sidebar selection state is maintained during slug transition
@@ -219,6 +227,10 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
         };
       },
     );
+
+    if (!cacheUpdated) {
+      rlog.init('titlePolling', `cache-miss tid=${pendingThreadId.slice(-8)} - thread not in sidebar cache`);
+    }
 
     // Update project threads cache if this is a project thread
     if (projectId) {

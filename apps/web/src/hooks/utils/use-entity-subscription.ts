@@ -99,6 +99,27 @@ export function useEntitySubscription({
   const abortControllerRef = useRef<AbortController | null>(null);
   const retryCountRef = useRef(0);
   const lastSeqRef = useRef(initialLastSeq);
+  const prevRoundNumberRef = useRef(roundNumber);
+
+  // Reset lastSeq when round number changes to prevent stale sequence numbers
+  // This fixes the round 2+ submission failure where subscriptions detect "complete"
+  // instantly because they're using stale lastSeq values from the previous round
+  useEffect(() => {
+    if (prevRoundNumberRef.current !== roundNumber) {
+      rlog.stream(
+        'check',
+        `${phase} r${prevRoundNumberRef.current}→r${roundNumber} resetting lastSeq from ${lastSeqRef.current} to 0`,
+      );
+      lastSeqRef.current = 0;
+      retryCountRef.current = 0;
+      setState(prev => ({
+        ...prev,
+        lastSeq: 0,
+        status: 'idle',
+      }));
+      prevRoundNumberRef.current = roundNumber;
+    }
+  }, [roundNumber, phase]);
 
   // Update ref when lastSeq changes
   useEffect(() => {
@@ -260,6 +281,7 @@ export function useEntitySubscription({
 
         const decoder = new TextDecoder();
         let currentSeq = lastSeqRef.current;
+        let textDeltaCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -278,14 +300,29 @@ export function useEntitySubscription({
             // Strip SSE framing
             const line = rawLine.startsWith('data: ') ? rawLine.slice(6) : rawLine;
 
-            // Handle AI SDK data stream format (0:)
+            // Count ALL meaningful events for seq tracking (not just text)
+            // This ensures frontend seq matches backend chunk count
+            const isAiSdkEvent = line.startsWith('0:') || line.startsWith('8:') || line.startsWith('e:') || line.startsWith('d:');
+            const isJsonEvent = line.startsWith('{');
+
+            if (isAiSdkEvent || isJsonEvent) {
+              currentSeq++;
+              lastSeqRef.current = currentSeq;
+            }
+
+            // Handle AI SDK data stream format (0:) - call onTextChunk for actual text
             if (line.startsWith('0:')) {
               try {
                 const textData = JSON.parse(line.slice(2));
                 if (typeof textData === 'string') {
-                  currentSeq++;
+                  textDeltaCount++;
                   callbacks?.onTextChunk?.(textData, currentSeq);
-                  lastSeqRef.current = currentSeq;
+
+                  // CRITICAL FIX: Yield to React AFTER each chunk for gradual rendering
+                  // Without this, React 18 batches all state updates together
+                  await new Promise<void>((resolve) => {
+                    requestAnimationFrame(() => resolve());
+                  });
                 }
               } catch {
                 // Ignore parse errors
@@ -296,9 +333,13 @@ export function useEntitySubscription({
                 const event = JSON.parse(line);
                 const textContent = event.delta ?? event.textDelta;
                 if (event.type === 'text-delta' && typeof textContent === 'string') {
-                  currentSeq++;
+                  textDeltaCount++;
                   callbacks?.onTextChunk?.(textContent, currentSeq);
-                  lastSeqRef.current = currentSeq;
+
+                  // CRITICAL FIX: Yield to React AFTER each chunk for gradual rendering
+                  await new Promise<void>((resolve) => {
+                    requestAnimationFrame(() => resolve());
+                  });
                 }
               } catch {
                 // Ignore parse errors
@@ -306,6 +347,9 @@ export function useEntitySubscription({
             }
           }
         }
+
+        // Log summary instead of per-line (reduces clutter)
+        rlog.stream('check', `${logPrefix} parsed ${currentSeq} events, ${textDeltaCount} text deltas`);
 
         // Stream ended
         setState(prev => ({
