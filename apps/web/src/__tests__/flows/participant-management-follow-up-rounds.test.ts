@@ -73,7 +73,7 @@ describe('adding Participants Between Rounds', () => {
   });
 
   describe('single Participant Addition', () => {
-    it('should update expectedParticipantIds when adding one participant', () => {
+    it('should update expectedModelIds when adding one participant', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 2);
 
       const newParticipants = [
@@ -90,10 +90,10 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2']);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(3);
-      expect(store.getState().expectedParticipantIds).toContain('model-2');
+      expect(store.getState().expectedModelIds).toHaveLength(3);
+      expect(store.getState().expectedModelIds).toContain('model-2');
     });
 
     it('should reset currentParticipantIndex when adding participants', () => {
@@ -108,7 +108,7 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2']);
       store.getState().prepareForNewMessage('Second message', []);
 
       expect(store.getState().currentParticipantIndex).toBe(0);
@@ -124,12 +124,12 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2']);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
       expect(store.getState().streamingRoundNumber).toBe(1);
-      expect(store.getState().expectedParticipantIds).toHaveLength(3);
+      expect(store.getState().expectedModelIds).toHaveLength(3);
     });
   });
 
@@ -148,9 +148,9 @@ describe('adding Participants Between Rounds', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds(['model-0', 'model-1', 'model-2', 'model-3', 'model-4']);
+        .setExpectedModelIds(['model-0', 'model-1', 'model-2', 'model-3', 'model-4']);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(5);
+      expect(store.getState().expectedModelIds).toHaveLength(5);
       expect(store.getState().selectedParticipants).toHaveLength(5);
     });
 
@@ -165,7 +165,7 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2', 'model-3']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2', 'model-3']);
 
       const selectedParticipants = store.getState().selectedParticipants;
       expect(selectedParticipants[0]?.priority).toBe(0);
@@ -191,13 +191,13 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2']);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
       expect(store.getState().hasPreSearchBeenTriggered(0)).toBeTruthy();
       expect(store.getState().hasPreSearchBeenTriggered(1)).toBeFalsy();
-      expect(store.getState().expectedParticipantIds).toHaveLength(3);
+      expect(store.getState().expectedModelIds).toHaveLength(3);
     });
 
     it('should wait for pre-search before new participants stream', () => {
@@ -212,7 +212,7 @@ describe('adding Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2']);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
@@ -248,16 +248,16 @@ describe('removing Participants Between Rounds', () => {
   });
 
   describe('single Participant Removal', () => {
-    it('should update expectedParticipantIds when removing one participant', () => {
+    it('should update expectedModelIds when removing one participant', () => {
       setupStoreWithInitialRound(store, 3);
 
       const newParticipants = [createParticipantConfig(0), createParticipantConfig(1)];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1']);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(2);
-      expect(store.getState().expectedParticipantIds).not.toContain('model-2');
+      expect(store.getState().expectedModelIds).toHaveLength(2);
+      expect(store.getState().expectedModelIds).not.toContain('model-2');
     });
 
     it('should handle currentParticipantIndex bounds after removal', () => {
@@ -268,7 +268,7 @@ describe('removing Participants Between Rounds', () => {
       const newParticipants = [createParticipantConfig(0), createParticipantConfig(1)];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1']);
       store.getState().prepareForNewMessage('Second message', []);
 
       expect(store.getState().currentParticipantIndex).toBe(0);
@@ -282,9 +282,9 @@ describe('removing Participants Between Rounds', () => {
       const newParticipants = [createParticipantConfig(0), createParticipantConfig(1)];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1']);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(2);
+      expect(store.getState().expectedModelIds).toHaveLength(2);
       expect(store.getState().selectedParticipants).toHaveLength(2);
     });
 
@@ -297,7 +297,7 @@ describe('removing Participants Between Rounds', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-2']);
+      store.getState().setExpectedModelIds(['model-0', 'model-2']);
 
       const selectedParticipants = store.getState().selectedParticipants;
       expect(selectedParticipants[0]?.priority).toBe(0);
@@ -310,9 +310,9 @@ describe('removing Participants Between Rounds', () => {
       setupStoreWithInitialRound(store, 2);
 
       store.getState().setSelectedParticipants([]);
-      store.getState().setExpectedParticipantIds([]);
+      store.getState().setExpectedModelIds([]);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(0);
+      expect(store.getState().expectedModelIds).toHaveLength(0);
       expect(store.getState().selectedParticipants).toHaveLength(0);
     });
 
@@ -322,7 +322,7 @@ describe('removing Participants Between Rounds', () => {
       store.getState().setCurrentParticipantIndex(2);
 
       store.getState().setSelectedParticipants([]);
-      store.getState().setExpectedParticipantIds([]);
+      store.getState().setExpectedModelIds([]);
       store.getState().prepareForNewMessage('Second message', []);
 
       expect(store.getState().currentParticipantIndex).toBe(0);
@@ -398,9 +398,9 @@ describe('participant Role Changes Between Rounds', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([participant0.modelId, participant1.modelId]);
+        .setExpectedModelIds([participant0.modelId, participant1.modelId]);
 
-      expect(store.getState().expectedParticipantIds).toHaveLength(2);
+      expect(store.getState().expectedModelIds).toHaveLength(2);
       expect(store.getState().selectedParticipants).toHaveLength(2);
     });
   });
@@ -525,15 +525,15 @@ describe('multiple Participant Changes in Same Submission', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-3']);
+      store.getState().setExpectedModelIds(['model-0', 'model-3']);
 
       expect(store.getState().selectedParticipants).toHaveLength(2);
       expect(store.getState().selectedParticipants[0]?.role).toBe('Updated Role');
       expect(store.getState().selectedParticipants[1]?.id).toBe('participant-3');
-      expect(store.getState().expectedParticipantIds).toContain('model-0');
-      expect(store.getState().expectedParticipantIds).toContain('model-3');
-      expect(store.getState().expectedParticipantIds).not.toContain('model-1');
-      expect(store.getState().expectedParticipantIds).not.toContain('model-2');
+      expect(store.getState().expectedModelIds).toContain('model-0');
+      expect(store.getState().expectedModelIds).toContain('model-3');
+      expect(store.getState().expectedModelIds).not.toContain('model-1');
+      expect(store.getState().expectedModelIds).not.toContain('model-2');
     });
 
     it('should reset state correctly across complex changes', () => {
@@ -549,11 +549,11 @@ describe('multiple Participant Changes in Same Submission', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-0', 'model-1', 'model-2', 'model-3']);
+      store.getState().setExpectedModelIds(['model-0', 'model-1', 'model-2', 'model-3']);
       store.getState().prepareForNewMessage('Second message', []);
 
       expect(store.getState().currentParticipantIndex).toBe(0);
-      expect(store.getState().expectedParticipantIds).toHaveLength(4);
+      expect(store.getState().expectedModelIds).toHaveLength(4);
     });
   });
 
@@ -577,11 +577,11 @@ describe('multiple Participant Changes in Same Submission', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['new-model-10', 'new-model-11', 'new-model-12']);
+      store.getState().setExpectedModelIds(['new-model-10', 'new-model-11', 'new-model-12']);
 
       expect(store.getState().selectedParticipants).toHaveLength(3);
-      expect(store.getState().expectedParticipantIds).toHaveLength(3);
-      expect(store.getState().expectedParticipantIds).toEqual([
+      expect(store.getState().expectedModelIds).toHaveLength(3);
+      expect(store.getState().expectedModelIds).toEqual([
         'new-model-10',
         'new-model-11',
         'new-model-12',
@@ -601,7 +601,7 @@ describe('multiple Participant Changes in Same Submission', () => {
       ];
 
       store.getState().setSelectedParticipants(newParticipants);
-      store.getState().setExpectedParticipantIds(['model-10', 'model-11', 'model-12', 'model-13']);
+      store.getState().setExpectedModelIds(['model-10', 'model-11', 'model-12', 'model-13']);
       store.getState().prepareForNewMessage('Second message', []);
 
       expect(store.getState().currentParticipantIndex).toBe(0);
@@ -691,7 +691,7 @@ describe('stream Order Updates With Participant Changes', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([
+        .setExpectedModelIds([
           p2.modelId,
           p0.modelId,
           p1.modelId,
@@ -759,8 +759,8 @@ describe('stream Order Updates With Participant Changes', () => {
     });
   });
 
-  describe('expectedParticipantIds Order Consistency', () => {
-    it('should maintain order consistency between selectedParticipants and expectedParticipantIds', () => {
+  describe('expectedModelIds Order Consistency', () => {
+    it('should maintain order consistency between selectedParticipants and expectedModelIds', () => {
       const initialParticipants = setupStoreWithInitialRound(store, 3);
 
       const p0 = initialParticipants[0];
@@ -791,7 +791,7 @@ describe('stream Order Updates With Participant Changes', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([
+        .setExpectedModelIds([
           p1.modelId,
           p0.modelId,
           p2.modelId,
@@ -803,7 +803,7 @@ describe('stream Order Updates With Participant Changes', () => {
         p2.modelId,
       ];
 
-      expect(store.getState().expectedParticipantIds).toEqual(expectedOrder);
+      expect(store.getState().expectedModelIds).toEqual(expectedOrder);
     });
 
     it('should stream participants in correct order after reordering', () => {
@@ -831,12 +831,12 @@ describe('stream Order Updates With Participant Changes', () => {
       store.getState().setSelectedParticipants(newParticipants);
       store
         .getState()
-        .setExpectedParticipantIds([p1.modelId, p0.modelId]);
+        .setExpectedModelIds([p1.modelId, p0.modelId]);
       store.getState().prepareForNewMessage('Second message', []);
       store.getState().setStreamingRoundNumber(1);
 
-      expect(store.getState().expectedParticipantIds[0]).toBe(p1.modelId);
-      expect(store.getState().expectedParticipantIds[1]).toBe(p0.modelId);
+      expect(store.getState().expectedModelIds[0]).toBe(p1.modelId);
+      expect(store.getState().expectedModelIds[1]).toBe(p0.modelId);
     });
   });
 });

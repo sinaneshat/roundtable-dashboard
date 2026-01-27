@@ -54,8 +54,8 @@ import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractSessionToken } from '@/lib/auth';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { rlog } from '@/lib/utils/dev-logger';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import {
   AI_RETRY_CONFIG,
   AI_TIMEOUT_CONFIG,
@@ -1746,7 +1746,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               // ✅ DEBUG: Log moderator trigger attempt
               rlog.moderator('queue-start', `r${currentRoundNumber} needsModerator=true hasQueue=${!!c.env.ROUND_ORCHESTRATION_QUEUE}`);
 
-            // ✅ TRIGGER MODERATOR via Queue
+              // ✅ TRIGGER MODERATOR via Queue
               const queueMessage: TriggerModeratorQueueMessage = {
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
                 queuedAt: new Date().toISOString(),

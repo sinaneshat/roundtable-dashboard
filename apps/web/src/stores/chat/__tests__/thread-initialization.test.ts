@@ -28,7 +28,7 @@ import {
 import type { ChatStoreApi } from '@/stores/chat';
 import { ChatPhases } from '@/stores/chat/store-schemas';
 
-describe('Thread Initialization', () => {
+describe('thread Initialization', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -580,7 +580,7 @@ describe('Thread Initialization', () => {
   // Phase preservation during streaming
   // ==========================================================================
 
-  describe('Phase preservation during streaming', () => {
+  describe('phase preservation during streaming', () => {
     it('should preserve pending state if waitingToStartStreaming is true', () => {
       store.getState().setWaitingToStartStreaming(true);
 
@@ -686,7 +686,7 @@ describe('Thread Initialization', () => {
   // Message handling (setMessages)
   // ==========================================================================
 
-  describe('Message handling', () => {
+  describe('message handling', () => {
     it('setMessages should update messages array', () => {
       const messages: UIMessage[] = [
         createTestUserMessage({
@@ -826,7 +826,7 @@ describe('Thread Initialization', () => {
   // State consistency during thread navigation
   // ==========================================================================
 
-  describe('State consistency during thread navigation', () => {
+  describe('state consistency during thread navigation', () => {
     it('should maintain consistent state after multiple navigations', () => {
       // Navigate to thread 1
       const thread1 = createMockThread({ id: 'thread-1' });

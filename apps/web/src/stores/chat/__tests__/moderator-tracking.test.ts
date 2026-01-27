@@ -15,9 +15,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockParticipants, createMockThread, createTestChatStore } from '@/lib/testing';
 import type { ChatStoreApi } from '@/stores/chat';
-import { ChatPhases, type EntityStatus } from '@/stores/chat/store-schemas';
+import type { EntityStatus } from '@/stores/chat/store-schemas';
+import { ChatPhases } from '@/stores/chat/store-schemas';
 
-describe('Moderator Tracking', () => {
+describe('moderator Tracking', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {

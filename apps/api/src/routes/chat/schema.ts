@@ -1194,6 +1194,40 @@ export type AddParticipantRequest = z.infer<typeof AddParticipantRequestSchema>;
 export type UpdateParticipantRequest = z.infer<typeof UpdateParticipantRequestSchema>;
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type StreamChatRequest = z.infer<typeof StreamChatRequestSchema>;
+
+// ============================================================================
+// START ROUND - Queue-based round orchestration
+// ============================================================================
+
+/**
+ * Request schema for starting a round with queue-based orchestration.
+ * Used when web search is enabled - triggers presearch → P0 → P1 → ... → moderator
+ * all via backend queue orchestration.
+ */
+export const StartRoundRequestSchema = z.object({
+  attachmentIds: z.array(z.string()).optional().openapi({
+    description: 'Upload IDs for attachments',
+    example: ['01HXYZ123ABC', '01HXYZ456DEF'],
+  }),
+  enableWebSearch: z.boolean().optional().openapi({
+    description: 'Enable web search for this round. If true, presearch will be triggered first.',
+    example: true,
+  }),
+  message: UIMessageSchema.openapi({
+    description: 'User message in AI SDK UIMessage format',
+  }),
+}).openapi('StartRoundRequest');
+
+export type StartRoundRequest = z.infer<typeof StartRoundRequestSchema>;
+
+export const StartRoundResponseSchema = createApiResponseSchema(z.object({
+  roundNumber: RoundNumberSchema,
+  status: z.enum(['queued', 'already_active']),
+  threadId: z.string(),
+})).openapi('StartRoundResponse');
+
+export type StartRoundResponse = z.infer<typeof StartRoundResponseSchema>;
+
 export type ChatCustomRole = z.infer<typeof ChatCustomRoleSchema>;
 export type CreateCustomRoleRequest = z.infer<typeof CreateCustomRoleRequestSchema>;
 export type UpdateCustomRoleRequest = z.infer<typeof UpdateCustomRoleRequestSchema>;

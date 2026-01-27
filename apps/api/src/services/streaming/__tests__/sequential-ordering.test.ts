@@ -56,16 +56,16 @@ vi.mock('../unified-stream-buffer.service', async (importOriginal) => {
         roundNumber: number,
         participantIndex: number,
       ) => {
-        getActiveParticipantStreamIdCalls.push({ threadId, roundNumber, participantIndex });
+        getActiveParticipantStreamIdCalls.push({ participantIndex, roundNumber, threadId });
         const key = `${threadId}:r${roundNumber}:p${participantIndex}`;
         return mockStreamIds[key] ?? null;
       },
     ),
     getParticipantStreamChunks: vi.fn(async () => []),
     getParticipantStreamMetadata: vi.fn(async () => ({
-      status: 'completed',
       chunkCount: 0,
       createdAt: Date.now(),
+      status: 'completed',
     })),
   };
 });
@@ -80,15 +80,15 @@ vi.mock('../unified-stream-buffer.service', async (importOriginal) => {
 function createMockActiveStream(
   roundNumber: number,
   participantStatuses: Record<number, string>,
-  totalParticipants: number = 3,
+  totalParticipants = 3,
 ): ThreadActiveStream {
   return {
-    streamId: `thread-123_r${roundNumber}_p0`,
-    roundNumber,
-    participantIndex: 0,
-    totalParticipants,
     createdAt: new Date().toISOString(),
+    participantIndex: 0,
     participantStatuses: participantStatuses as Record<number, typeof ParticipantStreamStatuses.ACTIVE>,
+    roundNumber,
+    streamId: `thread-123_r${roundNumber}_p0`,
+    totalParticipants,
   };
 }
 
@@ -109,7 +109,7 @@ function setMockStreamId(
 // Tests
 // ============================================================================
 
-describe('Sequential Participant Ordering', () => {
+describe('sequential Participant Ordering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getThreadActiveStreamCalls = [];
@@ -123,7 +123,7 @@ describe('Sequential Participant Ordering', () => {
   // ==========================================================================
 
   describe('baton passing order', () => {
-    it('P0 should start immediately without waiting for previous participants', () => {
+    it('p0 should start immediately without waiting for previous participants', () => {
       // P0 has no previous participants to wait for
       const participantIndex = 0;
       const roundNumber = 1;
@@ -140,7 +140,7 @@ describe('Sequential Participant Ordering', () => {
       expect(shouldWait).toBe(false);
     });
 
-    it('P1 should wait for P0 to complete before starting', () => {
+    it('p1 should wait for P0 to complete before starting', () => {
       const roundNumber = 1;
 
       // Given: P0 is still active (not completed)
@@ -157,7 +157,7 @@ describe('Sequential Participant Ordering', () => {
       expect(p0Complete).toBe(false);
     });
 
-    it('P1 should proceed when P0 is completed', () => {
+    it('p1 should proceed when P0 is completed', () => {
       const roundNumber = 1;
 
       // Given: P0 has completed
@@ -174,7 +174,7 @@ describe('Sequential Participant Ordering', () => {
       expect(p0Complete).toBe(true);
     });
 
-    it('P2 should wait for both P0 and P1 to complete', () => {
+    it('p2 should wait for both P0 and P1 to complete', () => {
       const roundNumber = 1;
       const participantIndex = 2;
 
@@ -195,7 +195,7 @@ describe('Sequential Participant Ordering', () => {
       expect(allPreviousComplete).toBe(false);
     });
 
-    it('P2 should proceed when P0 and P1 are both completed', () => {
+    it('p2 should proceed when P0 and P1 are both completed', () => {
       const roundNumber = 1;
       const participantIndex = 2;
 
@@ -216,7 +216,7 @@ describe('Sequential Participant Ordering', () => {
       expect(allPreviousComplete).toBe(true);
     });
 
-    it('Moderator should wait for ALL participants to complete', () => {
+    it('moderator should wait for ALL participants to complete', () => {
       const roundNumber = 1;
       const participantIndex = -1; // Moderator uses negative index
 
@@ -240,7 +240,7 @@ describe('Sequential Participant Ordering', () => {
       expect(allParticipantsComplete).toBe(false);
     });
 
-    it('Moderator should proceed when ALL participants are completed', () => {
+    it('moderator should proceed when ALL participants are completed', () => {
       const roundNumber = 1;
       const participantIndex = -1;
 
@@ -311,12 +311,12 @@ describe('Sequential Participant Ordering', () => {
 
       // Given: No participant statuses recorded yet
       mockThreadActiveStream = {
-        streamId: 'thread-123_r1_p0',
-        roundNumber,
-        participantIndex: 0,
-        totalParticipants: 3,
         createdAt: new Date().toISOString(),
+        participantIndex: 0,
         participantStatuses: {},
+        roundNumber,
+        streamId: 'thread-123_r1_p0',
+        totalParticipants: 3,
       };
 
       // When: P1 checks previous participant status
@@ -469,7 +469,7 @@ describe('Sequential Participant Ordering', () => {
   // ==========================================================================
 
   describe('round boundary ordering', () => {
-    it('Round 2 should not be affected by Round 1 participant statuses', () => {
+    it('round 2 should not be affected by Round 1 participant statuses', () => {
       const targetRound = 2;
       const participantIndex = 0; // P0 of round 2
 

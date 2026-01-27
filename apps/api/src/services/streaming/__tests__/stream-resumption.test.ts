@@ -34,23 +34,27 @@ function createMockKV() {
   const store = new Map<string, string>();
 
   return {
+    // Test helpers
+    _clear: () => store.clear(),
+    _getStore: () => store,
+    _setRaw: (key: string, value: string) => store.set(key, value),
     delete: vi.fn(async (key: string) => {
       store.delete(key);
     }),
     get: vi.fn(async (key: string, type?: string) => {
       const value = store.get(key);
-      if (!value) return null;
-      if (type === 'json') return JSON.parse(value);
+      if (!value) {
+        return null;
+      }
+      if (type === 'json') {
+        return JSON.parse(value);
+      }
       return value;
     }),
     list: vi.fn(async () => ({ keys: [] })),
     put: vi.fn(async (key: string, value: string, _options?: { expirationTtl?: number }) => {
       store.set(key, value);
     }),
-    // Test helpers
-    _clear: () => store.clear(),
-    _getStore: () => store,
-    _setRaw: (key: string, value: string) => store.set(key, value),
   };
 }
 
@@ -96,7 +100,9 @@ async function consumeStream(stream: ReadableStream<Uint8Array>): Promise<string
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       chunks.push(decoder.decode(value));
     }
   } finally {
@@ -450,7 +456,7 @@ describe('stream resumption', () => {
   // ==========================================================================
 
   describe('resumption scenarios from FLOW_DOCUMENTATION', () => {
-    describe('SCENARIO 1: User refreshes mid-P1', () => {
+    describe('sCENARIO 1: User refreshes mid-P1', () => {
       it('should load P0 from D1 (complete) and resume P1 from lastSeq in KV', () => {
         /**
          * SCENARIO 1: User refreshes mid-P1
@@ -489,7 +495,7 @@ describe('stream resumption', () => {
       });
     });
 
-    describe('SCENARIO 2: User returns after round complete', () => {
+    describe('sCENARIO 2: User returns after round complete', () => {
       it('should load all messages from D1 when round is complete', () => {
         /**
          * SCENARIO 2: User returns after round complete
@@ -521,7 +527,7 @@ describe('stream resumption', () => {
       });
     });
 
-    describe('SCENARIO 3: User returns mid-moderator', () => {
+    describe('sCENARIO 3: User returns mid-moderator', () => {
       it('should load P0-PN from D1 and resume moderator from KV', () => {
         /**
          * SCENARIO 3: User returns mid-moderator
@@ -573,14 +579,16 @@ describe('stream resumption', () => {
       ];
 
       const shouldSendChunk = (chunk: StreamChunk): boolean => {
-        if (!filterReasoningOnReplay) return true;
+        if (!filterReasoningOnReplay) {
+          return true;
+        }
         return chunk.event !== 'reasoning-delta';
       };
 
       const filteredChunks = chunks.filter(shouldSendChunk);
 
       expect(filteredChunks).toHaveLength(3);
-      expect(filteredChunks.every((c) => c.event !== 'reasoning-delta')).toBe(true);
+      expect(filteredChunks.every(c => c.event !== 'reasoning-delta')).toBe(true);
     });
 
     it('should send all events when filterReasoningOnReplay is false', () => {
@@ -592,7 +600,9 @@ describe('stream resumption', () => {
       ];
 
       const shouldSendChunk = (chunk: StreamChunk): boolean => {
-        if (!filterReasoningOnReplay) return true;
+        if (!filterReasoningOnReplay) {
+          return true;
+        }
         return chunk.event !== 'reasoning-delta';
       };
 
@@ -610,7 +620,9 @@ describe('stream resumption', () => {
       ];
 
       const shouldSendChunk = (chunk: StreamChunk): boolean => {
-        if (!filterReasoningOnReplay) return true;
+        if (!filterReasoningOnReplay) {
+          return true;
+        }
         return chunk.event !== 'reasoning-delta';
       };
 
@@ -794,7 +806,9 @@ describe('stream resumption', () => {
       let isClosed = false;
 
       const safeClose = () => {
-        if (isClosed) return;
+        if (isClosed) {
+          return;
+        }
         isClosed = true;
       };
 
@@ -807,11 +821,13 @@ describe('stream resumption', () => {
     });
 
     it('should handle enqueue when controller is closed', () => {
-      let isClosed = true;
+      const isClosed = true;
       let enqueueCalled = false;
 
       const safeEnqueue = () => {
-        if (isClosed) return false;
+        if (isClosed) {
+          return false;
+        }
         enqueueCalled = true;
         return true;
       };
@@ -907,7 +923,9 @@ describe('stream resumption', () => {
       ];
 
       const shouldSendChunk = (chunk: StreamChunk): boolean => {
-        if (!filterReasoningOnReplay) return true;
+        if (!filterReasoningOnReplay) {
+          return true;
+        }
         return chunk.event !== 'reasoning-delta';
       };
 

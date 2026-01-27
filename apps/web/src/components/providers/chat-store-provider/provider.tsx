@@ -24,6 +24,7 @@ import { useModeratorStream } from '@/hooks/utils/use-moderator-stream';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import { startRoundService } from '@/services/api/chat';
 import { ChatPhases, createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
@@ -95,31 +96,38 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     if (seq === 1) {
       rlog.stream('start', `${entity} streaming`);
     }
+
+    // FIX: Read currentRoundNumber directly from store to avoid stale closure
+    // The callback may be invoked before React re-renders with the updated round number,
+    // causing streaming placeholders to be created with the wrong round number on round 2+
+    const state = store.getState();
+    const roundNumber = state.currentRoundNumber ?? 0;
+
     // Update subscription status for UI
     if (entity === 'presearch') {
-      store.getState().updateEntitySubscriptionStatus('presearch', 'streaming', seq);
+      state.updateEntitySubscriptionStatus('presearch', 'streaming', seq);
     } else if (entity === 'moderator') {
-      store.getState().updateEntitySubscriptionStatus('moderator', 'streaming', seq);
+      state.updateEntitySubscriptionStatus('moderator', 'streaming', seq);
       // FIX: Re-enable moderator text appending - now uses same ID as useModeratorStream
       // (${threadId}_r${roundNumber}_moderator) so it updates the existing placeholder
       // instead of creating a duplicate. This is needed for gradual streaming when
       // useModeratorStream gets 204 (another request handling) and subscription handles streaming.
       if (text) {
-        store.getState().appendModeratorStreamingText(text, currentRoundNumber ?? 0);
+        state.appendModeratorStreamingText(text, roundNumber);
       }
     } else if (entity.startsWith('participant_')) {
       const index = Number.parseInt(entity.replace('participant_', ''), 10);
-      store.getState().updateEntitySubscriptionStatus(index, 'streaming', seq);
+      state.updateEntitySubscriptionStatus(index, 'streaming', seq);
 
       // FIX: Only create streaming placeholders for P1+ participants
       // P0 is handled by AI SDK which manages its own rendering directly
       // Creating streaming_p0_r0 alongside AI SDK's message causes duplicates
       // P1+ need streaming placeholders because they're not handled by AI SDK
       if (text && index > 0) {
-        store.getState().appendEntityStreamingText(index, text, currentRoundNumber ?? 0);
+        state.appendEntityStreamingText(index, text, roundNumber);
       }
     }
-  }, [store, currentRoundNumber]);
+  }, [store]);
 
   const handleEntityComplete = useCallback(async (entity: EntityType, lastSeq: number) => {
     rlog.stream('end', `${entity} complete lastSeq=${lastSeq}`);
@@ -155,9 +163,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   }, [store]);
 
   const handleRoundComplete = useCallback(() => {
-    rlog.phase('subscription', `Round ${currentRoundNumber} COMPLETE`);
-    store.getState().completeStreaming();
-  }, [store, currentRoundNumber]);
+    const state = store.getState();
+    rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
+    state.completeStreaming();
+  }, [store]);
 
   const handleEntityError = useCallback((entity: EntityType, error: Error) => {
     rlog.stuck('sub', `${entity} error: ${error.message}`);
@@ -224,8 +233,39 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // Sync AI SDK messages to store (AI SDK -> Store)
   useEffect(() => {
     if (chat.messages.length > 0) {
+      // FIX: Preserve streaming placeholders AND optimistic user messages when syncing
+      // AI SDK only handles P0 streaming - P1+ participants use streaming placeholders
+      // created by appendEntityStreamingText. Without preserving these, P1+ streaming
+      // is interrupted when AI SDK updates its messages (causing UI to break mid-way)
+      //
+      // ✅ FIX: Also preserve optimistic user messages (optimistic_*) that were added
+      // to the store before AI SDK was updated. Without this, Round 2+ user messages
+      // temporarily disappear when AI SDK syncs, causing a flash of empty content.
+      const state = store.getState();
+      const storeOnlyMessages = state.messages.filter(
+        m => m.id.startsWith('streaming_p') || m.id.includes('_moderator') || m.id.startsWith('optimistic_'),
+      );
+
       // Clone to prevent Immer from freezing AI SDK's objects
-      store.getState().setMessages(structuredClone(chat.messages) as UIMessage[]);
+      const aiSdkMessages = structuredClone(chat.messages) as UIMessage[];
+
+      // Merge: AI SDK messages + store-only messages (that aren't already in AI SDK messages)
+      const aiSdkMessageIds = new Set(aiSdkMessages.map(m => m.id));
+      const messagesToPreserve = storeOnlyMessages.filter(
+        m => !aiSdkMessageIds.has(m.id),
+      );
+
+      const mergedMessages = [...aiSdkMessages, ...messagesToPreserve];
+
+      // DEBUG: Log when we preserve optimistic or streaming messages
+      if (messagesToPreserve.length > 0) {
+        const optimisticCount = messagesToPreserve.filter(m => m.id.startsWith('optimistic_')).length;
+        const streamingCount = messagesToPreserve.filter(m => m.id.startsWith('streaming_p')).length;
+        const moderatorCount = messagesToPreserve.filter(m => m.id.includes('_moderator')).length;
+        rlog.sync('aiSdk→store', `preserved: optimistic=${optimisticCount} streaming=${streamingCount} moderator=${moderatorCount} aiSdk=${aiSdkMessages.length} total=${mergedMessages.length}`);
+      }
+
+      state.setMessages(mergedMessages);
     }
   }, [chat.messages, store]);
 
@@ -286,17 +326,66 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     hasTriggeredRef.current = true;
     lastTriggerKeyRef.current = triggerKey;
 
-    // Start P0 streaming
+    // Start round - different paths for web search vs direct streaming
     const enabledCount = participants.filter(p => p.isEnabled).length;
 
-    rlog.phase('trigger', `START r${roundNumber} pIdx=0 phase→PARTICIPANTS enabledCount=${enabledCount}`);
-    store.getState().startRound(roundNumber, enabledCount);
+    if (enableWebSearch) {
+      // ✅ QUEUE-ORCHESTRATED FLOW: Backend handles presearch → P0 → P1 → ... → moderator
+      // Get the last user message for the start round request
+      const lastUserMessage = [...storeMessages].reverse().find((m): m is UIMessage => m.role === 'user');
+      if (!lastUserMessage) {
+        rlog.stuck('trigger', 'No user message found for start round');
+        hasTriggeredRef.current = false;
+        lastTriggerKeyRef.current = null;
+        return;
+      }
 
-    chat.startRound(participants, storeMessages);
-    rlog.handoff('P0-triggered', `r${roundNumber} AI SDK startRound called`);
+      rlog.phase('trigger', `START r${roundNumber} via QUEUE (web search enabled) enabledCount=${enabledCount}`);
 
-    // Clear the waiting flag
-    store.getState().setWaitingToStartStreaming(false);
+      // Clear the waiting flag immediately (prevents re-triggering during async call)
+      store.getState().setWaitingToStartStreaming(false);
+
+      // Call start round service FIRST - backend will persist enableWebSearch to DB
+      // Only THEN enable subscriptions by calling startRound (which sets phase to PARTICIPANTS)
+      // This prevents the race condition where subscriptions check enableWebSearch before it's persisted
+      startRoundService({
+        attachmentIds: pendingAttachmentIds ?? undefined,
+        enableWebSearch: true, // This endpoint is only called when web search is enabled
+        message: lastUserMessage,
+        roundNumber,
+        threadId: effectiveThreadId,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            rlog.stuck('trigger', `Start round failed: ${response.status}`);
+            showApiErrorToast('Failed to start round', new Error(`HTTP ${response.status}`));
+            // Reset trigger state so user can retry
+            hasTriggeredRef.current = false;
+            lastTriggerKeyRef.current = null;
+          } else {
+            rlog.handoff('queue-triggered', `r${roundNumber} START_ROUND queued, now enabling subscriptions`);
+            // ✅ NOW enable subscriptions - DB has been updated with enableWebSearch=true
+            store.getState().startRound(roundNumber, enabledCount);
+          }
+        })
+        .catch((error) => {
+          rlog.stuck('trigger', `Start round error: ${error.message}`);
+          showApiErrorToast('Failed to start round', error);
+          // Reset trigger state so user can retry
+          hasTriggeredRef.current = false;
+          lastTriggerKeyRef.current = null;
+        });
+    } else {
+      // ✅ DIRECT P0 FLOW: No presearch needed, trigger P0 directly via AI SDK
+      rlog.phase('trigger', `START r${roundNumber} pIdx=0 phase→PARTICIPANTS enabledCount=${enabledCount}`);
+      store.getState().startRound(roundNumber, enabledCount);
+
+      chat.startRound(participants, storeMessages);
+      rlog.handoff('P0-triggered', `r${roundNumber} AI SDK startRound called`);
+
+      // Clear the waiting flag
+      store.getState().setWaitingToStartStreaming(false);
+    }
   }, [
     waitingToStartStreaming,
     effectiveThreadId,
@@ -306,6 +395,8 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     chat.isStreaming,
     participants,
     store,
+    enableWebSearch,
+    pendingAttachmentIds,
   ]);
 
   // Set chat stop callback for navigation cleanup

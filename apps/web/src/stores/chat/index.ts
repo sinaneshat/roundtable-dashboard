@@ -123,9 +123,12 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     const { initialChangelog, initialMessages, initialPreSearches, participants, thread } = options;
 
     const state = storeApi.getState();
-    const enabledCount = participants.filter(p => p.isEnabled).length;
+    // Props participant count (from SSR/server data)
+    const propsEnabledCount = participants.filter(p => p.isEnabled).length;
+    // Store participant count (current runtime state)
+    const storeEnabledCount = state.participants.filter(p => p.isEnabled).length;
 
-    rlog.init('useSyncHydrateStore', `tid=${thread.id.slice(-8)} curTid=${state.thread?.id?.slice(-8) ?? '-'} curPhase=${state.phase} r=${state.currentRoundNumber} streaming=${state.isStreaming} msgs=${initialMessages.length} pCount=${enabledCount} hydrated=${hasHydratedRef.current} prevTid=${threadIdRef.current?.slice(-8) ?? '-'}`);
+    rlog.init('useSyncHydrateStore', `tid=${thread.id.slice(-8)} curTid=${state.thread?.id?.slice(-8) ?? '-'} curPhase=${state.phase} r=${state.currentRoundNumber} streaming=${state.isStreaming} msgs=${initialMessages.length} pCount=${storeEnabledCount}(store)/${propsEnabledCount}(props) hydrated=${hasHydratedRef.current} prevTid=${threadIdRef.current?.slice(-8) ?? '-'}`);
 
     // Skip if already hydrated for this thread
     if (hasHydratedRef.current && threadIdRef.current === thread.id) {

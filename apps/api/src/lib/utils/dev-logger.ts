@@ -179,6 +179,9 @@ function rlogNow(category: RlogCategory, message: string): void {
  */
 const FRAME_DESCRIPTIONS: Record<number, string> = {
   1: 'User Types Message on Overview Screen',
+  10: 'Web Research Streaming (Blocks Participants)',
+  11: 'Web Research Complete → Participants Start',
+  12: 'Round 2 Complete',
   2: 'User Clicks Send → ALL Placeholders Appear Instantly',
   3: 'Participant 1 Starts Streaming (Others Still Waiting)',
   4: 'Participant 1 Complete → Participant 2 Starts',
@@ -187,9 +190,6 @@ const FRAME_DESCRIPTIONS: Record<number, string> = {
   7: 'User Enables Web Search + Changes Participants',
   8: 'Send Clicked → Changelog + All Placeholders Appear',
   9: 'Changelog Expanded (Click to See Details)',
-  10: 'Web Research Streaming (Blocks Participants)',
-  11: 'Web Research Complete → Participants Start',
-  12: 'Round 2 Complete',
 };
 
 export const rlog = {

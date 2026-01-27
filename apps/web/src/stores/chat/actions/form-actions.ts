@@ -72,6 +72,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const actions = useChatStore(useShallow(s => ({
     addPreSearch: s.addPreSearch,
     clearAttachments: s.clearAttachments,
+    createStreamingPlaceholders: s.createStreamingPlaceholders,
     initializeThread: s.initializeThread,
     prepareForNewMessage: s.prepareForNewMessage,
     resetForm: s.resetForm,
@@ -79,7 +80,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setCreatedThreadProjectId: s.setCreatedThreadProjectId,
     setCurrentRoundNumber: s.setCurrentRoundNumber,
     setEnableWebSearch: s.setEnableWebSearch,
-    setExpectedParticipantIds: s.setExpectedParticipantIds,
+    setExpectedModelIds: s.setExpectedModelIds,
     setHasInitiallyLoaded: s.setHasInitiallyLoaded,
     setInputValue: s.setInputValue,
     setIsCreatingThread: s.setIsCreatingThread,
@@ -368,7 +369,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       // Set pending state for new message flow
       actions.setPendingMessage(prompt);
-      actions.setExpectedParticipantIds(getEnabledParticipantModelIds(participants));
+      actions.setExpectedModelIds(getEnabledParticipantModelIds(participants));
       if (attachmentIds?.length) {
         actions.setPendingAttachmentIds(attachmentIds);
       }
@@ -472,11 +473,21 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setStreamingRoundNumber(nextRoundNumber);
     // participants from store is already typed as ChatParticipant[] via ChatParticipantSchema
     const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : freshParticipants;
-    actions.setExpectedParticipantIds(getEnabledParticipantModelIds(effectiveParticipants));
+    actions.setExpectedModelIds(getEnabledParticipantModelIds(effectiveParticipants));
 
+    // ✅ FIX: Update participants BEFORE creating placeholders
+    // createStreamingPlaceholders reads from store.participants, so we must update first
+    // Otherwise placeholders get stale participant IDs from the previous round
     if (hasParticipantChanges) {
       actions.updateParticipants(optimisticParticipants);
     }
+
+    // ✅ FRAME 8 FIX: Create streaming placeholders immediately so UI shows them on send
+    // This ensures placeholders appear instantly (Frame 8) before async startRoundService() completes
+    // Without this, Round 2+ has a visible gap where user message appears but no placeholders
+    const enabledCount = effectiveParticipants.filter(p => p.isEnabled).length;
+    actions.createStreamingPlaceholders(nextRoundNumber, enabledCount);
+    rlog.frame(8, 'optimistic-placeholders', `r${nextRoundNumber} ${enabledCount} placeholders created immediately`);
 
     if (freshEnableWebSearch) {
       actions.addPreSearch(createPlaceholderPreSearch({
@@ -535,7 +546,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (responseData?.participants && responseData.participants.length > 0) {
         const participantsWithDates = transformChatParticipants(responseData.participants);
         actions.updateParticipants(participantsWithDates);
-        actions.setExpectedParticipantIds(getEnabledParticipantModelIds(participantsWithDates));
+        actions.setExpectedModelIds(getEnabledParticipantModelIds(participantsWithDates));
 
         const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
         actions.setSelectedParticipants(syncedParticipantConfigs);

@@ -24,7 +24,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createChatStore } from '../store';
-import type { ChatPhase, EntityStatus, SubscriptionState } from '../store-schemas';
+import type { EntityStatus, SubscriptionState } from '../store-schemas';
 import { ChatPhases } from '../store-schemas';
 
 // ============================================================================
@@ -111,7 +111,7 @@ function createSubscriptionState(
 // IDLE -> PARTICIPANTS TRANSITION (startRound)
 // ============================================================================
 
-describe('IDLE -> PARTICIPANTS Transition (startRound)', () => {
+describe('iDLE -> PARTICIPANTS Transition (startRound)', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -119,7 +119,7 @@ describe('IDLE -> PARTICIPANTS Transition (startRound)', () => {
     vi.clearAllMocks();
   });
 
-  describe('Frame 2 - Round 1: "User Clicks Send -> ALL Placeholders Appear"', () => {
+  describe('frame 2 - Round 1: "User Clicks Send -> ALL Placeholders Appear"', () => {
     it('should set phase to PARTICIPANTS when startRound is called', () => {
       // Initial state is IDLE
       expect(store.getState().phase).toBe(ChatPhases.IDLE);
@@ -180,7 +180,7 @@ describe('IDLE -> PARTICIPANTS Transition (startRound)', () => {
     });
   });
 
-  describe('Frame 8 - Round 2: "Send Clicked -> Changelog + All Placeholders"', () => {
+  describe('frame 8 - Round 2: "Send Clicked -> Changelog + All Placeholders"', () => {
     it('should set phase to PARTICIPANTS for follow-up rounds', () => {
       // Round 1 complete
       store.getState().startRound(0, 2);
@@ -218,7 +218,7 @@ describe('IDLE -> PARTICIPANTS Transition (startRound)', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('edge Cases', () => {
     it('should allow startRound when already in PARTICIPANTS phase (idempotent)', () => {
       store.getState().startRound(0, 3);
       expect(store.getState().phase).toBe(ChatPhases.PARTICIPANTS);
@@ -246,7 +246,7 @@ describe('IDLE -> PARTICIPANTS Transition (startRound)', () => {
 // PARTICIPANTS -> MODERATOR TRANSITION (onParticipantComplete)
 // ============================================================================
 
-describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
+describe('pARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -254,7 +254,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
     vi.clearAllMocks();
   });
 
-  describe('Frame 5/11: "All Participants Complete -> Moderator Starts"', () => {
+  describe('frame 5/11: "All Participants Complete -> Moderator Starts"', () => {
     it('should transition to MODERATOR when ALL participants are complete', () => {
       // Set up: 3 participants, all streaming
       const participants = createMockParticipants(3);
@@ -314,7 +314,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
       store.getState().initializeSubscriptions(0, 2);
 
       // Verify subscription state is used for decision
-      expect(store.getState().subscriptionState.participants.length).toBe(2);
+      expect(store.getState().subscriptionState.participants).toHaveLength(2);
       expect(store.getState().subscriptionState.participants[0]?.status).toBe('idle');
 
       // Mark both complete
@@ -327,7 +327,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
     });
   });
 
-  describe('Out-of-Order Completion', () => {
+  describe('out-of-Order Completion', () => {
     it('should handle P1 finishing before P0', () => {
       const participants = createMockParticipants(2);
       store.getState().setParticipants(participants);
@@ -372,7 +372,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
     });
   });
 
-  describe('Error States', () => {
+  describe('error States', () => {
     it('should treat errored participants as complete (for transition purposes)', () => {
       const participants = createMockParticipants(2);
       store.getState().setParticipants(participants);
@@ -404,7 +404,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
     });
   });
 
-  describe('Single Participant', () => {
+  describe('single Participant', () => {
     it('should immediately transition to MODERATOR when single participant completes', () => {
       const participants = createMockParticipants(1);
       store.getState().setParticipants(participants);
@@ -423,7 +423,7 @@ describe('PARTICIPANTS -> MODERATOR Transition (onParticipantComplete)', () => {
 // MODERATOR -> COMPLETE TRANSITION (onModeratorComplete)
 // ============================================================================
 
-describe('MODERATOR -> COMPLETE Transition (onModeratorComplete)', () => {
+describe('mODERATOR -> COMPLETE Transition (onModeratorComplete)', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -431,7 +431,7 @@ describe('MODERATOR -> COMPLETE Transition (onModeratorComplete)', () => {
     vi.clearAllMocks();
   });
 
-  describe('Frame 6/12: "Round Complete"', () => {
+  describe('frame 6/12: "Round Complete"', () => {
     it('should set phase to COMPLETE', () => {
       // Set up MODERATOR phase
       const participants = createMockParticipants(2);
@@ -518,7 +518,7 @@ describe('MODERATOR -> COMPLETE Transition (onModeratorComplete)', () => {
 // COMPLETE -> IDLE TRANSITION (resetToIdle/prepareForNewMessage)
 // ============================================================================
 
-describe('COMPLETE -> IDLE Transition', () => {
+describe('cOMPLETE -> IDLE Transition', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -589,7 +589,7 @@ describe('COMPLETE -> IDLE Transition', () => {
 // GUARD AGAINST DUPLICATE completeStreaming CALLS
 // ============================================================================
 
-describe('Guard Against Duplicate completeStreaming Calls', () => {
+describe('guard Against Duplicate completeStreaming Calls', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -676,7 +676,7 @@ describe('Guard Against Duplicate completeStreaming Calls', () => {
 // FULL ROUND LIFECYCLE
 // ============================================================================
 
-describe('Full Round Lifecycle', () => {
+describe('full Round Lifecycle', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -773,7 +773,7 @@ describe('Full Round Lifecycle', () => {
 // SUBSCRIPTION STATE INTEGRATION
 // ============================================================================
 
-describe('Subscription State Integration', () => {
+describe('subscription State Integration', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -822,7 +822,7 @@ describe('Subscription State Integration', () => {
 // RACE CONDITION SCENARIOS
 // ============================================================================
 
-describe('Race Condition Prevention', () => {
+describe('race Condition Prevention', () => {
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {

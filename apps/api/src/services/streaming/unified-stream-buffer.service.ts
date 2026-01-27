@@ -26,7 +26,6 @@
 
 import { FinishReasons, parseSSEEventType, StreamPhases, StreamStatuses } from '@roundtable/shared/enums';
 
-import { getThreadActiveStream } from './resumable-stream-kv.service';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -46,6 +45,8 @@ import {
   STREAM_BUFFER_TTL_SECONDS,
   StreamChunkSchema,
 } from '@/types/streaming';
+
+import { getThreadActiveStream } from './resumable-stream-kv.service';
 
 // ============================================================================
 // HELPERS
@@ -633,7 +634,7 @@ export function createLiveParticipantResumeStream(
                 return;
               }
               // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-              // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+
               await new Promise((resolve) => {
                 setTimeout(resolve, 5);
               });
@@ -672,7 +673,7 @@ export function createLiveParticipantResumeStream(
                 // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
                 // This allows the browser to receive and process each chunk individually
                 // instead of receiving all chunks in a single burst
-                // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+
                 await new Promise((resolve) => {
                   setTimeout(resolve, 5);
                 });
@@ -745,7 +746,9 @@ export function createWaitingParticipantStream(
   let isClosed = false;
 
   const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
-    if (isClosed) return;
+    if (isClosed) {
+      return;
+    }
     try {
       isClosed = true;
       controller.close();
@@ -755,7 +758,9 @@ export function createWaitingParticipantStream(
   };
 
   const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
-    if (isClosed) return false;
+    if (isClosed) {
+      return false;
+    }
     try {
       controller.enqueue(data);
       return true;
@@ -766,7 +771,9 @@ export function createWaitingParticipantStream(
   };
 
   const shouldSendChunk = (chunk: { data: string; event?: string | undefined }): boolean => {
-    if (!filterReasoningOnReplay) return true;
+    if (!filterReasoningOnReplay) {
+      return true;
+    }
     return chunk.event !== 'reasoning-delta';
   };
 
@@ -862,9 +869,11 @@ export function createWaitingParticipantStream(
           for (let i = startFromChunkIndex; i < initialChunks.length; i++) {
             const chunk = initialChunks[i];
             if (chunk && shouldSendChunk(chunk)) {
-              if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+              if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+                return;
+              }
               // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-              // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+
               await new Promise((resolve) => {
                 setTimeout(resolve, 5);
               });
@@ -899,9 +908,11 @@ export function createWaitingParticipantStream(
             for (let i = lastChunkIndex; i < chunks.length; i++) {
               const chunk = chunks[i];
               if (chunk && shouldSendChunk(chunk)) {
-                if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+                if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
+                  return;
+                }
                 // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-                // eslint-disable-next-line no-await-in-loop -- intentional for gradual streaming
+
                 await new Promise((resolve) => {
                   setTimeout(resolve, 5);
                 });

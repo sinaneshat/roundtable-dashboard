@@ -29,6 +29,8 @@ import {
   RoundModeratorRequestSchema,
   RoundStatusResponseSchema,
   SetRoundFeedbackResponseSchema,
+  StartRoundRequestSchema,
+  StartRoundResponseSchema,
   StreamChatRequestSchema,
   StreamStatusResponseSchema,
   ThreadDetailResponseSchema,
@@ -1314,5 +1316,67 @@ export const subscribeToModeratorStreamRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
   summary: 'Subscribe to moderator stream',
+  tags: ['chat'],
+});
+
+// ============================================================================
+// START ROUND - Queue-based round orchestration
+// ============================================================================
+
+/**
+ * POST /chat/threads/:threadId/rounds/:roundNumber/start
+ * ✅ BACKEND-FIRST: Start a round with queue orchestration
+ *
+ * When web search is enabled, this endpoint handles the full orchestration:
+ * START_ROUND → presearch → P0 → P1 → ... → moderator
+ *
+ * Frontend calls this instead of POST /chat directly when enableWebSearch is true.
+ */
+export const startRoundRoute = createRoute({
+  description: `Start a new round with queue-based orchestration.
+
+**When to use**: Call this instead of POST /chat when web search is enabled.
+The backend queue will orchestrate: presearch → P0 → P1 → ... → moderator
+
+**Flow**:
+1. Saves user message to database
+2. Queues START_ROUND message
+3. Queue worker handles presearch (if web search enabled)
+4. After presearch completes, triggers P0
+5. P0 completion triggers P1, etc.
+6. All participants done triggers moderator
+
+**Frontend should**:
+- Subscribe to all entity streams after calling this
+- NOT call POST /chat directly (queue handles all triggers)`,
+  method: 'post',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/start',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: StartRoundRequestSchema,
+        },
+      },
+      required: true,
+    },
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.ACCEPTED]: {
+      content: {
+        'application/json': { schema: StartRoundResponseSchema },
+      },
+      description: 'Round queued for execution',
+    },
+    [HttpStatusCodes.CONFLICT]: {
+      content: {
+        'application/json': { schema: ApiErrorResponseSchema },
+      },
+      description: 'Round already in progress',
+    },
+    ...createMutationRouteResponses(),
+  },
+  summary: 'Start round with queue orchestration',
   tags: ['chat'],
 });

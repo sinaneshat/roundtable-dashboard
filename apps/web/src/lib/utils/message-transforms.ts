@@ -316,6 +316,10 @@ export function chatMessagesToUIMessages(
 
   // DEBUG: Log participant map setup
   rlog.moderator('toUI-setup', `participants=${participants?.length ?? 0} mapSize=${participantMap?.size ?? 0} indexMapSize=${participantIndexMap?.size ?? 0}`);
+  // DEBUG: Log caller when participants are empty to trace the issue
+  if (!participants?.length && messages.length > 1) {
+    rlog.phase('toUI-EMPTY', `msgs=${messages.length} NO PARTICIPANTS - caller: ${new Error().stack?.split('\n')[2]?.trim()}`);
+  }
   if (participants?.length) {
     participants.forEach((p, i) => rlog.moderator('toUI-p', `[${i}] id=${p.id?.slice(-8)} model=${p.modelId}`));
   }

@@ -41,7 +41,7 @@ export const THREAD_DEFAULTS: ThreadState = {
   currentParticipantIndex: 0,
   currentRoundNumber: null,
   error: null,
-  expectedParticipantIds: null,
+  expectedModelIds: null,
   hasSentPendingMessage: false,
   isRegenerating: false,
   isStreaming: false,
@@ -176,7 +176,9 @@ export const OVERVIEW_RESET = {
 
 /** Streaming complete reset */
 export const STREAMING_COMPLETE_RESET = {
+  currentParticipantIndex: 0,
   isStreaming: false,
+  streamingRoundNumber: null,
   waitingToStartStreaming: false,
 };
 

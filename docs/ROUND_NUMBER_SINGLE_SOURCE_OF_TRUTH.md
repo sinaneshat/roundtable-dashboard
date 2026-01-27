@@ -64,7 +64,7 @@ const newRoundNumber = calculateNextRoundNumber(messages);
 
 // 3. Send message to backend with calculated roundNumber
 actions.prepareForNewMessage(trimmed, []);
-// Sets: pendingMessage, expectedParticipantIds
+// Sets: pendingMessage, expectedModelIds
 
 // 4. Provider's pendingMessage effect triggers
 const roundNumber = calculateNextRoundNumber(storeMessages);

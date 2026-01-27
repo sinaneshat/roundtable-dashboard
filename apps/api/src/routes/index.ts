@@ -128,6 +128,7 @@ import {
   listUserPresetsHandler,
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
+  startRoundHandler,
   streamChatHandler,
   subscribeToModeratorStreamHandler,
   subscribeToParticipantStreamHandler,
@@ -170,6 +171,7 @@ import {
   listUserPresetsRoute,
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
+  startRoundRoute,
   streamChatRoute,
   subscribeToModeratorStreamRoute,
   subscribeToParticipantStreamRoute,
@@ -388,10 +390,11 @@ const chatFeatureRoutes = createOpenApiApp()
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler);
 
 /**
- * Group 5b: Chat - Entity Subscriptions (3 routes)
+ * Group 5b: Chat - Entity Subscriptions & Round Orchestration (4 routes)
  * ✅ BACKEND-FIRST ARCHITECTURE: Per FLOW_DOCUMENTATION.md
  */
 const chatEntitySubscriptionRoutes = createOpenApiApp()
+  .openapi(startRoundRoute, startRoundHandler)
   .openapi(subscribeToPreSearchStreamRoute, subscribeToPreSearchStreamHandler)
   .openapi(subscribeToParticipantStreamRoute, subscribeToParticipantStreamHandler)
   .openapi(subscribeToModeratorStreamRoute, subscribeToModeratorStreamHandler);

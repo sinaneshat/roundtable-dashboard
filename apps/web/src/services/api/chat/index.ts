@@ -56,6 +56,14 @@ export {
   updateParticipantService,
 } from './participants';
 
+// Round Orchestration (Backend-First Start)
+export {
+  type StartRoundRequest,
+  type StartRoundResponse,
+  startRoundService,
+  type StartRoundServiceOptions,
+} from './round-orchestration';
+
 // Pre-Search
 export {
   executePreSearchStreamService,

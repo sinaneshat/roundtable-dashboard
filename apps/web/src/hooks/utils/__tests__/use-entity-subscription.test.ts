@@ -63,11 +63,11 @@ function createMockResponse(options: {
   return {
     body: typeof options.body === 'string'
       ? new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(options.body));
-          controller.close();
-        },
-      })
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(options.body));
+            controller.close();
+          },
+        })
       : options.body ?? null,
     headers,
     json: options.json ?? (() => Promise.resolve({})),
@@ -605,7 +605,7 @@ describe('useEntitySubscription', () => {
       await vi.runAllTimersAsync();
 
       await waitFor(() => {
-        expect(onComplete).toHaveBeenCalled();
+        expect(onComplete).toHaveBeenCalledWith();
       });
 
       // Final seq should count all events (5 total)
@@ -734,7 +734,7 @@ describe('useEntitySubscription', () => {
     it('should abort previous subscription when new one starts', async () => {
       const mockService = vi.mocked(apiServices.subscribeToPreSearchStreamService);
 
-      let abortSignals: AbortSignal[] = [];
+      const abortSignals: AbortSignal[] = [];
 
       mockService.mockImplementation(async (_, options) => {
         if (options?.signal) {
@@ -952,7 +952,7 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockPresearch).toHaveBeenCalled();
+      expect(mockPresearch).toHaveBeenCalledWith();
     });
 
     it('should use subscribeToParticipantStreamService for participant phase', async () => {
@@ -988,7 +988,7 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockModerator).toHaveBeenCalled();
+      expect(mockModerator).toHaveBeenCalledWith();
     });
 
     it('should throw error when participantIndex missing for participant phase', async () => {
@@ -1068,7 +1068,7 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockService).toHaveBeenCalled();
+      expect(mockService).toHaveBeenCalledWith();
     });
   });
 

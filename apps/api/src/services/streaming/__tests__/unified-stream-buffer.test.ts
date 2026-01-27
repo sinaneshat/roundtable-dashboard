@@ -17,7 +17,8 @@
  */
 
 import { StreamStatuses } from '@roundtable/shared/enums';
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ApiEnv } from '@/types';
 import type {
@@ -28,6 +29,7 @@ import type {
 } from '@/types/streaming';
 import { STREAM_BUFFER_TTL_SECONDS } from '@/types/streaming';
 
+import type { ResumeStreamOptions } from '../unified-stream-buffer.service';
 import {
   appendParticipantStreamChunk,
   appendPreSearchStreamChunk,
@@ -50,7 +52,6 @@ import {
   initializeParticipantStreamBuffer,
   initializePreSearchStreamBuffer,
   isPreSearchBufferStale,
-  type ResumeStreamOptions,
 } from '../unified-stream-buffer.service';
 
 // ============================================================================
@@ -61,12 +62,16 @@ function createMockKV() {
   const storage = new Map<string, string>();
 
   return {
+    // Expose storage for test inspection
+    _storage: storage,
     delete: vi.fn(async (key: string) => {
       storage.delete(key);
     }),
     get: vi.fn(async (key: string, type?: 'text' | 'json') => {
       const value = storage.get(key);
-      if (!value) return null;
+      if (!value) {
+        return null;
+      }
       if (type === 'json') {
         return JSON.parse(value);
       }
@@ -75,8 +80,6 @@ function createMockKV() {
     put: vi.fn(async (key: string, value: string) => {
       storage.set(key, value);
     }),
-    // Expose storage for test inspection
-    _storage: storage,
   };
 }
 
@@ -104,7 +107,9 @@ async function streamToArray(stream: ReadableStream<Uint8Array>): Promise<string
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       results.push(decoder.decode(value));
     }
   } finally {
@@ -211,10 +216,10 @@ describe('unified-stream-buffer.service', () => {
           'Initialized participant stream buffer',
           expect.objectContaining({
             operationName: 'initializeParticipantStreamBuffer',
+            participantIndex,
+            roundNumber,
             streamId,
             threadId,
-            roundNumber,
-            participantIndex,
           }),
         );
       });
@@ -241,7 +246,7 @@ describe('unified-stream-buffer.service', () => {
         await appendParticipantStreamChunk(streamId, chunkData, mockEnv, mockLogger);
 
         // Should store chunk
-        const chunkCall = mockKV.put.mock.calls.find((call) =>
+        const chunkCall = mockKV.put.mock.calls.find(call =>
           (call[0] as string).includes(':c:0'),
         );
         expect(chunkCall).toBeDefined();
@@ -407,7 +412,7 @@ describe('unified-stream-buffer.service', () => {
     it('should retry 3 times with 50ms delay when metadata not found', async () => {
       // Simulate race condition: metadata arrives after 2nd retry
       let callCount = 0;
-      mockKV.get = vi.fn(async (key: string, type?: 'text' | 'json') => {
+      vi.spyOn(mockKV, 'get').mockImplementation(async (key: string, type?: 'text' | 'json') => {
         callCount++;
         if (key.includes(':meta') && callCount < 3) {
           return null; // Metadata not ready yet
@@ -437,14 +442,14 @@ describe('unified-stream-buffer.service', () => {
 
       // Should have called get 3 times (2 failed + 1 success)
       const metadataGetCalls = (mockKV.get as Mock).mock.calls.filter(
-        (call) => (call[0] as string).includes(':meta'),
+        call => (call[0] as string).includes(':meta'),
       );
-      expect(metadataGetCalls.length).toBe(3);
+      expect(metadataGetCalls).toHaveLength(3);
     });
 
     it('should give up after 3 retries and log warning', async () => {
       // Metadata never becomes available
-      mockKV.get = vi.fn(async () => null);
+      vi.spyOn(mockKV, 'get').mockImplementation(async () => null);
 
       const chunkData = 'data: {"type":"text-delta","delta":"Test"}\n\n';
 
@@ -477,7 +482,7 @@ describe('unified-stream-buffer.service', () => {
 
       let putCallCount = 0;
       const originalPut = mockKV.put;
-      mockKV.put = vi.fn(async (key: string, value: string, options?: { expirationTtl: number }) => {
+      vi.spyOn(mockKV, 'put').mockImplementation(async (key: string, value: string, options?: { expirationTtl: number }) => {
         putCallCount++;
         if (key.includes(':c:') && putCallCount < 3) {
           throw new Error('KV temporary failure');
@@ -555,7 +560,7 @@ describe('unified-stream-buffer.service', () => {
       // Each batch creates 1 metadata get + batch_size chunk gets
       // Total gets: 1 (metadata) + 250 (chunks in 3 batches via Promise.all)
       const getCalls = (mockKV.get as Mock).mock.calls;
-      expect(getCalls.length).toBe(251); // 1 metadata + 250 individual chunks
+      expect(getCalls).toHaveLength(251); // 1 metadata + 250 individual chunks
     });
 
     it('should return empty array when chunk count is 0', async () => {
@@ -940,7 +945,7 @@ describe('unified-stream-buffer.service', () => {
         const results = await streamToArray(stream);
 
         // Should only get chunks 3 and 4 (indices 3 and 4)
-        expect(results.length).toBe(2);
+        expect(results).toHaveLength(2);
         expect(results[0]).toContain('chunk3');
         expect(results[1]).toContain('chunk4');
       });
@@ -972,7 +977,7 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        expect(results.length).toBe(0);
+        expect(results).toHaveLength(0);
       });
     });
 
@@ -1021,7 +1026,7 @@ describe('unified-stream-buffer.service', () => {
         const results = await streamToArray(stream);
 
         // Should only get the text-delta chunk
-        expect(results.length).toBe(1);
+        expect(results).toHaveLength(1);
         expect(results[0]).toContain('text-delta');
         expect(results[0]).not.toContain('reasoning-delta');
       });
@@ -1067,7 +1072,7 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        expect(results.length).toBe(2);
+        expect(results).toHaveLength(2);
       });
     });
 
@@ -1159,7 +1164,7 @@ describe('unified-stream-buffer.service', () => {
 
         // Should skip chunks 0,1, start from 2, and filter reasoning
         // From chunks 2,3,4: only 3 and 4 are text-delta
-        expect(results.length).toBe(2);
+        expect(results).toHaveLength(2);
         expect(results[0]).toContain('chunk3-text');
         expect(results[1]).toContain('chunk4-text');
       });
@@ -1491,7 +1496,7 @@ describe('unified-stream-buffer.service', () => {
       const stream = createLivePreSearchResumeStream(streamId, mockEnv);
       const results = await streamToArray(stream);
 
-      expect(results.length).toBe(2);
+      expect(results).toHaveLength(2);
       // Should have SSE format: event: X\ndata: Y\n\n
       expect(results[0]).toContain('event: search-result');
       expect(results[0]).toContain('data: {"url":"https://example1.com"}');

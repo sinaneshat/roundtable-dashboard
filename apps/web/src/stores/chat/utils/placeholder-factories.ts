@@ -50,6 +50,7 @@ export function createOptimisticUserMessage({
   return {
     id: `optimistic_${generateId()}`,
     metadata: {
+      role: MessageRoles.USER,
       roundNumber,
     },
     parts,

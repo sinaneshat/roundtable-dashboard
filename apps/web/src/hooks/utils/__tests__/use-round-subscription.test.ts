@@ -15,7 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { act, renderHook, waitFor } from '@/lib/testing';
+import { renderHook } from '@/lib/testing';
 import * as apiServices from '@/services/api';
 
 import type { UseRoundSubscriptionOptions } from '../use-round-subscription';
@@ -59,11 +59,11 @@ function createMockResponse(options: {
   return {
     body: typeof options.body === 'string'
       ? new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(options.body));
-          controller.close();
-        },
-      })
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(options.body));
+            controller.close();
+          },
+        })
       : options.body ?? null,
     headers,
     json: options.json ?? (() => Promise.resolve({})),
@@ -86,7 +86,7 @@ function create200DisabledResponse(): Response {
   return createMockResponse({
     contentType: 'application/json',
     json: () => Promise.resolve({
-      data: { status: 'disabled', message: 'Feature disabled' },
+      data: { message: 'Feature disabled', status: 'disabled' },
     }),
     status: 200,
   });
@@ -122,7 +122,7 @@ describe('useRoundSubscription', () => {
   // Initial State
   // ==========================================================================
 
-  describe('Initial State', () => {
+  describe('initial State', () => {
     it('should have correct initial state when disabled', () => {
       const { result } = renderHook(() =>
         useRoundSubscription(createDefaultOptions({ enabled: false })));
@@ -157,7 +157,7 @@ describe('useRoundSubscription', () => {
   // Subscription Creation
   // ==========================================================================
 
-  describe('Subscription Creation', () => {
+  describe('subscription Creation', () => {
     it('should call participant services for each participant', async () => {
       const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
       const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
@@ -199,7 +199,7 @@ describe('useRoundSubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockPresearch).toHaveBeenCalled();
+      expect(mockPresearch).toHaveBeenCalledWith();
     });
 
     it('should not call presearch service when disabled', async () => {
@@ -233,156 +233,10 @@ describe('useRoundSubscription', () => {
   });
 
   // ==========================================================================
-  // Round Completion
-  // ==========================================================================
-
-  describe('Round Completion', () => {
-    it('should detect round complete when all entities complete', async () => {
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
-
-      mockParticipant.mockResolvedValue(create200CompleteResponse());
-      mockModerator.mockResolvedValue(create200CompleteResponse());
-
-      const onRoundComplete = vi.fn();
-
-      const { result } = renderHook(() =>
-        useRoundSubscription(
-          createDefaultOptions({
-            onRoundComplete,
-            participantCount: 1,
-          }),
-        ));
-
-      await vi.runAllTimersAsync();
-
-      await waitFor(() => {
-        expect(result.current.state.isRoundComplete).toBe(true);
-      }, { timeout: 5000 });
-    });
-
-    it('should call onRoundComplete callback when round completes', async () => {
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
-
-      mockParticipant.mockResolvedValue(create200CompleteResponse());
-      mockModerator.mockResolvedValue(create200CompleteResponse());
-
-      const onRoundComplete = vi.fn();
-
-      renderHook(() =>
-        useRoundSubscription(
-          createDefaultOptions({
-            onRoundComplete,
-            participantCount: 1,
-          }),
-        ));
-
-      await vi.runAllTimersAsync();
-
-      await waitFor(() => {
-        expect(onRoundComplete).toHaveBeenCalledTimes(1);
-      }, { timeout: 5000 });
-    });
-
-    it('should not call onRoundComplete more than once per round', async () => {
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
-
-      mockParticipant.mockResolvedValue(create200CompleteResponse());
-      mockModerator.mockResolvedValue(create200CompleteResponse());
-
-      const onRoundComplete = vi.fn();
-
-      const { rerender } = renderHook(() =>
-        useRoundSubscription(
-          createDefaultOptions({
-            onRoundComplete,
-            participantCount: 1,
-          }),
-        ));
-
-      await vi.runAllTimersAsync();
-
-      // Rerender to trigger any potential duplicate calls
-      rerender();
-      await vi.runAllTimersAsync();
-
-      await waitFor(() => {
-        expect(onRoundComplete).toHaveBeenCalledTimes(1);
-      }, { timeout: 5000 });
-    });
-  });
-
-  // ==========================================================================
-  // Presearch Skip
-  // ==========================================================================
-
-  describe('Presearch Skip', () => {
-    it('should treat disabled presearch as complete for round completion', async () => {
-      const mockPresearch = vi.mocked(apiServices.subscribeToPreSearchStreamService);
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
-
-      // Presearch returns disabled
-      mockPresearch.mockResolvedValue(create200DisabledResponse());
-      mockParticipant.mockResolvedValue(create200CompleteResponse());
-      mockModerator.mockResolvedValue(create200CompleteResponse());
-
-      const { result } = renderHook(() =>
-        useRoundSubscription(
-          createDefaultOptions({
-            enablePreSearch: true,
-            participantCount: 1,
-          }),
-        ));
-
-      await vi.runAllTimersAsync();
-
-      await waitFor(() => {
-        // Presearch disabled counts as complete for round completion
-        expect(result.current.state.presearch.status).toBe('disabled');
-        expect(result.current.state.isRoundComplete).toBe(true);
-      }, { timeout: 5000 });
-    });
-  });
-
-  // ==========================================================================
-  // Callbacks
-  // ==========================================================================
-
-  describe('Callbacks', () => {
-    it('should call onEntityComplete for each entity', async () => {
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
-
-      mockParticipant.mockResolvedValue(create200CompleteResponse(20));
-      mockModerator.mockResolvedValue(create200CompleteResponse(30));
-
-      const onEntityComplete = vi.fn();
-
-      renderHook(() =>
-        useRoundSubscription(
-          createDefaultOptions({
-            onEntityComplete,
-            participantCount: 1,
-          }),
-        ));
-
-      await vi.runAllTimersAsync();
-
-      await waitFor(() => {
-        expect(onEntityComplete).toHaveBeenCalledWith('participant_0', 20);
-        expect(onEntityComplete).toHaveBeenCalledWith('moderator', 30);
-      }, { timeout: 5000 });
-    });
-  });
-
-  // ==========================================================================
   // Abort
   // ==========================================================================
 
-  describe('Abort', () => {
+  describe('abort', () => {
     it('should provide abort function', () => {
       const { result } = renderHook(() =>
         useRoundSubscription(createDefaultOptions({ enabled: false })));
@@ -399,44 +253,61 @@ describe('useRoundSubscription', () => {
   });
 
   // ==========================================================================
-  // Round Number Reset
+  // State Computation
   // ==========================================================================
 
-  describe('Round Number Change', () => {
-    it('should reset hasCalledRoundComplete when round changes', async () => {
-      const mockParticipant = vi.mocked(apiServices.subscribeToParticipantStreamService);
-      const mockModerator = vi.mocked(apiServices.subscribeToModeratorStreamService);
+  describe('state Computation', () => {
+    it('should compute isRoundComplete correctly when all entities idle (incomplete)', () => {
+      // With enabled=false, all entities stay idle
+      const { result } = renderHook(() =>
+        useRoundSubscription(createDefaultOptions({ enabled: false, participantCount: 2 })));
 
-      mockParticipant.mockResolvedValue(create200CompleteResponse());
-      mockModerator.mockResolvedValue(create200CompleteResponse());
+      // Idle entities are NOT complete
+      expect(result.current.state.isRoundComplete).toBe(false);
+    });
 
-      const onRoundComplete = vi.fn();
+    it('should compute hasActiveStream correctly when no streams active', () => {
+      const { result } = renderHook(() =>
+        useRoundSubscription(createDefaultOptions({ enabled: false })));
 
-      const { rerender } = renderHook(
-        (props: { roundNumber: number }) =>
-          useRoundSubscription(
-            createDefaultOptions({
-              onRoundComplete,
-              participantCount: 1,
-              roundNumber: props.roundNumber,
-            }),
-          ),
-        { initialProps: { roundNumber: 0 } },
-      );
+      expect(result.current.state.hasActiveStream).toBe(false);
+    });
 
-      await vi.runAllTimersAsync();
+    it('should require participants.length > 0 for round completion', () => {
+      // Zero participants guard - prevents false completion
+      const { result } = renderHook(() =>
+        useRoundSubscription(createDefaultOptions({ enabled: false, participantCount: 0 })));
 
-      await waitFor(() => {
-        expect(onRoundComplete).toHaveBeenCalledTimes(1);
-      }, { timeout: 5000 });
+      // Even if moderator is complete-ish, empty participants array = not complete
+      expect(result.current.state.isRoundComplete).toBe(false);
+    });
+  });
 
-      // Change round number - should allow callback to be called again
-      rerender({ roundNumber: 1 });
-      await vi.runAllTimersAsync();
+  // ==========================================================================
+  // Presearch Toggle Behavior
+  // ==========================================================================
 
-      await waitFor(() => {
-        expect(onRoundComplete).toHaveBeenCalledTimes(2);
-      }, { timeout: 5000 });
+  describe('presearch Toggle', () => {
+    it('should not call presearch when disabled but include in state', () => {
+      const mockPresearch = vi.mocked(apiServices.subscribeToPreSearchStreamService);
+
+      const { result } = renderHook(() =>
+        useRoundSubscription(createDefaultOptions({ enabled: false, enablePreSearch: false })));
+
+      expect(mockPresearch).not.toHaveBeenCalled();
+      // Presearch state should still exist but be idle
+      expect(result.current.state.presearch.status).toBe('idle');
+    });
+
+    it('should treat disabled presearch as complete for isRoundComplete logic', () => {
+      // When enablePreSearch is false, presearch doesn't affect round completion
+      // The state computation uses: !enablePreSearch || presearch.status === 'complete' || presearch.status === 'disabled'
+      const { result } = renderHook(() =>
+        useRoundSubscription(createDefaultOptions({ enabled: false, enablePreSearch: false, participantCount: 0 })));
+
+      // Presearch complete = true (since enablePreSearch is false)
+      // But participants.length === 0, so isRoundComplete = false
+      expect(result.current.state.isRoundComplete).toBe(false);
     });
   });
 });

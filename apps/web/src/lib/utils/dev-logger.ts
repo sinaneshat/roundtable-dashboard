@@ -147,7 +147,12 @@ const rlogFireCounts: Record<string, { count: number; lastFlush: number }> = {};
 let rlogEnabled = isDev;
 
 // Track keys that fire rapidly and should be suppressed with counts
-const RAPID_FIRE_KEYS = new Set(['noprefill-check', 'noprefill-skip', 'noprefill-completion']);
+const RAPID_FIRE_KEYS = new Set([
+  'noprefill-check',
+  'noprefill-skip',
+  'noprefill-completion',
+  'stream-check', // Debounce [STREAM] check logs (APPEND, resetting lastSeq, etc.)
+]);
 
 function getRlogStyle(category: RlogCategory): string {
   return RLOG_CATEGORY_STYLES[category];
@@ -164,13 +169,13 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
   // For rapid-fire logs, use longer debounce and show fire counts
   if (RAPID_FIRE_KEYS.has(key)) {
     const now = Date.now();
-    const tracker = rlogFireCounts[logKey] || { count: 0, lastFlush: now };
+    const tracker = rlogFireCounts[logKey] || { count: 0, lastFlush: 0 };
 
     tracker.count++;
 
-    // Flush every RAPID_DEBOUNCE_MS
-    if (now - tracker.lastFlush >= RLOG_RAPID_DEBOUNCE_MS) {
-      const countStr = tracker.count > 1 ? ` [${tracker.count}X]` : '';
+    // Flush: either first call (lastFlush=0) or after RAPID_DEBOUNCE_MS
+    if (tracker.lastFlush === 0 || now - tracker.lastFlush >= RLOG_RAPID_DEBOUNCE_MS) {
+      const countStr = tracker.count > 1 ? ` [×${tracker.count}]` : '';
       // eslint-disable-next-line no-console
       console.log(`%c[${category}]${countStr} ${message}`, getRlogStyle(category));
       tracker.count = 0;
@@ -265,7 +270,14 @@ export const rlog = {
   race: (action: string, detail: string): void => rlogNow(RlogCategories.RACE, `${action}: ${detail}`),
   resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
-  stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
+  stream: (action: RlogStreamAction, detail: string): void => {
+    // Debounce 'check' actions (APPEND, resetting lastSeq, etc.) to reduce console clutter
+    if (action === 'check') {
+      rlogLog(RlogCategories.STREAM, 'stream-check', `${action}: ${detail}`);
+    } else {
+      rlogNow(RlogCategories.STREAM, `${action}: ${detail}`);
+    }
+  },
   // ✅ Stuck state detection logging (blockers, timeouts, stuck rounds)
   stuck: (action: string, detail: string): void => rlogNow(RlogCategories.STUCK, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),

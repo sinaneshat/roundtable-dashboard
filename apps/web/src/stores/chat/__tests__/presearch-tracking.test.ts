@@ -43,12 +43,12 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMockStoredPreSearch, createMockThread } from '@/lib/testing';
+import { createMockStoredPreSearch } from '@/lib/testing';
 import type { StoredPreSearch } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { createChatStore } from '@/stores/chat';
 
-describe('PreSearch Tracking', () => {
+describe('preSearch Tracking', () => {
   let store: ChatStoreApi;
 
   beforeEach(() => {
@@ -565,12 +565,12 @@ describe('PreSearch Tracking', () => {
         store.getState().addPreSearch(createMockStoredPreSearch(1, 'streaming'));
 
         // ACT
-        store.getState().updatePartialPreSearchData(1, { step: 1, partial: 'data1' });
-        store.getState().updatePartialPreSearchData(1, { step: 2, partial: 'data2' });
+        store.getState().updatePartialPreSearchData(1, { partial: 'data1', step: 1 });
+        store.getState().updatePartialPreSearchData(1, { partial: 'data2', step: 2 });
 
         // ASSERT
         const preSearch = store.getState().preSearches[0];
-        expect(preSearch?.searchData).toEqual({ step: 2, partial: 'data2' });
+        expect(preSearch?.searchData).toEqual({ partial: 'data2', step: 2 });
       });
     });
 

@@ -752,6 +752,14 @@ export const ChatMessageList = memo(
           totalMessages: deduplicatedMessages.length,
         });
 
+        // DEBUG: Log when streaming placeholder has no participantInfo
+        const msgMeta = getMessageMetadata(message.metadata);
+        const isStreamingPlaceholder = msgMeta && typeof msgMeta === 'object' && 'isStreaming' in msgMeta && msgMeta.isStreaming === true;
+        if (isStreamingPlaceholder && !participantInfo) {
+          const roundNum = getRoundNumber(message.metadata);
+          rlog.phase('UI-skip-noInfo', `r${roundNum} id=${message.id?.slice(-8)} pCount=${participants.length} - streaming placeholder has NO participantInfo`);
+        }
+
         return { index, message, participantInfo };
       });
     }, [deduplicatedMessages, isStreaming, currentParticipantIndex, participants, currentStreamingParticipant, isModeratorStreaming]);
@@ -781,6 +789,15 @@ export const ChatMessageList = memo(
       let currentAssistantGroup: Extract<MessageGroup, { type: 'assistant-group' }> | null = null;
       let currentUserGroup: Extract<MessageGroup, { type: 'user-group' }> | null = null;
 
+      // DEBUG: Log what messages we're processing
+      const streamingMsgs = messagesWithParticipantInfo.filter(m => {
+        const raw = m.message.metadata as Record<string, unknown> | null | undefined;
+        return raw && 'isStreaming' in raw && raw.isStreaming === true;
+      });
+      if (streamingMsgs.length > 0) {
+        rlog.phase('UI-groups-in', `r=${_streamingRoundNumber} total=${messagesWithParticipantInfo.length} streamingPlaceholders=${streamingMsgs.length} hasParticipantInfo=${streamingMsgs.filter(m => m.participantInfo !== null).length}`);
+      }
+
       for (const { index, message, participantInfo } of messagesWithParticipantInfo) {
         const isPreSearch = isPreSearchMessage(message.metadata);
         if (isPreSearch) {
@@ -809,7 +826,34 @@ export const ChatMessageList = memo(
           continue;
         }
 
-        if (!participantInfo) {
+        // Check for streaming placeholder - use RAW metadata, not parsed
+        // getMessageMetadata uses schema parsing which fails for streaming placeholders
+        // because isStreaming isn't in DbMessageMetadataSchema
+        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
+        const isStreamingPlaceholder = rawMeta && typeof rawMeta === 'object' && 'isStreaming' in rawMeta && rawMeta.isStreaming === true;
+
+        // ✅ FIX: For streaming placeholders without participantInfo (stale props issue),
+        // create fallback participantInfo from raw message metadata
+        let effectiveParticipantInfo = participantInfo;
+        if (!participantInfo && isStreamingPlaceholder && rawMeta) {
+          // Extract participant info from streaming placeholder raw metadata
+          const pIdx = typeof rawMeta.participantIndex === 'number' ? rawMeta.participantIndex : undefined;
+          const modelId = typeof rawMeta.model === 'string' ? rawMeta.model : undefined;
+          const role = typeof rawMeta.participantRole === 'string' ? rawMeta.participantRole : null;
+          const roundNum = typeof rawMeta.roundNumber === 'number' ? rawMeta.roundNumber : undefined;
+
+          if (pIdx !== undefined) {
+            effectiveParticipantInfo = {
+              isStreaming: true,
+              modelId,
+              participantIndex: pIdx,
+              role,
+            };
+            rlog.phase('UI-fallback', `r${roundNum} pIdx=${pIdx} model=${modelId?.slice(-15)} - created fallback participantInfo from raw metadata`);
+          }
+        }
+
+        if (!effectiveParticipantInfo) {
           continue;
         }
 
@@ -826,7 +870,9 @@ export const ChatMessageList = memo(
           || p.type === 'reasoning',
         ) ?? false;
 
-        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator && !messageHasContent) {
+        // Don't skip streaming placeholders - they should show with shimmer
+        // isStreamingPlaceholder already computed above
+        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator && !messageHasContent && !isStreamingPlaceholder) {
           continue;
         }
 
@@ -835,9 +881,9 @@ export const ChatMessageList = memo(
           currentUserGroup = null;
         }
 
-        const isModerator = participantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
+        const isModerator = effectiveParticipantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
         const metadata = getMessageMetadata(message.metadata);
-        const model = findModel(participantInfo.modelId);
+        const model = findModel(effectiveParticipantInfo.modelId);
         const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
         let avatarSrc: string;
@@ -853,7 +899,7 @@ export const ChatMessageList = memo(
         } else {
           const avatarProps = getAvatarPropsFromModelId(
             MessageRoles.ASSISTANT,
-            participantInfo.modelId,
+            effectiveParticipantInfo.modelId,
             userInfo.image,
             userInfo.name,
           );
@@ -864,7 +910,7 @@ export const ChatMessageList = memo(
           requiredTierName = model?.required_tier_name ?? undefined;
         }
 
-        const participantKey = `${participantInfo.participantIndex}-${participantInfo.modelId || 'unknown'}`;
+        const participantKey = `${effectiveParticipantInfo.participantIndex}-${effectiveParticipantInfo.modelId || 'unknown'}`;
 
         if (
           currentAssistantGroup
@@ -874,7 +920,7 @@ export const ChatMessageList = memo(
           currentAssistantGroup.messages.push({
             index,
             message,
-            participantInfo,
+            participantInfo: effectiveParticipantInfo,
           });
         } else {
           // Different participant or first assistant message
@@ -889,9 +935,9 @@ export const ChatMessageList = memo(
               displayName,
               isAccessible,
               requiredTierName,
-              role: participantInfo.role ?? null,
+              role: effectiveParticipantInfo.role ?? null,
             },
-            messages: [{ index, message, participantInfo }],
+            messages: [{ index, message, participantInfo: effectiveParticipantInfo }],
             participantKey,
             type: 'assistant-group',
           };

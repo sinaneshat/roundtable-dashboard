@@ -27,6 +27,7 @@ import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, Th
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
+import { extractSessionToken } from '@/lib/auth';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import {
   deductCreditsForAction,
@@ -55,6 +56,7 @@ import {
   getPreSearchStreamChunks,
   initializePreSearchStreamBuffer,
   isPreSearchBufferStale,
+  markPreSearchCompletedInExecution,
 } from '@/services/streaming';
 import { getUserTier } from '@/services/usage';
 import type { ApiEnv } from '@/types';
@@ -1245,6 +1247,22 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               clearActivePreSearchStream(threadId, roundNum, c.env),
             ]),
           );
+
+          // ✅ ORCHESTRATION: Trigger next phase (participants) via queue
+          // Extract session token for queue authentication
+          const sessionToken = extractSessionToken(c.req.header('cookie'));
+          if (sessionToken) {
+            c.executionCtx.waitUntil(
+              markPreSearchCompletedInExecution(
+                db,
+                threadId,
+                roundNum,
+                c.env.ROUND_ORCHESTRATION_QUEUE,
+                sessionToken,
+                body.attachmentIds,
+              ),
+            );
+          }
         } else {
           // Mark as failed if no successful searches
           // ✅ UNIFIED ERROR HANDLING: Use ErrorMetadataService for consistent error categorization

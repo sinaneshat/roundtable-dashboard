@@ -113,14 +113,120 @@ export function createChatStore() {
         // MESSAGES
         // ============================================================
 
-        batchUpdatePendingState: (pendingMessage, expectedParticipantIds) => {
-          set({ expectedParticipantIds, pendingMessage }, false, 'thread/batchUpdatePendingState');
+        /**
+         * Append streaming text to a participant's placeholder message.
+         * Creates placeholder if not exists, appends text if exists.
+         * Used for P1+ participants to show gradual streaming in UI.
+         */
+        appendEntityStreamingText: (participantIndex: number, text: string, roundNumber: number) => {
+          if (!text) {
+            return; // Skip empty text chunks
+          }
+
+          set((draft) => {
+            // Generate streaming message ID - matches pattern used elsewhere
+            const streamingMsgId = `streaming_p${participantIndex}_r${roundNumber}`;
+
+            // Find existing streaming placeholder
+            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+
+            if (existingIdx >= 0) {
+              // Append text to existing placeholder
+              const msg = draft.messages[existingIdx];
+              if (msg && msg.parts && msg.parts.length > 0) {
+                const firstPart = msg.parts[0];
+                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
+                  firstPart.text = firstPart.text + text;
+                  rlog.stream('check', `P${participantIndex} r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
+                }
+              }
+            } else {
+              // Create new streaming placeholder
+              // Look up participant info from participants array
+              const participant = draft.participants[participantIndex];
+              const modelId = participant?.modelId ?? 'unknown';
+              const participantId = participant?.id;
+
+              const streamingMessage: UIMessage = {
+                id: streamingMsgId,
+                metadata: {
+                  isStreaming: true,
+                  model: modelId,
+                  participantId,
+                  participantIndex,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text, type: MessagePartTypes.TEXT }],
+                role: UIMessageRoles.ASSISTANT,
+              };
+
+              draft.messages.push(streamingMessage);
+              rlog.stream('start', `P${participantIndex} r${roundNumber} streaming placeholder created`);
+            }
+          }, false, `streaming/appendText-p${participantIndex}`);
         },
 
         // ============================================================
         // THREAD STATE
         // ============================================================
 
+        /**
+         * Append streaming text to the moderator's placeholder message.
+         * Creates placeholder if not exists, appends text if exists.
+         * Used for gradual moderator streaming in UI.
+         */
+        appendModeratorStreamingText: (text: string, roundNumber: number) => {
+          if (!text) {
+            return; // Skip empty text chunks
+          }
+
+          set((draft) => {
+            // FIX: Use the same ID format as useModeratorStream to avoid duplicate placeholders
+            // useModeratorStream creates: ${threadId}_r${roundNumber}_moderator
+            // Previously this used: streaming_moderator_r${roundNumber} which caused duplicates
+            const threadId = draft.thread?.id;
+            const streamingMsgId = threadId
+              ? `${threadId}_r${roundNumber}_moderator`
+              : `streaming_moderator_r${roundNumber}`; // Fallback if no thread yet
+
+            // Find existing streaming placeholder
+            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+
+            if (existingIdx >= 0) {
+              // Append text to existing placeholder
+              const msg = draft.messages[existingIdx];
+              if (msg && msg.parts && msg.parts.length > 0) {
+                const firstPart = msg.parts[0];
+                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
+                  firstPart.text = firstPart.text + text;
+                  rlog.stream('check', `Moderator r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
+                }
+              }
+            } else {
+              // Create new streaming placeholder for moderator
+              const streamingMessage: UIMessage = {
+                id: streamingMsgId,
+                metadata: {
+                  isStreaming: true,
+                  model: 'moderator',
+                  participantId: MODERATOR_NAME,
+                  participantIndex: MODERATOR_PARTICIPANT_INDEX,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text, type: MessagePartTypes.TEXT }],
+                role: UIMessageRoles.ASSISTANT,
+              };
+
+              draft.messages.push(streamingMessage);
+              rlog.stream('start', `Moderator r${roundNumber} streaming placeholder created`);
+            }
+          }, false, `streaming/appendText-moderator`);
+        },
+        batchUpdatePendingState: (pendingMessage, expectedModelIds) => {
+          set({ expectedModelIds, pendingMessage }, false, 'thread/batchUpdatePendingState');
+        },
         chatStop: null,
         clearAllPreSearches: () => set({ preSearches: [] }, false, 'preSearch/clearAllPreSearches'),
         clearAllPreSearchTracking: () => {
@@ -159,6 +265,7 @@ export function createChatStore() {
             regeneratingRoundNumber: null,
           }, false, 'operations/completeRegeneration');
         },
+
         completeStreaming: () => {
           const state = get();
           const roundNumber = state.currentRoundNumber ?? 0;
@@ -193,6 +300,7 @@ export function createChatStore() {
             set({
               ...STREAMING_COMPLETE_RESET,
               messages: cleanedMessages,
+              pendingMessage: null,
               phase: ChatPhases.COMPLETE as ChatPhase,
             }, false, 'operations/completeStreaming');
           } else {
@@ -202,6 +310,11 @@ export function createChatStore() {
             }, false, 'operations/completeStreaming');
           }
         },
+
+        // ============================================================
+        // FORM STATE
+        // ============================================================
+
         completeTitleAnimation: () => {
           set({
             animatingThreadId: null,
@@ -211,13 +324,72 @@ export function createChatStore() {
             oldTitle: null,
           }, false, 'titleAnimation/complete');
         },
+        /**
+         * CREATE STREAMING PLACEHOLDERS - Frame 2/8
+         * Creates empty streaming placeholder messages for all participants (P1+) and moderator.
+         * Called proactively when round starts so UI shows placeholders immediately,
+         * rather than waiting for first streaming chunk to arrive.
+         *
+         * P0 is handled by AI SDK, so we only create placeholders for P1+.
+         */
+        createStreamingPlaceholders: (roundNumber: number, participantCount: number) => {
+          set((draft) => {
+            // Create placeholders for P1+ (P0 is handled by AI SDK)
+            for (let i = 1; i < participantCount; i++) {
+              const streamingMsgId = `streaming_p${i}_r${roundNumber}`;
 
+              // Skip if already exists
+              if (draft.messages.some(m => m.id === streamingMsgId)) {
+                continue;
+              }
+
+              const participant = draft.participants[i];
+              const modelId = participant?.modelId ?? 'unknown';
+              const participantId = participant?.id;
+
+              const placeholder: UIMessage = {
+                id: streamingMsgId,
+                metadata: {
+                  isStreaming: true,
+                  model: modelId,
+                  participantId,
+                  participantIndex: i,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text: '', type: MessagePartTypes.TEXT }], // Empty text initially
+                role: UIMessageRoles.ASSISTANT,
+              };
+
+              draft.messages.push(placeholder);
+              rlog.stream('check', `P${i} r${roundNumber} proactive placeholder created (empty)`);
+            }
+
+            // Create moderator placeholder
+            const threadId = draft.thread?.id;
+            const modId = threadId
+              ? `${threadId}_r${roundNumber}_moderator`
+              : `streaming_moderator_r${roundNumber}`;
+
+            if (!draft.messages.some(m => m.id === modId)) {
+              draft.messages.push({
+                id: modId,
+                metadata: {
+                  isModerator: true,
+                  isStreaming: true,
+                  model: MODERATOR_NAME,
+                  participantIndex: MODERATOR_PARTICIPANT_INDEX,
+                  role: UIMessageRoles.ASSISTANT,
+                  roundNumber,
+                },
+                parts: [{ text: '', type: MessagePartTypes.TEXT }],
+                role: UIMessageRoles.ASSISTANT,
+              });
+              rlog.stream('check', `Moderator r${roundNumber} proactive placeholder created (empty)`);
+            }
+          }, false, 'streaming/createPlaceholders');
+        },
         getAttachments: () => get().pendingAttachments,
-
-        // ============================================================
-        // FORM STATE
-        // ============================================================
-
         hasAttachments: () => get().pendingAttachments.length > 0,
         hasModeratorStreamBeenTriggered: (moderatorId: string, roundNumber: number) => {
           const state = get();
@@ -284,12 +456,14 @@ export function createChatStore() {
             triggeredPreSearchRounds: new Set<number>(),
           }, false, 'operations/initializeThread');
         },
+
         loadFeedbackFromServer: (data) => {
           set({
             feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
             hasLoadedFeedback: true,
           }, false, 'feedback/loadFeedbackFromServer');
         },
+
         markModeratorStreamTriggered: (moderatorId: string, roundNumber: number) => {
           rlog.moderator('triggered', `r${roundNumber} id=${moderatorId.slice(-8)}`);
           set((draft) => {
@@ -297,6 +471,7 @@ export function createChatStore() {
             draft.triggeredModeratorRounds.add(roundNumber);
           }, false, 'tracking/markModeratorStreamTriggered');
         },
+
         markPreSearchTriggered: (roundNumber: number) => {
           rlog.presearch('triggered', `r${roundNumber}`);
           set((draft) => {
@@ -328,9 +503,14 @@ export function createChatStore() {
           set({
             isModeratorStreaming: false,
             isStreaming: false,
+            pendingMessage: null,
             phase: ChatPhases.COMPLETE as ChatPhase,
           }, false, 'phase/complete');
         },
+
+        // ============================================================
+        // UI STATE
+        // ============================================================
 
         /**
          * PARTICIPANT COMPLETE - Frame 3/4/5 or 10/11
@@ -375,7 +555,6 @@ export function createChatStore() {
             rlog.phase('onParticipantComplete', `P${participantIndex} complete, waiting for others (${subState.participants.filter(p => p.status === 'complete' || p.status === 'error').length}/${enabledCount})`);
           }
         },
-
         prepareForNewMessage: () => {
           set({
             hasSentPendingMessage: false,
@@ -383,7 +562,6 @@ export function createChatStore() {
             phase: ChatPhases.IDLE as ChatPhase,
           }, false, 'operations/prepareForNewMessage');
         },
-
         removeAttachment: (id: string) => {
           set((draft) => {
             const idx = draft.pendingAttachments.findIndex(a => a.id === id);
@@ -392,11 +570,6 @@ export function createChatStore() {
             }
           }, false, 'attachments/removeAttachment');
         },
-
-        // ============================================================
-        // UI STATE
-        // ============================================================
-
         removeParticipant: (participantId: string) => {
           set((draft) => {
             const idx = draft.selectedParticipants.findIndex(p => p.id === participantId || p.modelId === participantId);
@@ -435,6 +608,7 @@ export function createChatStore() {
           rlog.phase('resetToIdle', '→IDLE');
           set({ phase: ChatPhases.IDLE as ChatPhase }, false, 'phase/toIdle');
         },
+
         resetToNewChat: () => {
           rlog.init('resetToNewChat', 'Starting new chat');
           set({
@@ -446,6 +620,11 @@ export function createChatStore() {
             triggeredPreSearchRounds: new Set<number>(),
           }, false, 'operations/resetToNewChat');
         },
+
+        // ============================================================
+        // FEEDBACK STATE
+        // ============================================================
+
         resetToOverview: () => {
           rlog.init('resetToOverview', 'Returning to overview');
           set({
@@ -458,49 +637,43 @@ export function createChatStore() {
           }, false, 'operations/resetToOverview');
         },
         setAnimationPhase: phase => set({ animationPhase: phase }, false, 'titleAnimation/setAnimationPhase'),
-
         setAutoMode: enabled => set({ autoMode: enabled }, false, 'form/setAutoMode'),
-
-        // ============================================================
-        // FEEDBACK STATE
-        // ============================================================
-
-        setChangelogItems: items => set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
-        setChatStop: stop => set({ chatStop: stop }, false, 'external/setChatStop'),
-        setCreatedThreadId: id => set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
 
         // ============================================================
         // ATTACHMENTS STATE
         // ============================================================
 
+        setChangelogItems: items => set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
+        setChatStop: stop => set({ chatStop: stop }, false, 'external/setChatStop'),
+        setCreatedThreadId: id => set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
         setCreatedThreadProjectId: projectId => set({ createdThreadProjectId: projectId }, false, 'ui/setCreatedThreadProjectId'),
         setCurrentParticipantIndex: index => set({ currentParticipantIndex: index }, false, 'thread/setCurrentParticipantIndex'),
         setCurrentRoundNumber: round => set({ currentRoundNumber: round }, false, 'thread/setCurrentRoundNumber'),
         setEnableWebSearch: enabled => set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
         setError: error => set({ error }, false, 'thread/setError'),
-        setExpectedParticipantIds: ids => set({ expectedParticipantIds: ids }, false, 'thread/setExpectedParticipantIds'),
+        setExpectedModelIds: ids => set({ expectedModelIds: ids }, false, 'thread/setExpectedModelIds'),
+
+        // ============================================================
+        // PRE-SEARCH STATE - Frame 10
+        // ============================================================
+
         setFeedback: (roundNumber, type) => {
           set((draft) => {
             draft.feedbackByRound.set(roundNumber, type);
           }, false, 'feedback/setFeedback');
         },
-        setHasInitiallyLoaded: loaded => set({ hasInitiallyLoaded: loaded }, false, 'ui/setHasInitiallyLoaded'),
-        setHasSentPendingMessage: sent => set({ hasSentPendingMessage: sent }, false, 'thread/setHasSentPendingMessage'),
 
-        // ============================================================
-        // PRE-SEARCH STATE - Frame 10
-        // ============================================================
+        setHasInitiallyLoaded: loaded => set({ hasInitiallyLoaded: loaded }, false, 'ui/setHasInitiallyLoaded'),
+
+        setHasSentPendingMessage: sent => set({ hasSentPendingMessage: sent }, false, 'thread/setHasSentPendingMessage'),
 
         setInputValue: value => set({ inputValue: value }, false, 'form/setInputValue'),
 
         setIsAnalyzingPrompt: analyzing => set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
 
         setIsCreatingThread: creating => set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
-
         setIsModeratorStreaming: streaming => set({ isModeratorStreaming: streaming }, false, 'ui/setIsModeratorStreaming'),
-
         setIsRegenerating: regenerating => set({ isRegenerating: regenerating }, false, 'thread/setIsRegenerating'),
-
         setIsStreaming: streaming => set({ isStreaming: streaming }, false, 'thread/setIsStreaming'),
         setMessages: (messages) => {
           const prevMessages = get().messages;
@@ -513,33 +686,40 @@ export function createChatStore() {
         setModelOrder: modelIds => set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
         setParticipants: participants => set({ participants }, false, 'thread/setParticipants'),
         setPendingAttachmentIds: ids => set({ pendingAttachmentIds: ids }, false, 'attachments/setPendingAttachmentIds'),
-        setPendingFeedback: feedback => set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-        setPendingFileParts: parts => set({ pendingFileParts: parts }, false, 'attachments/setPendingFileParts'),
-        setPendingMessage: message => set({ pendingMessage: message }, false, 'form/setPendingMessage'),
 
         // ============================================================
         // CHANGELOG STATE - Frame 8/9
         // ============================================================
 
-        setPreSearches: preSearches => set({ preSearches }, false, 'preSearch/setPreSearches'),
+        setPendingFeedback: feedback => set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
 
-        setRegeneratingRoundNumber: round => set({ regeneratingRoundNumber: round }, false, 'thread/setRegeneratingRoundNumber'),
+        setPendingFileParts: parts => set({ pendingFileParts: parts }, false, 'attachments/setPendingFileParts'),
 
         // ============================================================
         // TITLE ANIMATION STATE
         // ============================================================
 
+        setPendingMessage: message => set({ pendingMessage: message }, false, 'form/setPendingMessage'),
+        setPreSearches: preSearches => set({ preSearches }, false, 'preSearch/setPreSearches'),
+        setRegeneratingRoundNumber: round => set({ regeneratingRoundNumber: round }, false, 'thread/setRegeneratingRoundNumber'),
         setScreenMode: mode => set({ screenMode: mode }, false, 'ui/setScreenMode'),
-        setSelectedMode: mode => set({ selectedMode: mode }, false, 'form/setSelectedMode'),
-        setSelectedParticipants: participants => set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
-        setShowInitialUI: show => set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
 
         // ============================================================
         // TRACKING STATE (deduplication)
         // ============================================================
 
+        setSelectedMode: mode => set({ selectedMode: mode }, false, 'form/setSelectedMode'),
+        setSelectedParticipants: participants => set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
+        setShowInitialUI: show => set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
+
+        // ============================================================
+        // OPERATIONS
+        // ============================================================
+
         setStreamingRoundNumber: round => set({ streamingRoundNumber: round }, false, 'thread/setStreamingRoundNumber'),
+
         setThread: thread => set({ thread }, false, 'thread/setThread'),
+
         /**
          * WAITING TO START - Frame 1/7
          * User is typing, about to send
@@ -556,10 +736,6 @@ export function createChatStore() {
           }
           set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming');
         },
-
-        // ============================================================
-        // OPERATIONS
-        // ============================================================
 
         startRegeneration: (roundNumber: number) => {
           rlog.stream('start', `Regenerating r${roundNumber}`);
@@ -589,6 +765,10 @@ export function createChatStore() {
           }
 
           rlog.phase('startRound', `IDLE→PARTICIPANTS r${roundNumber} with ${participantCount} participants`);
+
+          // ✅ Create streaming placeholders immediately so UI shows them
+          // This ensures placeholders appear on send (Frame 2/8), not on first streaming chunk
+          get().createStreamingPlaceholders(roundNumber, participantCount);
 
           set({
             currentParticipantIndex: 0,
@@ -667,114 +847,6 @@ export function createChatStore() {
               }
             }
           }, false, `subscription/update-${entity}`);
-        },
-
-        /**
-         * Append streaming text to a participant's placeholder message.
-         * Creates placeholder if not exists, appends text if exists.
-         * Used for P1+ participants to show gradual streaming in UI.
-         */
-        appendEntityStreamingText: (participantIndex: number, text: string, roundNumber: number) => {
-          if (!text) {
-            return; // Skip empty text chunks
-          }
-
-          set((draft) => {
-            // Generate streaming message ID - matches pattern used elsewhere
-            const streamingMsgId = `streaming_p${participantIndex}_r${roundNumber}`;
-
-            // Find existing streaming placeholder
-            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
-
-            if (existingIdx >= 0) {
-              // Append text to existing placeholder
-              const msg = draft.messages[existingIdx];
-              if (msg && msg.parts && msg.parts.length > 0) {
-                const firstPart = msg.parts[0];
-                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
-                  firstPart.text = firstPart.text + text;
-                  rlog.stream('check', `P${participantIndex} r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
-                }
-              }
-            } else {
-              // Create new streaming placeholder
-              // Look up participant info from participants array
-              const participant = draft.participants[participantIndex];
-              const modelId = participant?.modelId ?? 'unknown';
-              const participantId = participant?.id;
-
-              const streamingMessage: UIMessage = {
-                id: streamingMsgId,
-                metadata: {
-                  isStreaming: true,
-                  model: modelId,
-                  participantId,
-                  participantIndex,
-                  role: UIMessageRoles.ASSISTANT,
-                  roundNumber,
-                },
-                parts: [{ text, type: MessagePartTypes.TEXT }],
-                role: UIMessageRoles.ASSISTANT,
-              };
-
-              draft.messages.push(streamingMessage);
-              rlog.stream('start', `P${participantIndex} r${roundNumber} streaming placeholder created`);
-            }
-          }, false, `streaming/appendText-p${participantIndex}`);
-        },
-
-        /**
-         * Append streaming text to the moderator's placeholder message.
-         * Creates placeholder if not exists, appends text if exists.
-         * Used for gradual moderator streaming in UI.
-         */
-        appendModeratorStreamingText: (text: string, roundNumber: number) => {
-          if (!text) {
-            return; // Skip empty text chunks
-          }
-
-          set((draft) => {
-            // FIX: Use the same ID format as useModeratorStream to avoid duplicate placeholders
-            // useModeratorStream creates: ${threadId}_r${roundNumber}_moderator
-            // Previously this used: streaming_moderator_r${roundNumber} which caused duplicates
-            const threadId = draft.thread?.id;
-            const streamingMsgId = threadId
-              ? `${threadId}_r${roundNumber}_moderator`
-              : `streaming_moderator_r${roundNumber}`; // Fallback if no thread yet
-
-            // Find existing streaming placeholder
-            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
-
-            if (existingIdx >= 0) {
-              // Append text to existing placeholder
-              const msg = draft.messages[existingIdx];
-              if (msg && msg.parts && msg.parts.length > 0) {
-                const firstPart = msg.parts[0];
-                if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
-                  firstPart.text = firstPart.text + text;
-                  rlog.stream('check', `Moderator r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
-                }
-              }
-            } else {
-              // Create new streaming placeholder for moderator
-              const streamingMessage: UIMessage = {
-                id: streamingMsgId,
-                metadata: {
-                  isStreaming: true,
-                  model: 'moderator',
-                  participantId: MODERATOR_NAME,
-                  participantIndex: MODERATOR_PARTICIPANT_INDEX,
-                  role: UIMessageRoles.ASSISTANT,
-                  roundNumber,
-                },
-                parts: [{ text, type: MessagePartTypes.TEXT }],
-                role: UIMessageRoles.ASSISTANT,
-              };
-
-              draft.messages.push(streamingMessage);
-              rlog.stream('start', `Moderator r${roundNumber} streaming placeholder created`);
-            }
-          }, false, `streaming/appendText-moderator`);
         },
 
         // ============================================================

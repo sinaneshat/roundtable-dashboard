@@ -76,7 +76,7 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
     auth: 'session',
     operationName: 'subscribeToPreSearchStream',
     validateParams: z.object({
-      roundNumber: z.string().transform((v) => Number.parseInt(v, 10)),
+      roundNumber: z.string().transform(v => Number.parseInt(v, 10)),
       threadId: z.string(),
     }),
   },
@@ -142,7 +142,7 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
 
     // Check if stream is stale
     const lastChunkTime = chunks && chunks.length > 0
-      ? Math.max(...chunks.map((chunk) => chunk.timestamp))
+      ? Math.max(...chunks.map(chunk => chunk.timestamp))
       : 0;
     const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
@@ -200,8 +200,8 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
     auth: 'session',
     operationName: 'subscribeToParticipantStream',
     validateParams: z.object({
-      participantIndex: z.string().transform((v) => Number.parseInt(v, 10)),
-      roundNumber: z.string().transform((v) => Number.parseInt(v, 10)),
+      participantIndex: z.string().transform(v => Number.parseInt(v, 10)),
+      roundNumber: z.string().transform(v => Number.parseInt(v, 10)),
       threadId: z.string(),
     }),
   },
@@ -287,7 +287,7 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
 
     // Check if stream is stale
     const lastChunkTime = chunks && chunks.length > 0
-      ? Math.max(...chunks.map((chunk) => chunk.timestamp))
+      ? Math.max(...chunks.map(chunk => chunk.timestamp))
       : 0;
     const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 
@@ -345,7 +345,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
     auth: 'session',
     operationName: 'subscribeToModeratorStream',
     validateParams: z.object({
-      roundNumber: z.string().transform((v) => Number.parseInt(v, 10)),
+      roundNumber: z.string().transform(v => Number.parseInt(v, 10)),
       threadId: z.string(),
     }),
   },
@@ -427,7 +427,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
 
     // Check if stream is stale
     const lastChunkTime = chunks && chunks.length > 0
-      ? Math.max(...chunks.map((chunk) => chunk.timestamp))
+      ? Math.max(...chunks.map(chunk => chunk.timestamp))
       : 0;
     const isStale = lastChunkTime > 0 && Date.now() - lastChunkTime > STREAMING_CONFIG.STALE_CHUNK_TIMEOUT_MS;
 

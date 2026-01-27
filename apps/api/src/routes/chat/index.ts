@@ -2,6 +2,11 @@ export {
   analyzePromptHandler,
 } from './handlers/analyze.handler';
 export {
+  subscribeToModeratorStreamHandler,
+  subscribeToParticipantStreamHandler,
+  subscribeToPreSearchStreamHandler,
+} from './handlers/entity-subscription.handler';
+export {
   getThreadFeedbackHandler,
   setRoundFeedbackHandler,
 } from './handlers/feedback.handler';
@@ -33,17 +38,15 @@ export {
   updateCustomRoleHandler,
 } from './handlers/role.handler';
 export {
+  startRoundHandler,
+} from './handlers/round-start.handler';
+export {
   getRoundStatusHandler,
 } from './handlers/round-status.handler';
 export {
   getThreadStreamResumptionStateHandler,
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';
-export {
-  subscribeToModeratorStreamHandler,
-  subscribeToParticipantStreamHandler,
-  subscribeToPreSearchStreamHandler,
-} from './handlers/entity-subscription.handler';
 export {
   streamChatHandler,
 } from './handlers/streaming.handler';

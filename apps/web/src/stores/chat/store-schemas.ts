@@ -54,7 +54,7 @@ export const ThreadStateSchema = z.object({
   currentParticipantIndex: z.number(),
   currentRoundNumber: z.number().nullable(),
   error: z.custom<Error | null>(),
-  expectedParticipantIds: z.array(z.string()).nullable(),
+  expectedModelIds: z.array(z.string()).nullable(),
   hasSentPendingMessage: z.boolean(),
   isRegenerating: z.boolean(),
   isStreaming: z.boolean(),
@@ -227,11 +227,11 @@ export type ChatStoreActions = {
   setIsStreaming: (streaming: boolean) => void;
   setError: (error: Error | null) => void;
   setStreamingRoundNumber: (round: number | null) => void;
-  setExpectedParticipantIds: (ids: string[] | null) => void;
+  setExpectedModelIds: (ids: string[] | null) => void;
   setHasSentPendingMessage: (sent: boolean) => void;
   setIsRegenerating: (regenerating: boolean) => void;
   setRegeneratingRoundNumber: (round: number | null) => void;
-  batchUpdatePendingState: (pendingMessage: string | null, expectedParticipantIds: string[] | null) => void;
+  batchUpdatePendingState: (pendingMessage: string | null, expectedModelIds: string[] | null) => void;
 
   // === FORM ===
   setInputValue: (value: string) => void;
@@ -316,6 +316,12 @@ export type ChatStoreActions = {
   clearSubscriptionState: () => void;
 
   // === STREAMING TEXT (P1+ gradual UI updates) ===
+  /**
+   * Create streaming placeholders proactively for all participants (P1+) and moderator.
+   * Called when round starts so UI shows placeholders immediately.
+   */
+  createStreamingPlaceholders: (roundNumber: number, participantCount: number) => void;
+
   /**
    * Append streaming text to a participant's placeholder message.
    * Creates placeholder if not exists, appends text if exists.
