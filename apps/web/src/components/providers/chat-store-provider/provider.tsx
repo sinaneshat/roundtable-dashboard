@@ -11,7 +11,7 @@
  * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  */
 
-import { MessageRoles } from '@roundtable/shared';
+import { MessageRoles, MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -136,24 +136,44 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
     if (entity === 'presearch') {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
+
+      // ✅ FIX: Bridge presearch subscription status to preSearches array
+      // Without this, preSearches[roundNumber].status stays 'pending' even though
+      // subscriptionState.presearch.status is 'complete', causing UI stuck in loading
+      const currentRound = state.currentRoundNumber ?? 0;
+      state.updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
+      rlog.presearch('sub-complete', `r${currentRound} - bridged subscription complete to preSearches array`);
     } else if (entity === 'moderator') {
       state.updateEntitySubscriptionStatus('moderator', 'complete', lastSeq);
 
-      // ✅ FIX: Check if messages still have streaming placeholders before calling onModeratorComplete
-      // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
-      // If we call onModeratorComplete here while streaming placeholders exist, we get an intermediate
-      // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+      // ✅ FIX: Check if messages still have streaming placeholders
       const hasStreamingPlaceholders = state.messages.some((m) => {
         const meta = m.metadata as Record<string, unknown> | null | undefined;
         return meta && 'isStreaming' in meta && meta.isStreaming === true;
       });
 
       if (hasStreamingPlaceholders) {
-        rlog.moderator('sub-complete', `skipping onModeratorComplete - streaming placeholders still exist, polling will handle`);
-      } else {
-        // Moderator complete means round is done
-        state.onModeratorComplete();
+        // ✅ FIX: Clean up streaming placeholders by marking them as not streaming
+        // This prevents UI from getting stuck in loading state
+        rlog.moderator('sub-complete', `cleaning up streaming placeholders before onModeratorComplete`);
+        const cleanedMessages = state.messages.map((m) => {
+          const meta = m.metadata as Record<string, unknown> | null | undefined;
+          if (meta && 'isStreaming' in meta && meta.isStreaming === true) {
+            return {
+              ...m,
+              metadata: {
+                ...meta,
+                isStreaming: false,
+              },
+            };
+          }
+          return m;
+        });
+        state.setMessages(cleanedMessages);
       }
+
+      // Moderator complete means round is done
+      state.onModeratorComplete();
     } else if (entity.startsWith('participant_')) {
       const index = Number.parseInt(entity.replace('participant_', ''), 10);
       state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
@@ -179,22 +199,38 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   const handleRoundComplete = useCallback(() => {
     const state = store.getState();
-    rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
+    const roundNumber = state.currentRoundNumber ?? 0;
+    rlog.phase('subscription', `Round ${roundNumber} COMPLETE`);
 
-    // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
-    // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
-    // If we call completeStreaming here while streaming placeholders exist, we get an intermediate
-    // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+    // ✅ FIX: Check if messages still have streaming placeholders
     const hasStreamingPlaceholders = state.messages.some((m) => {
       const meta = m.metadata as Record<string, unknown> | null | undefined;
       return meta && 'isStreaming' in meta && meta.isStreaming === true;
     });
 
     if (hasStreamingPlaceholders) {
-      rlog.moderator('round-complete', `skipping completeStreaming - streaming placeholders still exist, polling will handle`);
-    } else {
-      state.completeStreaming();
+      // ✅ FIX: Clean up streaming placeholders by marking them as not streaming
+      // This prevents UI from getting stuck in loading state when subscription
+      // completes but streaming placeholders still exist
+      rlog.moderator('round-complete', `cleaning up streaming placeholders before completeStreaming`);
+      const cleanedMessages = state.messages.map((m) => {
+        const meta = m.metadata as Record<string, unknown> | null | undefined;
+        if (meta && 'isStreaming' in meta && meta.isStreaming === true) {
+          return {
+            ...m,
+            metadata: {
+              ...meta,
+              isStreaming: false,
+            },
+          };
+        }
+        return m;
+      });
+      state.setMessages(cleanedMessages);
     }
+
+    // Now safe to complete streaming - placeholders are cleaned up
+    state.completeStreaming();
   }, [store]);
 
   const handleEntityError = useCallback((entity: EntityType, error: Error) => {

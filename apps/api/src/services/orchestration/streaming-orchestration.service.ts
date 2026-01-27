@@ -277,6 +277,9 @@ export const BuildSystemPromptParamsSchema = z.object({
   logger: z.custom<TypedLogger>().optional(),
   memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
   participant: z.custom<ChatParticipant>(),
+  // P0 runs in parallel with pre-search, so P0 should NOT receive web search context
+  // Only P1+ participants should see search results in their system prompt
+  participantIndex: z.number().int().nonnegative(),
   previousDbMessages: z.array(z.custom<ChatMessage>()),
   thread: z.custom<Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>>(),
   userQuery: z.string(),
@@ -770,7 +773,7 @@ export async function loadParticipantConfiguration(
 export async function buildSystemPromptWithContext(
   params: BuildSystemPromptParams,
 ): Promise<BuildSystemPromptResult> {
-  const { allParticipants, attachmentIds, baseUrl, currentRoundNumber, db, env, logger, memoryLimits, participant, previousDbMessages, thread, userQuery } = params;
+  const { allParticipants, attachmentIds, baseUrl, currentRoundNumber, db, env, logger, memoryLimits, participant, participantIndex, previousDbMessages, thread, userQuery } = params;
 
   // Memory safety defaults
   const maxRagResults = memoryLimits?.maxRagResults ?? 5;
@@ -997,7 +1000,10 @@ export async function buildSystemPromptWithContext(
   }
 
   // Web search context with citation support
-  if (thread.enableWebSearch) {
+  // ✅ FIX: Only inject web search context for P1+ participants
+  // P0 runs in parallel with pre-search, so P0 should NOT see search results
+  // This prevents P0 from mentioning/citing search content that it shouldn't know about
+  if (thread.enableWebSearch && participantIndex > 0) {
     try {
       const searchResult = buildSearchContextWithCitations(previousDbMessages, {
         currentRoundNumber,
@@ -1013,12 +1019,23 @@ export async function buildSystemPromptWithContext(
           citationSourceMap.set(source.id, source);
         }
       }
+
+      logger?.info('Added web search context to system prompt', LogHelpers.operation({
+        citableSourcesAdded: searchResult.citableSources.length,
+        operationName: 'buildSystemPromptWithContext',
+        participantIndex,
+      }));
     } catch (error) {
       logger?.warn('Search context building failed', LogHelpers.operation({
         error: getErrorMessage(error),
         operationName: 'buildSystemPromptWithContext',
       }));
     }
+  } else if (thread.enableWebSearch && participantIndex === 0) {
+    logger?.info('Skipping web search context for P0 (runs in parallel with pre-search)', LogHelpers.operation({
+      operationName: 'buildSystemPromptWithContext',
+      participantIndex,
+    }));
   }
 
   // If no project context, load thread attachments separately

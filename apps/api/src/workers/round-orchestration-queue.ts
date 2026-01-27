@@ -351,6 +351,10 @@ async function checkRoundCompletion(
     },
   );
 
+  // Debug: log response details
+  const contentType = stateResponse.headers.get('content-type') || 'unknown';
+  const statusCode = stateResponse.status;
+
   if (!stateResponse.ok) {
     // 404 means round doesn't exist or is complete - not an error
     if (stateResponse.status === 404) {
@@ -364,8 +368,11 @@ async function checkRoundCompletion(
 
   // Parse wrapped API response: { data: RoundStatus, meta: ... }
   const json = await stateResponse.json() as { data?: unknown };
-  if (!json.data) {
-    throw new Error('Invalid round status response: missing data field');
+  if (!json.data || typeof json.data !== 'object') {
+    // Debug: show what we received when data is missing or not an object
+    const received = JSON.stringify(json).slice(0, 500);
+    const dataType = typeof json.data;
+    throw new Error(`Invalid round status response: data field is ${dataType}. Status=${statusCode} ContentType=${contentType} Received=${received}`);
   }
 
   // Validate response with Zod schema - single source of truth
@@ -373,7 +380,8 @@ async function checkRoundCompletion(
   if (!parseResult.success) {
     // Debug: Log what we actually received to diagnose the issue
     const received = JSON.stringify(json).slice(0, 500);
-    throw new Error(`Invalid round status response. Received: ${received}. Errors: ${parseResult.error.message}`);
+    const dataKeys = Object.keys(json.data as object).join(',');
+    throw new Error(`Invalid round status. Keys=[${dataKeys}] Received: ${received}. Errors: ${parseResult.error.message}`);
   }
   const roundState = parseResult.data;
 

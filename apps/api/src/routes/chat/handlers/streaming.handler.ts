@@ -711,6 +711,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           },
           memoryLimits,
           participant,
+          // ✅ FIX: Pass participantIndex to skip web search context for P0
+          // P0 runs in parallel with pre-search, so P0 should NOT see search results
+          participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           previousDbMessages,
           thread,
           userQuery,

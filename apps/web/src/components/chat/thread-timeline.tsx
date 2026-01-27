@@ -235,15 +235,34 @@ export function ThreadTimeline({
             </UnifiedErrorBoundary>
 
             {streamingRoundNumber !== item.roundNumber && !isReadOnly && (() => {
-              const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
+              // ✅ FIX: Use raw metadata check as fallback for finding moderator
+              // Schema-based isModeratorMessage may fail for streaming placeholders with extra fields
+              const moderatorMessage = item.data.find((msg) => {
+                if (isModeratorMessage(msg)) {
+                  return true;
+                }
+                // Fallback: check raw metadata for isModerator flag
+                const rawMeta = msg.metadata as Record<string, unknown> | null | undefined;
+                return rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+              });
 
               if (!moderatorMessage) {
                 return null;
               }
 
+              // ✅ FIX: Also check raw metadata for finishReason
               const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
-              const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta ? (moderatorMeta as { finishReason?: string }).finishReason : undefined;
-              if (!finishReason) {
+              const rawMeta = moderatorMessage.metadata as Record<string, unknown> | null | undefined;
+              const finishReason = moderatorMeta?.finishReason
+                ?? (rawMeta && 'finishReason' in rawMeta ? (rawMeta.finishReason as string | undefined) : undefined);
+
+              // ✅ FIX: Skip finishReason check if message has visible content (streaming complete)
+              // Streaming placeholders might not have finishReason but are complete once they have content
+              const hasVisibleContent = moderatorMessage.parts?.some(
+                p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+              ) ?? false;
+
+              if (!finishReason && !hasVisibleContent) {
                 return null;
               }
 
