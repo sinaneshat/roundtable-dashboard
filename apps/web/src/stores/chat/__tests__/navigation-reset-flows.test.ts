@@ -17,7 +17,6 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockParticipant,
   createMockParticipants,
   createMockStoredPreSearch,
   createMockThread,
@@ -26,7 +25,7 @@ import {
   createTestUserMessage,
 } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
-import { SUBSCRIPTION_DEFAULTS, THREAD_NAVIGATION_RESET } from '@/stores/chat/store-defaults';
+import { THREAD_NAVIGATION_RESET } from '@/stores/chat/store-defaults';
 import { ChatPhases } from '@/stores/chat/store-schemas';
 
 // ============================================================================
@@ -254,12 +253,12 @@ describe('navigation Reset Flows', () => {
     });
   });
 
-  describe('NOT reset completed messages when returning to same thread', () => {
+  describe('nOT reset completed messages when returning to same thread', () => {
     it('should NOT trigger reset when navigating to same thread slug', () => {
       const { messages } = setupCompletedThread(store, 'thread-A', 'thread-a', 2, 1);
 
       const messagesBeforeNav = store.getState().messages;
-      expect(messagesBeforeNav.length).toBe(messages.length);
+      expect(messagesBeforeNav).toHaveLength(messages.length);
 
       // Simulate "navigation" to same thread (e.g., clicking same link)
       // This shouldn't trigger any cleanup
@@ -270,7 +269,7 @@ describe('navigation Reset Flows', () => {
 
       const state = store.getState();
       // Messages should be unchanged
-      expect(state.messages.length).toBe(messages.length);
+      expect(state.messages).toHaveLength(messages.length);
       expect(state.thread?.slug).toBe('thread-a');
     });
   });
@@ -337,7 +336,7 @@ describe('navigation Reset Flows', () => {
 
       const stateAfter = store.getState();
       expect(stateAfter.isStreaming).toBe(true);
-      expect(stateAfter.messages.length).toBe(stateBefore.messages.length);
+      expect(stateAfter.messages).toHaveLength(stateBefore.messages.length);
     });
 
     it('should preserve lastSeq values for stream resumption after refresh', () => {
@@ -664,7 +663,7 @@ describe('navigation Reset Flows', () => {
         to: '/chat/thread-b',
       });
 
-      expect(chatStopMock).toHaveBeenCalled();
+      expect(chatStopMock).toHaveBeenCalledWith();
     });
 
     it('should NOT call chatStop when navigating to same thread', () => {

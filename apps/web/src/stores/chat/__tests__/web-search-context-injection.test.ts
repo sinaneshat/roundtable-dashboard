@@ -44,10 +44,14 @@ function shouldWaitForPreSearch(
   preSearch: StoredPreSearch | undefined,
 ): boolean {
   // No web search enabled - no waiting
-  if (!enableWebSearch) return false;
+  if (!enableWebSearch) {
+    return false;
+  }
 
   // No pre-search record - no waiting
-  if (!preSearch) return false;
+  if (!preSearch) {
+    return false;
+  }
 
   // Completed states don't block
   const nonBlockingStatuses: MessageStatus[] = [

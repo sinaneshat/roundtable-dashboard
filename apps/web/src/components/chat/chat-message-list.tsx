@@ -19,7 +19,7 @@ import { useTranslations } from '@/lib/i18n';
 import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
 import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
-import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, participantHasVisibleContent } from '@/lib/utils';
+import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, isPreSearchFast, participantHasVisibleContent } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiParticipant, AvailableSource, DbMessageMetadata, Model, StoredPreSearch } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
@@ -913,7 +913,9 @@ export const ChatMessageList = memo(
       }
 
       for (const { index, message, participantInfo } of messagesWithParticipantInfo) {
-        const isPreSearch = isPreSearchMessage(message.metadata);
+        // BUG FIX: Use BOTH Zod validation AND fast check for pre-search detection
+        // Fast check handles cases where Zod validation fails due to partial/mismatched metadata
+        const isPreSearch = isPreSearchMessage(message.metadata) || isPreSearchFast(message);
         if (isPreSearch) {
           continue;
         }

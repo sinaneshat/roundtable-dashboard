@@ -38,7 +38,7 @@ export type { CitableContextParams } from '@/common/schemas/project-context';
 // Helpers
 // ============================================================================
 
-function generateSourceId(type: CitationSourceType, sourceId: string): string {
+function generateSourceId(type: CitationSourceType, sourceId: string) {
   return `${CitationSourcePrefixes[type]}_${sourceId.slice(0, 8)}`;
 }
 
@@ -239,7 +239,7 @@ function buildAttachmentSources(
   });
 }
 
-function formatSourcesList(sources: CitableSource[]): string {
+function formatSourcesList(sources: CitableSource[]) {
   if (sources.length === 0) {
     return '';
   }
@@ -251,7 +251,7 @@ function formatSourcesList(sources: CitableSource[]): string {
   return `<available-context>\n${lines.join('\n')}\n</available-context>`;
 }
 
-function formatContextWithSources(sources: CitableSource[]): string {
+function formatContextWithSources(sources: CitableSource[]) {
   if (sources.length === 0) {
     return '';
   }

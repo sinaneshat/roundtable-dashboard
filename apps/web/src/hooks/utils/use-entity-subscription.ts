@@ -301,6 +301,7 @@ export function useEntitySubscription({
         let currentEventType: string | null = null;
         // FIX 2: Buffer incomplete JSON lines for chunked SSE data
         // Large JSON payloads can be split across multiple SSE chunks
+        const MAX_JSON_BUFFER_SIZE = 512 * 1024; // 512KB max buffer
         let jsonBuffer = '';
 
         while (true) {
@@ -357,6 +358,7 @@ export function useEntitySubscription({
                   // This prevents pending setTimeout retries from 202 polling from firing
                   isCompleteRef.current = true;
                   rlog.presearch('done-complete', `${logPrefix} 'done' event received, marking complete`);
+
                   setState(prev => ({
                     ...prev,
                     isStreaming: false,
@@ -365,7 +367,12 @@ export function useEntitySubscription({
                   }));
                   callbacks?.onStatusChange?.('complete');
                   callbacks?.onComplete?.(currentSeq);
-                  reader.cancel(); // Stop polling
+
+                  // Small delay before cancel to ensure all state updates flush
+                  await new Promise<void>((resolve) => {
+                    setTimeout(resolve, 50);
+                  });
+                  reader.cancel();
                   return; // Exit read loop
                 }
 
@@ -384,8 +391,15 @@ export function useEntitySubscription({
                   || errorMsg.includes('JSON at position');
 
                 if (isIncomplete) {
-                  // Keep buffering, wait for more data
-                  rlog.presearch('json-buffer', `${logPrefix} buffering incomplete JSON (${jsonBuffer.length} chars) for type=${currentEventType}`);
+                  // Check buffer size limit to prevent memory issues
+                  if (jsonBuffer.length > MAX_JSON_BUFFER_SIZE) {
+                    rlog.presearch('json-buffer-overflow', `${logPrefix} buffer exceeded ${MAX_JSON_BUFFER_SIZE} bytes, clearing`);
+                    jsonBuffer = '';
+                    currentEventType = null;
+                  } else {
+                    // Keep buffering, wait for more data
+                    rlog.presearch('json-buffer', `${logPrefix} buffering incomplete JSON (${jsonBuffer.length} chars) for type=${currentEventType}`);
+                  }
                 } else {
                   // Other parse error - log and clear buffer
                   rlog.presearch('event-error', `${logPrefix} parse error for type=${currentEventType}: ${errorMsg}`);

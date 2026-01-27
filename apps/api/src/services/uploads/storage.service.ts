@@ -72,7 +72,7 @@ const IS_LOCAL_DEV = process.env.WEBAPP_ENV === 'local' || process.env.NODE_ENV 
 /**
  * Get local file path for a storage key
  */
-function getLocalPath(key: string): string {
+function getLocalPath(key: string) {
   // Sanitize key to prevent path traversal
   const sanitized = key.replace(/\.\./g, '').replace(/^\/+/, '');
   return `${LOCAL_STORAGE_DIR}/${sanitized}`;
@@ -497,10 +497,10 @@ export async function createMultipartUpload(
   }
 }
 
-export function getPublicUrl(key: string, baseUrl: string): string {
+export function getPublicUrl(key: string, baseUrl: string) {
   return `${baseUrl}/api/v1/uploads/${encodeURIComponent(key)}/download`;
 }
 
-export function isLocalDevelopment(r2Bucket: R2Bucket | undefined): boolean {
+export function isLocalDevelopment(r2Bucket: R2Bucket | undefined) {
   return !r2Bucket;
 }

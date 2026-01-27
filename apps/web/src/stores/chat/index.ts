@@ -3,6 +3,12 @@
  */
 
 // Store
+// ============================================================================
+// UTILITY EXPORTS
+// Helper functions and hooks used by screens
+// ============================================================================
+import type { MessageStatus } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useLayoutEffect, useRef } from 'react';
 
@@ -82,14 +88,6 @@ export {
   validateThreadsListPages,
 } from './actions/types';
 
-// ============================================================================
-// UTILITY EXPORTS
-// Helper functions and hooks used by screens
-// ============================================================================
-
-import type { MessageStatus } from '@roundtable/shared';
-import { MessageStatuses } from '@roundtable/shared';
-
 /**
  * Get effective web search enabled state.
  * Form state takes precedence over thread default.
@@ -124,10 +122,14 @@ export function shouldWaitForPreSearch(
   preSearch: StoredPreSearch | undefined,
 ): boolean {
   // No web search enabled - no waiting
-  if (!enableWebSearch) return false;
+  if (!enableWebSearch) {
+    return false;
+  }
 
   // No pre-search record - no waiting
-  if (!preSearch) return false;
+  if (!preSearch) {
+    return false;
+  }
 
   // Completed states don't block (graceful degradation on failure)
   const nonBlockingStatuses: MessageStatus[] = [

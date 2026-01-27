@@ -10,12 +10,10 @@
  * @see docs/FLOW_DOCUMENTATION.md Section "Phase Transitions"
  */
 
-import { MessageStatuses } from '@roundtable/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,
-  createMockStoredPreSearch,
   createMockThread,
 } from '@/lib/testing';
 
@@ -29,7 +27,7 @@ import { ChatPhases } from '../store-schemas';
 
 type TestStore = ReturnType<typeof createChatStore>;
 
-function setupStore(participantCount: number = 2, enableWebSearch: boolean = false) {
+function setupStore(participantCount = 2, enableWebSearch = false) {
   const store = createChatStore();
   const participants = createMockParticipants(participantCount);
   const thread = createMockThread({ enableWebSearch, id: 'thread-phase' });
@@ -464,7 +462,7 @@ describe('idempotent Phase Transitions', () => {
 
 describe('phase Preserved During Hydration', () => {
   it('should preserve PARTICIPANTS phase during initializeThread if streaming', () => {
-    const { store, thread, participants } = setupStore(2);
+    const { participants, store, thread } = setupStore(2);
 
     // Simulate active streaming
     store.setState({
@@ -480,7 +478,7 @@ describe('phase Preserved During Hydration', () => {
   });
 
   it('should preserve MODERATOR phase during initializeThread if streaming', () => {
-    const { store, thread, participants } = setupStore(2);
+    const { participants, store, thread } = setupStore(2);
 
     store.setState({
       isStreaming: true,

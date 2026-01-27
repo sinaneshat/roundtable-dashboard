@@ -90,7 +90,7 @@ import {
  * @param bucket - The R2 bucket binding from environment
  * @returns The validated R2 bucket (non-null)
  */
-function getValidatedR2Bucket(bucket: R2Bucket | undefined): R2Bucket {
+function getValidatedR2Bucket(bucket: R2Bucket | undefined) {
   if (!bucket) {
     throw createError.badRequest(
       'R2 bucket not available. Multipart uploads require R2 configuration.',
@@ -103,7 +103,7 @@ function getValidatedR2Bucket(bucket: R2Bucket | undefined): R2Bucket {
 /**
  * Generate R2 key for upload
  */
-function generateR2Key(userId: string, uploadId: string, filename: string): string {
+function generateR2Key(userId: string, uploadId: string, filename: string) {
   // Sanitize filename
   const sanitizedFilename = filename.replace(/[^\w.-]/g, '_');
   return `uploads/${userId}/${uploadId}_${sanitizedFilename}`;

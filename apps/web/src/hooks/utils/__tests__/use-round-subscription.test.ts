@@ -82,7 +82,7 @@ function create200CompleteResponse(lastSeq = 10): Response {
   });
 }
 
-function create200DisabledResponse(): Response {
+function _create200DisabledResponse(): Response {
   return createMockResponse({
     contentType: 'application/json',
     json: () => Promise.resolve({

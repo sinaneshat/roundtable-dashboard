@@ -88,34 +88,40 @@ function applyKVResumption(
 
   // Apply presearch status
   if (presearchStatus) {
-    const status = presearchStatus === 'complete' ? 'complete'
-      : presearchStatus === 'streaming' ? 'streaming'
+    const status = presearchStatus === 'complete'
+      ? 'complete'
+      : presearchStatus === 'streaming'
+        ? 'streaming'
         : 'idle';
     store.getState().updateEntitySubscriptionStatus('presearch', status, lastSeqValues.presearch);
   }
 
   // Apply participant statuses
   participantStatuses.forEach((pStatus, index) => {
-    const status = pStatus === 'complete' ? 'complete'
-      : pStatus === 'streaming' ? 'streaming'
+    const status = pStatus === 'complete'
+      ? 'complete'
+      : pStatus === 'streaming'
+        ? 'streaming'
         : 'idle';
     store.getState().updateEntitySubscriptionStatus(index, status, lastSeqValues.participants[index] ?? 0);
   });
 
   // Apply moderator status
   if (moderatorStatus) {
-    const status = moderatorStatus === 'complete' ? 'complete'
-      : moderatorStatus === 'streaming' ? 'streaming'
+    const status = moderatorStatus === 'complete'
+      ? 'complete'
+      : moderatorStatus === 'streaming'
+        ? 'streaming'
         : 'idle';
     store.getState().updateEntitySubscriptionStatus('moderator', status, lastSeqValues.moderator);
   }
 
   // Set phase
   const phaseMap: Record<string, typeof ChatPhases[keyof typeof ChatPhases]> = {
-    'complete': ChatPhases.COMPLETE,
-    'moderator': ChatPhases.MODERATOR,
-    'participants': ChatPhases.PARTICIPANTS,
-    'presearch': ChatPhases.PARTICIPANTS, // presearch happens during PARTICIPANTS phase
+    complete: ChatPhases.COMPLETE,
+    moderator: ChatPhases.MODERATOR,
+    participants: ChatPhases.PARTICIPANTS,
+    presearch: ChatPhases.PARTICIPANTS, // presearch happens during PARTICIPANTS phase
   };
 
   store.setState({

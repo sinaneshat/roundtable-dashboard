@@ -70,7 +70,7 @@ const LanguageModelUsageSchema = z.object({
   totalTokens: z.number().int().nonnegative().optional(),
 });
 
-function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
+function isLanguageModelUsage(value: unknown) {
   return LanguageModelUsageSchema.safeParse(value).success;
 }
 

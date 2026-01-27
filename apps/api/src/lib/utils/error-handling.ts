@@ -90,7 +90,7 @@ const RawContextSchema = z.record(z.string(), z.unknown());
 // ERROR DETAILS EXTRACTION
 // ============================================================================
 
-function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
+function extractErrorDetails(context: unknown) {
   const details: NonNullable<ClientErrorDetails> = {};
 
   // Extract errorType using Zod

@@ -72,7 +72,6 @@ import type {
   RoundFeedbackInput,
   SendMessageInput,
   ToolArgs,
-  ToolCallResult,
   UpdateParticipantInput,
   UpdateProjectInput,
 } from './schema';
@@ -156,7 +155,7 @@ function getModelForPricing(modelId: string): import('@/common/schemas/model-pri
 // Helper: Build MCP Response
 // ============================================================================
 
-function mcpResult(data: unknown): ToolCallResult {
+function mcpResult(data: unknown) {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   const structuredContent = isObject(data) ? data : undefined;
   return {
@@ -165,7 +164,7 @@ function mcpResult(data: unknown): ToolCallResult {
   };
 }
 
-function mcpError(message: string): ToolCallResult {
+function mcpError(message: string) {
   return {
     content: [{ text: message, type: MessagePartTypes.TEXT }],
     isError: true,
@@ -395,7 +394,7 @@ async function executeToolInternal(
   rawArgs: ToolArgs | Record<string, unknown>,
   user: { id: string },
   env: ApiEnv['Bindings'],
-): Promise<ToolCallResult> {
+) {
   // Safe to use rawArgs - each tool validates via safeParse
   const args = rawArgs;
   const tool = getToolByName(toolName);
@@ -631,7 +630,7 @@ async function toolCreateThread(
   input: CreateThreadInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   const userTier = await getUserTier(user.id);
   const allModels = getAllModels();
   // ✅ PERF: Build Map once for O(1) lookups instead of O(n) find() in loop
@@ -727,7 +726,7 @@ async function toolGetThread(
   input: GetThreadInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   const thread = await db.query.chatThread.findFirst({
     where: eq(tables.chatThread.id, input.threadId),
     with: { participants: true },
@@ -781,7 +780,7 @@ async function toolListThreads(
   input: ListThreadsInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   // Build where clause
   const filters = [eq(tables.chatThread.userId, user.id)];
   if (input.projectId) {
@@ -813,7 +812,7 @@ async function toolDeleteThread(
   input: { threadId: string },
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
   await db.delete(tables.chatThread).where(eq(tables.chatThread.id, input.threadId));
   return mcpResult({ deleted: true, threadId: input.threadId });
@@ -823,7 +822,7 @@ async function toolSendMessage(
   input: SendMessageInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const userMessages = await db.query.chatMessage.findMany({
@@ -860,7 +859,7 @@ async function toolGenerateResponses(
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
   env: ApiEnv['Bindings'],
-): Promise<ToolCallResult> {
+) {
   // ✅ LAZY LOAD AI SDK: Load at function invocation, not module startup
   const { convertToModelMessages, streamText, validateUIMessages } = await getAiSdk();
 
@@ -1014,7 +1013,7 @@ async function toolListRounds(
   input: ListRoundsInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const messages = await db.query.chatMessage.findMany({
@@ -1039,7 +1038,7 @@ async function toolRegenerateRound(
   input: RegenerateRoundInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const cleanup = await handleRoundRegeneration({
@@ -1060,7 +1059,7 @@ async function toolRoundFeedback(
   input: RoundFeedbackInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const existing = await db.query.chatRoundFeedback.findFirst({
@@ -1098,7 +1097,7 @@ async function toolGenerateSummary(
   input: GenerateAnalysisInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   // Note: Full summary generation requires streaming - return guidance
@@ -1113,7 +1112,7 @@ async function toolGetRoundSummary(
   input: GetRoundAnalysisInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const messages = await db.query.chatMessage.findMany({
@@ -1151,7 +1150,7 @@ async function toolAddParticipant(
   input: AddParticipantInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
   const participants = await db.query.chatParticipant.findMany({
     where: eq(tables.chatParticipant.threadId, input.threadId),
@@ -1200,7 +1199,7 @@ async function toolUpdateParticipant(
   input: UpdateParticipantInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   const participant = await db.query.chatParticipant.findFirst({
@@ -1232,7 +1231,7 @@ async function toolRemoveParticipant(
   input: RemoveParticipantInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
   await db.update(tables.chatParticipant)
@@ -1248,7 +1247,7 @@ async function toolRemoveParticipant(
 async function toolListModels(
   input: ListModelsInput,
   user: { id: string },
-): Promise<ToolCallResult> {
+) {
   const userTier = await getUserTier(user.id);
   let models = getAllModels();
 
@@ -1282,7 +1281,7 @@ async function toolCreateProject(
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
   env: ApiEnv['Bindings'],
-): Promise<ToolCallResult> {
+) {
   const projectId = ulid();
   const r2FolderPrefix = `projects/${projectId}/`;
 
@@ -1323,7 +1322,7 @@ async function toolGetProject(
   input: GetProjectInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   const project = await db.query.chatProject.findFirst({
     where: and(
       eq(tables.chatProject.id, input.projectId),
@@ -1366,7 +1365,7 @@ async function toolListProjects(
   input: ListProjectsInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   const filters = [eq(tables.chatProject.userId, user.id)];
 
   if (input.search) {
@@ -1408,7 +1407,7 @@ async function toolUpdateProject(
   input: UpdateProjectInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   // Verify ownership
   const existing = await db.query.chatProject.findFirst({
     where: and(
@@ -1446,7 +1445,7 @@ async function toolDeleteProject(
   input: DeleteProjectInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   // Verify ownership
   const project = await db.query.chatProject.findFirst({
     where: and(
@@ -1477,7 +1476,7 @@ async function toolListProjectThreads(
   input: ListProjectThreadsInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   // Verify project ownership
   const project = await db.query.chatProject.findFirst({
     where: and(
@@ -1518,7 +1517,7 @@ async function toolListKnowledgeFiles(
   input: ListKnowledgeFilesInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ToolCallResult> {
+) {
   // Verify project ownership
   const project = await db.query.chatProject.findFirst({
     where: and(
@@ -1566,7 +1565,7 @@ async function toolDeleteKnowledgeFile(
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
   _env: ApiEnv['Bindings'],
-): Promise<ToolCallResult> {
+) {
   // Verify project ownership
   const project = await db.query.chatProject.findFirst({
     where: and(

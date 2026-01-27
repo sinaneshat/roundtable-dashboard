@@ -14,7 +14,6 @@
  * @see https://developers.cloudflare.com/workers/observability/logs/workers-logs/
  */
 
-import type { RequestLogLevel } from '@roundtable/shared/enums';
 import { REQUEST_LOG_LEVEL_BY_ENV, RequestLogLevels } from '@roundtable/shared/enums';
 import { createMiddleware } from 'hono/factory';
 
@@ -27,7 +26,7 @@ import type { ApiEnv } from '@/types';
 /**
  * Get log level based on environment
  */
-function getLogLevel(): RequestLogLevel {
+function getLogLevel() {
   const env = process.env.WEBAPP_ENV || process.env.NODE_ENV || 'development';
   return REQUEST_LOG_LEVEL_BY_ENV[env] ?? RequestLogLevels.VERBOSE;
 }
@@ -35,14 +34,14 @@ function getLogLevel(): RequestLogLevel {
 /**
  * Check if logging is disabled
  */
-function isLoggingDisabled(): boolean {
+function isLoggingDisabled() {
   return getLogLevel() === RequestLogLevels.NONE;
 }
 
 /**
  * Check if verbose logging is enabled
  */
-function isVerboseLogging(): boolean {
+function isVerboseLogging() {
   const level = getLogLevel();
   return level === RequestLogLevels.VERBOSE || level === RequestLogLevels.STANDARD;
 }

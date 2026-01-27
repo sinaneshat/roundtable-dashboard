@@ -305,7 +305,7 @@ export function calculateLLMCost(
  * @param reasoningText - Combined reasoning text
  * @returns Estimated token count
  */
-export function estimateReasoningTokens(reasoningText: string): number {
+export function estimateReasoningTokens(reasoningText: string) {
   return Math.ceil(reasoningText.length / 4);
 }
 
@@ -319,7 +319,7 @@ export function estimateReasoningTokens(reasoningText: string): number {
  * Trace IDs link related events (generation, errors, embeddings)
  * Format: trace_{ulid}
  */
-export function generateTraceId(): string {
+export function generateTraceId() {
   return `trace_${ulid()}`;
 }
 

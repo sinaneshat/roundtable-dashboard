@@ -56,7 +56,7 @@ import { getThreadActiveStream } from './resumable-stream-kv.service';
  * Format participant label for logging - converts sentinel values to readable names
  * -1 (NO_PARTICIPANT_SENTINEL) and -99 (MODERATOR_PARTICIPANT_INDEX) → "Moderator"
  */
-function formatParticipantLabel(participantIndex: number): string {
+function formatParticipantLabel(participantIndex: number) {
   if (participantIndex < 0) {
     return 'Moderator';
   }
@@ -67,11 +67,11 @@ function formatParticipantLabel(participantIndex: number): string {
 // KV KEY GENERATION - DISCRIMINATED BY STREAM PHASE
 // ============================================================================
 
-function getMetadataKey(streamId: string): string {
+function getMetadataKey(streamId: string) {
   return `stream:buffer:${streamId}:meta`;
 }
 
-function getChunkKey(streamId: string, index: number): string {
+function getChunkKey(streamId: string, index: number) {
   return `stream:buffer:${streamId}:c:${index}`;
 }
 
@@ -79,7 +79,7 @@ function getActiveKey(
   threadId: string,
   roundNumber: number,
   discriminator: string,
-): string {
+) {
   return `stream:active:${threadId}:r${roundNumber}:${discriminator}`;
 }
 
@@ -1331,10 +1331,20 @@ export function createLivePreSearchResumeStream(
       try {
         const initialChunks = await getPreSearchStreamChunks(streamId, env);
         if (initialChunks && initialChunks.length > 0) {
-          for (const chunk of initialChunks) {
-            const sseData = `event: ${chunk.event}\ndata: ${chunk.data}\n\n`;
-            if (!safeEnqueue(controller, encoder.encode(sseData))) {
-              return;
+          // BUG FIX: Add staggered delay between buffered chunks for gradual UI rendering
+          // Without delay, all chunks are sent instantly causing all-at-once display
+          // 30ms matches the visual pace users expect for gradual skeleton replacement
+          for (let i = 0; i < initialChunks.length; i++) {
+            const chunk = initialChunks[i];
+            if (chunk) {
+              const sseData = `event: ${chunk.event}\ndata: ${chunk.data}\n\n`;
+              if (!safeEnqueue(controller, encoder.encode(sseData))) {
+                return;
+              }
+              // Add delay between chunks (except after last) for gradual replay
+              if (i < initialChunks.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 30));
+              }
             }
           }
           lastChunkIndex = initialChunks.length;

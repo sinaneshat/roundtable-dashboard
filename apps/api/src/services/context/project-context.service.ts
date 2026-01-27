@@ -525,7 +525,7 @@ export async function getAggregatedProjectContext(
  */
 export function formatProjectContextForPrompt(
   context: AggregatedProjectContext,
-): string {
+) {
   const sections: string[] = [];
 
   // Format memories

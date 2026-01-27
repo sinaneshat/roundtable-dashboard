@@ -1,5 +1,13 @@
 /**
- * Web Search Service - Browser-based search using Puppeteer
+ * Web Search Service - Multi-Engine Search with Serper
+ *
+ * Search Engine Priority:
+ * 1. Serper (Google Search API) - Primary, fast, reliable
+ * 2. DuckDuckGo Browser - Fallback when Serper unavailable
+ *
+ * Content Extraction Priority:
+ * 1. Cloudflare Browser - Full JS rendering
+ * 2. Lightweight HTML - Last resort
  */
 
 import type {
@@ -18,6 +26,7 @@ import {
   LogTypes,
   PageWaitStrategies,
   PageWaitStrategySchema,
+  RlogCategories,
   UIMessageRoles,
   WebSearchActiveAnswerModes,
   WebSearchAnswerModes,
@@ -59,12 +68,45 @@ import {
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 
+import { isSerperConfigured, searchWithSerperRetry } from './serper.service';
 import {
   cacheImageDescription,
   cacheSearchResult,
   getCachedImageDescription,
   getCachedSearch,
 } from './web-search-cache.service';
+
+// ============================================================================
+// RLOG LOGGING (replaces console.log/error/warn)
+// ============================================================================
+
+const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+
+function rlogSearch(action: string, detail: string): void {
+  if (!isDev) {
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.log(`%c[${RlogCategories.PRESRCH}] search:${action}: ${detail}`, 'color: #FF5722; font-weight: bold');
+}
+
+// ============================================================================
+// SEARCH ENGINE TYPES
+// ============================================================================
+
+/**
+ * Search engine identifier for multi-engine fallback
+ */
+type SearchEngine = 'serper' | 'duckduckgo' | 'bing';
+
+/**
+ * Result of multi-engine search attempt
+ */
+type MultiEngineSearchResult = {
+  engine: SearchEngine;
+  results: Array<{ title: string; url: string; snippet: string }>;
+  responseTimeMs: number;
+};
 
 type PuppeteerRequestHandler = {
   isInterceptResolutionHandled: () => boolean;
@@ -760,7 +802,8 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
       });
       return { browser, type: BrowserEnvironments.CLOUDFLARE };
     } catch (error) {
-      console.error('[Browser] Cloudflare puppeteer failed:', error instanceof Error ? error.message : error);
+      rlogSearch('browser-fail', `cloudflare puppeteer: ${error instanceof Error ? error.message : 'Unknown'}`);
+      // Fall through to fetch-based fallback
       // Fall through to fetch-based fallback
     }
   }
@@ -979,7 +1022,7 @@ async function extractPageContent(
 }> {
   // ✅ FIX Phase 5D: Early check for ad/tracking URLs that will fail extraction
   if (shouldSkipUrl(url)) {
-    console.warn(`[Search] Skipping ad/tracking URL: ${url.slice(0, 80)}...`);
+    rlogSearch('skip-ad', `url=${url.slice(0, 60)}...`);
     return {
       content: '',
       metadata: {
@@ -993,7 +1036,7 @@ async function extractPageContent(
 
   // Fallback if no browser available - use lightweight HTML extraction
   if (!browserResult) {
-    console.error(`[Search] No browser for ${url}, using lightweight extraction`);
+    rlogSearch('no-browser', `using lightweight for ${extractDomain(url)}`);
     const lightContent = await extractLightweightContent(url);
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
@@ -1125,12 +1168,21 @@ async function extractPageContent(
       await browserResult.browser.close();
     } catch {}
 
-    console.error(`[Search] Browser extraction failed for ${url}, falling back to lightweight:`, browserError);
+    // Log at warn level - this is expected for JS-heavy sites (TradingView, etc.)
+    // The fallback to lightweight extraction typically succeeds
+    rlogSearch('browser-fallback', `${extractDomain(url)} trying lightweight`);
 
     // Fall back to lightweight extraction instead of returning empty
     const lightContent = await extractLightweightContent(url);
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
+
+    // Log fallback success
+    if (content.length > 0) {
+      rlogSearch('lightweight-ok', `${extractDomain(url)} words=${wordCount}`);
+    } else {
+      rlogSearch('lightweight-empty', extractDomain(url));
+    }
 
     // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
     const fallbackMetadata: {
@@ -1246,7 +1298,7 @@ async function searchWithBrowser(
 
     return results;
   } catch (error) {
-    console.error('[Browser] Search failed:', error);
+    rlogSearch('browser-search-fail', error instanceof Error ? error.message : 'Unknown error');
     // Close browser on error
     try {
       await browserResult.browser.close();
@@ -1276,7 +1328,7 @@ async function searchWithFetch(
     });
 
     if (!response.ok) {
-      console.error('[Fetch] DuckDuckGo request failed:', response.status);
+      rlogSearch('ddg-http-error', `status=${response.status}`);
       return [];
     }
 
@@ -1288,7 +1340,12 @@ async function searchWithFetch(
       || html.includes('challenge-form')
       || html.includes('g-recaptcha')
     ) {
-      console.error('[Fetch] DuckDuckGo returned CAPTCHA page');
+      const captchaType = html.includes('g-recaptcha')
+        ? 'google-recaptcha'
+        : html.includes('challenge-form')
+          ? 'challenge-form'
+          : 'anomaly-modal';
+      rlogSearch('ddg-captcha', `type=${captchaType} query="${query.slice(0, 30)}..."`);
       return [];
     }
 
@@ -1344,9 +1401,101 @@ async function searchWithFetch(
 
     return results;
   } catch (error) {
-    console.error('[Fetch] Search failed:', error instanceof Error ? error.message : error);
+    rlogSearch('ddg-error', error instanceof Error ? error.message : 'Unknown error');
     return [];
   }
+}
+
+// ============================================================================
+// MULTI-ENGINE SEARCH (Serper → DuckDuckGo fallback)
+// ============================================================================
+
+/**
+ * Execute search across multiple engines with automatic fallback
+ *
+ * Engine priority:
+ * 1. Serper (Google Search API) - Fast, reliable, no ads
+ * 2. DuckDuckGo Browser - Fallback when Serper unavailable
+ *
+ * @param query - Search query
+ * @param maxResults - Maximum results to return
+ * @param env - Cloudflare environment bindings
+ * @param params - Optional search parameters
+ * @returns Search results with engine metadata
+ */
+async function executeMultiEngineSearch(
+  query: string,
+  maxResults: number,
+  env: ApiEnv['Bindings'],
+  params?: Partial<WebSearchParameters>,
+): Promise<MultiEngineSearchResult> {
+  const startTime = performance.now();
+
+  // Try Serper first (Google Search API)
+  if (isSerperConfigured(env)) {
+    try {
+      rlogSearch('engine', 'trying serper (google)');
+      const serperResult = await searchWithSerperRetry(query, env, {
+        numResults: maxResults + 5, // Extra to compensate for filtering
+      });
+
+      // Filter out ad/tracking URLs
+      const filteredResults = serperResult.results
+        .filter((r) => !shouldSkipUrl(r.url))
+        .slice(0, maxResults)
+        .map((r) => ({
+          snippet: r.snippet,
+          title: r.title,
+          url: r.url,
+        }));
+
+      if (filteredResults.length > 0) {
+        rlogSearch('serper-success', `results=${filteredResults.length} time=${serperResult.responseTimeMs.toFixed(0)}ms`);
+        return {
+          engine: 'serper',
+          responseTimeMs: serperResult.responseTimeMs,
+          results: filteredResults,
+        };
+      }
+
+      rlogSearch('serper-empty', 'no valid results after filtering, falling back');
+    } catch (error) {
+      rlogSearch('serper-fail', error instanceof Error ? error.message : 'Unknown error');
+      // Continue to fallback
+    }
+  } else {
+    rlogSearch('serper-skip', 'API key not configured');
+  }
+
+  // Fallback to DuckDuckGo browser search
+  rlogSearch('engine', 'falling back to duckduckgo');
+  try {
+    const ddgResults = await searchWithBrowser(query, maxResults + 5, env, params);
+    const filteredResults = ddgResults.filter((r) => !shouldSkipUrl(r.url)).slice(0, maxResults);
+    const responseTimeMs = performance.now() - startTime;
+
+    if (filteredResults.length > 0) {
+      rlogSearch('ddg-success', `results=${filteredResults.length} time=${responseTimeMs.toFixed(0)}ms`);
+      return {
+        engine: 'duckduckgo',
+        responseTimeMs,
+        results: filteredResults,
+      };
+    }
+
+    rlogSearch('ddg-empty', 'no valid results');
+  } catch (error) {
+    rlogSearch('ddg-fail', error instanceof Error ? error.message : 'Unknown error');
+  }
+
+  // All engines failed
+  const responseTimeMs = performance.now() - startTime;
+  rlogSearch('all-failed', `no results from any engine, time=${responseTimeMs.toFixed(0)}ms`);
+  return {
+    engine: 'serper',
+    responseTimeMs,
+    results: [],
+  };
 }
 
 // Image Description Generation (AI-Powered)
@@ -1445,7 +1594,7 @@ async function generateImageDescriptions(
                     threadId: billingContext.threadId,
                   });
                 } catch (billingError) {
-                  console.error('[WebSearch] Image description billing failed:', billingError);
+                  rlogSearch('billing-fail', `image-desc: ${billingError instanceof Error ? billingError.message : 'Unknown'}`);
                 }
               }
             }
@@ -1645,7 +1794,7 @@ async function generateAnswerSummary(
             threadId: billingContext.threadId,
           });
         } catch (billingError) {
-          console.error('[WebSearch] Answer summary billing failed:', billingError);
+          rlogSearch('billing-fail', `answer-summary: ${billingError instanceof Error ? billingError.message : 'Unknown'}`);
         }
       }
     }
@@ -1726,7 +1875,7 @@ async function detectSearchParameters(
             threadId: billingContext.threadId,
           });
         } catch (billingError) {
-          console.error('[WebSearch] Parameter detection billing failed:', billingError);
+          rlogSearch('billing-fail', `param-detect: ${billingError instanceof Error ? billingError.message : 'Unknown'}`);
         }
       }
     }
@@ -1750,43 +1899,6 @@ async function detectSearchParameters(
     }
     return null;
   }
-}
-
-// Utility: Retry Logic with Exponential Backoff
-
-/**
- * Retry wrapper with minimal backoff for reliability
- * Single retry with short delay - fail fast, don't block
- *
- * @param fn - Async function to retry
- * @param maxRetries - Maximum retry attempts (default: 2)
- * @param initialDelay - Initial delay in ms (default: 200)
- * @returns Result of the function
- */
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 2,
-  initialDelay = 200,
-): Promise<T> {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = normalizeError(error);
-
-      // Don't retry on last attempt
-      if (attempt < maxRetries - 1) {
-        await new Promise((resolve) => {
-          setTimeout(resolve, initialDelay);
-        });
-      }
-    }
-  }
-
-  // All retries exhausted
-  throw lastError;
 }
 
 // Progressive Result Streaming (AsyncGenerator Pattern)
@@ -1872,25 +1984,23 @@ export async function* streamSearchResults(
       type: WebSearchStreamEventTypes.METADATA,
     };
 
-    // PHASE 2: Get Basic Search Results
+    // PHASE 2: Get Basic Search Results using multi-engine search
+    rlogSearch('stream-start', `query="${query.slice(0, 40)}..." maxResults=${maxResults}`);
     logger?.info('Starting progressive search', {
       logType: LogTypes.OPERATION,
       operationName: 'streamSearchResults',
       query,
     });
 
-    const searchResults = await withRetry(
-      async () =>
-        await searchWithBrowser(
-          query,
-          maxResults + 2, // Fetch extra for filtering
-          env,
-          params,
-        ),
-      2, // 2 retries max - fail fast
+    const multiEngineResult = await executeMultiEngineSearch(
+      query,
+      maxResults + 5, // Fetch extra to compensate for filtering
+      env,
+      params,
     );
 
-    if (searchResults.length === 0) {
+    if (multiEngineResult.results.length === 0) {
+      rlogSearch('stream-empty', `no results from engine=${multiEngineResult.engine}`);
       yield {
         data: {
           requestId,
@@ -1902,8 +2012,10 @@ export async function* streamSearchResults(
       return;
     }
 
+    rlogSearch('stream-results', `engine=${multiEngineResult.engine} count=${multiEngineResult.results.length}`);
+
     // Take only requested number of sources
-    const resultsToProcess = searchResults.slice(0, maxResults);
+    const resultsToProcess = multiEngineResult.results.slice(0, maxResults);
 
     // PHASE 3: Stream Each Result Progressively
     for (let i = 0; i < resultsToProcess.length; i++) {
@@ -2138,24 +2250,27 @@ export async function performWebSearch(
       }
     }
 
-    const searchResults = await withRetry(
-      async () =>
-        await searchWithBrowser(
-          params.query,
-          maxResults + 2, // Fetch extra for filtering
-          env,
-          params,
-        ),
-      2, // 2 retries max - fail fast
+    // Use multi-engine search (Serper → DuckDuckGo fallback)
+    rlogSearch('perform', `query="${params.query.slice(0, 40)}..." maxResults=${maxResults}`);
+
+    const multiEngineResult = await executeMultiEngineSearch(
+      params.query,
+      maxResults + 5, // Fetch extra to compensate for filtering
+      env,
+      params,
     );
 
+    let searchResults = multiEngineResult.results;
+
     if (searchResults.length === 0) {
+      rlogSearch('no-results', `all engines failed for query="${params.query.slice(0, 30)}..."`);
+
       if (logger) {
-        logger.warn('Web search returned no results', {
-          context: `Search depth: ${params.searchDepth || 'advanced'}`,
+        logger.warn('All search engines returned empty', {
+          context: `Engine: ${multiEngineResult.engine}`,
           logType: LogTypes.EDGE_CASE,
           query: params.query,
-          scenario: 'no_search_results',
+          scenario: 'all_searches_empty',
         });
       }
 
@@ -2164,11 +2279,13 @@ export async function performWebSearch(
         answer: null,
         autoParameters: autoParams,
         query: params.query,
-        requestId, // ✅ P0 FIX: Add request ID
+        requestId,
         responseTime: performance.now() - startTime,
         results: [],
       };
     }
+
+    rlogSearch('results', `engine=${multiEngineResult.engine} count=${searchResults.length}`);
 
     // Take only requested number of sources
     const sourcesToProcess = searchResults.slice(0, maxResults);
@@ -2233,7 +2350,7 @@ export async function performWebSearch(
           url: result.url,
         };
 
-        // Extract full content
+        // Extract full content using browser or lightweight extraction
         try {
           const extracted = await extractPageContent(
             result.url,
@@ -2242,9 +2359,8 @@ export async function performWebSearch(
             10000,
           );
 
-          // When browser is unavailable, extractLightweightMetadata still provides
-          // imageUrl, faviconUrl, title, and description - these should be applied
-          const hasContent = !!extracted.content;
+          // Check if we got valid content
+          const hasContent = !!extracted.content && isValidContent(extracted.content);
           const hasMetadata = !!(
             extracted.metadata.imageUrl
             || extracted.metadata.faviconUrl
@@ -2302,6 +2418,8 @@ export async function performWebSearch(
             }
           }
         } catch (extractError) {
+          rlogSearch('extract-error', `${domain}: ${normalizeError(extractError).message}`);
+
           if (logger) {
             logger.warn('Failed to extract page content', {
               context: `URL: ${result.url}`,
@@ -2422,29 +2540,149 @@ function extractDomain(url: string): string {
 }
 
 /**
- * ✅ FIX Phase 5D: Check if URL should be skipped for content extraction
+ * Check if URL should be skipped for content extraction
  *
- * Ad redirect URLs and tracking URLs will fail extraction and cause server errors.
- * These URLs are typically intermediary redirects that don't contain useful content.
+ * Comprehensive filtering for:
+ * - Ad redirect URLs
+ * - Tracking URLs
+ * - Low-quality domains
+ * - Non-content pages
  *
  * @param url - URL to check
  * @returns true if URL should be skipped
  */
 function shouldSkipUrl(url: string): boolean {
-  const skipPatterns = [
-    /duckduckgo\.com\/y\.js/i, // DuckDuckGo ad redirects
-    /duckduckgo\.com\/l\//i, // DuckDuckGo link redirects (may contain ads)
-    /bing\.com\/aclick/i, // Bing ad clicks
-    /googleadservices\.com/i, // Google ads
-    /googlesyndication\.com/i, // Google ad syndication
-    /doubleclick\.net/i, // DoubleClick ads
-    /facebook\.com\/tr/i, // Facebook tracking pixel
-    /pixel\./i, // Generic pixel tracking
-    /\.ad\./i, // Generic ad subdomain
-    /\/ad\/|\/ads\//i, // Ad paths
+  // Ad and tracking URL patterns
+  const adTrackingPatterns = [
+    // DuckDuckGo ad/tracking
+    /duckduckgo\.com\/y\.js/i,
+    /duckduckgo\.com\/l\//i,
+    /duckduckgo\.com.*[?&]ad/i,
+    // Google ads/tracking
+    /googleadservices\.com/i,
+    /googlesyndication\.com/i,
+    /google\.com\/aclk/i,
+    /google\.com\/pagead/i,
+    /googleads\./i,
+    /adservice\.google/i,
+    // Bing ads
+    /bing\.com\/aclick/i,
+    /bing\.com\/aclk/i,
+    // DoubleClick/Google Marketing
+    /doubleclick\.net/i,
+    /2mdn\.net/i,
+    // Facebook/Meta tracking
+    /facebook\.com\/tr/i,
+    /facebook\.com\/ads/i,
+    /fbcdn\.net.*tracking/i,
+    // Twitter/X tracking
+    /t\.co\/[a-zA-Z0-9]+$/i, // Short links without content
+    /twitter\.com\/i\/web\/status/i,
+    // Generic ad patterns
+    /\/ad\/|\/ads\//i,
+    /\.ad\./i,
+    /adclick\./i,
+    /adserver\./i,
+    /advertising\./i,
+    /pixel\./i,
+    /tracking\./i,
+    /tracker\./i,
+    /clicktrack/i,
+    /click\.linksynergy/i,
+    /prf\.hn/i,
+    /anrdoezrs\.net/i,
+    /apmebf\.com/i,
+    // Affiliate networks
+    /amazon\.com\/gp\/r\.html/i,
+    /amazon\.com\/gp\/redirect/i,
+    /shareasale\.com/i,
+    /commission-junction/i,
+    /cj\.com/i,
+    /tkqlhce\.com/i,
+    /jdoqocy\.com/i,
+    /dpbolvw\.net/i,
+    /kqzyfj\.com/i,
+    // URL shorteners (often used for tracking)
+    /bit\.ly\/[a-zA-Z0-9]+$/i,
+    /tinyurl\.com\/[a-zA-Z0-9]+$/i,
+    /goo\.gl\/[a-zA-Z0-9]+$/i,
+    /ow\.ly\/[a-zA-Z0-9]+$/i,
+    // Analytics/tracking pixels
+    /analytics\./i,
+    /stats\./i,
+    /metrics\./i,
+    /beacon\./i,
+    /telemetry\./i,
   ];
 
-  return skipPatterns.some(pattern => pattern.test(url));
+  // Low-quality or non-content domains
+  const lowQualityDomains = [
+    /^(www\.)?pinterest\.(com|co\.\w+)$/i, // Requires login
+    /^(www\.)?instagram\.com$/i, // Requires login
+    /^(www\.)?tiktok\.com$/i, // JS-heavy, often fails
+    /^(www\.)?linkedin\.com$/i, // Requires login
+    /^(www\.)?quora\.com$/i, // Paywall/login
+    /^(www\.)?researchgate\.net$/i, // Paywall
+    /^(www\.)?academia\.edu$/i, // Paywall
+  ];
+
+  // Check ad/tracking patterns
+  if (adTrackingPatterns.some((pattern) => pattern.test(url))) {
+    rlogSearch('skip-ad', `url=${url.slice(0, 60)}...`);
+    return true;
+  }
+
+  // Check low-quality domains
+  try {
+    const hostname = new URL(url).hostname;
+    if (lowQualityDomains.some((pattern) => pattern.test(hostname))) {
+      rlogSearch('skip-lowq', `domain=${hostname}`);
+      return true;
+    }
+  } catch {
+    // Invalid URL
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Validate that extracted content is meaningful (not ads/errors)
+ *
+ * @param content - Extracted content to validate
+ * @param minWords - Minimum word count for valid content
+ * @returns true if content appears valid
+ */
+function isValidContent(content: string, minWords = 50): boolean {
+  if (!content || content.trim().length === 0) {
+    return false;
+  }
+
+  const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
+  if (wordCount < minWords) {
+    return false;
+  }
+
+  // Check for common error page patterns
+  const errorPatterns = [
+    /404\s*(not\s*found|error|page)/i,
+    /page\s*(not\s*found|unavailable|removed)/i,
+    /access\s*denied/i,
+    /403\s*forbidden/i,
+    /500\s*internal\s*server\s*error/i,
+    /javascript\s*(is\s*)?(required|must\s*be\s*enabled)/i,
+    /please\s*enable\s*javascript/i,
+    /captcha/i,
+    /prove\s*(you('re)?\s*)?(are\s*)?(not\s*)?(a\s*)?robot/i,
+    /verify\s*(you('re)?\s*)?(are\s*)?(human|not\s*a\s*bot)/i,
+  ];
+
+  if (errorPatterns.some((pattern) => pattern.test(content.slice(0, 500)))) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

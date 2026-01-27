@@ -247,7 +247,7 @@ describe('sSR Hydration Consistency', () => {
 
       // Messages should remain stable reference if no actual change needed
       const stateAfterSecond = store.getState();
-      expect(stateAfterSecond.messages.length).toBe(messagesAfterFirst.length);
+      expect(stateAfterSecond.messages).toHaveLength(messagesAfterFirst.length);
     });
   });
 
@@ -450,7 +450,7 @@ describe('sSR Hydration Consistency', () => {
     });
 
     it('should hydrate streaming presearch status', () => {
-      const thread = createMockThread({ id: 'thread-123', enableWebSearch: true });
+      const thread = createMockThread({ enableWebSearch: true, id: 'thread-123' });
       const participants = createMockParticipants(2, 'thread-123');
 
       // Only user message - presearch still in progress
@@ -506,7 +506,7 @@ describe('sSR Hydration Consistency', () => {
       const state = store.getState();
       // After hydration, currentRoundNumber is not automatically set by initializeThread
       // It's set by the streaming flow
-      expect(state.messages.length).toBe(8);
+      expect(state.messages).toHaveLength(8);
     });
   });
 

@@ -85,7 +85,7 @@ export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
  * - 250,000 = ~tokens per MB of PDF content
  * - Minimum 1 MB for any model
  */
-function deriveMaxFileSizeMB(contextLength: number): number {
+function deriveMaxFileSizeMB(contextLength: number) {
   const calculated = Math.floor((contextLength * 0.4) / 250000);
   return Math.max(1, calculated); // Minimum 1 MB
 }
@@ -931,7 +931,7 @@ export function needsSmoothStream(modelId: string) {
  * DeepSeek models use XML <think> tags for reasoning that require
  * extractReasoningMiddleware to extract properly.
  */
-export function isDeepSeekModel(modelId: string): boolean {
+export function isDeepSeekModel(modelId: string) {
   const model = getModelById(modelId);
   if (model) {
     return model.provider === 'deepseek';
@@ -946,7 +946,7 @@ export function isDeepSeekModel(modelId: string): boolean {
  * O-series models (o1, o3, o4) are reasoning-first and use native
  * reasoning via provider - no extractReasoningMiddleware needed.
  */
-export function isOSeriesModel(modelId: string): boolean {
+export function isOSeriesModel(modelId: string) {
   const model = getModelById(modelId);
   if (model) {
     // O-series models have is_reasoning_model=true and provider='openai'
@@ -964,7 +964,7 @@ export function isOSeriesModel(modelId: string): boolean {
  * Nano/mini variants have limited token budgets and should use
  * minimal reasoning effort to preserve tokens for output.
  */
-export function isNanoOrMiniVariant(modelId: string): boolean {
+export function isNanoOrMiniVariant(modelId: string) {
   const lowerModelId = modelId.toLowerCase();
   return lowerModelId.includes('nano') || lowerModelId.includes('mini');
 }
@@ -984,14 +984,14 @@ export function getModelTags(modelId: string): ModelCapabilityTag[] {
 /**
  * ✅ MODEL HAS TAG: Check if a model has a specific capability tag
  */
-export function modelHasTag(modelId: string, tag: ModelCapabilityTag): boolean {
+export function modelHasTag(modelId: string, tag: ModelCapabilityTag) {
   return getModelTags(modelId).includes(tag);
 }
 
 /**
  * ✅ MODEL HAS ALL TAGS: Check if a model has all specified tags
  */
-export function modelHasAllTags(modelId: string, tags: ModelCapabilityTag[]): boolean {
+export function modelHasAllTags(modelId: string, tags: ModelCapabilityTag[]) {
   const modelTags = getModelTags(modelId);
   return tags.every(tag => modelTags.includes(tag));
 }

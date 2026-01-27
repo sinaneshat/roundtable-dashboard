@@ -150,7 +150,7 @@ export async function validateTurnstileFromContext(
  * Extract Turnstile token from request
  * Checks both header and body for the token
  */
-export function extractTurnstileToken(c: Context<ApiEnv>): string | null {
+export function extractTurnstileToken(c: Context<ApiEnv>) {
   // Check header first (preferred for API calls)
   const headerToken = c.req.header('X-Turnstile-Token') || c.req.header('CF-Turnstile-Response');
   if (headerToken) {

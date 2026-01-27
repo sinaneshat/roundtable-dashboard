@@ -11,7 +11,6 @@
  * These tests are designed to FAIL first, then we fix the bugs.
  */
 
-import { MessagePartTypes, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -35,7 +34,7 @@ type TestStore = ReturnType<typeof createChatStore>;
 // Issue: appendEntityStreamingText doesn't validate participantIndex bounds
 // ============================================================================
 
-describe('BUG 1: Out-of-Bounds Participant Index (FIXED)', () => {
+describe('bUG 1: Out-of-Bounds Participant Index (FIXED)', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -124,7 +123,7 @@ describe('BUG 1: Out-of-Bounds Participant Index (FIXED)', () => {
 // threadId is available, a new message with different ID can be created.
 // ============================================================================
 
-describe('BUG 2: Duplicate Moderator Messages', () => {
+describe('bUG 2: Duplicate Moderator Messages', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -191,7 +190,7 @@ describe('BUG 2: Duplicate Moderator Messages', () => {
 // but could match a stale moderator from different round if not cleaned up
 // ============================================================================
 
-describe('BUG 3: Moderator Fallback Matches Wrong Round', () => {
+describe('bUG 3: Moderator Fallback Matches Wrong Round', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -241,7 +240,7 @@ describe('BUG 3: Moderator Fallback Matches Wrong Round', () => {
 // Issue: No validation that entity is valid ('presearch', 'moderator', or number)
 // ============================================================================
 
-describe('BUG 4: Invalid Entity Type Handling', () => {
+describe('bUG 4: Invalid Entity Type Handling', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -287,7 +286,7 @@ describe('BUG 4: Invalid Entity Type Handling', () => {
 // Issue: If streaming encounters an error, isStreaming may remain true
 // ============================================================================
 
-describe('BUG 5: isStreaming Flag Error Handling', () => {
+describe('bUG 5: isStreaming Flag Error Handling', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -339,7 +338,7 @@ describe('BUG 5: isStreaming Flag Error Handling', () => {
 // Issue: appendEntityStreamingText assumes parts[0] has text field
 // ============================================================================
 
-describe('BUG 6: Message Parts Structure Validation', () => {
+describe('bUG 6: Message Parts Structure Validation', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -394,7 +393,7 @@ describe('BUG 6: Message Parts Structure Validation', () => {
 // If thread is null, moderator ID uses fallback but may cause issues
 // ============================================================================
 
-describe('BUG 7: Placeholder Creation Without Thread', () => {
+describe('bUG 7: Placeholder Creation Without Thread', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -447,7 +446,7 @@ describe('BUG 7: Placeholder Creation Without Thread', () => {
 // actual participants array has different length, updates may fail
 // ============================================================================
 
-describe('BUG 8: Subscription/Participant Count Mismatch (FIXED)', () => {
+describe('bUG 8: Subscription/Participant Count Mismatch (FIXED)', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -524,7 +523,7 @@ describe('BUG 8: Subscription/Participant Count Mismatch (FIXED)', () => {
 // but if participants array is empty, every() returns true
 // ============================================================================
 
-describe('BUG 9: Phase Transition with Empty Subscription State', () => {
+describe('bUG 9: Phase Transition with Empty Subscription State', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -557,7 +556,7 @@ describe('BUG 9: Phase Transition with Empty Subscription State', () => {
 // Issue: Multiple rapid updates could cause race conditions in immer draft
 // ============================================================================
 
-describe('BUG 10: Concurrent Streaming Modifications', () => {
+describe('bUG 10: Concurrent Streaming Modifications', () => {
   let store: TestStore;
 
   beforeEach(() => {
@@ -587,7 +586,7 @@ describe('BUG 10: Concurrent Streaming Modifications', () => {
 
     // Total length should match
     const expectedLength = chunks.join('').length;
-    expect(text.length).toBe(expectedLength);
+    expect(text).toHaveLength(expectedLength);
   });
 
   it('should handle interleaved appends to multiple participants', () => {

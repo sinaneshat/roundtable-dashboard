@@ -25,7 +25,7 @@ const OG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * Simple hash function for cache invalidation (edge-compatible)
  * Uses a fast string hash instead of crypto for performance
  */
-function simpleHash(str: string): string {
+function simpleHash(str: string) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -46,7 +46,7 @@ export function generateOgVersionHash(data: {
   participantCount?: number;
   messageCount?: number;
   updatedAt?: Date | string;
-}): string {
+}) {
   const content = [
     data.title ?? '',
     data.mode ?? '',
@@ -67,7 +67,7 @@ export function generateOgCacheKey(
   type: OgImageType,
   identifier: string,
   versionHash: string,
-): string {
+) {
   return `og-images/${type}/${identifier}-${versionHash}.png`;
 }
 

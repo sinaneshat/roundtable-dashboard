@@ -26,6 +26,7 @@ Roundtable: collaborative AI brainstorming platform.
 | Manual type guards | Use `.safeParse()` or `.parse()` |
 | `db.transaction()` | Use `db.batch()` (D1 limitation) |
 | `// @ts-ignore`, `// @ts-expect-error` | Fix the underlying type issue |
+| Explicit return types | Lean on inference; omit unless necessary |
 
 ### REQUIRED
 

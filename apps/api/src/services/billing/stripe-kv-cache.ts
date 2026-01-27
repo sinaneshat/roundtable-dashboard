@@ -19,11 +19,11 @@ const USER_CUSTOMER_ID_TTL = 60 * 60 * 24; // 24 hours - rarely changes
 const SUBSCRIPTION_DATA_TTL = 60 * 5; // 5 minutes - can change on webhook
 
 // KV key patterns
-function getUserCustomerKey(userId: string): string {
+function getUserCustomerKey(userId: string) {
   return `stripe:user:${userId}`;
 }
 
-function getCustomerDataKey(customerId: string): string {
+function getCustomerDataKey(customerId: string) {
   return `stripe:customer:${customerId}`;
 }
 

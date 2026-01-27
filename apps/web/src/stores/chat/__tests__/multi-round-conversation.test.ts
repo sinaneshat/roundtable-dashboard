@@ -12,15 +12,12 @@
  */
 
 import { MessageStatuses } from '@roundtable/shared';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,
   createMockStoredPreSearch,
   createMockThread,
-  createTestAssistantMessage,
-  createTestModeratorMessage,
-  createTestUserMessage,
 } from '@/lib/testing';
 
 import { createChatStore } from '../store';
@@ -33,7 +30,7 @@ import { ChatPhases } from '../store-schemas';
 
 type TestStore = ReturnType<typeof createChatStore>;
 
-function setupStore(participantCount: number = 2, enableWebSearch: boolean = false) {
+function setupStore(participantCount = 2, enableWebSearch = false) {
   const store = createChatStore();
   const participants = createMockParticipants(participantCount);
   const thread = createMockThread({ enableWebSearch, id: 'thread-multi-round' });

@@ -11,7 +11,7 @@
  * could cause duplicate messages or lost updates.
  */
 
-import { MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@roundtable/shared';
+import { MODERATOR_PARTICIPANT_INDEX } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -20,7 +20,6 @@ import {
 } from '@/lib/testing';
 
 import { createChatStore } from '../store';
-import { ChatPhases } from '../store-schemas';
 
 // ============================================================================
 // Test Setup
@@ -142,7 +141,7 @@ describe('participant Message ID Uniqueness', () => {
     const ids = messages.map(m => m.id);
     const uniqueIds = [...new Set(ids)];
 
-    expect(ids.length).toBe(uniqueIds.length);
+    expect(ids).toHaveLength(uniqueIds.length);
 
     // Verify expected IDs
     expect(ids).toContain('streaming_p1_r0');
@@ -185,7 +184,7 @@ describe('participant Message ID Uniqueness', () => {
     store.getState().createStreamingPlaceholders(0, 3);
 
     // Count should not change
-    expect(store.getState().messages.length).toBe(initialCount);
+    expect(store.getState().messages).toHaveLength(initialCount);
   });
 });
 

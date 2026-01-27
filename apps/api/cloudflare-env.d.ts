@@ -86,6 +86,7 @@ declare namespace Cloudflare {
 		OPENROUTER_API_KEY: string;
 		POSTHOG_API_KEY: string;
 		POSTHOG_HOST: string;
+		SERPER_API_KEY: string;
 		KV: KVNamespace;
 		UPLOADS_R2_BUCKET: R2Bucket;
 		DB: D1Database;

@@ -244,6 +244,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const prevRoundRef = useRef<number | null>(null);
   useEffect(() => {
     if (currentRoundNumber !== null && currentRoundNumber !== prevRoundRef.current) {
+      // Only reset if presearch subscription is not actively streaming
+      const presearchStatus = store.getState().subscriptionState?.presearch?.status;
+      if (presearchStatus === 'streaming') {
+        rlog.presearch('reset-deferred', `r${currentRoundNumber} deferring accumulator reset - presearch still streaming`);
+        return; // Don't reset while streaming
+      }
+
       preSearchDataRef.current = {
         queries: [],
         results: [],
@@ -253,7 +260,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       prevRoundRef.current = currentRoundNumber;
       rlog.presearch('reset', `r${currentRoundNumber} accumulator reset`);
     }
-  }, [currentRoundNumber]);
+  }, [currentRoundNumber, store]);
 
   // Handle presearch SSE events for gradual UI updates
   // CRITICAL: We must deep clone arrays before passing to Immer to avoid freezing

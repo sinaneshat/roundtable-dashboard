@@ -50,7 +50,7 @@ const CREDIT_ACTION_CALCULATORS: Record<CreditAction, CreditCalculator> = {
   [CreditActions.WEB_SEARCH]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery),
 };
 
-function calculateCreditCost(action: CreditAction, params: CreditEstimateParams): number {
+function calculateCreditCost(action: CreditAction, params: CreditEstimateParams) {
   return CREDIT_ACTION_CALCULATORS[action](params);
 }
 

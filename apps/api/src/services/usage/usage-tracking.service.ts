@@ -169,7 +169,7 @@ export async function ensureUserUsageRecord(userId: string): Promise<UserChatUsa
   return usage;
 }
 
-async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage): Promise<void> {
+async function rolloverBillingPeriod(userId: string, currentUsage: UserChatUsage) {
   const db = await getDbAsync();
   const now = new Date();
 

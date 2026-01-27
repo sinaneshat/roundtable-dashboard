@@ -42,7 +42,7 @@ import {
 function validateSubscriptionOwnership(
   subscription: { userId: string },
   user: { id: string },
-): boolean {
+) {
   return subscription.userId === user.id;
 }
 
@@ -957,7 +957,7 @@ async function trackRevenueFromWebhook(
   event: Stripe.Event,
   userId: string,
   customerId: string,
-): Promise<void> {
+) {
   const obj = event.data.object;
   if (!isObject(obj)) {
     return;
@@ -1096,7 +1096,7 @@ async function trackRevenueFromWebhook(
   } catch {}
 }
 
-function extractCustomerId(event: Stripe.Event): string | null {
+function extractCustomerId(event: Stripe.Event) {
   const obj = event.data.object;
   if (!isObject(obj) || !('customer' in obj)) {
     return null;
@@ -1127,7 +1127,7 @@ function extractCustomerId(event: Stripe.Event): string | null {
 async function processWebhookEvent(
   event: Stripe.Event,
   db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<void> {
+) {
   if (!TRACKED_WEBHOOK_EVENTS.includes(event.type)) {
     return;
   }

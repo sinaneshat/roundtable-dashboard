@@ -9,22 +9,17 @@
  * @see docs/FLOW_DOCUMENTATION.md Section 2 - Web Search Functionality
  */
 
-import { MessageStatuses, ScreenModes } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,
   createMockStoredPreSearch,
   createMockThread,
-  createParticipantConfigs,
-  createTestAssistantMessage,
-  createTestModeratorMessage,
-  createTestUserMessage,
 } from '@/lib/testing';
 
 import { createChatStore } from '../store';
 import type { EntityStatus } from '../store-schemas';
-import { ChatPhases } from '../store-schemas';
 
 // ============================================================================
 // Test Setup
@@ -425,6 +420,6 @@ describe('subscription State Isolation from Pre-Search', () => {
     }));
 
     // Subscription participant count should remain unchanged
-    expect(store.getState().subscriptionState.participants.length).toBe(initialSubCount);
+    expect(store.getState().subscriptionState.participants).toHaveLength(initialSubCount);
   });
 });

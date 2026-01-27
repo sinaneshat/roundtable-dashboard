@@ -15,7 +15,7 @@ const MAX_SLUG_LENGTH = 50;
 const SHORT_ID_LENGTH = 6;
 const MAX_ATTEMPTS = 5;
 
-function toKebabCase(str: string): string {
+function toKebabCase(str: string) {
   return str
     .toLowerCase()
     .trim()
@@ -26,7 +26,7 @@ function toKebabCase(str: string): string {
     .replace(/-$/g, '');
 }
 
-function generateShortId(): string {
+function generateShortId() {
   return Math.random().toString(36).substring(2, 2 + SHORT_ID_LENGTH);
 }
 

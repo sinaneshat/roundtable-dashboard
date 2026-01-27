@@ -57,6 +57,7 @@ import {
   getUserMetadata,
   hasParticipantEnrichment,
   isPreSearch,
+  isPreSearchFast,
   normalizeOpenRouterError,
 } from './metadata';
 
@@ -256,7 +257,9 @@ export function chatMessageToUIMessage(
   // No Date object handling needed - JSON.stringify converts Date to ISO string
   const createdAt = message.createdAt;
 
-  const isPreSearchMsg = isPreSearch(message.metadata);
+  // BUG FIX: Use BOTH Zod validation AND fast check for pre-search detection
+  // Fast check handles cases where Zod validation fails due to partial/mismatched metadata
+  const isPreSearchMsg = isPreSearch(message.metadata) || isPreSearchFast(message);
 
   const metadata = isPreSearchMsg
     ? message.metadata
@@ -340,7 +343,8 @@ export function chatMessagesToUIMessages(
 
       // Enrich messages that have roundNumber but missing participant metadata
       if (participantMap && message.role === MessageRoles.ASSISTANT) {
-        const isPreSearchMsg = isPreSearch(message.metadata);
+        // BUG FIX: Use BOTH Zod validation AND fast check for pre-search detection
+        const isPreSearchMsg = isPreSearch(message.metadata) || isPreSearchFast(message);
 
         if (!isPreSearchMsg) {
           const participantId = getParticipantId(message.metadata);
@@ -424,7 +428,8 @@ export function chatMessagesToUIMessages(
     let enrichedMetadata: DbMessageMetadata | null;
 
     if (participantMap && message.role === MessageRoles.ASSISTANT) {
-      const isPreSearchMsg = isPreSearch(message.metadata);
+      // BUG FIX: Use BOTH Zod validation AND fast check for pre-search detection
+      const isPreSearchMsg = isPreSearch(message.metadata) || isPreSearchFast(message);
 
       if (!isPreSearchMsg) {
         const participantId = getParticipantId(message.metadata);
@@ -494,7 +499,10 @@ export function chatMessagesToUIMessages(
           enrichedMetadata = null;
         }
       } else {
-        enrichedMetadata = getPreSearchMetadata(message.metadata);
+        // Pre-search identified - try Zod validation first, but preserve original metadata
+        // if Zod fails (ensures isPreSearch checks work in UI even with partial metadata)
+        enrichedMetadata = getPreSearchMetadata(message.metadata)
+          ?? (message.metadata as DbPreSearchMessageMetadata | null);
       }
     } else {
       enrichedMetadata = null;

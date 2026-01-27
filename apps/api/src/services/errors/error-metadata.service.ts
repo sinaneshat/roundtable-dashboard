@@ -32,7 +32,7 @@ import { isObject } from '@/lib/utils/type-guards';
  * Helper to access index signature properties safely
  * Required for noPropertyAccessFromIndexSignature TypeScript option
  */
-function getObjectProp<T>(obj: Record<string, unknown>, key: string): T | undefined {
+function getObjectProp<T>(obj: Record<string, unknown>, key: string) {
   return obj[key] as T | undefined;
 }
 

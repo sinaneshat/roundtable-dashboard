@@ -237,14 +237,14 @@ export async function extractPdfTextWithCloudflareAI(
 /**
  * Check if a file should use in-worker PDF.js extraction (small files).
  */
-export function shouldExtractPdfText(mimeType: string, fileSize: number): boolean {
+export function shouldExtractPdfText(mimeType: string, fileSize: number) {
   return mimeType === PDF_MIME_TYPE && fileSize <= MAX_PDF_SIZE_FOR_EXTRACTION;
 }
 
 /**
  * Check if a file should use Cloudflare AI extraction (large files).
  */
-export function shouldExtractPdfTextWithAI(mimeType: string, fileSize: number): boolean {
+export function shouldExtractPdfTextWithAI(mimeType: string, fileSize: number) {
   return mimeType === PDF_MIME_TYPE
     && fileSize > MAX_PDF_SIZE_FOR_EXTRACTION
     && fileSize <= MAX_PDF_SIZE_FOR_AI_EXTRACTION;

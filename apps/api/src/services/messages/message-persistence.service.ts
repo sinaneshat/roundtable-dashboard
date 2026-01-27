@@ -34,7 +34,7 @@ import { AvailableSourceSchema } from '@/types/citations';
  * Safely access a property from a Record<string, unknown> using bracket notation.
  * This helper avoids TS4111 index signature access errors while keeping code readable.
  */
-function getMetadataProp<T>(obj: Record<string, unknown>, key: string): T | undefined {
+function getMetadataProp<T>(obj: Record<string, unknown>, key: string) {
   const value = obj[key];
   return value as T | undefined;
 }
@@ -78,7 +78,7 @@ export type SaveMessageParams = z.infer<typeof SaveMessageParamsSchema>;
  * 3. finishResult.reasoningText (Claude 4 models)
  * 4. providerMetadata reasoning fields
  */
-function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFinishResult): string | null {
+function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFinishResult) {
   if (reasoningDeltas.length > 0) {
     return reasoningDeltas.join('');
   }

@@ -44,7 +44,7 @@ export type PerformanceMetrics = z.infer<typeof PerformanceMetricsSchema>;
  * Only in preview/local environments (not prod)
  * WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
  */
-function isPerformanceTrackingEnabled(): boolean {
+function isPerformanceTrackingEnabled() {
   const env = process.env.WEBAPP_ENV || WebAppEnvs.LOCAL;
   return env === WebAppEnvs.LOCAL || env === WebAppEnvs.PREVIEW;
 }

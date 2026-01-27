@@ -32,10 +32,7 @@ async function getAuth() {
  * and creates sessions when getSession() is called with x-api-key header.
  * @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
  */
-async function authenticateSession(c: Context<ApiEnv>): Promise<{
-  session: Session | null;
-  user: User | null;
-}> {
+async function authenticateSession(c: Context<ApiEnv>) {
   // Lazy load auth module to reduce worker startup CPU time
   const auth = await getAuth();
 

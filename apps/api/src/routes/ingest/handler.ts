@@ -18,7 +18,7 @@ const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
  * Standard CORS headers for PostHog proxy
  * Allow all origins since analytics should work from anywhere
  */
-function getCorsHeaders(): Record<string, string> {
+function getCorsHeaders() {
   return {
     'Access-Control-Allow-Headers': 'Content-Type, X-PostHog-Token, X-PostHog-Decide-Version',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',

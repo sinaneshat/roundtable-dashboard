@@ -11,7 +11,7 @@
  * @see docs/FLOW_DOCUMENTATION.md Section "Turn-Based Streaming"
  */
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,
@@ -28,7 +28,7 @@ import { ChatPhases } from '../store-schemas';
 
 type TestStore = ReturnType<typeof createChatStore>;
 
-function setupStore(participantCount: number = 3) {
+function setupStore(participantCount = 3) {
   const store = createChatStore();
   const participants = createMockParticipants(participantCount);
   const thread = createMockThread({ id: 'thread-baton' });
@@ -157,8 +157,7 @@ describe('out-of-Order Baton Completion', () => {
       store.getState().updateEntitySubscriptionStatus(index, 'complete' as EntityStatus, 100);
       store.getState().onParticipantComplete(index);
 
-      const completedCount = store.getState().subscriptionState.participants
-        .filter(p => p.status === 'complete' || p.status === 'error').length;
+      const completedCount = store.getState().subscriptionState.participants.filter(p => p.status === 'complete' || p.status === 'error').length;
 
       expect(completedCount).toBe(i + 1);
     });

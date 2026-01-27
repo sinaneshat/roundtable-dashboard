@@ -71,7 +71,7 @@ export const OPTIONAL_ENV_VARS = [
 /**
  * Validates URL format for environment variables
  */
-function isValidUrl(value: string): boolean {
+function isValidUrl(value: string) {
   try {
     void new URL(value);
     return true;
@@ -83,7 +83,7 @@ function isValidUrl(value: string): boolean {
 /**
  * Validates email format
  */
-function isValidEmail(value: string): boolean {
+function isValidEmail(value: string) {
   const emailRegex = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
   return emailRegex.test(value);
 }
@@ -91,7 +91,7 @@ function isValidEmail(value: string): boolean {
 /**
  * Validates AWS region format
  */
-function isValidAwsRegion(value: string): boolean {
+function isValidAwsRegion(value: string) {
   const regionRegex = /^[a-z]{2}-[a-z]+-\d+$/;
   return regionRegex.test(value);
 }

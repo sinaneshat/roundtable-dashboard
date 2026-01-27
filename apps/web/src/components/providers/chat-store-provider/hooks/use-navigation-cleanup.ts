@@ -76,14 +76,14 @@ export function useNavigationCleanup({
     const isGoingToThread = pathname?.startsWith('/chat/') && pathname !== '/chat' && !nextIsNewPath && !nextIsProjectOverview;
 
     // Navigation between actual threads (excluding /new routes which are overview-like)
-    const isNavigatingBetweenThreads =
-      prevPath?.startsWith('/chat/')
-      && pathname?.startsWith('/chat/')
-      && prevPath !== pathname
-      && !prevIsNewPath
-      && !nextIsNewPath
-      && !prevIsProjectOverview
-      && !nextIsProjectOverview;
+    const isNavigatingBetweenThreads
+      = prevPath?.startsWith('/chat/')
+        && pathname?.startsWith('/chat/')
+        && prevPath !== pathname
+        && !prevIsNewPath
+        && !nextIsNewPath
+        && !prevIsProjectOverview
+        && !nextIsProjectOverview;
 
     // Navigation from any "overview" state (/chat, /chat/projects/$id, or /new routes) to a thread
     const isFromOverviewToThread = (prevIsNewPath || prevIsProjectOverview) && isGoingToThread;

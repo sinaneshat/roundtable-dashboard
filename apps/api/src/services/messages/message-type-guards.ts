@@ -8,11 +8,11 @@
 import type { ChatMessage } from '@/db/validation';
 import { getParticipantMetadata, getPreSearchMetadata } from '@/lib/utils';
 
-export function isDbPreSearchMessage(message: ChatMessage): boolean {
+export function isDbPreSearchMessage(message: ChatMessage) {
   return getPreSearchMetadata(message.metadata) !== null;
 }
 
-export function isDbParticipantMessage(message: ChatMessage): boolean {
+export function isDbParticipantMessage(message: ChatMessage) {
   if (!message.participantId) {
     return false;
   }
@@ -43,6 +43,6 @@ export function filterDbToConversationMessages<T extends ChatMessage>(messages: 
   return messages.filter(msg => !isDbPreSearchMessage(msg));
 }
 
-export function countDbParticipantMessages(messages: ChatMessage[]): number {
+export function countDbParticipantMessages(messages: ChatMessage[]) {
   return filterDbToParticipantMessages(messages).length;
 }

@@ -16,7 +16,6 @@ import type { UIMessage } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockParticipant,
   createMockParticipants,
   createMockThread,
   createTestAssistantMessage,
@@ -412,7 +411,7 @@ describe('rendering Consistency', () => {
       // Length > 0 check passes
       expect(text.length).toBeGreaterThan(0);
       // But trim check shows no meaningful content
-      expect(text.trim().length).toBe(0);
+      expect(text.trim()).toHaveLength(0);
     });
 
     it('should detect actual content correctly', () => {

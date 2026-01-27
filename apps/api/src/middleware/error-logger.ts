@@ -31,7 +31,7 @@ import type { ApiEnv } from '@/types';
  * Checks if an error message contains raw SQL or database internals.
  * These patterns indicate D1/Drizzle errors that shouldn't be exposed to clients.
  */
-function isDatabaseError(message: string): boolean {
+function isDatabaseError(message: string) {
   const sqlPatterns = [
     'Failed query',
     'UPDATE "',
@@ -54,7 +54,7 @@ function isDatabaseError(message: string): boolean {
  * Creates a sanitized error that doesn't expose database internals.
  * Logs the original error for debugging but returns a safe message to clients.
  */
-function createSanitizedDatabaseError(originalError: Error): Error {
+function createSanitizedDatabaseError(originalError: Error) {
   const sanitizedError = new Error('A database operation failed. Please try again later.');
   sanitizedError.name = 'DatabaseError';
   // Preserve stack for internal logging but use sanitized message
@@ -70,7 +70,7 @@ function createSanitizedDatabaseError(originalError: Error): Error {
  * These are expected on protected endpoints when user isn't authenticated.
  * We skip verbose logging for these to reduce console noise in dev.
  */
-function isExpected401(err: Error, status: number): boolean {
+function isExpected401(err: Error, status: number) {
   if (status !== 401) {
     return false;
   }

@@ -98,17 +98,19 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
       immer((set, get) => ({
         ...STORE_DEFAULTS,
         // Apply initial state overrides for SSR
-        ...(initialState ? {
-          changelogItems: initialChangelogItems,
-          hasInitiallyLoaded: initialHasLoaded,
-          messages: initialMessages,
-          participants: initialParticipants,
-          phase: initialPhase as ChatPhase,
-          preSearches: initialPreSearches,
-          screenMode: initialThread ? ScreenModes.THREAD : STORE_DEFAULTS.screenMode,
-          showInitialUI: !initialThread,
-          thread: initialThread,
-        } : {}),
+        ...(initialState
+          ? {
+              changelogItems: initialChangelogItems,
+              hasInitiallyLoaded: initialHasLoaded,
+              messages: initialMessages,
+              participants: initialParticipants,
+              phase: initialPhase as ChatPhase,
+              preSearches: initialPreSearches,
+              screenMode: initialThread ? ScreenModes.THREAD : STORE_DEFAULTS.screenMode,
+              showInitialUI: !initialThread,
+              thread: initialThread,
+            }
+          : {}),
 
         // ============================================================
         // PHASE TRANSITIONS - Core Flow Machine

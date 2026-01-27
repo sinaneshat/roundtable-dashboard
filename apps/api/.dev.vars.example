@@ -69,3 +69,12 @@ OPENROUTER_API_KEY=sk-or-your-openrouter-api-key
 # Get from: https://app.posthog.com/project/settings
 POSTHOG_API_KEY=phc_your_posthog_project_api_key
 POSTHOG_HOST=https://us.i.posthog.com
+
+# ============================================================================
+# WEB SEARCH SERVICES
+# ============================================================================
+
+# Serper API Key (Google Search)
+# Get from: https://serper.dev/api-key
+# Pricing: $50/month for 50,000 searches, 2,500 free/month
+SERPER_API_KEY=your-serper-api-key

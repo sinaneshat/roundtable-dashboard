@@ -376,7 +376,7 @@ const TEXT_EXTRACTABLE_MIMES = new Set([
 /**
  * Check if a file's MIME type supports client-side text extraction
  */
-function isTextExtractable(mimeType: string): boolean {
+function isTextExtractable(mimeType: string) {
   return TEXT_EXTRACTABLE_MIMES.has(mimeType)
     || mimeType.startsWith('text/')
     || mimeType.includes('json')

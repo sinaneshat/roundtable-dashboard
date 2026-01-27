@@ -508,7 +508,7 @@ export async function loadAttachmentContentUrl(
   return { errors, extractedTextContent, fileParts, stats };
 }
 
-export function uint8ArrayToBase64(bytes: Uint8Array): string {
+export function uint8ArrayToBase64(bytes: Uint8Array) {
   // O(n) chunked approach - avoids O(n²) string concatenation memory exhaustion
   // Process in 32KB chunks to avoid stack overflow with String.fromCharCode.apply
   const CHUNK_SIZE = 0x8000; // 32KB
@@ -522,11 +522,11 @@ export function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(chunks.join(''));
 }
 
-export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+export function arrayBufferToBase64(buffer: ArrayBuffer) {
   return uint8ArrayToBase64(new Uint8Array(buffer));
 }
 
-export function isWithinSizeLimit(fileSize: number): boolean {
+export function isWithinSizeLimit(fileSize: number) {
   return fileSize <= MAX_BASE64_FILE_SIZE;
 }
 

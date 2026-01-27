@@ -27,7 +27,7 @@ export type ValidatePromptTemplate<T> = PromptPlaceholder<T>;
  * @param description - Description of what value should be
  * @returns Formatted placeholder string like '<COMPUTE: description>'
  */
-export function placeholder(prefix: PlaceholderPrefix, description: string): string {
+export function placeholder(prefix: PlaceholderPrefix, description: string) {
   return `<${prefix}: ${description}>`;
 }
 
@@ -117,7 +117,7 @@ export const ANSWER_SUMMARY_ADVANCED_PROMPT = 'You are an expert research analys
  * @param mode - WebSearchActiveAnswerMode (basic or advanced)
  * @returns Appropriate system prompt for answer generation
  */
-export function getAnswerSummaryPrompt(mode: WebSearchActiveAnswerMode): string {
+export function getAnswerSummaryPrompt(mode: WebSearchActiveAnswerMode) {
   return mode === WebSearchActiveAnswerModes.ADVANCED ? ANSWER_SUMMARY_ADVANCED_PROMPT : ANSWER_SUMMARY_BASIC_PROMPT;
 }
 
@@ -137,7 +137,7 @@ export function getAnswerSummaryPrompt(mode: WebSearchActiveAnswerMode): string 
  * @param query - Search query to analyze
  * @returns Formatted prompt for parameter detection
  */
-export function buildAutoParameterDetectionPrompt(query: string): string {
+export function buildAutoParameterDetectionPrompt(query: string) {
   return `Analyze this search query and recommend optimal search parameters.
 
 Query: "${query}"
@@ -310,7 +310,7 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
  *
  * @returns System prompt with current date context
  */
-export function buildWebSearchComplexityAnalysisPrompt(): string {
+export function buildWebSearchComplexityAnalysisPrompt() {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.toLocaleString('en-US', { month: 'long' });
@@ -446,7 +446,7 @@ Return ONLY valid JSON. Extract optimal keywords and strategically decide when t
  * @param userMessage - The user's question to search for
  * @returns Formatted prompt for query generation
  */
-export function buildWebSearchQueryPrompt(userMessage: string): string {
+export function buildWebSearchQueryPrompt(userMessage: string) {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.toLocaleString('en-US', { month: 'long' });
@@ -823,7 +823,7 @@ export const MODERATOR_JSON_STRUCTURE = {
  * @param userPrompt - Base user prompt from moderator building function
  * @returns Enhanced prompt with JSON structure guidance
  */
-export function buildModeratorEnhancedPrompt(userPrompt: string): string {
+export function buildModeratorEnhancedPrompt(userPrompt: string) {
   return `${userPrompt}
 
 OUTPUT STYLE: Concise moderator with engagement metrics
@@ -1066,7 +1066,7 @@ Think carefully. Your configuration directly impacts the quality of help the use
  * @param participantResponses - Array of participant responses
  * @returns Formatted participant list string
  */
-export function buildModeratorParticipantList(participantResponses: ParticipantResponse[]): string {
+export function buildModeratorParticipantList(participantResponses: ParticipantResponse[]) {
   return participantResponses
     .map(p => `${p.participantRole} (${p.modelName})`)
     .join(', ');
@@ -1077,7 +1077,7 @@ export function buildModeratorParticipantList(participantResponses: ParticipantR
  * @param participantResponses - Array of participant responses
  * @returns Formatted transcript string
  */
-export function buildModeratorTranscript(participantResponses: ParticipantResponse[]): string {
+export function buildModeratorTranscript(participantResponses: ParticipantResponse[]) {
   return participantResponses
     .map(p => `**${p.participantRole} (${p.modelName}):**\n${p.responseContent}`)
     .join('\n\n');
@@ -1228,7 +1228,7 @@ Begin with the direct answer. Make this summary something the user would want to
  * @param attachments - Attachment metadata with citation IDs
  * @returns Formatted prompt section with file contents and citation instructions
  */
-export function buildAttachmentCitationPrompt(attachments: AttachmentCitationInfo[]): string {
+export function buildAttachmentCitationPrompt(attachments: AttachmentCitationInfo[]) {
   if (attachments.length === 0) {
     return '';
   }
@@ -1322,7 +1322,7 @@ export function buildMemoryExtractionPrompt(
   userQuestion: string,
   moderatorSummary: string,
   existingMemories: string[],
-): string {
+) {
   const existingList = existingMemories.length > 0
     ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
     : 'None';
@@ -1386,7 +1386,7 @@ export function buildSelectiveMemoryPrompt(
   userQuestion: string,
   participantResponses: { name: string; response: string }[],
   existingMemories: string[],
-): string {
+) {
   const existingList = existingMemories.length > 0
     ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
     : 'None';

@@ -18,7 +18,6 @@ import type {
   listJobsRoute,
   updateJobRoute,
 } from './route';
-import type { JobResponse } from './schema';
 import {
   CreateJobRequestSchema,
   DeleteJobQuerySchema,
@@ -33,7 +32,7 @@ function transformJob(
   job: typeof tables.automatedJob.$inferSelect,
   threadSlug?: string | null,
   isPublic?: boolean,
-): JobResponse {
+) {
   return {
     autoPublish: job.autoPublish,
     createdAt: job.createdAt.toISOString(),

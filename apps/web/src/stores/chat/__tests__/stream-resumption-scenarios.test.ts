@@ -10,8 +10,8 @@
  * @see docs/FLOW_DOCUMENTATION.md Section "Stream Resumption Pattern"
  */
 
-import { MessageStatuses, RoundPhases } from '@roundtable/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MessageStatuses } from '@roundtable/shared';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,

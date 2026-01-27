@@ -455,7 +455,7 @@ async function executePendingPhase(
   thread: { enableWebSearch: boolean },
   params: ExecuteRoundParams,
   logger?: TypedLogger,
-): Promise<void> {
+) {
   const { attachmentIds, db, queue, roundNumber, sessionToken, threadId, userId, userQuery } = params;
 
   // Update attempt tracking
@@ -505,7 +505,7 @@ async function executeParticipantsPhase(
   totalParticipants: number,
   params: ExecuteRoundParams,
   logger?: TypedLogger,
-): Promise<void> {
+) {
   const { attachmentIds, db, queue, roundNumber, sessionToken, threadId, userId } = params;
 
   // Check if all participants completed
@@ -554,7 +554,7 @@ async function executeModeratorPhase(
   totalParticipants: number,
   params: ExecuteRoundParams,
   logger?: TypedLogger,
-): Promise<void> {
+) {
   const { db, queue, roundNumber, sessionToken, threadId, userId } = params;
 
   if (execution.moderatorCompletedAt) {

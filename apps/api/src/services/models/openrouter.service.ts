@@ -31,7 +31,7 @@ async function getOpenRouterSdk() {
   return openRouterModule;
 }
 
-function isValidOpenRouterModelId(modelId: string): boolean {
+function isValidOpenRouterModelId(modelId: string) {
   return /^[\w-]+\/[\w.-]+$/.test(modelId);
 }
 
@@ -64,7 +64,7 @@ class OpenRouterService {
   private client: OpenRouterClient | null = null;
   private config: OpenRouterServiceConfig | null = null;
 
-  initialize(config: OpenRouterServiceConfig): void {
+  initialize(config: OpenRouterServiceConfig) {
     if (this.config) {
       return;
     }
@@ -109,7 +109,7 @@ class OpenRouterService {
     return this.client;
   }
 
-  private validateModelId(modelId: string): void {
+  private validateModelId(modelId: string) {
     if (!isValidOpenRouterModelId(modelId)) {
       const context: ErrorContext = {
         errorType: 'validation',
@@ -180,7 +180,7 @@ class OpenRouterService {
 
 export const openRouterService = new OpenRouterService();
 
-export function initializeOpenRouter(env: ApiEnv['Bindings']): void {
+export function initializeOpenRouter(env: ApiEnv['Bindings']) {
   openRouterService.initialize({
     apiKey: env.OPENROUTER_API_KEY,
     appName: env.APP_NAME || 'Roundtable AI Chat',

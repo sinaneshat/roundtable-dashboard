@@ -25,7 +25,7 @@ const updateCounts = new Map<string, UpdateTracker>();
 const isDev = process.env.NODE_ENV === NodeEnvs.DEVELOPMENT;
 
 /* eslint-disable no-console */
-function getConsoleMethod(level: DevLogLevel): typeof console.debug {
+function getConsoleMethod(level: DevLogLevel) {
   const consoleMethodMap: Record<DevLogLevel, typeof console.debug> = {
     [DevLogLevels.DEBUG]: console.debug.bind(console),
     [DevLogLevels.ERROR]: console.error.bind(console),
@@ -35,7 +35,7 @@ function getConsoleMethod(level: DevLogLevel): typeof console.debug {
   return consoleMethodMap[level];
 }
 
-function logWarning(message: string): void {
+function logWarning(message: string) {
   console.warn(message);
 }
 /* eslint-enable no-console */
@@ -45,7 +45,7 @@ function debouncedLog(
   level: DevLogLevel,
   message: string,
   data?: string,
-): void {
+) {
   if (!isDev) {
     return;
   }
@@ -90,7 +90,7 @@ function debouncedLog(
   logCache.set(key, entry);
 }
 
-function trackUpdate(key: string): { count: number; isExcessive: boolean } {
+function trackUpdate(key: string) {
   if (!isDev) {
     return { count: 0, isExcessive: false };
   }
@@ -115,7 +115,7 @@ function trackUpdate(key: string): { count: number; isExcessive: boolean } {
   return { count: entry.count, isExcessive };
 }
 
-function formatDebugValue(key: string, value: string | number | boolean | null | undefined): string {
+function formatDebugValue(key: string, value: string | number | boolean | null | undefined) {
   if (typeof value === 'boolean') {
     return `${key}=${value ? 1 : 0}`;
   }
@@ -136,11 +136,11 @@ const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const rlogLastLogged: Record<string, string> = {};
 let rlogEnabled = isDev;
 
-function getRlogStyle(category: RlogCategory): string {
+function getRlogStyle(category: RlogCategory) {
   return RLOG_CATEGORY_STYLES[category];
 }
 
-function rlogLog(category: RlogCategory, key: string, message: string): void {
+function rlogLog(category: RlogCategory, key: string, message: string) {
   if (!rlogEnabled) {
     return;
   }
@@ -163,7 +163,7 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
   }, RLOG_DEBOUNCE_MS);
 }
 
-function rlogNow(category: RlogCategory, message: string): void {
+function rlogNow(category: RlogCategory, message: string) {
   if (!rlogEnabled) {
     return;
   }

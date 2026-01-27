@@ -68,7 +68,7 @@ export function getModelCapabilities(modelId: string): ModelCapabilities {
 export function supportsCapability(
   modelId: string,
   capability: keyof Omit<ModelCapabilities, 'jsonModeQuality' | 'knownIssues'>,
-): boolean {
+) {
   const capabilities = getModelCapabilities(modelId);
   return capabilities[capability];
 }

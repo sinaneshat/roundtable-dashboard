@@ -35,7 +35,7 @@ import type {
  * Base loader data shape for all chat thread routes
  * CRITICAL: streamResumption must ALWAYS be included for consistent hydration
  */
-export interface ChatThreadLoaderData {
+export type ChatThreadLoaderData = {
   threadTitle: string | null;
   threadId: string | null;
   threadData: GetThreadBySlugResponse['data'] | null;
@@ -43,15 +43,15 @@ export interface ChatThreadLoaderData {
   changelog: ChangelogItem[] | undefined;
   feedback: RoundFeedbackData[] | undefined;
   streamResumption: undefined;
-}
+};
 
 /**
  * Extended loader data for project sub-threads
  * Includes projectName for breadcrumb display
  */
-export interface ProjectChatThreadLoaderData extends ChatThreadLoaderData {
+export type ProjectChatThreadLoaderData = {
   projectName: string | null;
-}
+} & ChatThreadLoaderData;
 
 // ============================================================================
 // Helper Functions
@@ -65,13 +65,13 @@ export function createEmptyLoaderData(): ChatThreadLoaderData;
 export function createEmptyLoaderData(opts: { projectName: string | null }): ProjectChatThreadLoaderData;
 export function createEmptyLoaderData(opts?: { projectName?: string | null }): ChatThreadLoaderData | ProjectChatThreadLoaderData {
   const base: ChatThreadLoaderData = {
-    threadTitle: null,
-    threadId: null,
-    threadData: null,
-    preSearches: undefined,
     changelog: undefined,
     feedback: undefined,
+    preSearches: undefined,
     streamResumption: undefined, // ALWAYS include - prevents hydration mismatch
+    threadData: null,
+    threadId: null,
+    threadTitle: null,
   };
 
   if (opts && 'projectName' in opts) {
@@ -85,20 +85,20 @@ export function createEmptyLoaderData(opts?: { projectName?: string | null }): C
 // Auxiliary Data Fetching
 // ============================================================================
 
-interface AuxiliaryDataResult {
+type AuxiliaryDataResult = {
   preSearches: StoredPreSearch[] | undefined;
   changelog: ChangelogItem[] | undefined;
   feedback: RoundFeedbackData[] | undefined;
-}
+};
 
 /**
  * Fetches auxiliary data (changelog, preSearches, feedback) for a thread
  * Handles both server-side (await all) and client-side (cache-first) patterns
  */
 async function fetchAuxiliaryData({
+  isServer,
   queryClient,
   threadId,
-  isServer,
 }: {
   queryClient: QueryClient;
   threadId: string;
@@ -194,22 +194,22 @@ async function fetchAuxiliaryDataForPrefetch({
 // Main Loader Function
 // ============================================================================
 
-interface FetchThreadDataParams {
+type FetchThreadDataParams = {
   queryClient: QueryClient;
   slug: string;
   isServer: boolean;
   loaderContext: string; // e.g., 'normal-route' or 'project-route'
-}
+};
 
 /**
  * Shared thread data fetching logic
  * Returns thread data and auxiliary data with consistent shape
  */
 export async function fetchThreadData({
-  queryClient,
-  slug,
   isServer,
   loaderContext,
+  queryClient,
+  slug,
 }: FetchThreadDataParams): Promise<ChatThreadLoaderData> {
   const options = threadBySlugQueryOptions(slug);
 
@@ -245,13 +245,13 @@ export async function fetchThreadData({
     }
 
     return {
-      threadTitle: threadData.thread.title ?? null,
-      threadId: prefetchThreadId ?? null,
-      threadData,
-      preSearches: auxiliaryData.preSearches,
       changelog: auxiliaryData.changelog,
       feedback: auxiliaryData.feedback,
+      preSearches: auxiliaryData.preSearches,
       streamResumption: undefined,
+      threadData,
+      threadId: prefetchThreadId ?? null,
+      threadTitle: threadData.thread.title ?? null,
     };
   }
 
@@ -277,21 +277,21 @@ export async function fetchThreadData({
 
   if (threadId) {
     auxiliaryData = await fetchAuxiliaryData({
+      isServer,
       queryClient,
       threadId,
-      isServer,
     });
   }
 
   const threadData = cachedData?.success ? cachedData.data : null;
 
   return {
-    threadTitle,
-    threadId: threadId || null,
-    threadData,
-    preSearches: auxiliaryData.preSearches,
     changelog: auxiliaryData.changelog,
     feedback: auxiliaryData.feedback,
+    preSearches: auxiliaryData.preSearches,
     streamResumption: undefined,
+    threadData,
+    threadId: threadId || null,
+    threadTitle,
   };
 }

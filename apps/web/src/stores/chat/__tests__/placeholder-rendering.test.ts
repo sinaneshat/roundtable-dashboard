@@ -11,13 +11,12 @@
  * @see docs/FLOW_DOCUMENTATION.md Section "Placeholder Pattern"
  */
 
-import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, ScreenModes, UIMessageRoles } from '@roundtable/shared';
+import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, UIMessageRoles } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createMockParticipants,
   createMockThread,
-  createTestUserMessage,
 } from '@/lib/testing';
 
 import { createChatStore } from '../store';
@@ -161,7 +160,7 @@ describe('placeholder ID Generation', () => {
     // No ID collisions
     const allIds = store.getState().messages.map(m => m.id);
     const uniqueIds = [...new Set(allIds)];
-    expect(allIds.length).toBe(uniqueIds.length);
+    expect(allIds).toHaveLength(uniqueIds.length);
   });
 
   it('should use thread ID in moderator placeholder ID', () => {
@@ -303,7 +302,7 @@ describe('placeholder State During Different Phases', () => {
     store = createChatStore();
   });
 
-  it('IDLE phase: no streaming placeholders exist', () => {
+  it('iDLE phase: no streaming placeholders exist', () => {
     setupStoreWithThread(store, 2);
 
     expect(store.getState().phase).toBe(ChatPhases.IDLE);
@@ -312,7 +311,7 @@ describe('placeholder State During Different Phases', () => {
     expect(streamingMessages).toHaveLength(0);
   });
 
-  it('PARTICIPANTS phase: all placeholders exist', () => {
+  it('pARTICIPANTS phase: all placeholders exist', () => {
     setupStoreWithThread(store, 3);
     store.getState().startRound(0, 3);
 
@@ -323,7 +322,7 @@ describe('placeholder State During Different Phases', () => {
     expect(streamingMessages).toHaveLength(3);
   });
 
-  it('MODERATOR phase: participant messages converted, mod placeholder streaming', () => {
+  it('mODERATOR phase: participant messages converted, mod placeholder streaming', () => {
     setupStoreWithThread(store, 2);
     store.getState().startRound(0, 2);
     store.getState().initializeSubscriptions(0, 2);
@@ -343,7 +342,7 @@ describe('placeholder State During Different Phases', () => {
     expect(modPlaceholder).toBeDefined();
   });
 
-  it('COMPLETE phase: all streaming flags should be cleared on completeStreaming', () => {
+  it('cOMPLETE phase: all streaming flags should be cleared on completeStreaming', () => {
     setupStoreWithThread(store, 2);
     store.getState().startRound(0, 2);
     store.getState().initializeSubscriptions(0, 2);

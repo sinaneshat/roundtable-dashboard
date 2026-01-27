@@ -17,7 +17,6 @@ import { getUserTier } from '@/services/usage';
 import type { ApiEnv } from '@/types';
 
 import type { listModelsRoute } from './route';
-import type { BaseModelResponse } from './schema';
 
 // ============================================================================
 // Helper Functions (DRY pattern)
@@ -27,7 +26,7 @@ import type { BaseModelResponse } from './schema';
  * Convert HardcodedModel to API response format
  * ✅ Returns BaseModelResponse - Zod-inferred type from schema.ts
  */
-function toModelForApi(model: ReturnType<typeof getAllModels>[number]): BaseModelResponse {
+function toModelForApi(model: ReturnType<typeof getAllModels>[number]) {
   return {
     architecture: model.architecture,
     capabilities: model.capabilities,

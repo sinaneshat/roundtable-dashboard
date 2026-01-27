@@ -124,15 +124,15 @@ export const TIER_QUOTAS: Record<
   }
 > = deriveTierRecord(config => config.quotas);
 
-export function tokensToCredits(tokens: number): number {
+export function tokensToCredits(tokens: number) {
   return Math.ceil(tokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 }
 
-export function creditsToTokens(credits: number): number {
+export function creditsToTokens(credits: number) {
   return credits * CREDIT_CONFIG.TOKENS_PER_CREDIT;
 }
 
-export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_COSTS): number {
+export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_COSTS) {
   const tokens = CREDIT_CONFIG.ACTION_COSTS[action];
   return tokensToCredits(tokens);
 }
@@ -140,14 +140,14 @@ export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_CO
 export function estimateStreamingCredits(
   participantCount: number,
   estimatedInputTokens = 500,
-): number {
+) {
   const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
   const totalTokens = estimatedInputTokens + estimatedOutputTokens;
   const reservedTokens = Math.ceil(totalTokens * CREDIT_CONFIG.RESERVATION_MULTIPLIER);
   return tokensToCredits(reservedTokens);
 }
 
-export function calculateBaseCredits(inputTokens: number, outputTokens: number): number {
+export function calculateBaseCredits(inputTokens: number, outputTokens: number) {
   return tokensToCredits(inputTokens + outputTokens);
 }
 
@@ -184,7 +184,7 @@ export function getModelPricingTierById(
   return getModelPricingTier(model);
 }
 
-export function getModelCreditMultiplier(model: ModelForPricing): number {
+export function getModelCreditMultiplier(model: ModelForPricing) {
   const tier = getModelPricingTier(model);
   return getModelTierMultiplier(tier);
 }
@@ -192,7 +192,7 @@ export function getModelCreditMultiplier(model: ModelForPricing): number {
 export function getModelCreditMultiplierById(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
-): number {
+) {
   const tier = getModelPricingTierById(modelId, getModel);
   return getModelTierMultiplier(tier);
 }
@@ -202,7 +202,7 @@ export function calculateWeightedCredits(
   outputTokens: number,
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
-): number {
+) {
   // Ensure tokens are valid numbers, default to 0 if NaN/undefined
   const safeInputTokens = Number.isFinite(inputTokens) ? inputTokens : 0;
   const safeOutputTokens = Number.isFinite(outputTokens) ? outputTokens : 0;
@@ -222,22 +222,22 @@ export function estimateWeightedCredits(
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
   estimatedInputTokens: number = CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
-): number {
+) {
   const baseEstimate = estimateStreamingCredits(participantCount, estimatedInputTokens);
   const multiplier = getModelCreditMultiplierById(modelId, getModel);
   return Math.ceil(baseEstimate * multiplier);
 }
 
-export function getTierName(tier: SubscriptionTier): string {
+export function getTierName(tier: SubscriptionTier) {
   const config = TIER_CONFIG[tier];
   return config?.name ?? 'Unknown';
 }
 
-export function getTiersInOrder(): SubscriptionTier[] {
+export function getTiersInOrder() {
   return [...SUBSCRIPTION_TIERS];
 }
 
-export function getMaxOutputTokensForTier(tier: SubscriptionTier): number {
+export function getMaxOutputTokensForTier(tier: SubscriptionTier) {
   return MAX_OUTPUT_TOKENS_BY_TIER[tier] ?? 512;
 }
 
@@ -253,32 +253,32 @@ export function getSafeMaxOutputTokens(
   modelContextLength: number,
   estimatedInputTokens: number,
   tier: SubscriptionTier,
-): number {
+) {
   const tierMaxOutput = getMaxOutputTokensForTier(tier);
   const safetyBuffer = Math.floor(modelContextLength * 0.2);
   const availableTokens = modelContextLength - estimatedInputTokens - safetyBuffer;
   return Math.max(512, Math.min(tierMaxOutput, availableTokens));
 }
 
-export function getMaxModelPricingForTier(tier: SubscriptionTier): number | null {
+export function getMaxModelPricingForTier(tier: SubscriptionTier) {
   return MAX_MODEL_PRICING_BY_TIER[tier] ?? null;
 }
 
-export function getMaxModelsForTier(tier: SubscriptionTier): number {
+export function getMaxModelsForTier(tier: SubscriptionTier) {
   return MAX_MODELS_BY_TIER[tier] ?? 3;
 }
 
-export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
+export function getMonthlyCreditsForTier(tier: SubscriptionTier) {
   const config = TIER_CONFIG[tier];
   return config?.monthlyCredits ?? 0;
 }
 
-export function getProjectsPerUserForTier(tier: SubscriptionTier): number {
+export function getProjectsPerUserForTier(tier: SubscriptionTier) {
   const config = TIER_CONFIG[tier];
   return config?.quotas.projectsPerUser ?? 0;
 }
 
-export function getThreadsPerProjectForTier(tier: SubscriptionTier): number {
+export function getThreadsPerProjectForTier(tier: SubscriptionTier) {
   const config = TIER_CONFIG[tier];
   return config?.quotas.threadsPerProject ?? 0;
 }
@@ -299,7 +299,7 @@ export function getTierFromProductId(productId: string): SubscriptionTier {
   return SubscriptionTiers.FREE;
 }
 
-export function parsePrice(priceStr: string | number | null | undefined): number {
+export function parsePrice(priceStr: string | number | null | undefined) {
   if (priceStr === null || priceStr === undefined) {
     return 0;
   }
@@ -312,12 +312,12 @@ export function parsePrice(priceStr: string | number | null | undefined): number
   return match ? Number.parseFloat(match[1] || '0') : 0;
 }
 
-export function costPerMillion(pricePerToken: string | number): number {
+export function costPerMillion(pricePerToken: string | number) {
   const perToken = typeof pricePerToken === 'number' ? pricePerToken : Number.parseFloat(pricePerToken);
   return perToken * 1_000_000;
 }
 
-export function isModelFree(model: ModelForPricing): boolean {
+export function isModelFree(model: ModelForPricing) {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
   const freeLimit = MAX_MODEL_PRICING_BY_TIER.free ?? null;
   return freeLimit !== null && inputPricePerMillion <= freeLimit;
@@ -339,7 +339,7 @@ export function getModelCostCategory(model: ModelForPricing): ModelCostCategory 
   return ModelCostCategories.HIGH;
 }
 
-export function getModelPricingDisplay(model: ModelForPricing): string {
+export function getModelPricingDisplay(model: ModelForPricing) {
   if (isModelFree(model)) {
     return 'Free';
   }
@@ -350,7 +350,7 @@ export function getModelPricingDisplay(model: ModelForPricing): string {
   return `$${inputPrice.toFixed(2)}/$${outputPrice.toFixed(2)} per 1M tokens`;
 }
 
-export function getTierUpgradeMessage(tier: SubscriptionTier): string {
+export function getTierUpgradeMessage(tier: SubscriptionTier) {
   const config = TIER_CONFIG[tier];
   return config?.upgradeMessage ?? 'Upgrade to unlock more features';
 }
@@ -364,7 +364,7 @@ export function getRequiredTierForModel(model: ModelForPricing): SubscriptionTie
   return SubscriptionTiers.PRO;
 }
 
-export function canAccessModelByPricing(userTier: SubscriptionTier, model: ModelForPricing): boolean {
+export function canAccessModelByPricing(userTier: SubscriptionTier, model: ModelForPricing) {
   const requiredTier = getRequiredTierForModel(model);
   const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
   const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
@@ -437,7 +437,7 @@ export function enrichWithTierAccess(
   };
 }
 
-export function canAccessByTier(userTier: SubscriptionTier, requiredTier: SubscriptionTier): boolean {
+export function canAccessByTier(userTier: SubscriptionTier, requiredTier: SubscriptionTier) {
   const userTierIndex = SUBSCRIPTION_TIERS.indexOf(userTier);
   const requiredTierIndex = SUBSCRIPTION_TIERS.indexOf(requiredTier);
   return userTierIndex >= requiredTierIndex;
@@ -447,7 +447,7 @@ export function getQuickStartModelsByTier(
   models: ModelForPricing[],
   tier: SubscriptionTier,
   count = 4,
-): string[] {
+) {
   const accessibleModels = models.filter(model => canAccessModelByPricing(tier, model));
 
   if (accessibleModels.length === 0) {
@@ -458,12 +458,12 @@ export function getQuickStartModelsByTier(
   return sortedModels.slice(0, count).map(model => model.id);
 }
 
-export function getDefaultModelForTier(models: ModelForPricing[], tier: SubscriptionTier): string | undefined {
+export function getDefaultModelForTier(models: ModelForPricing[], tier: SubscriptionTier) {
   const tierModels = getQuickStartModelsByTier(models, tier, 1);
   return tierModels.length > 0 ? tierModels[0] : undefined;
 }
 
-export function getFlagshipScore(model: ModelForPricing): number {
+export function getFlagshipScore(model: ModelForPricing) {
   let score = 0;
 
   const inputPrice = Number.parseFloat(model.pricing.prompt) * 1_000_000;
@@ -512,7 +512,7 @@ export function getFlagshipScore(model: ModelForPricing): number {
   return score;
 }
 
-export function isFlagshipModel(model: ModelForPricing): boolean {
+export function isFlagshipModel(model: ModelForPricing) {
   const score = getFlagshipScore(model);
   return score >= 70;
 }
@@ -673,7 +673,7 @@ export const INFINITE_RETRY_CONFIG = {
   maxInitialAttempts: 10,
 } as const;
 
-export function getExponentialBackoff(attempt: number): number {
+export function getExponentialBackoff(attempt: number) {
   if (attempt <= 0) {
     return 0;
   }

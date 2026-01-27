@@ -162,7 +162,7 @@ type KVRateLimitEntry = z.infer<typeof KVRateLimitEntrySchema>;
 async function getRateLimitEntry(
   c: Context<ApiEnv>,
   key: string,
-): Promise<KVRateLimitEntry | null> {
+) {
   // Try KV first (production/preview)
   const kv = c.env?.KV;
   if (kv) {
@@ -194,7 +194,7 @@ async function setRateLimitEntry(
   key: string,
   entry: KVRateLimitEntry,
   ttlMs: number,
-): Promise<void> {
+) {
   // Try KV first (production/preview)
   const kv = c.env?.KV;
   if (kv) {
@@ -218,7 +218,7 @@ async function setRateLimitEntry(
 /**
  * Default key generator based on user, session, or IP
  */
-function defaultKeyGenerator(c: Context<ApiEnv>): string {
+function defaultKeyGenerator(c: Context<ApiEnv>) {
   const user = c.get('user');
   const session = c.get('session');
   const ip = c.req.header('cf-connecting-ip')
@@ -240,7 +240,7 @@ function defaultKeyGenerator(c: Context<ApiEnv>): string {
 /**
  * IP-based key generator
  */
-function ipKeyGenerator(c: Context<ApiEnv>): string {
+function ipKeyGenerator(c: Context<ApiEnv>) {
   const ip = c.req.header('cf-connecting-ip')
     || c.req.header('x-forwarded-for')
     || c.req.header('x-real-ip')
@@ -252,7 +252,7 @@ function ipKeyGenerator(c: Context<ApiEnv>): string {
 /**
  * Organization-based key generator
  */
-function organizationKeyGenerator(c: Context<ApiEnv>): string {
+function organizationKeyGenerator(c: Context<ApiEnv>) {
   const session = c.get('session');
   const user = c.get('user');
 

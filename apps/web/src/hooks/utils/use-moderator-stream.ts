@@ -185,7 +185,9 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
         const pollForModerator = async (): Promise<boolean> => {
           const maxAttempts = 30; // 30 * 1000ms = 30 seconds max
           for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, 1000);
+            });
 
             const result = await queryClient.fetchQuery({
               queryFn: () => getThreadMessagesService({ param: { id: threadId } }),

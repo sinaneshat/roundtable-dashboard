@@ -458,6 +458,32 @@ export function isPreSearch(metadata: unknown): boolean {
   return validated !== null;
 }
 
+/**
+ * Fast O(1) pre-search check without Zod validation
+ *
+ * Use as defensive fallback when Zod validation may fail due to:
+ * - Partial metadata during streaming
+ * - Schema mismatches between frontend/backend versions
+ * - Race conditions during round completion
+ *
+ * Checks:
+ * 1. Message ID pattern (most reliable) - IDs starting with 'pre-search-'
+ * 2. Metadata isPreSearch flag directly
+ *
+ * @param message - Message object with optional id and metadata
+ * @returns true if message is identified as pre-search
+ */
+export function isPreSearchFast(message: { id?: string; metadata?: unknown }): boolean {
+  // Check ID pattern first (most reliable)
+  if (message.id?.startsWith('pre-search-')) {
+    return true;
+  }
+
+  // Check metadata flag directly without Zod validation
+  const meta = message.metadata as Record<string, unknown> | null | undefined;
+  return meta?.isPreSearch === true;
+}
+
 // ============================================================================
 // Upload Metadata Extraction
 // ============================================================================

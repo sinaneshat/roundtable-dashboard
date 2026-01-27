@@ -1,4 +1,4 @@
-export function simpleOptimizeQuery(userQuery: string): string {
+export function simpleOptimizeQuery(userQuery: string) {
   let optimized = userQuery.trim();
 
   if (!optimized) {
@@ -217,7 +217,7 @@ export function simpleOptimizeQuery(userQuery: string): string {
   return finalResult;
 }
 
-export function isOptimizedQuery(query: string): boolean {
+export function isOptimizedQuery(query: string) {
   if (!query || query.trim().length === 0) {
     return false;
   }
@@ -235,7 +235,7 @@ export function isOptimizedQuery(query: string): boolean {
   return true;
 }
 
-export function isQuerySearchable(query: string): boolean {
+export function isQuerySearchable(query: string) {
   const trimmed = query.trim().toLowerCase();
 
   if (!trimmed || trimmed.length < 2) {

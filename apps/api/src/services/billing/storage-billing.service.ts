@@ -58,7 +58,7 @@ export async function getUserProjectStorageBytes(
  * @param bytes - Total storage in bytes
  * @returns Credits to charge (10 credits per 10MB, rounded up)
  */
-export function calculateStorageCredits(bytes: number): number {
+export function calculateStorageCredits(bytes: number) {
   if (bytes <= 0) {
     return 0;
   }

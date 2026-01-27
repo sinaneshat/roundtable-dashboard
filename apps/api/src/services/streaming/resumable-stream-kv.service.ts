@@ -48,7 +48,7 @@ const STREAM_STATE_TTL = 60 * 60;
 /**
  * Generate KV key for stream state
  */
-function getStreamStateKey(threadId: string, roundNumber: number, participantIndex: number): string {
+function getStreamStateKey(threadId: string, roundNumber: number, participantIndex: number) {
   return `stream:state:${threadId}:r${roundNumber}:p${participantIndex}`;
 }
 
@@ -56,7 +56,7 @@ function getStreamStateKey(threadId: string, roundNumber: number, participantInd
  * Generate KV key for thread-level active stream tracking
  * ✅ RESUMABLE STREAMS: Track ONE active stream per thread for AI SDK resume pattern
  */
-function getThreadActiveStreamKey(threadId: string): string {
+function getThreadActiveStreamKey(threadId: string) {
   return `stream:thread:${threadId}:active`;
 }
 

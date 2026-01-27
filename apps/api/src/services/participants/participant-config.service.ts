@@ -51,7 +51,7 @@ export type ChangelogEntry = z.infer<typeof ChangelogEntrySchema>;
 // HELPERS
 // ============================================================================
 
-function extractModelName(modelId: string): string {
+function extractModelName(modelId: string) {
   const parts = modelId.split('/');
   return parts[parts.length - 1] || modelId;
 }

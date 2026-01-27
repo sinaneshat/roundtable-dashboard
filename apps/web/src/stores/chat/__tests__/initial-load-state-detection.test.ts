@@ -10,7 +10,7 @@
  * @see docs/FLOW_DOCUMENTATION.md Section "Stream Resumption Pattern"
  */
 
-import { MessageStatuses, ScreenModes, UIMessageRoles } from '@roundtable/shared';
+import { MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
