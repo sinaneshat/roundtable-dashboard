@@ -36,6 +36,27 @@ export const CLOUDFLARE_AI_SEARCH_COST_PER_QUERY = 0;
 export const TAVILY_COST_PER_SEARCH = 0.01;
 
 /**
+ * Serper API pricing
+ * $1 per 1,000 searches = $0.001 per search
+ * @see https://serper.dev/pricing
+ */
+export const SERPER_COST_PER_SEARCH = 0.001;
+
+/**
+ * Cloudflare Vectorize pricing
+ * $0.01 per million queried dimensions
+ * @see https://developers.cloudflare.com/vectorize/platform/pricing/
+ */
+export const CLOUDFLARE_VECTORIZE_COST_PER_MILLION_DIMENSIONS = 0.01;
+
+/**
+ * Cloudflare Workers AI pricing
+ * $0.011 per 1,000 neurons
+ * @see https://developers.cloudflare.com/workers-ai/platform/pricing/
+ */
+export const CLOUDFLARE_WORKERS_AI_COST_PER_1K_NEURONS = 0.011;
+
+/**
  * Helper to get Cloudflare AI pricing by model name
  */
 export function getCloudflareAiPricing(

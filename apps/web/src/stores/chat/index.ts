@@ -30,7 +30,6 @@ export type {
   ChatStoreState,
   EntityStatus,
   EntitySubscriptionStateType,
-  FeedbackState,
   FormState,
   PreSearchState,
   SubscriptionState,
@@ -60,8 +59,6 @@ export {
 // Actions (kept files)
 export type { UseAutoModeAnalysisReturn } from './actions/auto-mode-actions';
 export { useAutoModeAnalysis } from './actions/auto-mode-actions';
-export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './actions/feedback-actions';
-export { useFeedbackActions } from './actions/feedback-actions';
 export type { AttachmentInfo, UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
 export { useNavigationReset } from './actions/navigation-reset';

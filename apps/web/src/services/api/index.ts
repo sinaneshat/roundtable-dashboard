@@ -174,9 +174,6 @@ export {
   type GetThreadChangelogRequest,
   type GetThreadChangelogResponse,
   getThreadChangelogService,
-  type GetThreadFeedbackRequest,
-  type GetThreadFeedbackResponse,
-  getThreadFeedbackService,
   type GetThreadMemoryEventsRequest,
   type GetThreadMemoryEventsResponse,
   getThreadMemoryEventsService,
@@ -226,10 +223,6 @@ export {
   type PreSearchResponse,
   type PreSearchResult,
   type PublicThreadData,
-  type RoundFeedbackData,
-  type SetRoundFeedbackRequest,
-  type SetRoundFeedbackResponse,
-  setRoundFeedbackService,
   type StoredPreSearch,
   type StoredThread,
   type StreamChatRequest,
@@ -372,7 +365,7 @@ export {
 export type { ServiceOptions } from './types';
 
 // ============================================================================
-// Feedback Domain Services
+// Upload Domain Services
 // ============================================================================
 
 export {

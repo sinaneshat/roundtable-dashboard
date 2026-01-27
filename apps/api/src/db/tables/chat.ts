@@ -5,7 +5,6 @@ import {
   DEFAULT_MESSAGE_STATUS,
   DEFAULT_ROUND_EXECUTION_TABLE_STATUS,
   DEFAULT_THREAD_STATUS,
-  FEEDBACK_TYPES,
   MESSAGE_ROLES,
   MESSAGE_STATUSES,
   ROUND_EXECUTION_TABLE_STATUSES,
@@ -306,34 +305,6 @@ export const chatMessage = sqliteTable('chat_message', {
   index('chat_message_thread_created_idx').on(table.threadId, table.createdAt),
   // ✅ ROUND TRACKING INDEX: Efficient queries by thread + round for analysis placement
   index('chat_message_thread_round_idx').on(table.threadId, table.roundNumber),
-]);
-
-/**
- * Chat Round Feedback
- * Stores user feedback (like/dislike) for each round of conversation
- */
-export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .notNull(),
-  feedbackType: text('feedback_type', { enum: FEEDBACK_TYPES }), // null = no feedback
-  id: text('id').primaryKey(),
-  roundNumber: integer('round_number').notNull(), // ✅ 0-BASED: First round is 0
-  threadId: text('thread_id')
-    .notNull()
-    .references(() => chatThread.id, { onDelete: 'cascade' }),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-}, table => [
-  // ✅ Unique constraint: one feedback per user per round
-  index('chat_round_feedback_unique_idx').on(table.threadId, table.userId, table.roundNumber),
-  index('chat_round_feedback_thread_idx').on(table.threadId),
-  index('chat_round_feedback_round_idx').on(table.threadId, table.roundNumber),
 ]);
 
 /**

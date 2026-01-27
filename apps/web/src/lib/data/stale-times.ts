@@ -69,7 +69,6 @@ export const STALE_TIMES = {
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadDetail: 0, // NO CACHE - streaming updates require fresh data, store is source of truth (ONE-WAY DATA FLOW)
   threadDetailKV: 300, // 5 minutes - thread detail DB cache
-  threadFeedback: Infinity, // Never stale - invalidated only on mutation
   // ============================================================================
   // KV Cache TTLs (in seconds for $withCache DB-level caching)
   // ============================================================================

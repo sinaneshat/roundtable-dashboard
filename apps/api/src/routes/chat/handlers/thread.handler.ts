@@ -1582,7 +1582,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
  *
  * Hard deletes the thread and all related data:
  * - All messages and their uploads
- * - All participants, changelogs, pre-searches, feedback
+ * - All participants, changelogs, pre-searches
  * - All project memories from this thread
  * - All project attachments linked to this thread
  * - All junction table records (threadUpload, messageUpload)
@@ -1767,7 +1767,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       );
     }
 
-    // ✅ PERF OPTIMIZATION: Run all 6 queries in parallel with KV caching
+    // ✅ PERF OPTIMIZATION: Run all 5 queries in parallel with KV caching
     // Reduces latency from ~500ms (sequential) to ~100ms (parallel)
     // Each query uses $withCache for 1-hour KV caching
     const [
@@ -1775,7 +1775,6 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
       participants,
       allMessages,
       allChangelog,
-      allFeedback,
       allPreSearches,
     ] = await Promise.all([
       // 1. Thread owner (now cached)
@@ -1831,17 +1830,7 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
           tag: PublicThreadCacheTags.changelog(thread.id),
         }),
 
-      // 5. Feedback (now cached)
-      db.select()
-        .from(tables.chatRoundFeedback)
-        .where(eq(tables.chatRoundFeedback.threadId, thread.id))
-        .orderBy(tables.chatRoundFeedback.roundNumber)
-        .$withCache({
-          config: { ex: 3600 }, // 1 hour cache
-          tag: PublicThreadCacheTags.feedback(thread.id),
-        }),
-
-      // 6. PreSearches (now cached)
+      // 5. PreSearches (now cached)
       db.select()
         .from(tables.chatPreSearch)
         .where(and(
@@ -1911,15 +1900,12 @@ export const getPublicThreadHandler: RouteHandler<typeof getPublicThreadRoute, A
     // ✅ TEXT STREAMING: Moderator messages are now in chatMessage with metadata.isModerator: true
     const analyses: never[] = [];
 
-    const feedback = allFeedback.filter(f => completeRounds.has(f.roundNumber));
-
     // ✅ PUBLIC PAGE FIX: Only return pre-searches for complete rounds
     const preSearches = allPreSearches.filter(ps => completeRounds.has(ps.roundNumber));
 
     const response = Responses.ok(c, {
       analyses,
       changelog,
-      feedback,
       messages,
       participants,
       preSearches,

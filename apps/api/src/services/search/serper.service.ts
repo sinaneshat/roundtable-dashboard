@@ -1,33 +1,21 @@
 /**
- * Serper Search Service - Google Search via Serper API
+ * Serper Search Service - Google Search via Serper.dev API
  *
- * Primary search engine for web searches. Uses Serper.dev API
- * which provides fast, reliable Google search results.
+ * Uses Serper.dev's REST endpoint with native fetch (Workers-compatible).
+ * Provides organic results, knowledge graph, and related searches.
  *
- * Pricing: $50/month for 50,000 searches, 2,500 free/month
- * Speed: ~1.8s average response time
+ * @see https://serper.dev/
  */
 
+import { SERPER_COST_PER_SEARCH } from '@roundtable/shared/constants';
 import { RlogCategories } from '@roundtable/shared/enums';
 
+import { generateTraceId, trackSpan } from '@/services/errors/posthog-llm-tracking.service';
 import type { ApiEnv } from '@/types';
 
 // ============================================================================
-// TYPES
+// TYPES (from Serper.dev response)
 // ============================================================================
-
-/**
- * Serper API search parameters
- */
-type SerperSearchParams = {
-  q: string;
-  gl?: string; // Country code (e.g., "us", "uk")
-  hl?: string; // Language code (e.g., "en", "es")
-  num?: number; // Number of results (default: 10, max: 100)
-  autocorrect?: boolean;
-  page?: number;
-  type?: 'search' | 'images' | 'news' | 'places';
-};
 
 /**
  * Serper organic search result
@@ -42,9 +30,9 @@ type SerperOrganicResult = {
 };
 
 /**
- * Serper knowledge graph result
+ * Serper knowledge graph (internal type)
  */
-type SerperKnowledgeGraph = {
+type SerperKnowledgeGraphInternal = {
   title?: string;
   type?: string;
   website?: string;
@@ -53,26 +41,47 @@ type SerperKnowledgeGraph = {
 };
 
 /**
+ * Serper People Also Ask
+ */
+type SerperPeopleAlsoAsk = {
+  question: string;
+  snippet: string;
+  title: string;
+  link: string;
+};
+
+/**
+ * Serper related search
+ */
+type SerperRelatedSearch = {
+  query: string;
+};
+
+/**
  * Serper API response
  */
-type SerperSearchResponse = {
+type SerperApiResponse = {
   searchParameters: {
     q: string;
-    gl: string;
-    hl: string;
-    num: number;
     type: string;
+    engine: string;
+    num?: number;
   };
-  organic: SerperOrganicResult[];
-  knowledgeGraph?: SerperKnowledgeGraph;
-  peopleAlsoAsk?: Array<{
-    question: string;
-    snippet: string;
-    link: string;
-  }>;
-  relatedSearches?: Array<{ query: string }>;
+  organic?: SerperOrganicResult[];
+  knowledgeGraph?: SerperKnowledgeGraphInternal;
+  peopleAlsoAsk?: SerperPeopleAlsoAsk[];
+  relatedSearches?: SerperRelatedSearch[];
+  answerBox?: {
+    title?: string;
+    answer?: string;
+    snippet?: string;
+  };
   credits?: number;
 };
+
+// ============================================================================
+// EXPORTED TYPES
+// ============================================================================
 
 /**
  * Normalized search result for internal use
@@ -86,13 +95,24 @@ export type SerperSearchResult = {
 };
 
 /**
+ * Knowledge graph data
+ */
+export type SerperKnowledgeGraph = {
+  title?: string;
+  type?: string;
+  website?: string;
+  description?: string;
+};
+
+/**
  * Search response with metadata
  */
 export type SerperSearchOutput = {
   results: SerperSearchResult[];
   knowledgeGraph?: SerperKnowledgeGraph;
   relatedSearches?: string[];
-  creditsUsed?: number;
+  relatedQuestions?: Array<{ question: string; snippet?: string }>;
+  answerBox?: { title?: string; answer?: string; snippet?: string };
   responseTimeMs: number;
 };
 
@@ -127,11 +147,13 @@ function rlogSerper(action: string, detail: string): void {
  * Check if Serper API is configured
  */
 export function isSerperConfigured(env: ApiEnv['Bindings']): boolean {
-  return !!env.SERPER_API_KEY && env.SERPER_API_KEY !== 'your-serper-api-key-here';
+  return !!env.SERP_API_KEY && env.SERP_API_KEY !== 'your-serper-api-key-here';
 }
 
 /**
- * Perform a Google search via Serper API
+ * Perform a Google search via Serper.dev API
+ *
+ * Uses native fetch for Cloudflare Workers compatibility.
  */
 export async function searchWithSerper(
   query: string,
@@ -140,7 +162,6 @@ export async function searchWithSerper(
     numResults?: number;
     country?: string;
     language?: string;
-    page?: number;
   },
 ): Promise<SerperSearchOutput> {
   const startTime = performance.now();
@@ -152,29 +173,24 @@ export async function searchWithSerper(
 
   const numResults = Math.min(options?.numResults || DEFAULT_NUM_RESULTS, MAX_RESULTS);
 
-  const params: SerperSearchParams = {
-    autocorrect: true,
-    gl: options?.country || 'us',
-    hl: options?.language || 'en',
-    num: numResults,
-    page: options?.page || 1,
-    q: query,
-    type: 'search',
-  };
-
   rlogSerper('request', `q="${query.slice(0, 50)}${query.length > 50 ? '...' : ''}" num=${numResults}`);
 
+  // Create abort controller for timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
     const response = await fetch(SERPER_API_URL, {
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        autocorrect: true,
+        gl: options?.country || 'us',
+        hl: options?.language || 'en',
+        num: numResults,
+        q: query,
+      }),
       headers: {
         'Content-Type': 'application/json',
-        'X-API-KEY': env.SERPER_API_KEY,
+        'X-API-KEY': env.SERP_API_KEY,
       },
       method: 'POST',
       signal: controller.signal,
@@ -184,40 +200,99 @@ export async function searchWithSerper(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
-      rlogSerper('error', `status=${response.status} body=${errorText.slice(0, 100)}`);
-      throw new Error(`Serper API error: ${response.status} - ${errorText}`);
+      rlogSerper('http-error', `status=${response.status} body=${errorText.slice(0, 200)}`);
+      throw new Error(`Serper HTTP error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json() as SerperSearchResponse;
+    const data = await response.json() as SerperApiResponse;
     const responseTimeMs = performance.now() - startTime;
 
-    // Normalize results
-    const results: SerperSearchResult[] = (data.organic || []).map(r => ({
-      date: r.date,
-      position: r.position,
-      snippet: r.snippet || '',
-      title: r.title || '',
-      url: r.link || '',
-    }));
+    // Normalize organic results
+    const results: SerperSearchResult[] = (data.organic || []).map((r) => {
+      const result: SerperSearchResult = {
+        position: r.position,
+        snippet: r.snippet || '',
+        title: r.title || '',
+        url: r.link || '',
+      };
+      if (r.date) {
+        result.date = r.date;
+      }
+      return result;
+    });
 
-    rlogSerper('success', `results=${results.length} time=${responseTimeMs.toFixed(0)}ms`);
-
-    return {
-      creditsUsed: data.credits,
-      knowledgeGraph: data.knowledgeGraph,
-      relatedSearches: data.relatedSearches?.map(r => r.query),
+    // Build output
+    const output: SerperSearchOutput = {
       responseTimeMs,
       results,
     };
+
+    // Add knowledge graph if present
+    if (data.knowledgeGraph) {
+      const kg = data.knowledgeGraph;
+      output.knowledgeGraph = {
+        description: kg.description,
+        title: kg.title,
+        type: kg.type,
+        website: kg.website,
+      };
+    }
+
+    // Add related searches if present
+    if (data.relatedSearches && data.relatedSearches.length > 0) {
+      output.relatedSearches = data.relatedSearches.map(r => r.query);
+    }
+
+    // Add related questions (People Also Ask) if present
+    if (data.peopleAlsoAsk && data.peopleAlsoAsk.length > 0) {
+      output.relatedQuestions = data.peopleAlsoAsk.map(r => ({
+        question: r.question,
+        snippet: r.snippet,
+      }));
+    }
+
+    // Add answer box if present
+    if (data.answerBox) {
+      output.answerBox = {
+        answer: data.answerBox.answer,
+        snippet: data.answerBox.snippet,
+        title: data.answerBox.title,
+      };
+    }
+
+    rlogSerper('success', `results=${results.length} time=${responseTimeMs.toFixed(0)}ms`);
+
+    // Track Serper search cost for PostHog analytics
+    const traceId = generateTraceId();
+    trackSpan(
+      { userId: 'system' },
+      {
+        inputState: { numResults, query },
+        outputState: { resultsCount: results.length },
+        spanName: 'serper_search',
+        traceId,
+      },
+      responseTimeMs,
+      {
+        additionalProperties: {
+          actual_cost_usd: SERPER_COST_PER_SEARCH,
+          operation_type: 'web_search',
+          provider: 'serper',
+        },
+      },
+    ).catch(() => {}); // Fire and forget
+
+    return output;
   } catch (error) {
     clearTimeout(timeoutId);
+    const responseTimeMs = performance.now() - startTime;
 
     if (error instanceof Error && error.name === 'AbortError') {
       rlogSerper('timeout', `exceeded ${REQUEST_TIMEOUT_MS}ms`);
-      throw new Error(`Serper API timeout after ${REQUEST_TIMEOUT_MS}ms`);
+      throw new Error(`Serper timeout after ${REQUEST_TIMEOUT_MS}ms`);
     }
 
-    rlogSerper('error', error instanceof Error ? error.message : 'Unknown error');
+    rlogSerper('error', `${error instanceof Error ? error.message : 'Unknown error'} time=${responseTimeMs.toFixed(0)}ms`);
     throw error;
   }
 }

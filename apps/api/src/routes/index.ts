@@ -112,7 +112,6 @@ import {
   getRoundStatusHandler,
   getThreadBySlugHandler,
   getThreadChangelogHandler,
-  getThreadFeedbackHandler,
   getThreadHandler,
   getThreadMemoryEventsHandler,
   getThreadMessagesHandler,
@@ -127,7 +126,6 @@ import {
   listThreadsHandler,
   listUserPresetsHandler,
   resumeThreadStreamHandler,
-  setRoundFeedbackHandler,
   startRoundHandler,
   streamChatHandler,
   subscribeToModeratorStreamHandler,
@@ -155,7 +153,6 @@ import {
   getRoundStatusRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
-  getThreadFeedbackRoute,
   getThreadMemoryEventsRoute,
   getThreadMessagesRoute,
   getThreadPreSearchesRoute,
@@ -170,7 +167,6 @@ import {
   listThreadsRoute,
   listUserPresetsRoute,
   resumeThreadStreamRoute,
-  setRoundFeedbackRoute,
   startRoundRoute,
   streamChatRoute,
   subscribeToModeratorStreamRoute,
@@ -385,9 +381,7 @@ const chatFeatureRoutes = createOpenApiApp()
   .openapi(createUserPresetRoute, createUserPresetHandler)
   .openapi(getUserPresetRoute, getUserPresetHandler)
   .openapi(updateUserPresetRoute, updateUserPresetHandler)
-  .openapi(deleteUserPresetRoute, deleteUserPresetHandler)
-  .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler)
-  .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler);
+  .openapi(deleteUserPresetRoute, deleteUserPresetHandler);
 
 /**
  * Group 5b: Chat - Entity Subscriptions & Round Orchestration (4 routes)

@@ -10,7 +10,6 @@ import type {
   AttachmentsState,
   ChangelogState,
   ChatPhase,
-  FeedbackState,
   FormState,
   PreSearchState,
   SubscriptionState,
@@ -76,12 +75,6 @@ export const UI_DEFAULTS: UIState = {
   waitingToStartStreaming: false,
 };
 
-export const FEEDBACK_DEFAULTS: FeedbackState = {
-  feedbackByRound: new Map(),
-  hasLoadedFeedback: false,
-  pendingFeedback: null,
-};
-
 export const ATTACHMENTS_DEFAULTS: AttachmentsState = {
   pendingAttachmentIds: null,
   pendingAttachments: [],
@@ -136,7 +129,6 @@ export const STORE_DEFAULTS = {
   ...THREAD_DEFAULTS,
   ...FORM_DEFAULTS,
   ...UI_DEFAULTS,
-  ...FEEDBACK_DEFAULTS,
   ...ATTACHMENTS_DEFAULTS,
   ...PRESEARCH_DEFAULTS,
   ...CHANGELOG_DEFAULTS,
@@ -152,7 +144,6 @@ export const STORE_DEFAULTS = {
 /** Reset for thread navigation (between threads) */
 export const THREAD_NAVIGATION_RESET = {
   ...THREAD_DEFAULTS,
-  ...FEEDBACK_DEFAULTS,
   changelogItems: [],
   createdThreadId: null,
   createdThreadProjectId: null,
@@ -168,7 +159,6 @@ export const THREAD_NAVIGATION_RESET = {
 /** Reset for returning to overview */
 export const OVERVIEW_RESET = {
   ...STORE_DEFAULTS,
-  feedbackByRound: new Map(),
   preSearchActivityTimes: new Map<number, number>(),
   triggeredModeratorIds: new Set<string>(),
   triggeredModeratorRounds: new Set<number>(),

@@ -309,6 +309,40 @@ export function estimateReasoningTokens(reasoningText: string) {
   return Math.ceil(reasoningText.length / 4);
 }
 
+/**
+ * Estimate tokens from text when AI SDK doesn't return usage
+ *
+ * Uses ~4 characters per token (GPT-style tokenization approximation)
+ *
+ * @param text - Text to estimate tokens for
+ * @returns Estimated token count
+ */
+export function estimateTokensFromText(text: string) {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Estimate usage from input/output content when AI SDK doesn't return usage
+ *
+ * Useful for models that don't report token counts
+ *
+ * @param inputContent - Input text sent to model
+ * @param outputContent - Output text received from model
+ * @returns Estimated usage object compatible with AI SDK LanguageModelUsage
+ */
+export function estimateUsageFromContent(
+  inputContent: string,
+  outputContent: string,
+) {
+  const inputTokens = estimateTokensFromText(inputContent);
+  const outputTokens = estimateTokensFromText(outputContent);
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+  };
+}
+
 // ============================================================================
 // TRACE ID MANAGEMENT
 // ============================================================================
@@ -1075,91 +1109,6 @@ export async function trackTrace(
             name: options.error.name,
             stack: options.error.stack,
           },
-        }),
-
-        // Additional properties
-        ...options?.additionalProperties,
-      },
-    });
-
-    // Events auto-flush due to flushAt: 1 config - no shutdown needed
-  } catch {
-    // Silently fail - don't break the application
-  }
-}
-
-// ============================================================================
-// FEEDBACK TRACKING ($ai_feedback)
-// ============================================================================
-
-/**
- * Track user feedback on AI-generated content
- *
- * ✅ POSTHOG OFFICIAL: $ai_feedback captures user ratings and feedback
- * Reference: https://posthog.com/docs/llm-analytics/feedback
- *
- * Use this when:
- * - User rates a response (thumbs up/down, stars, etc.)
- * - User provides qualitative feedback on AI output
- * - Tracking quality metrics for AI generations
- *
- * @param context - Basic tracking context
- * @param context.userId - User ID for tracking
- * @param context.sessionId - Session ID for tracking (optional)
- * @param params - Feedback parameters
- * @param params.traceId - Trace ID of the AI generation being rated
- * @param params.score - Numeric score (e.g., 1-5, 0-1, -1 to 1)
- * @param params.feedbackType - Type of feedback (e.g., 'rating', 'thumbs', 'text')
- * @param params.comment - Optional text feedback/comment
- * @param params.generationId - Optional specific generation ID being rated
- * @param options - Optional tracking enrichment
- * @param options.feedbackCategory - Category of feedback (e.g., 'accuracy', 'helpfulness', 'tone')
- * @param options.additionalProperties - Custom properties
- */
-export async function trackFeedback(
-  context: { userId: string; sessionId?: string },
-  params: {
-    traceId: string;
-    score: number;
-    feedbackType: 'rating' | 'thumbs' | 'text' | 'custom';
-    comment?: string;
-    generationId?: string;
-  },
-  options?: {
-    feedbackCategory?: string;
-    additionalProperties?: Record<string, unknown>;
-  },
-): Promise<void> {
-  const posthog = getPostHogClient();
-
-  if (!posthog) {
-    return; // PostHog not initialized (non-production env)
-  }
-
-  try {
-    posthog.capture({
-      distinctId: context.sessionId || context.userId,
-      event: '$ai_feedback',
-      properties: {
-        $ai_feedback_score: params.score,
-        $ai_feedback_type: params.feedbackType,
-        // Required feedback properties
-        $ai_trace_id: params.traceId,
-
-        // Session linking
-        ...(context.sessionId && {
-          $session_id: context.sessionId,
-        }),
-
-        // Optional feedback details
-        ...(params.comment && {
-          $ai_feedback_comment: params.comment,
-        }),
-        ...(params.generationId && {
-          $ai_generation_id: params.generationId,
-        }),
-        ...(options?.feedbackCategory && {
-          $ai_feedback_category: options.feedbackCategory,
         }),
 
         // Additional properties

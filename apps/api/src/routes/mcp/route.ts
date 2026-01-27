@@ -155,7 +155,6 @@ Execute a tool by name with arguments. Returns MCP-compliant response.
 - \`generate_responses\` - Generate AI responses
 - \`list_rounds\` - List thread rounds
 - \`regenerate_round\` - Regenerate round responses
-- \`round_feedback\` - Submit round feedback
 - \`generate_analysis\` - Generate round summary
 - \`get_round_analysis\` - Get existing summary
 - \`add_participant\` - Add participant to thread

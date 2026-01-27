@@ -24,7 +24,6 @@ import {
   chatMessage,
   chatParticipant,
   chatPreSearch,
-  chatRoundFeedback,
   chatThread,
   chatThreadChangelog,
   chatUserPreset,
@@ -93,15 +92,6 @@ export const chatPreSearchSelectSchema = createSelectSchema(chatPreSearch);
 export const chatPreSearchInsertSchema = createInsertSchema(chatPreSearch);
 
 /**
- * Round Feedback Schemas
- * User feedback (like/dislike) for conversation rounds
- * Note: Field validation applied at API layer
- */
-export const chatRoundFeedbackSelectSchema = createSelectSchema(chatRoundFeedback);
-export const chatRoundFeedbackInsertSchema = createInsertSchema(chatRoundFeedback);
-export const chatRoundFeedbackUpdateSchema = createUpdateSchema(chatRoundFeedback);
-
-/**
  * User Preset Schemas
  * User-saved preset configurations for thread creation
  * Note: Field validation applied at API layer
@@ -145,10 +135,6 @@ export type ChatCustomRoleUpdate = z.infer<typeof chatCustomRoleUpdateSchema>;
 
 export type ChatPreSearch = z.infer<typeof chatPreSearchSelectSchema>;
 export type ChatPreSearchInsert = z.infer<typeof chatPreSearchInsertSchema>;
-
-export type ChatRoundFeedback = z.infer<typeof chatRoundFeedbackSelectSchema>;
-export type ChatRoundFeedbackInsert = z.infer<typeof chatRoundFeedbackInsertSchema>;
-export type ChatRoundFeedbackUpdate = z.infer<typeof chatRoundFeedbackUpdateSchema>;
 
 export type ChatUserPreset = z.infer<typeof chatUserPresetSelectSchema>;
 export type ChatUserPresetInsert = z.infer<typeof chatUserPresetInsertSchema>;

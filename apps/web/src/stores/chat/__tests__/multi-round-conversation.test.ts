@@ -334,29 +334,6 @@ describe('changelog Accumulation Across Rounds', () => {
 });
 
 // ============================================================================
-// SCENARIO: Feedback State Across Rounds
-// ============================================================================
-
-describe('feedback State Across Rounds', () => {
-  it('should track feedback per round independently', () => {
-    const { store } = setupStore(2);
-
-    completeRound(store, 0, 2);
-    store.getState().setFeedback(0, 'positive');
-
-    completeRound(store, 1, 2);
-    store.getState().setFeedback(1, 'negative');
-
-    completeRound(store, 2, 2);
-    // No feedback for round 2
-
-    expect(store.getState().feedbackByRound.get(0)).toBe('positive');
-    expect(store.getState().feedbackByRound.get(1)).toBe('negative');
-    expect(store.getState().feedbackByRound.get(2)).toBeUndefined();
-  });
-});
-
-// ============================================================================
 // SCENARIO: Thread State Preservation
 // ============================================================================
 

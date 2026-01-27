@@ -537,9 +537,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
 
           set({
             changelogItems: [],
-            feedbackByRound: new Map(),
             hasInitiallyLoaded: true,
-            hasLoadedFeedback: false,
             hasSentPendingMessage: false,
             messages,
             participants,
@@ -553,13 +551,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             triggeredModeratorRounds: new Set<number>(),
             triggeredPreSearchRounds: new Set<number>(),
           }, false, 'operations/initializeThread');
-        },
-
-        loadFeedbackFromServer: (data) => {
-          set({
-            feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
-            hasLoadedFeedback: true,
-          }, false, 'feedback/loadFeedbackFromServer');
         },
 
         markModeratorStreamTriggered: (moderatorId: string, roundNumber: number) => {
@@ -695,7 +686,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           rlog.init('resetForThreadNavigation', 'Clearing for new thread');
           set({
             ...THREAD_NAVIGATION_RESET,
-            feedbackByRound: new Map(),
             preSearchActivityTimes: new Map<number, number>(),
             triggeredModeratorIds: new Set<string>(),
             triggeredModeratorRounds: new Set<number>(),
@@ -711,7 +701,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           rlog.init('resetToNewChat', 'Starting new chat');
           set({
             ...OVERVIEW_RESET,
-            feedbackByRound: new Map(),
             preSearchActivityTimes: new Map<number, number>(),
             triggeredModeratorIds: new Set<string>(),
             triggeredModeratorRounds: new Set<number>(),
@@ -719,15 +708,10 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           }, false, 'operations/resetToNewChat');
         },
 
-        // ============================================================
-        // FEEDBACK STATE
-        // ============================================================
-
         resetToOverview: () => {
           rlog.init('resetToOverview', 'Returning to overview');
           set({
             ...OVERVIEW_RESET,
-            feedbackByRound: new Map(),
             preSearchActivityTimes: new Map<number, number>(),
             triggeredModeratorIds: new Set<string>(),
             triggeredModeratorRounds: new Set<number>(),
@@ -754,12 +738,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         // ============================================================
         // PRE-SEARCH STATE - Frame 10
         // ============================================================
-
-        setFeedback: (roundNumber, type) => {
-          set((draft) => {
-            draft.feedbackByRound.set(roundNumber, type);
-          }, false, 'feedback/setFeedback');
-        },
 
         setHasInitiallyLoaded: loaded => set({ hasInitiallyLoaded: loaded }, false, 'ui/setHasInitiallyLoaded'),
 
@@ -796,8 +774,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         // ============================================================
         // CHANGELOG STATE - Frame 8/9
         // ============================================================
-
-        setPendingFeedback: feedback => set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
 
         setPendingFileParts: parts => set({ pendingFileParts: parts }, false, 'attachments/setPendingFileParts'),
 

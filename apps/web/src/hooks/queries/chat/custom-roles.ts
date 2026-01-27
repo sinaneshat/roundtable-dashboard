@@ -1,7 +1,7 @@
 /**
- * Thread Feedback & Custom Roles Query Hooks
+ * Custom Roles & User Presets Query Hooks
  *
- * TanStack Query hooks for thread feedback and custom role template operations
+ * TanStack Query hooks for custom role template and user preset operations
  * Following patterns from TanStack Query v5 infinite query documentation
  *
  * IMPORTANT: Uses shared queryOptions from query-options.ts to ensure
@@ -13,7 +13,6 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { threadFeedbackQueryOptions } from '@/lib/data/query-options';
 import { GC_TIMES, STALE_TIME_PRESETS } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
@@ -21,35 +20,6 @@ import {
   listCustomRolesService,
   listUserPresetsService,
 } from '@/services/api';
-
-// ============================================================================
-// THREAD FEEDBACK HOOKS
-// ============================================================================
-
-/**
- * Hook to fetch round feedback for a thread
- * Returns feedback submitted by users for each round
- * Protected endpoint - requires authentication
- *
- * ✅ SSR: Uses shared queryOptions for consistent SSR hydration
- *
- * @param threadId - Thread ID
- * @param enabled - Optional control over whether to fetch (default: true)
- */
-export function useThreadFeedbackQuery(threadId: string, enabled = true) {
-  const { isAuthenticated } = useAuthCheck();
-
-  // ✅ SSR: Use shared queryOptions - MUST match loader prefetch
-  const options = threadFeedbackQueryOptions(threadId);
-
-  return useQuery({
-    ...options,
-    enabled: isAuthenticated && !!threadId && enabled,
-    gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
-    placeholderData: previousData => previousData,
-    throwOnError: false,
-  });
-}
 
 // ============================================================================
 // CUSTOM ROLES HOOKS

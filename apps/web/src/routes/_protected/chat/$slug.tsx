@@ -94,7 +94,6 @@ function ChatThreadRoute() {
     ? loaderData.threadData
     : (queryData?.success ? queryData.data : null);
   const changelog = loaderData?.changelog;
-  const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
 
   // Debug: Log data source selection (parity with project-route)
@@ -150,7 +149,6 @@ function ChatThreadRoute() {
       slug={slug ?? ''}
       user={user}
       initialChangelog={changelog}
-      initialFeedback={feedback}
       initialPreSearches={preSearches}
     />
   );

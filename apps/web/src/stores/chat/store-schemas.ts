@@ -5,8 +5,8 @@
  * Types inferred from Zod schemas (single source of truth).
  */
 
-import type { ChatMode, FeedbackType } from '@roundtable/shared';
-import { ChatModeSchema, FeedbackTypeSchema, ScreenModeSchema } from '@roundtable/shared';
+import type { ChatMode } from '@roundtable/shared';
+import { ChatModeSchema, ScreenModeSchema } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
@@ -96,16 +96,6 @@ export const UIStateSchema = z.object({
   waitingToStartStreaming: z.boolean(),
 });
 
-/** Feedback state */
-export const FeedbackStateSchema = z.object({
-  feedbackByRound: z.custom<Map<number, FeedbackType | null>>(),
-  hasLoadedFeedback: z.boolean(),
-  pendingFeedback: z.object({
-    roundNumber: z.number(),
-    type: FeedbackTypeSchema,
-  }).nullable(),
-});
-
 /** Attachments state */
 export const AttachmentsStateSchema = z.object({
   pendingAttachmentIds: z.array(z.string()).nullable(),
@@ -181,13 +171,10 @@ export const ChatStoreStateSchema = z.intersection(
         z.intersection(
           z.intersection(
             z.intersection(
-              z.intersection(
-                ThreadStateSchema,
-                FormStateSchema,
-              ),
-              UIStateSchema,
+              ThreadStateSchema,
+              FormStateSchema,
             ),
-            FeedbackStateSchema,
+            UIStateSchema,
           ),
           AttachmentsStateSchema,
         ),
@@ -207,7 +194,6 @@ export const ChatStoreStateSchema = z.intersection(
 export type ThreadState = z.infer<typeof ThreadStateSchema>;
 export type FormState = z.infer<typeof FormStateSchema>;
 export type UIState = z.infer<typeof UIStateSchema>;
-export type FeedbackState = z.infer<typeof FeedbackStateSchema>;
 export type AttachmentsState = z.infer<typeof AttachmentsStateSchema>;
 export type PreSearchState = z.infer<typeof PreSearchStateSchema>;
 export type ChangelogState = z.infer<typeof ChangelogStateSchema>;
@@ -263,11 +249,6 @@ export type ChatStoreActions = {
   setWaitingToStartStreaming: (waiting: boolean) => void;
   setHasInitiallyLoaded: (loaded: boolean) => void;
   setScreenMode: (mode: z.infer<typeof ScreenModeSchema> | null) => void;
-
-  // === FEEDBACK ===
-  setFeedback: (roundNumber: number, type: FeedbackType | null) => void;
-  setPendingFeedback: (feedback: { roundNumber: number; type: FeedbackType } | null) => void;
-  loadFeedbackFromServer: (data: Array<{ roundNumber: number; feedbackType: FeedbackType | null }>) => void;
 
   // === ATTACHMENTS ===
   addAttachments: (attachments: PendingAttachment[]) => void;

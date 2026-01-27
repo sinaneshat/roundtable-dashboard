@@ -15,15 +15,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import {
   threadBySlugQueryOptions,
   threadChangelogQueryOptions,
-  threadFeedbackQueryOptions,
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
 import { rlog } from '@/lib/utils/dev-logger';
 import type {
   ChangelogItem,
   GetThreadBySlugResponse,
-  GetThreadFeedbackResponse,
-  RoundFeedbackData,
   StoredPreSearch,
 } from '@/services/api';
 
@@ -41,7 +38,6 @@ export type ChatThreadLoaderData = {
   threadData: GetThreadBySlugResponse['data'] | null;
   preSearches: StoredPreSearch[] | undefined;
   changelog: ChangelogItem[] | undefined;
-  feedback: RoundFeedbackData[] | undefined;
   streamResumption: undefined;
 };
 
@@ -66,7 +62,6 @@ export function createEmptyLoaderData(opts: { projectName: string | null }): Pro
 export function createEmptyLoaderData(opts?: { projectName?: string | null }): ChatThreadLoaderData | ProjectChatThreadLoaderData {
   const base: ChatThreadLoaderData = {
     changelog: undefined,
-    feedback: undefined,
     preSearches: undefined,
     streamResumption: undefined, // ALWAYS include - prevents hydration mismatch
     threadData: null,
@@ -88,11 +83,10 @@ export function createEmptyLoaderData(opts?: { projectName?: string | null }): C
 type AuxiliaryDataResult = {
   preSearches: StoredPreSearch[] | undefined;
   changelog: ChangelogItem[] | undefined;
-  feedback: RoundFeedbackData[] | undefined;
 };
 
 /**
- * Fetches auxiliary data (changelog, preSearches, feedback) for a thread
+ * Fetches auxiliary data (changelog, preSearches) for a thread
  * Handles both server-side (await all) and client-side (cache-first) patterns
  */
 async function fetchAuxiliaryData({
@@ -105,20 +99,17 @@ async function fetchAuxiliaryData({
   isServer: boolean;
 }): Promise<AuxiliaryDataResult> {
   const changelogOptions = threadChangelogQueryOptions(threadId);
-  const feedbackOptions = threadFeedbackQueryOptions(threadId);
   const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
   if (isServer) {
     // On server, await all for proper hydration
-    const [changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
+    const [changelogResult, preSearchesResult] = await Promise.all([
       queryClient.ensureQueryData(changelogOptions).catch(() => null),
-      queryClient.ensureQueryData(feedbackOptions).catch(() => null),
       queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
     ]);
 
     return {
       changelog: changelogResult?.success ? changelogResult.data?.items : undefined,
-      feedback: feedbackResult?.success ? feedbackResult.data : undefined,
       preSearches: preSearchesResult?.success ? preSearchesResult.data?.items : undefined,
     };
   }
@@ -126,7 +117,6 @@ async function fetchAuxiliaryData({
   // On client, check cache first, then fetch missing data
   const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
   const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
-  const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
 
   const [changelogResult, preSearchesResult] = await Promise.all([
     cachedChangelog
@@ -137,21 +127,15 @@ async function fetchAuxiliaryData({
       : queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
   ]);
 
-  // Prefetch missing feedback in background
-  if (!cachedFeedback) {
-    queryClient.prefetchQuery(feedbackOptions).catch(() => {});
-  }
-
   return {
     changelog: changelogResult?.success ? changelogResult.data?.items : undefined,
-    feedback: cachedFeedback?.success ? cachedFeedback.data : undefined,
     preSearches: preSearchesResult?.success ? preSearchesResult.data?.items : undefined,
   };
 }
 
 /**
  * Fetches auxiliary data for prefetch-hit scenario (cached thread data)
- * Only fetches changelog and preSearches, uses cached feedback
+ * Only fetches changelog and preSearches
  */
 async function fetchAuxiliaryDataForPrefetch({
   queryClient,
@@ -161,13 +145,11 @@ async function fetchAuxiliaryDataForPrefetch({
   threadId: string;
 }): Promise<AuxiliaryDataResult> {
   const changelogOptions = threadChangelogQueryOptions(threadId);
-  const feedbackOptions = threadFeedbackQueryOptions(threadId);
   const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
   // Check cache first, then fetch missing data
   const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
   const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
-  const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
 
   const [changelogResult, preSearchesResult] = await Promise.all([
     cachedChangelog
@@ -178,14 +160,8 @@ async function fetchAuxiliaryDataForPrefetch({
       : queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
   ]);
 
-  // Prefetch missing feedback in background
-  if (!cachedFeedback) {
-    queryClient.prefetchQuery(feedbackOptions).catch(() => {});
-  }
-
   return {
     changelog: changelogResult?.success ? changelogResult.data?.items : undefined,
-    feedback: cachedFeedback?.success ? cachedFeedback.data : undefined,
     preSearches: preSearchesResult?.success ? preSearchesResult.data?.items : undefined,
   };
 }
@@ -224,16 +200,15 @@ export async function fetchThreadData({
   // Early return when flow-controller prefetched VALID data (must have messages)
   // CRITICAL: "Shell" data (thread metadata without messages) should NOT trigger early return
   // This prevents blank screen when sidebar prefetch caches incomplete data
-  // FIX: Still fetch auxiliary data (changelog, preSearches, feedback) to show configuration changes
+  // FIX: Still fetch auxiliary data (changelog, preSearches) to show configuration changes
   if (hasPrefetchMeta && cachedThreadData?.success && cachedThreadData.data.messages.length > 0) {
     const threadData = cachedThreadData.data;
     const prefetchThreadId = threadData.thread.id;
     rlog.init('loader', `${loaderContext} prefetch-hit: ${threadData.thread.slug} msgs=${threadData.messages.length}`);
 
-    // Fetch auxiliary data even on prefetch hit to ensure changelog/preSearches/feedback are available
+    // Fetch auxiliary data even on prefetch hit to ensure changelog/preSearches are available
     let auxiliaryData: AuxiliaryDataResult = {
       changelog: undefined,
-      feedback: undefined,
       preSearches: undefined,
     };
 
@@ -246,7 +221,6 @@ export async function fetchThreadData({
 
     return {
       changelog: auxiliaryData.changelog,
-      feedback: auxiliaryData.feedback,
       preSearches: auxiliaryData.preSearches,
       streamResumption: undefined,
       threadData,
@@ -271,7 +245,6 @@ export async function fetchThreadData({
 
   let auxiliaryData: AuxiliaryDataResult = {
     changelog: undefined,
-    feedback: undefined,
     preSearches: undefined,
   };
 
@@ -287,7 +260,6 @@ export async function fetchThreadData({
 
   return {
     changelog: auxiliaryData.changelog,
-    feedback: auxiliaryData.feedback,
     preSearches: auxiliaryData.preSearches,
     streamResumption: undefined,
     threadData,

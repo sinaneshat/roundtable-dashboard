@@ -286,7 +286,6 @@ app.use('/chat/custom-roles/:id', csrfProtection);
 
 app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/pre-search', csrfProtection);
 app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/moderator', csrfProtection);
-app.on('POST', '/chat/threads/:threadId/rounds/:roundNumber/feedback', csrfProtection);
 
 app.use('/projects', csrfProtection);
 app.on(['PATCH', 'DELETE'], '/projects/:id', csrfProtection);

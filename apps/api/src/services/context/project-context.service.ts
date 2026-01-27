@@ -17,7 +17,11 @@
  * - Moderator context: Past moderator analyses provide insights
  */
 
-import { CLOUDFLARE_AI_SEARCH_COST_PER_QUERY } from '@roundtable/shared/constants';
+import {
+  CLOUDFLARE_AI_SEARCH_COST_PER_QUERY,
+  CLOUDFLARE_VECTORIZE_COST_PER_MILLION_DIMENSIONS,
+  CLOUDFLARE_WORKERS_AI_COST_PER_1K_NEURONS,
+} from '@roundtable/shared/constants';
 import { CitationSourcePrefixes, CitationSourceTypes, MessagePartTypes, MessageRoles, PreSearchStatuses } from '@roundtable/shared/enums';
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 
@@ -717,22 +721,39 @@ export async function getProjectRagContext(
 
       // Track RAG query span for PostHog analytics
       const ragLatencyMs = performance.now() - ragStartTime;
+      const resultsCount = ragResponse.data?.length || 0;
+
+      // AutoRAG cost estimation:
+      // - AI Search is free during beta (CLOUDFLARE_AI_SEARCH_COST_PER_QUERY = 0)
+      // - Underlying Vectorize: ~768 dimensions per query for bge-base-en embeddings
+      // - Underlying Workers AI: reranking uses neurons
+      // Note: These are estimates since AutoRAG doesn't expose internal metrics
+      const estimatedDimensionsQueried = 768 * maxResults; // bge-base-en-v1.5 uses 768 dims
+      const estimatedVectorizeCost = (estimatedDimensionsQueried / 1_000_000) * CLOUDFLARE_VECTORIZE_COST_PER_MILLION_DIMENSIONS;
+      const estimatedRerankingNeurons = resultsCount * 100; // rough estimate per result
+      const estimatedWorkersAiCost = (estimatedRerankingNeurons / 1000) * CLOUDFLARE_WORKERS_AI_COST_PER_1K_NEURONS;
+      const actualCostUsd = CLOUDFLARE_AI_SEARCH_COST_PER_QUERY + estimatedVectorizeCost + estimatedWorkersAiCost;
+
       trackSpan(
         { userId: userId || 'anonymous' },
         {
           inputState: { maxResults, projectId, query },
-          outputState: { resultsCount: ragResponse.data?.length || 0 },
+          outputState: { resultsCount },
           spanName: 'rag_query',
           traceId: ragTraceId,
         },
         ragLatencyMs,
         {
           additionalProperties: {
+            actual_cost_usd: actualCostUsd,
             autorag_instance_id: project.autoragInstanceId,
-            estimated_cost_usd: CLOUDFLARE_AI_SEARCH_COST_PER_QUERY,
+            estimated_dimensions_queried: estimatedDimensionsQueried,
+            estimated_reranking_neurons: estimatedRerankingNeurons,
             operation_type: 'rag_query',
             projectId,
             provider: 'cloudflare',
+            vectorize_cost_usd: estimatedVectorizeCost,
+            workers_ai_cost_usd: estimatedWorkersAiCost,
           },
         },
       ).catch(() => {}); // Fire and forget

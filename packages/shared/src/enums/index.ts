@@ -549,18 +549,6 @@ export {
   ValidationTypeSchema,
 } from './errors';
 
-// Feedback enums
-export {
-  FEEDBACK_TYPES,
-  type FeedbackType,
-  FeedbackTypes,
-  FeedbackTypeSchema,
-  ROUND_FEEDBACK_VALUES,
-  type RoundFeedbackValue,
-  RoundFeedbackValues,
-  RoundFeedbackValueSchema,
-} from './feedback';
-
 // File, MIME type, and upload enums (consolidated)
 export {
   AI_PROCESSABLE_MIME_SET,

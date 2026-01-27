@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { CancelSubscriptionDialogProps } from '@/components/chat/cancel-subscription-dialog';
 import type { DeleteAccountDialogProps } from '@/components/chat/delete-account-dialog';
-import type { FeedbackModalProps } from '@/components/chat/feedback-modal';
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -45,11 +44,6 @@ const DeleteAccountDialog = dynamic<DeleteAccountDialogProps>(
   { ssr: false },
 );
 
-const FeedbackModal = dynamic<FeedbackModalProps>(
-  () => import('@/components/chat/feedback-modal').then(m => ({ default: m.FeedbackModal })),
-  { ssr: false },
-);
-
 type NavUserProps = {
   /** Server-side session for hydration - prevents mismatch */
   initialSession?: { session: Session; user: User } | null;
@@ -63,7 +57,6 @@ export function NavUser({ initialSession }: NavUserProps) {
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const showCancelDialog = useBoolean(false);
   const showDeleteDialog = useBoolean(false);
-  const showFeedbackModal = useBoolean(false);
   const isDeleting = useBoolean(false);
   const isStoppingImpersonation = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
@@ -301,13 +294,6 @@ export function NavUser({ initialSession }: NavUserProps) {
                   )}
 
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={showFeedbackModal.onTrue}>
-                <Icons.messageSquare />
-                <div className="flex-1">
-                  <p className="text-xs font-semibold">{t('userMenu.sendFeedback')}</p>
-                  <p className="text-[10px] text-muted-foreground">{t('userMenu.feedbackDescription')}</p>
-                </div>
-              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={showDeleteDialog.onTrue}
                 className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -387,12 +373,6 @@ export function NavUser({ initialSession }: NavUserProps) {
           subscriptionTier={activeSubscription ? SubscriptionTiers.PRO : SubscriptionTiers.FREE}
           currentPeriodEnd={activeSubscription?.currentPeriodEnd}
           isProcessing={cancelSubscriptionMutation.isPending}
-        />
-      )}
-      {showFeedbackModal.value && (
-        <FeedbackModal
-          open={showFeedbackModal.value}
-          onOpenChange={showFeedbackModal.setValue}
         />
       )}
       {showDeleteDialog.value && (

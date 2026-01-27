@@ -7,10 +7,6 @@ export {
   subscribeToPreSearchStreamHandler,
 } from './handlers/entity-subscription.handler';
 export {
-  getThreadFeedbackHandler,
-  setRoundFeedbackHandler,
-} from './handlers/feedback.handler';
-export {
   chatMessagesToUIMessages,
 } from './handlers/helpers';
 export {

@@ -12,7 +12,6 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		TITLE_GENERATION_QUEUE: Queue;
 		ROUND_ORCHESTRATION_QUEUE: Queue;
-		BROWSER: Fetcher;
 		AI: Ai;
 		WEBAPP_ENV: "preview";
 		APP_NAME: "Roundtable API";
@@ -45,7 +44,6 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		TITLE_GENERATION_QUEUE: Queue;
 		ROUND_ORCHESTRATION_QUEUE: Queue;
-		BROWSER: Fetcher;
 		AI: Ai;
 		WEBAPP_ENV: "prod";
 		APP_NAME: "Roundtable API";
@@ -86,13 +84,12 @@ declare namespace Cloudflare {
 		OPENROUTER_API_KEY: string;
 		POSTHOG_API_KEY: string;
 		POSTHOG_HOST: string;
-		SERPER_API_KEY: string;
+		SERP_API_KEY: string;
 		KV: KVNamespace;
 		UPLOADS_R2_BUCKET: R2Bucket;
 		DB: D1Database;
 		TITLE_GENERATION_QUEUE: Queue;
 		ROUND_ORCHESTRATION_QUEUE: Queue;
-		BROWSER: Fetcher;
 		AI: Ai;
 		WEBAPP_ENV: "preview" | "prod" | "local";
 		APP_NAME: "Roundtable API";

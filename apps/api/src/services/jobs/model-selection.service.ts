@@ -5,8 +5,13 @@
  * Uses a fast model to analyze the prompt and pick 2-3 models from USER_FACING_MODEL_IDS.
  */
 
-import { ModelIds } from '@roundtable/shared/enums';
+import { ModelIds, UIMessageRoles } from '@roundtable/shared/enums';
 
+import {
+  extractModelPricing,
+  generateTraceId,
+  trackLLMGeneration,
+} from '@/services/errors/posthog-llm-tracking.service';
 import type { ApiEnv } from '@/types';
 
 import { getModelById, USER_FACING_MODEL_IDS } from '../models';
@@ -52,18 +57,53 @@ export async function selectModelsForPrompt(
     apiKey: env.OPENROUTER_API_KEY,
   });
 
+  const startTime = performance.now();
+  const traceId = generateTraceId();
+  const modelId = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
+  const inputMessage = `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"`;
+
   try {
     const result = await openRouterService.generateText({
       maxTokens: 500,
       messages: [{
         id: 'select-models',
-        parts: [{ text: `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"`, type: 'text' }],
+        parts: [{ text: inputMessage, type: 'text' }],
         role: 'user',
       }],
-      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+      modelId,
       system: MODEL_SELECTION_SYSTEM_PROMPT,
       temperature: 0.3,
     });
+
+    // Track model selection for PostHog analytics
+    const modelConfig = getModelById(modelId);
+    const modelPricing = extractModelPricing(modelConfig);
+    trackLLMGeneration(
+      {
+        modelId,
+        modelName: modelConfig?.name || modelId,
+        participantId: 'system',
+        participantIndex: 0,
+        roundNumber: 0,
+        threadId: 'system',
+        threadMode: 'model_selection',
+        userId: 'system',
+      },
+      result,
+      [{ content: inputMessage, role: UIMessageRoles.USER }],
+      traceId,
+      startTime,
+      {
+        additionalProperties: {
+          operation_type: 'model_selection',
+        },
+        modelConfig: {
+          maxTokens: 500,
+          temperature: 0.3,
+        },
+        modelPricing,
+      },
+    ).catch(() => {}); // Fire and forget
 
     // Parse the JSON response
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);

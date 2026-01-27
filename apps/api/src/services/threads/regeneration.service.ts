@@ -1,6 +1,5 @@
 import { and, eq } from 'drizzle-orm';
 
-import { executeBatch } from '@/common/batch-operations';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 
@@ -47,20 +46,12 @@ export async function handleRoundRegeneration(
 
     deletedMessagesCount = deletedMessages.length;
 
-    await executeBatch(db, [
-      db.delete(tables.chatRoundFeedback).where(
-        and(
-          eq(tables.chatRoundFeedback.threadId, threadId),
-          eq(tables.chatRoundFeedback.roundNumber, regenerateRound),
-        ),
+    await db.delete(tables.chatThreadChangelog).where(
+      and(
+        eq(tables.chatThreadChangelog.threadId, threadId),
+        eq(tables.chatThreadChangelog.roundNumber, regenerateRound),
       ),
-      db.delete(tables.chatThreadChangelog).where(
-        and(
-          eq(tables.chatThreadChangelog.threadId, threadId),
-          eq(tables.chatThreadChangelog.roundNumber, regenerateRound),
-        ),
-      ),
-    ]);
+    );
   } catch (error) {
     if (error instanceof Error && error.name === 'AppError') {
       throw error;

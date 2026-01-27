@@ -5,14 +5,12 @@ import { LIMITS } from '@/constants';
 import type {
   GetThreadBySlugResponse,
   GetThreadChangelogResponse,
-  GetThreadFeedbackResponse,
   GetThreadPreSearchesResponse,
   ListThreadsResponse,
 } from '@/services/api';
 import {
   getThreadBySlugService,
   getThreadChangelogService,
-  getThreadFeedbackService,
   getThreadPreSearchesService,
   listThreadsService,
 } from '@/services/api';
@@ -22,7 +20,6 @@ import { idSchema, slugSchema } from './schemas';
 
 type GetThreadBySlugResult = GetThreadBySlugResponse | ServerFnErrorResponse;
 type GetThreadChangelogResult = GetThreadChangelogResponse | ServerFnErrorResponse;
-type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse;
 type GetThreadPreSearchesResult = GetThreadPreSearchesResponse | ServerFnErrorResponse;
 type GetThreadsByProjectResult = ListThreadsResponse | ServerFnErrorResponse;
 
@@ -39,15 +36,6 @@ export const getThreadChangelog = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(idSchema))
   .handler(async ({ context, data }): Promise<GetThreadChangelogResult> => {
     return await getThreadChangelogService(
-      { param: { id: data } },
-      { cookieHeader: context.cookieHeader },
-    );
-  });
-
-export const getThreadFeedback = createServerFn({ method: 'GET' })
-  .inputValidator(zodValidator(idSchema))
-  .handler(async ({ context, data }): Promise<GetThreadFeedbackResult> => {
-    return await getThreadFeedbackService(
       { param: { id: data } },
       { cookieHeader: context.cookieHeader },
     );

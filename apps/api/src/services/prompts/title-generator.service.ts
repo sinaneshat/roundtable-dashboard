@@ -17,7 +17,12 @@ import { TITLE_GENERATION_MODEL_ID } from '@/core/ai-models';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { finalizeCredits, TITLE_GENERATION_CONFIG } from '@/services/billing';
-import { initializeOpenRouter, openRouterService } from '@/services/models';
+import {
+  extractModelPricing,
+  generateTraceId,
+  trackLLMGeneration,
+} from '@/services/errors/posthog-llm-tracking.service';
+import { getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
 import type { ApiEnv } from '@/types';
 
 import { generateUniqueSlug } from './slug-generator.service';
@@ -44,6 +49,9 @@ export async function generateTitleFromMessage(
   const MAX_LENGTH = 50;
 
   // Single attempt - no retry delays. If it fails, use fallback immediately.
+  const startTime = performance.now();
+  const traceId = generateTraceId();
+
   try {
     const result = await openRouterService.generateText({
       maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
@@ -58,6 +66,36 @@ export async function generateTitleFromMessage(
       system: TITLE_GENERATION_CONFIG.systemPrompt,
       temperature: TITLE_GENERATION_CONFIG.temperature,
     });
+
+    // Track title generation for PostHog analytics
+    const modelConfig = getModelById(TITLE_GENERATION_MODEL_ID);
+    const modelPricing = extractModelPricing(modelConfig);
+    trackLLMGeneration(
+      {
+        modelId: TITLE_GENERATION_MODEL_ID,
+        modelName: modelConfig?.name || TITLE_GENERATION_MODEL_ID,
+        participantId: 'system',
+        participantIndex: 0,
+        roundNumber: 0,
+        threadId: billingContext?.threadId || 'system',
+        threadMode: 'title_generation',
+        userId: billingContext?.userId || 'system',
+      },
+      result,
+      [{ content: firstMessage, role: UIMessageRoles.USER }],
+      traceId,
+      startTime,
+      {
+        additionalProperties: {
+          operation_type: 'title_generation',
+        },
+        modelConfig: {
+          maxTokens: TITLE_GENERATION_CONFIG.maxTokens,
+          temperature: TITLE_GENERATION_CONFIG.temperature,
+        },
+        modelPricing,
+      },
+    ).catch(() => {}); // Fire and forget
 
     let title = result.text.trim().replace(/^["']|["']$/g, '');
 

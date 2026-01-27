@@ -22,7 +22,7 @@ import { getProjectAttachments, getProjectById, getProjectMemories } from '@/ser
 import { getSidebarProjects } from '@/server/sidebar-projects';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
-import { getThreadBySlug, getThreadChangelog, getThreadFeedback, getThreadPreSearches, getThreadsByProject } from '@/server/thread';
+import { getThreadBySlug, getThreadChangelog, getThreadPreSearches, getThreadsByProject } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -208,30 +208,6 @@ export function threadChangelogQueryOptions(threadId: string) {
     refetchOnWindowFocus: false,
     retry: false,
     staleTime: STALE_TIMES.threadChangelog, // Infinity
-  });
-}
-
-/**
- * Thread feedback query options factory
- *
- * Used by:
- * - _protected/chat/$slug.tsx loader (ensureQueryData)
- * - useThreadFeedbackQuery hook (useQuery)
- *
- * Server function getThreadFeedback() works both server-side and client-side:
- * - Server: Runs directly, forwards cookies
- * - Client: Makes RPC call to server function
- *
- * IMPORTANT: staleTime is Infinity - feedback is invalidated only on mutation.
- */
-export function threadFeedbackQueryOptions(threadId: string) {
-  return queryOptions({
-    queryFn: () => getThreadFeedback({ data: threadId }),
-    queryKey: queryKeys.threads.feedback(threadId),
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    retry: false,
-    staleTime: STALE_TIMES.threadFeedback, // Infinity
   });
 }
 

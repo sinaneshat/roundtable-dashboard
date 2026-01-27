@@ -603,19 +603,6 @@ describe('navigation Reset Flows', () => {
       expect(state.thread).toBeNull();
     });
 
-    it('should clear feedback state', () => {
-      setupCompletedThread(store, 'thread-A', 'thread-a', 2, 1);
-      store.setState({
-        feedbackByRound: new Map([[0, 'positive']]),
-        hasLoadedFeedback: true,
-      });
-
-      store.getState().resetForThreadNavigation();
-
-      const state = store.getState();
-      expect(state.feedbackByRound.size).toBe(0);
-      expect(state.hasLoadedFeedback).toBe(false);
-    });
   });
 
   describe('resetToOverview behavior', () => {

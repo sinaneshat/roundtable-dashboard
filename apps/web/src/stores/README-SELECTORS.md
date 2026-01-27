@@ -122,13 +122,11 @@ const isBlocked = isStreaming || Boolean(pendingMessage); // Recomputes on every
 - `useResumptionState()` - Resumption state
 - `usePreSearchState()` - Pre-search state
 - `useAnimationState()` - Animation flags
-- `useAllFeedback()` - Feedback state
 
 #### Computed Selectors
 - `useIsSubmitBlocked()` - Computed submit blocking state
 - `useCurrentStreamingParticipant()` - Active streaming participant
 - `useHasActiveThread()` - Active thread detection (computed)
-- `useFeedbackForRound(roundNumber)` - Feedback for specific round
 
 ### Preferences Store
 
@@ -220,13 +218,13 @@ export const useIsSubmitBlocked = () =>
 
 ```typescript
 // Component needs state for specific parameter
-const feedback = useFeedbackForRound(2);
+const changelog = useChangelogForRound(2);
 ```
 
 **Implementation:**
 ```typescript
-export const useFeedbackForRound = (roundNumber: number) =>
-  useChatStore(s => s.feedbackByRound.get(roundNumber));
+export const useChangelogForRound = (roundNumber: number) =>
+  useChatStore(s => s.changelogItems.filter(item => item.roundNumber === roundNumber));
 ```
 
 ## ⚡ Performance Benefits

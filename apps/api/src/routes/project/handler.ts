@@ -362,7 +362,7 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
  * Delete a project with FULL CASCADE
  *
  * Deletes everything related to the project:
- * - All threads and their messages, participants, changelogs, pre-searches, feedback
+ * - All threads and their messages, participants, changelogs, pre-searches
  * - All project attachments and their R2 files
  * - All project memories (including those from deleted threads)
  * - All junction table records (threadUpload, messageUpload)
@@ -481,7 +481,7 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
     // =========================================================================
     // STEP 5: Delete the project (DB cascade handles threads, attachments)
     // With onDelete: 'cascade' on chatThread.projectId, all threads are deleted
-    // Thread cascade then deletes: messages, participants, changelogs, pre-searches, feedback
+    // Thread cascade then deletes: messages, participants, changelogs, pre-searches
     // =========================================================================
 
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));

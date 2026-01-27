@@ -15,7 +15,6 @@ import {
   DeletedResponseSchema,
   DeleteThreadResponseSchema,
   ExistingModeratorMessageSchema,
-  GetThreadFeedbackResponseSchema,
   MemoryEventQuerySchema,
   MemoryEventResponseSchema,
   MessagesListResponseSchema,
@@ -24,11 +23,8 @@ import {
   PreSearchRequestSchema,
   PreSearchResponseSchema,
   PublicThreadSlugsResponseSchema,
-  RoundFeedbackParamSchema,
-  RoundFeedbackRequestSchema,
   RoundModeratorRequestSchema,
   RoundStatusResponseSchema,
-  SetRoundFeedbackResponseSchema,
   StartRoundRequestSchema,
   StartRoundResponseSchema,
   StreamChatRequestSchema,
@@ -959,53 +955,6 @@ export const getThreadPreSearchesRoute = createRoute({
     ...createProtectedRouteResponses(),
   },
   summary: 'Get pre-search results for thread',
-  tags: ['chat'],
-});
-
-export const setRoundFeedbackRoute = createRoute({
-  description: 'Set or update user feedback for a conversation round. Pass null to remove feedback.',
-  method: 'put',
-  path: '/chat/threads/{threadId}/rounds/{roundNumber}/feedback',
-  request: {
-    body: {
-      content: {
-        'application/json': {
-          schema: RoundFeedbackRequestSchema,
-        },
-      },
-      required: true,
-    },
-    params: RoundFeedbackParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': { schema: SetRoundFeedbackResponseSchema },
-      },
-      description: 'Feedback set successfully',
-    },
-    ...createMutationRouteResponses(),
-  },
-  summary: 'Set round feedback (like/dislike)',
-  tags: ['chat'],
-});
-export const getThreadFeedbackRoute = createRoute({
-  description: 'Get all round feedback (likes/dislikes) for a thread for the current user.',
-  method: 'get',
-  path: '/chat/threads/{id}/feedback',
-  request: {
-    params: IdParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': { schema: GetThreadFeedbackResponseSchema },
-      },
-      description: 'Feedback retrieved successfully',
-    },
-    ...createProtectedRouteResponses(),
-  },
-  summary: 'Get all round feedback for a thread',
   tags: ['chat'],
 });
 

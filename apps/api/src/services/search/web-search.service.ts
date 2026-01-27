@@ -1,36 +1,26 @@
 /**
- * Web Search Service - Multi-Engine Search with Serper
+ * Web Search Service - Serper API Search
  *
- * Search Engine Priority:
- * 1. Serper (Google Search API) - Primary, fast, reliable
- * 2. DuckDuckGo Browser - Fallback when Serper unavailable
- *
- * Content Extraction Priority:
- * 1. Cloudflare Browser - Full JS rendering
- * 2. Lightweight HTML - Last resort
+ * Uses Serper (Google Search API) exclusively for web searches.
+ * Serper provides search results with titles, URLs, snippets,
+ * and knowledge graph data - no browser rendering needed.
  */
 
 import type {
   WebSearchActiveAnswerMode,
   WebSearchComplexity,
   WebSearchDepth,
-  WebSearchRawContentFormat,
   WebSearchTimeRange,
   WebSearchTopic,
 } from '@roundtable/shared/enums';
 import {
-  BrowserEnvironments,
   CreditActions,
   DEFAULT_ACTIVE_ANSWER_MODE,
-  DEFAULT_BLOCKED_RESOURCE_TYPES,
   LogTypes,
-  PageWaitStrategies,
-  PageWaitStrategySchema,
   RlogCategories,
   UIMessageRoles,
   WebSearchActiveAnswerModes,
   WebSearchAnswerModes,
-  WebSearchRawContentFormats,
   WebSearchStreamEventTypes,
 } from '@roundtable/shared/enums';
 import {
@@ -40,7 +30,6 @@ import {
   streamText,
 } from 'ai';
 import { ulid } from 'ulid';
-import * as z from 'zod';
 
 import { createError, normalizeError } from '@/common/error-handling';
 import type { BillingContext } from '@/common/schemas/billing-context';
@@ -54,6 +43,12 @@ import type {
 import { MultiQueryGenerationSchema } from '@/routes/chat/schema';
 import { finalizeCredits } from '@/services/billing';
 import {
+  extractModelPricing,
+  generateTraceId,
+  trackLLMGeneration,
+} from '@/services/errors/posthog-llm-tracking.service';
+import {
+  getModelById,
   initializeOpenRouter,
   openRouterService,
 } from '@/services/models';
@@ -63,16 +58,13 @@ import {
   buildWebSearchComplexityAnalysisPrompt,
   buildWebSearchQueryPrompt,
   getAnswerSummaryPrompt,
-  IMAGE_DESCRIPTION_PROMPT,
 } from '@/services/prompts';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 
 import { isSerperConfigured, searchWithSerperRetry } from './serper.service';
 import {
-  cacheImageDescription,
   cacheSearchResult,
-  getCachedImageDescription,
   getCachedSearch,
 } from './web-search-cache.service';
 
@@ -95,24 +87,17 @@ function rlogSearch(action: string, detail: string): void {
 // ============================================================================
 
 /**
- * Search engine identifier for multi-engine fallback
+ * Search engine identifier
  */
-type SearchEngine = 'serper' | 'duckduckgo' | 'bing';
+type SearchEngine = 'serper';
 
 /**
- * Result of multi-engine search attempt
+ * Result of search attempt
  */
-type MultiEngineSearchResult = {
+type SearchResult = {
   engine: SearchEngine;
-  results: Array<{ title: string; url: string; snippet: string }>;
+  results: Array<{ title: string; url: string; snippet: string; date?: string }>;
   responseTimeMs: number;
-};
-
-type PuppeteerRequestHandler = {
-  isInterceptResolutionHandled: () => boolean;
-  resourceType: () => string;
-  abort: () => void;
-  continue: () => void;
 };
 
 /**
@@ -212,6 +197,8 @@ export async function generateSearchQuery(
   projectContext?: SearchProjectContext,
 ) {
   const modelId = AIModels.WEB_SEARCH;
+  const startTime = performance.now();
+  const traceId = generateTraceId();
 
   try {
     validateModelForOperation(modelId, 'web-search-query-generation-sync', {
@@ -235,13 +222,45 @@ export async function generateSearchQuery(
       systemPrompt = `${systemPrompt}\n\n${contextParts.join('\n\n')}`;
     }
 
+    const inputPrompt = buildWebSearchQueryPrompt(userMessage);
     const result = await generateText({
       maxRetries: 3,
       model: client.chat(modelId),
       output: Output.object({ schema: MultiQueryGenerationSchema }),
-      prompt: buildWebSearchQueryPrompt(userMessage),
+      prompt: inputPrompt,
       system: systemPrompt,
     });
+
+    // Track search query generation for PostHog analytics
+    const modelConfig = getModelById(modelId);
+    const modelPricing = extractModelPricing(modelConfig);
+    trackLLMGeneration(
+      {
+        modelId,
+        modelName: modelConfig?.name || modelId,
+        participantId: 'system',
+        participantIndex: 0,
+        roundNumber: 0,
+        threadId: 'system',
+        threadMode: 'web_search_query',
+        userId: 'system',
+      },
+      {
+        finishReason: result.finishReason,
+        response: result.response,
+        text: JSON.stringify(result.output),
+        usage: result.usage,
+      },
+      [{ content: inputPrompt, role: UIMessageRoles.USER }],
+      traceId,
+      startTime,
+      {
+        additionalProperties: {
+          operation_type: 'web_search_query_generation',
+        },
+        modelPricing,
+      },
+    ).catch(() => {}); // Fire and forget
 
     if (
       !result.output?.queries
@@ -312,1335 +331,74 @@ export async function generateSearchQuery(
   }
 }
 
-// Browser Initialization (Search & Content Extraction)
-
-/**
- * Initialize browser for search and content extraction
- *
- * Uses Cloudflare Browser Rendering (`@cloudflare/puppeteer`) for all environments.
- * Works both in production and local development via wrangler dev.
- *
- * - Pass env.BROWSER binding directly to launch()
- * - Uses keep_alive for session persistence (10 min idle timeout)
- * - Falls back to fetch-based search if browser unavailable
- *
- * @see https://developers.cloudflare.com/browser-rendering/puppeteer/
- * @param env - Cloudflare environment bindings
- * @returns Browser instance or null
- */
-// Browser Type Definitions (Cloudflare Browser Rendering only)
-
-type CloudflareBrowser = Awaited<ReturnType<typeof import('@cloudflare/puppeteer').default.launch>>;
-
-type BrowserResult
-  = | { type: typeof BrowserEnvironments.CLOUDFLARE; browser: CloudflareBrowser }
-    | null;
-
-const _PageOperationConfigSchema = z.object({
-  blockResourceTypes: z.array(z.string()).optional(),
-  selectorTimeout: z.number().optional(),
-  timeout: z.number().positive(),
-  url: z.string().url(),
-  userAgent: z.string().optional(),
-  viewport: z.object({ height: z.number(), width: z.number() }).strict().optional(),
-  waitForSelector: z.string().optional(),
-  waitUntil: PageWaitStrategySchema,
-}).strict();
-
-type PageOperationConfig = z.infer<typeof _PageOperationConfigSchema>;
-
-const _ExtractedContentSchema = z.object({
-  content: z.string(),
-  images: z.array(z.object({ alt: z.union([z.string(), z.undefined()]).optional(), url: z.string() }).strict()),
-  markdown: z.string(),
-  metadata: z.object({
-    author: z.union([z.string(), z.undefined()]).optional(),
-    description: z.union([z.string(), z.undefined()]).optional(),
-    faviconUrl: z.union([z.string(), z.undefined()]).optional(),
-    imageUrl: z.union([z.string(), z.undefined()]).optional(),
-    publishedDate: z.union([z.string(), z.undefined()]).optional(),
-    readingTime: z.number(),
-    title: z.union([z.string(), z.undefined()]).optional(),
-    wordCount: z.number(),
-  }).strict(),
-}).strict();
-
-type ExtractedContent = z.infer<typeof _ExtractedContentSchema>;
-
-const _ExtractedSearchResultSchema = z.object({
-  snippet: z.string(),
-  title: z.string(),
-  url: z.string().url(),
-}).strict();
-
-type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
-
-// Browser Operation Helpers
-
-async function extractWithCloudflareBrowser(
-  browser: CloudflareBrowser,
-  config: PageOperationConfig,
-  extractFormat: string,
-): Promise<ExtractedContent> {
-  const page = await browser.newPage();
-
-  try {
-    if (config.viewport) {
-      await page.setViewport(config.viewport);
-    }
-
-    if (config.blockResourceTypes?.length) {
-      await page.setRequestInterception(true);
-      page.on('request', (req: PuppeteerRequestHandler) => {
-        if (req.isInterceptResolutionHandled()) {
-          return;
-        }
-        if (config.blockResourceTypes?.includes(req.resourceType())) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-    }
-
-    await page.goto(config.url, {
-      timeout: config.timeout,
-      waitUntil: config.waitUntil,
-    });
-
-    if (config.waitForSelector) {
-      try {
-        await page.waitForSelector(config.waitForSelector, {
-          timeout: config.selectorTimeout ?? 3000,
-        });
-      } catch {}
-    }
-
-    const extractFn = createContentExtractor();
-    const extracted = await page.evaluate(extractFn, extractFormat);
-    await page.close();
-    return extracted;
-  } catch {
-    await page.close();
-    throw new Error('Content extraction failed');
-  }
-}
-
-async function searchWithCloudflareBrowser(
-  browser: CloudflareBrowser,
-  searchUrl: string,
-  maxResults: number,
-  userAgent: string,
-): Promise<ExtractedSearchResult[]> {
-  const page = await browser.newPage();
-
-  try {
-    await page.setUserAgent(userAgent);
-    await page.goto(searchUrl, {
-      timeout: 15000,
-      waitUntil: PageWaitStrategies.DOM_CONTENT_LOADED,
-    });
-
-    const searchFn = createSearchExtractor();
-    const results = await page.evaluate(searchFn, maxResults);
-    await page.close();
-    return results;
-  } catch {
-    await page.close();
-    throw new Error('Search extraction failed');
-  }
-}
-
-/** Function type for content extraction in browser context */
-type ContentExtractorFn = (extractFormat: string) => ExtractedContent;
-
-/**
- * Create content extractor function for page.evaluate
- *
- * Returns a function that can be serialized and executed in browser context.
- * This wrapper ensures proper typing for Puppeteer's page.evaluate.
- */
-function createContentExtractor(): ContentExtractorFn {
-  return function extractContent(extractFormat: string): ExtractedContent {
-    // Helper to clean text
-    const cleanText = (text: string): string => {
-      return text
-        .replace(/\s+/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-    };
-
-    /**
-     * Type guard for Element nodes in browser context
-     */
-    const isElementNode = (node: Node): node is Element => {
-      return node.nodeType === Node.ELEMENT_NODE;
-    };
-
-    /**
-     * Convert DOM element to markdown - runs in browser context (no external deps)
-     * Handles: headers, links, bold, italic, code, lists, paragraphs, images
-     */
-    const elementToMarkdown = (element: Element): string => {
-      const processNode = (node: Node): string => {
-        if (node.nodeType === Node.TEXT_NODE) {
-          return node.textContent?.replace(/\s+/g, ' ') || '';
-        }
-
-        if (!isElementNode(node)) {
-          return '';
-        }
-
-        const el = node;
-        const tag = el.tagName.toLowerCase();
-        const children = Array.from(el.childNodes).map(processNode).join('');
-
-        switch (tag) {
-          // Headers
-          case 'h1': return `\n\n# ${children.trim()}\n\n`;
-          case 'h2': return `\n\n## ${children.trim()}\n\n`;
-          case 'h3': return `\n\n### ${children.trim()}\n\n`;
-          case 'h4': return `\n\n#### ${children.trim()}\n\n`;
-          case 'h5': return `\n\n##### ${children.trim()}\n\n`;
-          case 'h6': return `\n\n###### ${children.trim()}\n\n`;
-
-          // Text formatting
-          case 'strong':
-          case 'b': return `**${children}**`;
-          case 'em':
-          case 'i': return `*${children}*`;
-          case 'code': return `\`${children}\``;
-          case 'pre': {
-            const codeEl = el.querySelector('code');
-            const lang = codeEl?.className?.match(/language-(\w+)/)?.[1] || '';
-            const code = codeEl?.textContent || el.textContent || '';
-            return `\n\n\`\`\`${lang}\n${code.trim()}\n\`\`\`\n\n`;
-          }
-
-          // Links
-          case 'a': {
-            const href = el.getAttribute('href') || '';
-            if (!href || href.startsWith('javascript:')) {
-              return children;
-            }
-            return `[${children}](${href})`;
-          }
-
-          // Images
-          case 'img': {
-            const src = el.getAttribute('src') || '';
-            const alt = el.getAttribute('alt') || '';
-            if (!src || src.startsWith('data:')) {
-              return '';
-            }
-            return `![${alt}](${src})`;
-          }
-
-          // Lists
-          case 'ul':
-          case 'ol': return `\n${children}\n`;
-          case 'li': return `- ${children.trim()}\n`;
-
-          // Block elements
-          case 'p': return `\n\n${children.trim()}\n\n`;
-          case 'br': return '\n';
-          case 'hr': return '\n\n---\n\n';
-          case 'blockquote': return `\n\n> ${children.trim().replace(/\n/g, '\n> ')}\n\n`;
-
-          // Table handling (basic)
-          case 'table': return `\n\n${children}\n\n`;
-          case 'thead':
-          case 'tbody': return children;
-          case 'tr': return `|${children}\n`;
-          case 'th':
-          case 'td': return ` ${children.trim()} |`;
-
-          // Structural elements - just return children
-          case 'div':
-          case 'section':
-          case 'article':
-          case 'main':
-          case 'span':
-          case 'figure':
-          case 'figcaption':
-            return children;
-
-          // Skip unwanted elements
-          case 'script':
-          case 'style':
-          case 'nav':
-          case 'iframe':
-          case 'noscript':
-          case 'svg':
-            return '';
-
-          default:
-            return children;
-        }
-      };
-
-      const raw = processNode(element);
-      // Clean up excessive whitespace
-      return raw
-        .replace(/\n{3,}/g, '\n\n')
-        .replace(/[ \t]+/g, ' ')
-        .replace(/\n +/g, '\n')
-        .replace(/ +\n/g, '\n')
-        .trim();
-    };
-
-    // Remove unwanted elements
-    const unwantedSelectors = [
-      'script',
-      'style',
-      'nav',
-      'header',
-      'footer',
-      '.sidebar',
-      '.advertisement',
-      '.ads',
-      '.popup',
-      '.cookie-notice',
-      '.newsletter',
-      '.social-share',
-      '[aria-hidden="true"]',
-      '.navigation',
-      '.menu',
-      '.comments',
-      '.related-posts',
-    ];
-
-    unwantedSelectors.forEach((selector) => {
-      document.querySelectorAll(selector).forEach(el => el.remove());
-    });
-
-    // Try to find main content area
-    const contentSelectors = [
-      'main',
-      'article',
-      '[role="main"]',
-      '.content',
-      '.post-content',
-      '.entry-content',
-      '.article-body',
-      '.story-body',
-      '#content',
-      '.markdown-body',
-      '.prose',
-    ];
-
-    let mainElement: Element | null = null;
-    let mainContent = '';
-
-    for (const selector of contentSelectors) {
-      const element = document.querySelector(selector);
-      if (element) {
-        mainElement = element;
-        mainContent = element.textContent || '';
-        if (mainContent.length > 200) {
-          break;
-        }
-      }
-    }
-
-    // Fallback to body if no main content found
-    if (mainContent.length < 200) {
-      mainElement = document.body;
-      mainContent = document.body.textContent || '';
-    }
-
-    // Convert to markdown in browser context (no external deps needed in Workers)
-    let markdown = '';
-    if (extractFormat === 'markdown' && mainElement) {
-      markdown = elementToMarkdown(mainElement);
-    }
-
-    // Extract images
-    const images: { url: string; alt?: string | undefined }[] = [];
-    if (mainElement) {
-      const imgElements = mainElement.querySelectorAll('img');
-      imgElements.forEach((img) => {
-        const src = img.src;
-        const alt = img.alt;
-        if (src && !src.includes('data:image')) {
-          // Only include alt if it has a value (satisfies exactOptionalPropertyTypes)
-          const imageEntry: { url: string; alt?: string } = { url: src };
-          if (alt) {
-            imageEntry.alt = alt;
-          }
-          images.push(imageEntry);
-        }
-      });
-    }
-
-    // Extract metadata
-    const getMetaContent = (name: string): string | null => {
-      const meta = document.querySelector(
-        `meta[property="${name}"], meta[name="${name}"]`,
-      );
-      if (meta instanceof HTMLMetaElement) {
-        return meta.content || null;
-      }
-      return null;
-    };
-
-    const title = document.querySelector('h1')?.textContent
-      || document.title
-      || getMetaContent('og:title')
-      || '';
-
-    const author = getMetaContent('author')
-      || getMetaContent('article:author')
-      || document.querySelector('.author, .by-author, [rel="author"]')?.textContent
-      || undefined;
-
-    const description = getMetaContent('description')
-      || getMetaContent('og:description')
-      || document.querySelector('meta[name="description"]')?.getAttribute('content')
-      || undefined;
-
-    const publishedDate = getMetaContent('article:published_time')
-      || getMetaContent('publish_date')
-      || document.querySelector('time[datetime]')?.getAttribute('datetime')
-      || undefined;
-
-    const imageUrl = getMetaContent('og:image') || getMetaContent('twitter:image') || undefined;
-
-    // Get favicon
-    const faviconUrl = (() => {
-      const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
-      if (favicon instanceof HTMLLinkElement && favicon.href) {
-        return favicon.href;
-      }
-      return `${window.location.origin}/favicon.ico`;
-    })();
-
-    // Clean and prepare content
-    const cleanedContent = cleanText(mainContent);
-    const wordCount = cleanedContent.split(/\s+/).length;
-    const readingTime = Math.ceil(wordCount / 200);
-
-    return {
-      content: cleanedContent.substring(0, 15000),
-      images: images.slice(0, 10),
-      markdown: markdown.substring(0, 20000),
-      metadata: {
-        author: author ? cleanText(author) : undefined,
-        description: description ? cleanText(description) : undefined,
-        faviconUrl: faviconUrl || undefined,
-        imageUrl: imageUrl || undefined,
-        publishedDate: publishedDate || undefined,
-        readingTime,
-        title: cleanText(title),
-        wordCount,
-      },
-    };
-  };
-}
-
-/** Function type for search extraction in browser context */
-type SearchExtractorFn = (max: number) => ExtractedSearchResult[];
-
-/**
- * Create search extractor function for page.evaluate
- *
- * Returns a function that extracts search results from DuckDuckGo HTML page.
- * This wrapper ensures proper typing for Puppeteer's page.evaluate.
- */
-function createSearchExtractor(): SearchExtractorFn {
-  return function extractSearchResults(max: number): ExtractedSearchResult[] {
-    const items: ExtractedSearchResult[] = [];
-    const resultElements = document.querySelectorAll('.result');
-
-    for (const element of resultElements) {
-      if (items.length >= max) {
-        break;
-      }
-
-      const titleEl = element.querySelector('.result__title a, .result__a');
-      const snippetEl = element.querySelector('.result__snippet');
-      const urlEl = element.querySelector('.result__url');
-
-      if (titleEl) {
-        const href = titleEl.getAttribute('href') || '';
-        let url = href;
-        if (href.includes('uddg=')) {
-          const match = href.match(/uddg=([^&]+)/);
-          if (match?.[1]) {
-            url = decodeURIComponent(match[1]);
-          }
-        } else if (urlEl) {
-          url = `https://${urlEl.textContent?.trim() || ''}`;
-        }
-
-        if (!url || url === 'https://') {
-          continue;
-        }
-
-        items.push({
-          snippet: snippetEl?.textContent?.trim() || '',
-          title: titleEl.textContent?.trim() || '',
-          url,
-        });
-      }
-    }
-
-    return items;
-  };
-}
-
-async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
-  // Use Cloudflare Browser Rendering for all environments (works with wrangler dev too)
-  // The BROWSER binding connects to Cloudflare's remote Browser Rendering service
-  if (env.BROWSER) {
-    try {
-      const cfPuppeteer = await import('@cloudflare/puppeteer');
-      // Launch with Browser binding - pass env.BROWSER directly
-      // keep_alive extends idle timeout from 1 min to 10 min (600000ms)
-      const browser = await cfPuppeteer.default.launch(env.BROWSER, {
-        keep_alive: 600000, // 10 minutes idle timeout
-      });
-      return { browser, type: BrowserEnvironments.CLOUDFLARE };
-    } catch (error) {
-      rlogSearch('browser-fail', `cloudflare puppeteer: ${error instanceof Error ? error.message : 'Unknown'}`);
-      // Fall through to fetch-based fallback
-      // Fall through to fetch-based fallback
-    }
-  }
-
-  // No browser available - will use fetch-based fallback
-  return null;
-}
-
-// Lightweight Metadata Extraction (Fallback when browser unavailable)
-
-/**
- * Extract metadata from HTML using regex (no browser required)
- * Used as fallback when Puppeteer isn't available
- */
-async function extractLightweightContent(url: string): Promise<{
-  imageUrl?: string;
-  faviconUrl?: string;
-  description?: string;
-  title?: string;
-  content?: string;
-}> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'text/html',
-        'User-Agent': 'Mozilla/5.0 (compatible; RoundtableBot/1.0)',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      return {};
-    }
-
-    // Read up to 200KB to get body content (not just head)
-    const reader = response.body?.getReader();
-    if (!reader) {
-      return {};
-    }
-
-    let html = '';
-    const decoder = new TextDecoder();
-    let bytesRead = 0;
-    const maxBytes = 200000;
-
-    while (bytesRead < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      html += decoder.decode(value, { stream: true });
-      bytesRead += value.length;
-    }
-
-    reader.cancel();
-
-    // Extract og:image
-    const ogImageMatch
-      = html.match(
-        /<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i,
-      )
-      || html.match(
-        /<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i,
-      );
-    const imageUrl = ogImageMatch?.[1];
-
-    // Extract twitter:image as fallback
-    const twitterImageMatch
-      = html.match(
-        /<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i,
-      )
-      || html.match(
-        /<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i,
-      );
-
-    // Extract description
-    const descMatch
-      = html.match(
-        /<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i,
-      )
-      || html.match(
-        /<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i,
-      );
-
-    // Extract title
-    const titleMatch
-      = html.match(/<title[^>]*>([^<]+)<\/title>/i)
-        || html.match(
-          /<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i,
-        );
-
-    // Build favicon URL
-    const domain = new URL(url).hostname;
-    const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-
-    // Extract body content as text (fallback when browser unavailable)
-    let content = '';
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)(?:<\/body>|$)/i);
-    if (bodyMatch?.[1]) {
-      content = bodyMatch[1]
-        // Remove script tags and content
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        // Remove style tags and content
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        // Remove noscript tags
-        .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
-        // Remove nav, footer, aside (typically non-content)
-        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-        .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-        // Remove comments
-        .replace(/<!--[\s\S]*?-->/g, '')
-        // Convert headers to text with newlines
-        .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n$1\n')
-        // Convert paragraphs and divs to text with newlines
-        .replace(/<\/?(p|div|br|li|tr)[^>]*>/gi, '\n')
-        // Remove all remaining HTML tags
-        .replace(/<[^>]+>/g, ' ')
-        // Decode common HTML entities
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, '\'')
-        // Normalize whitespace
-        .replace(/\s+/g, ' ')
-        .replace(/\n\s+/g, '\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-    }
-
-    // Limit content to ~50k chars (enough for AI context)
-    if (content.length > 50000) {
-      content = `${content.substring(0, 50000)}...`;
-    }
-
-    // Filter out undefined values to satisfy exactOptionalPropertyTypes
-    const result: {
-      imageUrl?: string;
-      faviconUrl?: string;
-      description?: string;
-      title?: string;
-      content?: string;
-    } = { faviconUrl };
-
-    const contentValue = content || undefined;
-    if (contentValue !== undefined) {
-      result.content = contentValue;
-    }
-
-    const descValue = descMatch?.[1]?.substring(0, 300);
-    if (descValue !== undefined) {
-      result.description = descValue;
-    }
-
-    const imageValue = imageUrl || twitterImageMatch?.[1];
-    if (imageValue !== undefined) {
-      result.imageUrl = imageValue;
-    }
-
-    const titleValue = titleMatch?.[1]?.substring(0, 200);
-    if (titleValue !== undefined) {
-      result.title = titleValue;
-    }
-
-    return result;
-  } catch {
-    return {};
-  }
-}
-
-// Page Content Extraction (Enhanced with Markdown/Text Modes)
-
-/**
- * Extract full content from a webpage using Puppeteer
- *
- * Uses page.evaluate() with improved content extraction techniques.
- * Waits for main content to load and extracts text, metadata, and structure.
- *
- * ✅ TAVILY-ENHANCED: Supports markdown and text extraction modes
- *
- * @param url - URL to scrape content from
- * @param env - Cloudflare environment bindings
- * @param format - Content format: 'text' or 'markdown'
- * @param timeout - Max time to wait for page load
- * @returns Extracted content and metadata
- */
-async function extractPageContent(
-  url: string,
-  env: ApiEnv['Bindings'],
-  format: WebSearchRawContentFormat = WebSearchRawContentFormats.TEXT,
-  timeout = 15000,
-): Promise<{
-  content: string;
-  rawContent?: string;
-  metadata: {
-    title?: string;
-    author?: string;
-    publishedDate?: string;
-    description?: string;
-    imageUrl?: string;
-    faviconUrl?: string;
-    wordCount: number;
-    readingTime: number;
-  };
-  images?: {
-    url: string;
-    alt?: string;
-  }[];
-}> {
-  // ✅ FIX Phase 5D: Early check for ad/tracking URLs that will fail extraction
-  if (shouldSkipUrl(url)) {
-    rlogSearch('skip-ad', `url=${url.slice(0, 60)}...`);
-    return {
-      content: '',
-      metadata: {
-        readingTime: 0,
-        wordCount: 0,
-      },
-    };
-  }
-
-  const browserResult = await initBrowser(env);
-
-  // Fallback if no browser available - use lightweight HTML extraction
-  if (!browserResult) {
-    rlogSearch('no-browser', `using lightweight for ${extractDomain(url)}`);
-    const lightContent = await extractLightweightContent(url);
-    const content = lightContent.content || '';
-    const wordCount = content.split(/\s+/).filter(Boolean).length;
-
-    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
-    const metadata: {
-      title?: string;
-      author?: string;
-      publishedDate?: string;
-      description?: string;
-      imageUrl?: string;
-      faviconUrl?: string;
-      wordCount: number;
-      readingTime: number;
-    } = {
-      readingTime: Math.ceil(wordCount / 200),
-      wordCount,
-    };
-    if (lightContent.description !== undefined) {
-      metadata.description = lightContent.description;
-    }
-    if (lightContent.faviconUrl !== undefined) {
-      metadata.faviconUrl = lightContent.faviconUrl;
-    }
-    if (lightContent.imageUrl !== undefined) {
-      metadata.imageUrl = lightContent.imageUrl;
-    }
-    if (lightContent.title !== undefined) {
-      metadata.title = lightContent.title;
-    }
-
-    return {
-      content,
-      metadata,
-      rawContent: content,
-    };
-  }
-
-  // Build config for page operations
-  const config: PageOperationConfig = {
-    blockResourceTypes: DEFAULT_BLOCKED_RESOURCE_TYPES,
-    selectorTimeout: 3000,
-    timeout,
-    url,
-    viewport: { height: 800, width: 1280 },
-    waitForSelector: 'article, main, [role="main"], .content, .post-content',
-    waitUntil: PageWaitStrategies.NETWORK_IDLE_2,
-  };
-
-  try {
-    // Use Cloudflare Browser Rendering for content extraction
-    const extracted: ExtractedContent = await extractWithCloudflareBrowser(
-      browserResult.browser,
-      config,
-      format,
-    );
-    await browserResult.browser.close();
-
-    // Use markdown from browser context (already converted, no external deps needed)
-    let rawContent: string | undefined;
-    if (format === 'markdown' && extracted.markdown) {
-      rawContent = extracted.markdown;
-    } else if (format === 'text') {
-      rawContent = extracted.content;
-    }
-
-    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
-    // extracted.metadata has properties with type `string | undefined` but return type expects `string?`
-    const resultMetadata: {
-      title?: string;
-      author?: string;
-      publishedDate?: string;
-      description?: string;
-      imageUrl?: string;
-      faviconUrl?: string;
-      wordCount: number;
-      readingTime: number;
-    } = {
-      readingTime: extracted.metadata.readingTime,
-      wordCount: extracted.metadata.wordCount,
-    };
-    if (extracted.metadata.title !== undefined) {
-      resultMetadata.title = extracted.metadata.title;
-    }
-    if (extracted.metadata.author !== undefined) {
-      resultMetadata.author = extracted.metadata.author;
-    }
-    if (extracted.metadata.publishedDate !== undefined) {
-      resultMetadata.publishedDate = extracted.metadata.publishedDate;
-    }
-    if (extracted.metadata.description !== undefined) {
-      resultMetadata.description = extracted.metadata.description;
-    }
-    if (extracted.metadata.imageUrl !== undefined) {
-      resultMetadata.imageUrl = extracted.metadata.imageUrl;
-    }
-    if (extracted.metadata.faviconUrl !== undefined) {
-      resultMetadata.faviconUrl = extracted.metadata.faviconUrl;
-    }
-
-    // Build result with images only if present (satisfies exactOptionalPropertyTypes)
-    const result: {
-      content: string;
-      rawContent?: string;
-      metadata: typeof resultMetadata;
-      images?: { url: string; alt?: string }[];
-    } = {
-      content: extracted.content,
-      metadata: resultMetadata,
-    };
-
-    // Convert images to the correct type, filtering out undefined alt values
-    if (extracted.images !== undefined && extracted.images.length > 0) {
-      result.images = extracted.images.map((img) => {
-        const imageEntry: { url: string; alt?: string } = { url: img.url };
-        if (img.alt !== undefined) {
-          imageEntry.alt = img.alt;
-        }
-        return imageEntry;
-      });
-    }
-    if (rawContent !== undefined) {
-      result.rawContent = rawContent;
-    }
-    return result;
-  } catch (browserError) {
-    // Close browser on error
-    try {
-      await browserResult.browser.close();
-    } catch {}
-
-    // Log at warn level - this is expected for JS-heavy sites (TradingView, etc.)
-    // The fallback to lightweight extraction typically succeeds
-    rlogSearch('browser-fallback', `${extractDomain(url)} trying lightweight`);
-
-    // Fall back to lightweight extraction instead of returning empty
-    const lightContent = await extractLightweightContent(url);
-    const content = lightContent.content || '';
-    const wordCount = content.split(/\s+/).filter(Boolean).length;
-
-    // Log fallback success
-    if (content.length > 0) {
-      rlogSearch('lightweight-ok', `${extractDomain(url)} words=${wordCount}`);
-    } else {
-      rlogSearch('lightweight-empty', extractDomain(url));
-    }
-
-    // Build metadata object conditionally to satisfy exactOptionalPropertyTypes
-    const fallbackMetadata: {
-      title?: string;
-      author?: string;
-      publishedDate?: string;
-      description?: string;
-      imageUrl?: string;
-      faviconUrl?: string;
-      wordCount: number;
-      readingTime: number;
-    } = {
-      readingTime: Math.ceil(wordCount / 200),
-      wordCount,
-    };
-    if (lightContent.description !== undefined) {
-      fallbackMetadata.description = lightContent.description;
-    }
-    if (lightContent.faviconUrl !== undefined) {
-      fallbackMetadata.faviconUrl = lightContent.faviconUrl;
-    }
-    if (lightContent.imageUrl !== undefined) {
-      fallbackMetadata.imageUrl = lightContent.imageUrl;
-    }
-    if (lightContent.title !== undefined) {
-      fallbackMetadata.title = lightContent.title;
-    }
-
-    return {
-      content,
-      metadata: fallbackMetadata,
-      rawContent: content,
-    };
-  }
-}
-
-// Browser-Based Web Search (DuckDuckGo)
-
-/**
- * Perform web search using headless browser (DuckDuckGo)
- *
- * Uses Cloudflare Browser Rendering to scrape DuckDuckGo search results.
- * Works in both local development (wrangler dev) and production.
- *
- * @param query - Search query string
- * @param maxResults - Maximum number of results to return
- * @param env - Cloudflare environment bindings
- * @param params - Enhanced search parameters
- * @returns Array of search results with title, URL, snippet
- */
-async function searchWithBrowser(
-  query: string,
-  maxResults: number,
-  env: ApiEnv['Bindings'],
-  params?: Partial<WebSearchParameters>,
-): Promise<{ title: string; url: string; snippet: string }[]> {
-  if (!query?.trim()) {
-    return [];
-  }
-
-  // Build query with domain filters
-  let finalQuery = query;
-  if (params?.includeDomains && params.includeDomains.length > 0) {
-    const domainFilter = params.includeDomains.map(d => `site:${d}`).join(' OR ');
-    finalQuery = `${query} (${domainFilter})`;
-  }
-  if (params?.excludeDomains && params.excludeDomains.length > 0) {
-    const exclusions = params.excludeDomains.map(d => `-site:${d}`).join(' ');
-    finalQuery = `${finalQuery} ${exclusions}`;
-  }
-
-  // Add time filter to query if specified
-  if (params?.timeRange) {
-    const timeFilterMap: Record<string, string> = {
-      d: 'past day',
-      day: 'past day',
-      m: 'past month',
-      month: 'past month',
-      w: 'past week',
-      week: 'past week',
-      y: 'past year',
-      year: 'past year',
-    };
-    const timeFilter = timeFilterMap[params.timeRange];
-    if (timeFilter) {
-      finalQuery = `${finalQuery} ${timeFilter}`;
-    }
-  }
-
-  const browserResult = await initBrowser(env);
-  if (!browserResult) {
-    // Fallback to fetch-based search when browser unavailable
-    return await searchWithFetch(finalQuery, maxResults);
-  }
-
-  // DuckDuckGo HTML search URL
-  const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(finalQuery)}`;
-  const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
-  try {
-    // Use discriminated union to call type-specific helper
-    // Use Cloudflare Browser Rendering for search
-    const rawResults: ExtractedSearchResult[] = await searchWithCloudflareBrowser(
-      browserResult.browser,
-      searchUrl,
-      maxResults + 5, // Fetch extra to compensate for filtered URLs
-      userAgent,
-    );
-    await browserResult.browser.close();
-
-    // ✅ FIX Phase 5D: Filter out ad/tracking URLs that will fail extraction
-    const results = rawResults.filter(r => !shouldSkipUrl(r.url)).slice(0, maxResults);
-
-    return results;
-  } catch (error) {
-    rlogSearch('browser-search-fail', error instanceof Error ? error.message : 'Unknown error');
-    // Close browser on error
-    try {
-      await browserResult.browser.close();
-    } catch {}
-    // Fallback to fetch-based search
-    return await searchWithFetch(finalQuery, maxResults);
-  }
-}
-
-/**
- * Fallback fetch-based search using DuckDuckGo HTML
- * Used when browser initialization fails
- */
-async function searchWithFetch(
-  query: string,
-  maxResults: number,
-): Promise<{ title: string; url: string; snippet: string }[]> {
-  try {
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-
-    const response = await fetch(searchUrl, {
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-
-    if (!response.ok) {
-      rlogSearch('ddg-http-error', `status=${response.status}`);
-      return [];
-    }
-
-    const html = await response.text();
-
-    // Check for CAPTCHA/bot detection
-    if (
-      html.includes('anomaly-modal')
-      || html.includes('challenge-form')
-      || html.includes('g-recaptcha')
-    ) {
-      const captchaType = html.includes('g-recaptcha')
-        ? 'google-recaptcha'
-        : html.includes('challenge-form')
-          ? 'challenge-form'
-          : 'anomaly-modal';
-      rlogSearch('ddg-captcha', `type=${captchaType} query="${query.slice(0, 30)}..."`);
-      return [];
-    }
-
-    // Parse results from HTML
-    const results: { title: string; url: string; snippet: string }[] = [];
-
-    // Match result blocks using matchAll to avoid assignment in while
-    const resultRegex = /<div[^>]*class="[^"]*result[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
-    const titleRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
-    const snippetRegex = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i;
-
-    const matches = html.matchAll(resultRegex);
-    for (const match of matches) {
-      if (results.length >= maxResults) {
-        break;
-      }
-
-      const block = match[1];
-      if (!block) {
-        continue;
-      }
-
-      const titleMatch = titleRegex.exec(block);
-      const snippetMatch = snippetRegex.exec(block);
-
-      if (titleMatch?.[1] && titleMatch[2]) {
-        let url = titleMatch[1];
-        // Extract actual URL from DuckDuckGo redirect
-        if (url.includes('uddg=')) {
-          const uddgMatch = url.match(/uddg=([^&]+)/);
-          if (uddgMatch?.[1]) {
-            url = decodeURIComponent(uddgMatch[1]);
-          }
-        }
-
-        // Skip invalid URLs
-        if (!url.startsWith('http')) {
-          continue;
-        }
-
-        // ✅ FIX Phase 5D: Skip ad/tracking URLs that will fail extraction
-        if (shouldSkipUrl(url)) {
-          continue;
-        }
-
-        results.push({
-          snippet: snippetMatch?.[1] ? snippetMatch[1].replace(/<[^>]*>/g, '').trim() : '',
-          title: titleMatch[2].trim(),
-          url,
-        });
-      }
-    }
-
-    return results;
-  } catch (error) {
-    rlogSearch('ddg-error', error instanceof Error ? error.message : 'Unknown error');
-    return [];
-  }
-}
-
 // ============================================================================
-// MULTI-ENGINE SEARCH (Serper → DuckDuckGo fallback)
+// SERPER SEARCH EXECUTION
 // ============================================================================
 
 /**
- * Execute search across multiple engines with automatic fallback
+ * Execute search using Serper API (Google Search)
  *
- * Engine priority:
- * 1. Serper (Google Search API) - Fast, reliable, no ads
- * 2. DuckDuckGo Browser - Fallback when Serper unavailable
+ * Serper is the sole search provider. It provides:
+ * - organic[] - Search results with title, link, snippet, position, date
+ * - knowledgeGraph - Structured entity data
+ * - relatedSearches[] - Related search queries
  *
  * @param query - Search query
  * @param maxResults - Maximum results to return
  * @param env - Cloudflare environment bindings
- * @param params - Optional search parameters
  * @returns Search results with engine metadata
  */
-async function executeMultiEngineSearch(
+async function executeSearch(
   query: string,
   maxResults: number,
   env: ApiEnv['Bindings'],
-  params?: Partial<WebSearchParameters>,
-): Promise<MultiEngineSearchResult> {
+): Promise<SearchResult> {
   const startTime = performance.now();
 
-  // Try Serper first (Google Search API)
-  if (isSerperConfigured(env)) {
-    try {
-      rlogSearch('engine', 'trying serper (google)');
-      const serperResult = await searchWithSerperRetry(query, env, {
-        numResults: maxResults + 5, // Extra to compensate for filtering
-      });
-
-      // Filter out ad/tracking URLs
-      const filteredResults = serperResult.results
-        .filter((r) => !shouldSkipUrl(r.url))
-        .slice(0, maxResults)
-        .map((r) => ({
-          snippet: r.snippet,
-          title: r.title,
-          url: r.url,
-        }));
-
-      if (filteredResults.length > 0) {
-        rlogSearch('serper-success', `results=${filteredResults.length} time=${serperResult.responseTimeMs.toFixed(0)}ms`);
-        return {
-          engine: 'serper',
-          responseTimeMs: serperResult.responseTimeMs,
-          results: filteredResults,
-        };
-      }
-
-      rlogSearch('serper-empty', 'no valid results after filtering, falling back');
-    } catch (error) {
-      rlogSearch('serper-fail', error instanceof Error ? error.message : 'Unknown error');
-      // Continue to fallback
-    }
-  } else {
+  if (!isSerperConfigured(env)) {
     rlogSearch('serper-skip', 'API key not configured');
+    return {
+      engine: 'serper',
+      responseTimeMs: performance.now() - startTime,
+      results: [],
+    };
   }
 
-  // Fallback to DuckDuckGo browser search
-  rlogSearch('engine', 'falling back to duckduckgo');
   try {
-    const ddgResults = await searchWithBrowser(query, maxResults + 5, env, params);
-    const filteredResults = ddgResults.filter((r) => !shouldSkipUrl(r.url)).slice(0, maxResults);
-    const responseTimeMs = performance.now() - startTime;
+    rlogSearch('engine', 'searching with serper (google)');
+    const serperResult = await searchWithSerperRetry(query, env, {
+      numResults: maxResults + 5, // Extra to compensate for filtering
+    });
+
+    // Filter out ad/tracking URLs and map to simplified format
+    const filteredResults = serperResult.results
+      .filter(r => !shouldSkipUrl(r.url))
+      .slice(0, maxResults)
+      .map(r => ({
+        date: r.date,
+        snippet: r.snippet,
+        title: r.title,
+        url: r.url,
+      }));
 
     if (filteredResults.length > 0) {
-      rlogSearch('ddg-success', `results=${filteredResults.length} time=${responseTimeMs.toFixed(0)}ms`);
-      return {
-        engine: 'duckduckgo',
-        responseTimeMs,
-        results: filteredResults,
-      };
+      rlogSearch('serper-success', `results=${filteredResults.length} time=${serperResult.responseTimeMs.toFixed(0)}ms`);
+    } else {
+      rlogSearch('serper-empty', 'no valid results after filtering');
     }
 
-    rlogSearch('ddg-empty', 'no valid results');
+    return {
+      engine: 'serper',
+      responseTimeMs: serperResult.responseTimeMs,
+      results: filteredResults,
+    };
   } catch (error) {
-    rlogSearch('ddg-fail', error instanceof Error ? error.message : 'Unknown error');
-  }
-
-  // All engines failed
-  const responseTimeMs = performance.now() - startTime;
-  rlogSearch('all-failed', `no results from any engine, time=${responseTimeMs.toFixed(0)}ms`);
-  return {
-    engine: 'serper',
-    responseTimeMs,
-    results: [],
-  };
-}
-
-// Image Description Generation (AI-Powered)
-
-/**
- * Generate AI descriptions for images using OpenRouter vision model
- *
- * ✅ FIXED: Now using actual vision API with image URLs (not fake text prompts)
- * ✅ TAVILY-ENHANCED: AI-generated image descriptions
- * ✅ BILLING: Deducts credits when billing context is provided
- *
- * @param images - Array of image URLs to describe
- * @param env - Cloudflare environment bindings
- * @param logger - Optional logger
- * @param billingContext - Optional billing context for credit deduction
- * @returns Images with AI-generated descriptions
- */
-async function generateImageDescriptions(
-  images: { url: string; alt?: string | undefined }[],
-  env: ApiEnv['Bindings'],
-  logger?: TypedLogger,
-  billingContext?: BillingContext,
-): Promise<{ url: string; description?: string | undefined; alt?: string | undefined }[]> {
-  if (images.length === 0) {
-    return [];
-  }
-
-  try {
-    initializeOpenRouter(env);
-    const client = await openRouterService.getClient();
-
-    // Process images in batches of 3 for efficiency
-    const batchSize = 3;
-    const results: { url: string; description?: string | undefined; alt?: string | undefined }[]
-      = [];
-
-    for (let i = 0; i < Math.min(images.length, 10); i += batchSize) {
-      const batch = images.slice(i, i + batchSize);
-
-      const descriptions = await Promise.all(
-        batch.map(async (image) => {
-          try {
-            const cached = await getCachedImageDescription(
-              image.url,
-              env,
-              logger,
-            );
-            if (cached) {
-              const result: { url: string; description?: string | undefined; alt?: string | undefined } = {
-                description: cached,
-                url: image.url,
-              };
-              if (image.alt !== undefined) {
-                result.alt = image.alt;
-              }
-              return result;
-            }
-
-            // https://sdk.vercel.ai/docs/ai-sdk-core/generating-text#multi-modal-messages
-            const result = await generateText({
-              messages: [
-                {
-                  content: [
-                    {
-                      text: IMAGE_DESCRIPTION_PROMPT,
-                      type: 'text',
-                    },
-                    {
-                      image: image.url, // ✅ CRITICAL: Send actual image URL, not text
-                      type: 'image',
-                    },
-                  ],
-                  role: UIMessageRoles.USER,
-                },
-              ],
-              model: client.chat(AIModels.WEB_SEARCH), // Use vision-capable model
-              temperature: 0.3, // Low temperature for factual descriptions
-              // Note: maxTokens not supported in AI SDK v6 generateText with messages
-            });
-
-            await cacheImageDescription(image.url, result.text, env, logger);
-
-            // ✅ BILLING: Deduct credits for image description AI call
-            if (billingContext && result.usage) {
-              const rawInput = result.usage.inputTokens ?? 0;
-              const rawOutput = result.usage.outputTokens ?? 0;
-              const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
-              const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
-              if (safeInputTokens > 0 || safeOutputTokens > 0) {
-                try {
-                  await finalizeCredits(billingContext.userId, `img-desc-${ulid()}`, {
-                    action: CreditActions.AI_RESPONSE,
-                    inputTokens: safeInputTokens,
-                    modelId: AIModels.WEB_SEARCH,
-                    outputTokens: safeOutputTokens,
-                    threadId: billingContext.threadId,
-                  });
-                } catch (billingError) {
-                  rlogSearch('billing-fail', `image-desc: ${billingError instanceof Error ? billingError.message : 'Unknown'}`);
-                }
-              }
-            }
-
-            const successResult: { url: string; description?: string | undefined; alt?: string | undefined } = {
-              description: result.text,
-              url: image.url,
-            };
-            if (image.alt !== undefined) {
-              successResult.alt = image.alt;
-            }
-            return successResult;
-          } catch (error) {
-            if (logger) {
-              logger.warn('Failed to generate image description', {
-                context: `URL: ${image.url}`,
-                error: normalizeError(error).message,
-                logType: LogTypes.EDGE_CASE,
-                scenario: 'image_description_failed',
-              });
-            }
-            const errorResult: { url: string; description?: string | undefined; alt?: string | undefined } = {
-              url: image.url,
-            };
-            if (image.alt !== undefined) {
-              errorResult.alt = image.alt;
-            }
-            return errorResult;
-          }
-        }),
-      );
-
-      results.push(...descriptions);
-    }
-
-    return results;
-  } catch (error) {
-    if (logger) {
-      logger.error('Image description generation failed', {
-        error: normalizeError(error).message,
-        logType: LogTypes.OPERATION,
-        operationName: 'generateImageDescriptions',
-      });
-    }
-    // Return images without descriptions on error
-    return images;
+    rlogSearch('serper-fail', error instanceof Error ? error.message : 'Unknown error');
+    return {
+      engine: 'serper',
+      responseTimeMs: performance.now() - startTime,
+      results: [],
+    };
   }
 }
 
@@ -1676,24 +434,66 @@ export async function streamAnswerSummary(
     );
   }
 
+  const startTime = performance.now();
+  const traceId = generateTraceId();
+  const modelId = AIModels.WEB_SEARCH;
+
   try {
     initializeOpenRouter(env);
     const client = await openRouterService.getClient();
 
-    // Build context from search results
+    // Build context from search results (use snippet as content)
     const context = results
       .slice(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
-        const content = r.fullContent || r.content;
+        const content = r.content;
         return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
 
     const systemPrompt = getAnswerSummaryPrompt(mode);
+    const inputPrompt = `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`;
 
     return streamText({
-      model: client.chat(AIModels.WEB_SEARCH),
-      prompt: `Query: ${query}\n\nSearch Results:\n${context}\n\nProvide ${mode === WebSearchActiveAnswerModes.ADVANCED ? 'a comprehensive' : 'a concise'} answer to the query based on these search results.`,
+      model: client.chat(modelId),
+      onFinish: (result) => {
+        // Track answer summary generation for PostHog analytics
+        const modelConfig = getModelById(modelId);
+        const modelPricing = extractModelPricing(modelConfig);
+        trackLLMGeneration(
+          {
+            modelId,
+            modelName: modelConfig?.name || modelId,
+            participantId: 'system',
+            participantIndex: 0,
+            roundNumber: 0,
+            threadId: 'system',
+            threadMode: 'answer_summary',
+            userId: 'system',
+          },
+          {
+            finishReason: result.finishReason,
+            response: result.response,
+            text: result.text,
+            usage: result.usage,
+          },
+          [{ content: inputPrompt, role: UIMessageRoles.USER }],
+          traceId,
+          startTime,
+          {
+            additionalProperties: {
+              answer_mode: mode,
+              operation_type: 'web_search_answer_summary',
+              results_count: results.length,
+            },
+            modelConfig: {
+              temperature: 0.5,
+            },
+            modelPricing,
+          },
+        ).catch(() => {}); // Fire and forget
+      },
+      prompt: inputPrompt,
       system: systemPrompt,
       temperature: 0.5,
       // Note: maxTokens controlled by model config, not streamText params
@@ -1748,11 +548,11 @@ async function generateAnswerSummary(
   try {
     initializeOpenRouter(env);
 
-    // Build context from search results
+    // Build context from search results (use snippet as content)
     const context = results
       .slice(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 10 : 5)
       .map((r, i) => {
-        const content = r.fullContent || r.content;
+        const content = r.content;
         return `[Source ${i + 1}: ${r.domain || r.url}]\n${content.substring(0, mode === WebSearchActiveAnswerModes.ADVANCED ? 1500 : 800)}`;
       })
       .join('\n\n---\n\n');
@@ -1838,9 +638,14 @@ async function detectSearchParameters(
   searchDepth?: WebSearchDepth;
   reasoning?: string;
 } | null> {
+  const startTime = performance.now();
+  const traceId = generateTraceId();
+  const modelId = AIModels.WEB_SEARCH;
+
   try {
     initializeOpenRouter(env);
 
+    const inputPrompt = buildAutoParameterDetectionPrompt(query);
     const result = await openRouterService.generateText({
       maxTokens: 200,
       messages: [
@@ -1848,16 +653,46 @@ async function detectSearchParameters(
           id: 'param-detect',
           parts: [
             {
-              text: buildAutoParameterDetectionPrompt(query),
+              text: inputPrompt,
               type: 'text',
             },
           ],
           role: UIMessageRoles.USER,
         },
       ],
-      modelId: AIModels.WEB_SEARCH,
+      modelId,
       temperature: 0.3,
     });
+
+    // Track parameter detection for PostHog analytics
+    const modelConfig = getModelById(modelId);
+    const modelPricing = extractModelPricing(modelConfig);
+    trackLLMGeneration(
+      {
+        modelId,
+        modelName: modelConfig?.name || modelId,
+        participantId: 'system',
+        participantIndex: 0,
+        roundNumber: 0,
+        threadId: billingContext?.threadId || 'system',
+        threadMode: 'parameter_detection',
+        userId: billingContext?.userId || 'system',
+      },
+      result,
+      [{ content: inputPrompt, role: UIMessageRoles.USER }],
+      traceId,
+      startTime,
+      {
+        additionalProperties: {
+          operation_type: 'web_search_parameter_detection',
+        },
+        modelConfig: {
+          maxTokens: 200,
+          temperature: 0.3,
+        },
+        modelPricing,
+      },
+    ).catch(() => {}); // Fire and forget
 
     // ✅ BILLING: Deduct credits for parameter detection AI call
     if (billingContext && result.usage) {
@@ -1870,7 +705,7 @@ async function detectSearchParameters(
           await finalizeCredits(billingContext.userId, `param-detect-${ulid()}`, {
             action: CreditActions.AI_RESPONSE,
             inputTokens: safeInputTokens,
-            modelId: AIModels.WEB_SEARCH,
+            modelId,
             outputTokens: safeOutputTokens,
             threadId: billingContext.threadId,
           });
@@ -1913,13 +748,11 @@ async function detectSearchParameters(
  * **STREAMING PHASES**:
  * 1. **Metadata** - Query params and start time
  * 2. **Basic Results** - Title, URL, snippet (fast)
- * 3. **Enhanced Results** - Full content, metadata, images (slower)
- * 4. **Complete** - Total results and timing
+ * 3. **Complete** - Total results and timing
  *
  * **PERFORMANCE CHARACTERISTICS**:
  * - Time to first result: 500-800ms (vs 3-5s batch)
  * - Basic results: Yielded immediately as discovered
- * - Enhanced results: Yielded asynchronously per source
  * - Perceived latency reduction: 60-84%
  *
  * @param params - Search parameters
@@ -1965,7 +798,7 @@ export async function* streamSearchResults(
   params: WebSearchParameters,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-  billingContext?: BillingContext,
+  _billingContext?: BillingContext,
 ): AsyncGenerator<StreamSearchEvent> {
   const { maxResults = 10, query, searchDepth = 'advanced' } = params;
   const startTime = performance.now();
@@ -1984,7 +817,7 @@ export async function* streamSearchResults(
       type: WebSearchStreamEventTypes.METADATA,
     };
 
-    // PHASE 2: Get Basic Search Results using multi-engine search
+    // PHASE 2: Get Basic Search Results using Serper
     rlogSearch('stream-start', `query="${query.slice(0, 40)}..." maxResults=${maxResults}`);
     logger?.info('Starting progressive search', {
       logType: LogTypes.OPERATION,
@@ -1992,15 +825,14 @@ export async function* streamSearchResults(
       query,
     });
 
-    const multiEngineResult = await executeMultiEngineSearch(
+    const searchResult = await executeSearch(
       query,
       maxResults + 5, // Fetch extra to compensate for filtering
       env,
-      params,
     );
 
-    if (multiEngineResult.results.length === 0) {
-      rlogSearch('stream-empty', `no results from engine=${multiEngineResult.engine}`);
+    if (searchResult.results.length === 0) {
+      rlogSearch('stream-empty', `no results from engine=${searchResult.engine}`);
       yield {
         data: {
           requestId,
@@ -2012,24 +844,25 @@ export async function* streamSearchResults(
       return;
     }
 
-    rlogSearch('stream-results', `engine=${multiEngineResult.engine} count=${multiEngineResult.results.length}`);
+    rlogSearch('stream-results', `engine=${searchResult.engine} count=${searchResult.results.length}`);
 
     // Take only requested number of sources
-    const resultsToProcess = multiEngineResult.results.slice(0, maxResults);
+    const resultsToProcess = searchResult.results.slice(0, maxResults);
 
-    // PHASE 3: Stream Each Result Progressively
+    // PHASE 3: Stream Each Result - use Serper snippet as content (no browser extraction)
     for (let i = 0; i < resultsToProcess.length; i++) {
       const result = resultsToProcess[i];
       if (!result) {
         continue;
-      } // Skip if undefined
+      }
       const domain = extractDomain(result.url);
 
+      // Use Serper snippet as content - no browser extraction needed
       const basicResult: WebSearchResultItem = {
         content: result.snippet,
         domain,
         excerpt: result.snippet,
-        publishedDate: null,
+        publishedDate: result.date || null,
         score: 0.5 + 0.5 * (1 - i / resultsToProcess.length), // Decay score
         title: result.title,
         url: result.url,
@@ -2045,100 +878,6 @@ export async function* streamSearchResults(
         },
         type: WebSearchStreamEventTypes.RESULT,
       };
-
-      // Extract full content in background - if it fails, basic result already sent
-      try {
-        // TypeScript narrows the union type based on boolean check
-        let rawContentFormat: WebSearchRawContentFormat | undefined;
-        if (params.includeRawContent) {
-          rawContentFormat
-            = typeof params.includeRawContent === 'boolean'
-              ? WebSearchRawContentFormats.TEXT
-              : params.includeRawContent; // Already narrowed to WebSearchRawContentFormat
-        }
-
-        const extracted = await extractPageContent(
-          result.url,
-          env,
-          rawContentFormat,
-          10000, // 10s timeout per page
-        );
-
-        const hasContent = !!extracted.content;
-        const hasMetadata = !!(
-          extracted.metadata.imageUrl
-          || extracted.metadata.faviconUrl
-          || extracted.metadata.title
-          || extracted.metadata.description
-        );
-
-        if (hasContent || hasMetadata) {
-          // Build enhanced result
-          const enhancedResult: WebSearchResultItem = {
-            ...basicResult,
-            metadata: {
-              author: extracted.metadata.author,
-              description: extracted.metadata.description,
-              faviconUrl: params.includeFavicon
-                ? extracted.metadata.faviconUrl
-                : undefined,
-              imageUrl: extracted.metadata.imageUrl,
-              readingTime: extracted.metadata.readingTime,
-              wordCount: extracted.metadata.wordCount,
-            },
-            publishedDate: extracted.metadata.publishedDate || null,
-          };
-
-          // Apply content fields only if we have content
-          if (hasContent) {
-            enhancedResult.fullContent = extracted.content;
-            enhancedResult.content = extracted.content.substring(0, 800);
-            enhancedResult.rawContent = extracted.rawContent;
-          }
-
-          // Use extracted title if available
-          if (extracted.metadata.title) {
-            enhancedResult.title = extracted.metadata.title;
-          }
-
-          // Include images if requested
-          if (
-            params.includeImages
-            && extracted.images
-            && extracted.images.length > 0
-          ) {
-            if (params.includeImageDescriptions) {
-              enhancedResult.images = await generateImageDescriptions(
-                extracted.images,
-                env,
-                logger,
-                billingContext,
-              );
-            } else {
-              enhancedResult.images = extracted.images;
-            }
-          }
-
-          yield {
-            data: {
-              enhanced: true,
-              index: i,
-              requestId,
-              result: enhancedResult,
-              total: resultsToProcess.length,
-            },
-            type: WebSearchStreamEventTypes.RESULT,
-          };
-        }
-      } catch (extractError) {
-        logger?.warn('Content extraction failed for result', {
-          context: `URL: ${result.url}, index: ${i}`,
-          error: normalizeError(extractError).message,
-          logType: LogTypes.EDGE_CASE,
-          scenario: 'content_extraction_failed',
-        });
-        // Basic result already sent - continue to next
-      }
     }
 
     // PHASE 4: Yield Completion
@@ -2250,27 +989,26 @@ export async function performWebSearch(
       }
     }
 
-    // Use multi-engine search (Serper → DuckDuckGo fallback)
+    // Use Serper search (sole search provider)
     rlogSearch('perform', `query="${params.query.slice(0, 40)}..." maxResults=${maxResults}`);
 
-    const multiEngineResult = await executeMultiEngineSearch(
+    const searchResult = await executeSearch(
       params.query,
       maxResults + 5, // Fetch extra to compensate for filtering
       env,
-      params,
     );
 
-    let searchResults = multiEngineResult.results;
+    const searchResults = searchResult.results;
 
     if (searchResults.length === 0) {
-      rlogSearch('no-results', `all engines failed for query="${params.query.slice(0, 30)}..."`);
+      rlogSearch('no-results', `engine failed for query="${params.query.slice(0, 30)}..."`);
 
       if (logger) {
-        logger.warn('All search engines returned empty', {
-          context: `Engine: ${multiEngineResult.engine}`,
+        logger.warn('Search engine returned empty', {
+          context: `Engine: ${searchResult.engine}`,
           logType: LogTypes.EDGE_CASE,
           query: params.query,
-          scenario: 'all_searches_empty',
+          scenario: 'search_empty',
         });
       }
 
@@ -2285,176 +1023,69 @@ export async function performWebSearch(
       };
     }
 
-    rlogSearch('results', `engine=${multiEngineResult.engine} count=${searchResults.length}`);
+    rlogSearch('results', `engine=${searchResult.engine} count=${searchResults.length}`);
 
     // Take only requested number of sources
     const sourcesToProcess = searchResults.slice(0, maxResults);
 
-    // TypeScript narrows the union type based on boolean check
-    let rawContentFormat: WebSearchRawContentFormat | undefined;
-    if (params.includeRawContent) {
-      if (typeof params.includeRawContent === 'boolean') {
-        rawContentFormat = WebSearchRawContentFormats.TEXT; // Default to text
-      } else {
-        rawContentFormat = params.includeRawContent; // Already narrowed to WebSearchRawContentFormat
-      }
-    }
+    // Process results - use Serper snippets as content (no browser extraction)
+    const results: WebSearchResultItem[] = sourcesToProcess.map((result, index) => {
+      const domain = extractDomain(result.url);
 
-    // Process results with full content extraction
-    const results: WebSearchResultItem[] = await Promise.all(
-      sourcesToProcess.map(async (result, index) => {
-        const domain = extractDomain(result.url);
+      // Split query into terms for matching
+      const queryTerms = params.query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(t => t.length > 2);
+      const titleLower = result.title.toLowerCase();
+      const snippetLower = result.snippet.toLowerCase();
 
-        // Split query into terms for matching
-        const queryTerms = params.query
-          .toLowerCase()
-          .split(/\s+/)
-          .filter(t => t.length > 2);
-        const titleLower = result.title.toLowerCase();
-        const snippetLower = result.snippet.toLowerCase();
+      // Score components (0-1 scale):
+      // 1. Search engine ranking (Serper pre-ranks results)
+      const rankScore = Math.max(0, 1 - index * 0.08); // First result = 1.0, decreases by 0.08
 
-        // Score components (0-1 scale):
-        // 1. Search engine ranking (DDG pre-ranks results)
-        const rankScore = Math.max(0, 1 - index * 0.08); // First result = 1.0, decreases by 0.08
+      // 2. Title relevance (high weight - most important)
+      const titleMatches = queryTerms.filter(term =>
+        titleLower.includes(term),
+      ).length;
+      const titleScore
+        = queryTerms.length > 0 ? titleMatches / queryTerms.length : 0;
 
-        // 2. Title relevance (high weight - most important)
-        const titleMatches = queryTerms.filter(term =>
-          titleLower.includes(term),
-        ).length;
-        const titleScore
-          = queryTerms.length > 0 ? titleMatches / queryTerms.length : 0;
+      // 3. Content relevance
+      const contentMatches = queryTerms.filter(term =>
+        snippetLower.includes(term),
+      ).length;
+      const contentScore
+        = queryTerms.length > 0 ? contentMatches / queryTerms.length : 0;
 
-        // 3. Content relevance
-        const contentMatches = queryTerms.filter(term =>
-          snippetLower.includes(term),
-        ).length;
-        const contentScore
-          = queryTerms.length > 0 ? contentMatches / queryTerms.length : 0;
+      // 4. Combined weighted score
+      // Title = 50%, Content = 30%, Rank = 20%
+      const relevanceScore
+        = titleScore * 0.5 + contentScore * 0.3 + rankScore * 0.2;
 
-        // 4. Combined weighted score
-        // Title = 50%, Content = 30%, Rank = 20%
-        const relevanceScore
-          = titleScore * 0.5 + contentScore * 0.3 + rankScore * 0.2;
+      // Ensure score is between 0.3 and 1.0 (never below 30% for search results)
+      const finalScore = Math.max(0.3, Math.min(1.0, relevanceScore));
 
-        // Ensure score is between 0.3 and 1.0 (never below 30% for search results)
-        const finalScore = Math.max(0.3, Math.min(1.0, relevanceScore));
+      // Use Serper snippet as content - no browser extraction needed
+      const baseResult: WebSearchResultItem = {
+        content: result.snippet,
+        domain,
+        excerpt: result.snippet,
+        publishedDate: result.date || null,
+        score: finalScore,
+        title: result.title,
+        url: result.url,
+      };
 
-        // Start with basic result
-        const baseResult: WebSearchResultItem = {
-          content: result.snippet,
-          domain,
-          excerpt: result.snippet,
-          publishedDate: null,
-          score: finalScore,
-          title: result.title,
-          url: result.url,
+      // Add favicon metadata if requested
+      if (params.includeFavicon) {
+        baseResult.metadata = {
+          faviconUrl: `https://${domain}/favicon.ico`,
         };
-
-        // Extract full content using browser or lightweight extraction
-        try {
-          const extracted = await extractPageContent(
-            result.url,
-            env,
-            rawContentFormat,
-            10000,
-          );
-
-          // Check if we got valid content
-          const hasContent = !!extracted.content && isValidContent(extracted.content);
-          const hasMetadata = !!(
-            extracted.metadata.imageUrl
-            || extracted.metadata.faviconUrl
-            || extracted.metadata.title
-            || extracted.metadata.description
-          );
-
-          if (hasContent) {
-            baseResult.fullContent = extracted.content;
-            baseResult.content = extracted.content.substring(0, 800);
-            baseResult.rawContent = extracted.rawContent;
-          }
-
-          if (hasContent || hasMetadata) {
-            // Add metadata - apply even without full content (lightweight extraction)
-            baseResult.metadata = {
-              author: extracted.metadata.author,
-              description: extracted.metadata.description,
-              faviconUrl: params.includeFavicon
-                ? extracted.metadata.faviconUrl
-                : undefined,
-              imageUrl: extracted.metadata.imageUrl,
-              readingTime: extracted.metadata.readingTime,
-              wordCount: extracted.metadata.wordCount,
-            };
-
-            if (extracted.metadata.publishedDate) {
-              baseResult.publishedDate = extracted.metadata.publishedDate;
-            }
-
-            if (
-              extracted.metadata.title
-              && extracted.metadata.title.length > 0
-            ) {
-              baseResult.title = extracted.metadata.title;
-            }
-          }
-
-          // Include images if requested (only when we have actual images from page scraping)
-          if (
-            params.includeImages
-            && extracted.images
-            && extracted.images.length > 0
-          ) {
-            if (params.includeImageDescriptions) {
-              // Generate AI descriptions for images
-              baseResult.images = await generateImageDescriptions(
-                extracted.images,
-                env,
-                logger,
-                billingContext,
-              );
-            } else {
-              baseResult.images = extracted.images;
-            }
-          }
-        } catch (extractError) {
-          rlogSearch('extract-error', `${domain}: ${normalizeError(extractError).message}`);
-
-          if (logger) {
-            logger.warn('Failed to extract page content', {
-              context: `URL: ${result.url}`,
-              error: normalizeError(extractError).message,
-              logType: LogTypes.EDGE_CASE,
-              scenario: 'page_content_extraction_failed',
-            });
-          }
-
-          // Fallback: Try to get favicon
-          if (params.includeFavicon) {
-            try {
-              baseResult.metadata = {
-                faviconUrl: `https://${domain}/favicon.ico`,
-              };
-            } catch {
-              // Ignore favicon errors
-            }
-          }
-        }
-
-        return baseResult;
-      }),
-    );
-
-    // Consolidate images from all results (Tavily-style)
-    let consolidatedImages:
-      | { url: string; description?: string | undefined; alt?: string | undefined }[]
-      | undefined;
-    if (params.includeImages) {
-      const allImages = results.flatMap(r => r.images || []);
-      if (allImages.length > 0) {
-        consolidatedImages = allImages.slice(0, 10); // Limit to 10 images
       }
-    }
+
+      return baseResult;
+    });
 
     // Generate answer summary if requested
     let answer: string | null = null;
@@ -2483,7 +1114,6 @@ export async function performWebSearch(
       _meta: complexity ? { complexity } : undefined,
       answer,
       autoParameters: autoParams,
-      images: consolidatedImages,
       query: params.query,
       requestId, // ✅ P0 FIX: Add request ID for tracking
       responseTime: performance.now() - startTime,
@@ -2576,7 +1206,7 @@ function shouldSkipUrl(url: string): boolean {
     /facebook\.com\/ads/i,
     /fbcdn\.net.*tracking/i,
     // Twitter/X tracking
-    /t\.co\/[a-zA-Z0-9]+$/i, // Short links without content
+    /t\.co\/[a-z0-9]+$/i, // Short links without content
     /twitter\.com\/i\/web\/status/i,
     // Generic ad patterns
     /\/ad\/|\/ads\//i,
@@ -2603,10 +1233,10 @@ function shouldSkipUrl(url: string): boolean {
     /dpbolvw\.net/i,
     /kqzyfj\.com/i,
     // URL shorteners (often used for tracking)
-    /bit\.ly\/[a-zA-Z0-9]+$/i,
-    /tinyurl\.com\/[a-zA-Z0-9]+$/i,
-    /goo\.gl\/[a-zA-Z0-9]+$/i,
-    /ow\.ly\/[a-zA-Z0-9]+$/i,
+    /bit\.ly\/[a-z0-9]+$/i,
+    /tinyurl\.com\/[a-z0-9]+$/i,
+    /goo\.gl\/[a-z0-9]+$/i,
+    /ow\.ly\/[a-z0-9]+$/i,
     // Analytics/tracking pixels
     /analytics\./i,
     /stats\./i,
@@ -2627,7 +1257,7 @@ function shouldSkipUrl(url: string): boolean {
   ];
 
   // Check ad/tracking patterns
-  if (adTrackingPatterns.some((pattern) => pattern.test(url))) {
+  if (adTrackingPatterns.some(pattern => pattern.test(url))) {
     rlogSearch('skip-ad', `url=${url.slice(0, 60)}...`);
     return true;
   }
@@ -2635,7 +1265,7 @@ function shouldSkipUrl(url: string): boolean {
   // Check low-quality domains
   try {
     const hostname = new URL(url).hostname;
-    if (lowQualityDomains.some((pattern) => pattern.test(hostname))) {
+    if (lowQualityDomains.some(pattern => pattern.test(hostname))) {
       rlogSearch('skip-lowq', `domain=${hostname}`);
       return true;
     }
@@ -2645,44 +1275,6 @@ function shouldSkipUrl(url: string): boolean {
   }
 
   return false;
-}
-
-/**
- * Validate that extracted content is meaningful (not ads/errors)
- *
- * @param content - Extracted content to validate
- * @param minWords - Minimum word count for valid content
- * @returns true if content appears valid
- */
-function isValidContent(content: string, minWords = 50): boolean {
-  if (!content || content.trim().length === 0) {
-    return false;
-  }
-
-  const wordCount = content.split(/\s+/).filter((w) => w.length > 0).length;
-  if (wordCount < minWords) {
-    return false;
-  }
-
-  // Check for common error page patterns
-  const errorPatterns = [
-    /404\s*(not\s*found|error|page)/i,
-    /page\s*(not\s*found|unavailable|removed)/i,
-    /access\s*denied/i,
-    /403\s*forbidden/i,
-    /500\s*internal\s*server\s*error/i,
-    /javascript\s*(is\s*)?(required|must\s*be\s*enabled)/i,
-    /please\s*enable\s*javascript/i,
-    /captcha/i,
-    /prove\s*(you('re)?\s*)?(are\s*)?(not\s*)?(a\s*)?robot/i,
-    /verify\s*(you('re)?\s*)?(are\s*)?(human|not\s*a\s*bot)/i,
-  ];
-
-  if (errorPatterns.some((pattern) => pattern.test(content.slice(0, 500)))) {
-    return false;
-  }
-
-  return true;
 }
 
 /**

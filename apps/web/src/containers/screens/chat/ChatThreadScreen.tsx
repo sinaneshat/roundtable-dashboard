@@ -23,7 +23,7 @@ import {
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, StoredPreSearch, ThreadDetailData } from '@/services/api';
 import { getThreadMemoryEventsService } from '@/services/api';
 import {
   getModeratorMessageForRound,
@@ -59,8 +59,6 @@ type ChatThreadScreenProps = {
   initialPreSearches?: StoredPreSearch[];
   /** Changelog items prefetched on server for SSR hydration */
   initialChangelog?: ChangelogItem[];
-  /** Feedback data prefetched on server for SSR hydration */
-  initialFeedback?: RoundFeedbackData[];
 };
 
 function useThreadHeaderUpdater({
@@ -93,7 +91,6 @@ function useThreadHeaderUpdater({
 
 export default function ChatThreadScreen({
   initialChangelog,
-  initialFeedback: _initialFeedback,
   initialMessages,
   initialPreSearches,
   participants,

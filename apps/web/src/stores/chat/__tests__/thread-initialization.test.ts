@@ -208,20 +208,6 @@ describe('thread Initialization', () => {
       expect(store.getState().preSearches).toHaveLength(0);
     });
 
-    it('should clear feedbackByRound Map', () => {
-      // Pre-populate feedback
-      store.getState().setFeedback(0, 'helpful');
-      store.getState().setFeedback(1, 'unhelpful');
-
-      expect(store.getState().feedbackByRound.size).toBe(2);
-
-      const thread = createMockThread();
-      const participants = createMockParticipants(2);
-      store.getState().initializeThread(thread, participants, []);
-
-      expect(store.getState().feedbackByRound.size).toBe(0);
-    });
-
     it('should set hasInitiallyLoaded to true', () => {
       expect(store.getState().hasInitiallyLoaded).toBe(false);
 
@@ -304,17 +290,6 @@ describe('thread Initialization', () => {
       expect(state.thread).toBeNull();
       expect(state.messages).toHaveLength(0);
       expect(state.participants).toHaveLength(0);
-    });
-
-    it('should reset feedbackByRound Map', () => {
-      store.getState().setFeedback(0, 'helpful');
-      store.getState().setFeedback(1, 'unhelpful');
-
-      expect(store.getState().feedbackByRound.size).toBe(2);
-
-      store.getState().resetForThreadNavigation();
-
-      expect(store.getState().feedbackByRound.size).toBe(0);
     });
 
     it('should reset triggeredModeratorIds Set', () => {
@@ -463,7 +438,6 @@ describe('thread Initialization', () => {
       store.getState().markModeratorStreamTriggered('mod-1', 0);
       store.getState().markPreSearchTriggered(0);
       store.getState().updatePreSearchActivity(0);
-      store.getState().setFeedback(0, 'helpful');
 
       store.getState().resetToNewChat();
 
@@ -472,7 +446,6 @@ describe('thread Initialization', () => {
       expect(state.triggeredModeratorRounds.size).toBe(0);
       expect(state.triggeredPreSearchRounds.size).toBe(0);
       expect(state.preSearchActivityTimes.size).toBe(0);
-      expect(state.feedbackByRound.size).toBe(0);
     });
 
     it('should reset form state to defaults', () => {
@@ -530,7 +503,6 @@ describe('thread Initialization', () => {
       store.getState().markModeratorStreamTriggered('mod-1', 0);
       store.getState().markPreSearchTriggered(0);
       store.getState().updatePreSearchActivity(0);
-      store.getState().setFeedback(0, 'helpful');
 
       store.getState().resetToOverview();
 
@@ -539,7 +511,6 @@ describe('thread Initialization', () => {
       expect(state.triggeredModeratorRounds.size).toBe(0);
       expect(state.triggeredPreSearchRounds.size).toBe(0);
       expect(state.preSearchActivityTimes.size).toBe(0);
-      expect(state.feedbackByRound.size).toBe(0);
     });
 
     it('should produce the same state as resetToNewChat', () => {
@@ -572,7 +543,6 @@ describe('thread Initialization', () => {
       expect(state1.screenMode).toEqual(state2.screenMode);
       expect(state1.showInitialUI).toEqual(state2.showInitialUI);
       expect(state1.triggeredModeratorIds.size).toEqual(state2.triggeredModeratorIds.size);
-      expect(state1.feedbackByRound.size).toEqual(state2.feedbackByRound.size);
     });
   });
 
@@ -835,7 +805,6 @@ describe('thread Initialization', () => {
 
       // Mark some state
       store.getState().markModeratorStreamTriggered('mod-1', 0);
-      store.getState().setFeedback(0, 'helpful');
 
       // Navigate away
       store.getState().resetForThreadNavigation();
@@ -849,7 +818,6 @@ describe('thread Initialization', () => {
       expect(store.getState().thread?.id).toBe('thread-2');
       expect(store.getState().participants).toHaveLength(3);
       expect(store.getState().triggeredModeratorIds.size).toBe(0);
-      expect(store.getState().feedbackByRound.size).toBe(0);
     });
 
     it('should not leak streaming state between threads', () => {

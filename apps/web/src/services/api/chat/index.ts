@@ -18,17 +18,6 @@ export {
   subscribeToPreSearchStreamService,
 } from './entity-subscription';
 
-// Feedback
-export {
-  type GetThreadFeedbackRequest,
-  type GetThreadFeedbackResponse,
-  getThreadFeedbackService,
-  type RoundFeedbackData,
-  type SetRoundFeedbackRequest,
-  type SetRoundFeedbackResponse,
-  setRoundFeedbackService,
-} from './feedback';
-
 // Messages (Streaming)
 export {
   type StreamChatRequest,

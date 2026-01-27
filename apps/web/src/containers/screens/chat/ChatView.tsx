@@ -15,7 +15,7 @@ import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
 import { useSidebarOptional } from '@/components/ui/sidebar';
-import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
+import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
   useBoolean,
@@ -44,12 +44,11 @@ import {
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData, StoredPreSearch } from '@/services/api';
+import type { ApiChangelog, ApiParticipant, Model, StoredPreSearch } from '@/services/api';
 import {
   ChatPhases,
   useAutoModeAnalysis,
   useChatFormActions,
-  useFeedbackActions,
   useThreadActions,
 } from '@/stores/chat';
 
@@ -301,14 +300,9 @@ export function ChatView({
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
   const { borderVariant: _borderVariant } = useFreeTrialState();
 
-  // ✅ PERF: Only fetch changelog/feedback for established threads (not during initial creation)
-  // These queries are not needed during the first round - data doesn't exist yet
+  // ✅ PERF: Only fetch changelog for established threads (not during initial creation)
+  // This query is not needed during the first round - data doesn't exist yet
   const { data: changelogResponse } = useThreadChangelogQuery(
-    effectiveThreadId,
-    mode === ScreenModes.THREAD && Boolean(effectiveThreadId) && !shouldSkipAuxiliaryQueries,
-  );
-
-  const { data: feedbackData, isSuccess: feedbackSuccess } = useThreadFeedbackQuery(
     effectiveThreadId,
     mode === ScreenModes.THREAD && Boolean(effectiveThreadId) && !shouldSkipAuxiliaryQueries,
   );
@@ -505,22 +499,6 @@ export function ChatView({
     messages: effectiveMessages,
     preSearches: effectivePreSearches,
   });
-
-  const feedbackActions = useFeedbackActions({ threadId: effectiveThreadId });
-
-  const lastLoadedFeedbackRef = useRef<string>('');
-  useEffect(() => {
-    if (feedbackSuccess && feedbackData?.success && feedbackData.data && Array.isArray(feedbackData.data)) {
-      const feedbackArray = feedbackData.data as RoundFeedbackData[];
-      const feedbackKey = feedbackArray.map(feedback =>
-        `${feedback.roundNumber}:${feedback.feedbackType ?? 'none'}`,
-      ).join(',');
-      if (feedbackKey !== lastLoadedFeedbackRef.current) {
-        lastLoadedFeedbackRef.current = feedbackKey;
-        feedbackActions.loadFeedback(feedbackArray);
-      }
-    }
-  }, [feedbackData, feedbackSuccess, feedbackActions]);
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 

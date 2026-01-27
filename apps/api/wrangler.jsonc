@@ -48,9 +48,6 @@
       "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
     }
   ],
-  "browser": {
-    "binding": "BROWSER"
-  },
   "ai": {
     "binding": "AI",
     "remote": true
@@ -152,7 +149,6 @@
       "r2_buckets": [
         { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-preview-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview-weur" }
       ],
-      "browser": { "binding": "BROWSER" },
       "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
@@ -214,7 +210,6 @@
       "r2_buckets": [
         { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-prod-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod-weur" }
       ],
-      "browser": { "binding": "BROWSER" },
       "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [

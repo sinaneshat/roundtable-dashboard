@@ -5,11 +5,17 @@
  * Analyzes previous round messages and creates prompts that deepen the discussion.
  */
 
-import { MessageRoles, ModelIds } from '@roundtable/shared/enums';
+import { MessageRoles, ModelIds, UIMessageRoles } from '@roundtable/shared/enums';
 import { desc, eq } from 'drizzle-orm';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import {
+  extractModelPricing,
+  generateTraceId,
+  trackLLMGeneration,
+} from '@/services/errors/posthog-llm-tracking.service';
+import { getModelById } from '@/services/models';
 import type { ApiEnv } from '@/types';
 
 import { openRouterService } from '../models/openrouter.service';
@@ -40,6 +46,10 @@ export async function generateNextRoundPrompt(
     apiKey: env.OPENROUTER_API_KEY,
   });
 
+  const startTime = performance.now();
+  const traceId = generateTraceId();
+  const modelId = ModelIds.GOOGLE_GEMINI_2_5_FLASH;
+
   try {
     // Load all messages from the thread
     const messages = await db
@@ -51,24 +61,56 @@ export async function generateNextRoundPrompt(
     // Build conversation summary
     const conversationSummary = buildConversationSummary(messages, currentRound);
 
-    const result = await openRouterService.generateText({
-      maxTokens: 300,
-      messages: [{
-        id: 'generate-prompt',
-        parts: [{ text: `Original discussion topic: "${initialPrompt}"
+    const inputMessage = `Original discussion topic: "${initialPrompt}"
 
 Conversation so far:
 ${conversationSummary}
 
 Current round: ${currentRound + 1}
 
-Generate the next follow-up prompt to deepen this discussion.`, type: 'text' }],
+Generate the next follow-up prompt to deepen this discussion.`;
+
+    const result = await openRouterService.generateText({
+      maxTokens: 300,
+      messages: [{
+        id: 'generate-prompt',
+        parts: [{ text: inputMessage, type: 'text' }],
         role: 'user',
       }],
-      modelId: ModelIds.GOOGLE_GEMINI_2_5_FLASH,
+      modelId,
       system: PROMPT_GENERATION_SYSTEM,
       temperature: 0.7,
     });
+
+    // Track prompt generation for PostHog analytics
+    const modelConfig = getModelById(modelId);
+    const modelPricing = extractModelPricing(modelConfig);
+    trackLLMGeneration(
+      {
+        modelId,
+        modelName: modelConfig?.name || modelId,
+        participantId: 'system',
+        participantIndex: 0,
+        roundNumber: currentRound,
+        threadId,
+        threadMode: 'prompt_generation',
+        userId: 'system',
+      },
+      result,
+      [{ content: inputMessage, role: UIMessageRoles.USER }],
+      traceId,
+      startTime,
+      {
+        additionalProperties: {
+          operation_type: 'prompt_generation',
+        },
+        modelConfig: {
+          maxTokens: 300,
+          temperature: 0.7,
+        },
+        modelPricing,
+      },
+    ).catch(() => {}); // Fire and forget
 
     const prompt = result.text.trim();
 

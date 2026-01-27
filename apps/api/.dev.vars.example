@@ -74,7 +74,7 @@ POSTHOG_HOST=https://us.i.posthog.com
 # WEB SEARCH SERVICES
 # ============================================================================
 
-# Serper API Key (Google Search)
+# Serper.dev API Key (Google Search via REST API)
 # Get from: https://serper.dev/api-key
-# Pricing: $50/month for 50,000 searches, 2,500 free/month
-SERPER_API_KEY=your-serper-api-key
+# Uses native fetch for Cloudflare Workers compatibility.
+SERP_API_KEY=your-serper-api-key-here

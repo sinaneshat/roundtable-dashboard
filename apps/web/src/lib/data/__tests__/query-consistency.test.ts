@@ -140,10 +140,6 @@ describe('stale time values', () => {
       expect(STALE_TIMES.threadModerators).toBe(Infinity);
     });
 
-    it('threadFeedback should be Infinity (only changes on mutation)', () => {
-      expect(STALE_TIMES.threadFeedback).toBe(Infinity);
-    });
-
     it('preSearch should be Infinity (ONE-WAY DATA FLOW)', () => {
       expect(STALE_TIMES.preSearch).toBe(Infinity);
     });

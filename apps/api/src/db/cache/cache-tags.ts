@@ -105,14 +105,12 @@ const PublicThreadCacheTags = {
       tags.push(
         PublicThreadCacheTags.owner(threadId),
         PublicThreadCacheTags.changelog(threadId),
-        PublicThreadCacheTags.feedback(threadId),
         PublicThreadCacheTags.preSearch(threadId),
       );
     }
     return tags;
   },
   changelog: (threadId: string) => `public-changelog-${threadId}`,
-  feedback: (threadId: string) => `public-feedback-${threadId}`,
   owner: (threadId: string) => `public-thread-owner-${threadId}`,
   preSearch: (threadId: string) => `public-presearch-${threadId}`,
   single: (slug: string) => `public-thread-${slug}`,

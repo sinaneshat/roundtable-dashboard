@@ -47,8 +47,6 @@ import {
   chatMessageSelectSchema,
   chatParticipantSelectSchema,
   chatPreSearchSelectSchema,
-  chatRoundFeedbackSelectSchema,
-  chatRoundFeedbackUpdateSchema,
   chatThreadChangelogSelectSchema,
   chatThreadInsertSchema,
   chatThreadSelectSchema,
@@ -309,9 +307,6 @@ export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
 }).openapi('ThreadListQuery');
 export const ThreadDetailPayloadSchema = z.object({
   changelog: z.array(ChatThreadChangelogSchema),
-  feedback: z.array(chatRoundFeedbackSelectSchema).optional().openapi({
-    description: 'User feedback for each round (optional - excluded for public threads)',
-  }),
   messages: z.array(ChatMessageSchema),
   participants: z.array(ChatParticipantSchema),
   preSearches: z.array(chatPreSearchSelectSchema).optional().openapi({
@@ -1314,50 +1309,6 @@ export const StoredModeratorDataSchema = z.object({
 }).openapi('StoredModeratorData');
 
 export type StoredModeratorData = z.infer<typeof StoredModeratorDataSchema>;
-
-export const RoundFeedbackParamSchema = z.object({
-  roundNumber: z.string().openapi({
-    description: 'Round number (0-based)',
-    example: '0',
-  }),
-  threadId: z.string().openapi({
-    description: 'Thread ID',
-    example: 'thread_abc123',
-  }),
-});
-export const RoundFeedbackRequestSchema = chatRoundFeedbackUpdateSchema
-  .pick({
-    feedbackType: true,
-  })
-  .openapi('RoundFeedbackRequest');
-export type RoundFeedbackRequest = z.infer<typeof RoundFeedbackRequestSchema>;
-const ChatRoundFeedbackSchema = chatRoundFeedbackSelectSchema
-  .pick({
-    createdAt: true,
-    feedbackType: true,
-    id: true,
-    roundNumber: true,
-    threadId: true,
-    updatedAt: true,
-    userId: true,
-  })
-  .openapi('ChatRoundFeedback');
-export type RoundFeedback = z.infer<typeof ChatRoundFeedbackSchema>;
-export const SetRoundFeedbackResponseSchema = createApiResponseSchema(
-  ChatRoundFeedbackSchema,
-).openapi('SetRoundFeedbackResponse');
-export const GetThreadFeedbackResponseSchema = createApiResponseSchema(
-  z.array(ChatRoundFeedbackSchema),
-).openapi('GetThreadFeedbackResponse');
-
-export const RoundFeedbackDataSchema = chatRoundFeedbackSelectSchema
-  .pick({
-    feedbackType: true,
-    roundNumber: true,
-  })
-  .openapi('RoundFeedbackData');
-
-export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
 
 export const StreamStatusResponseSchema = createApiResponseSchema(StreamStateSchema).openapi('StreamStatusResponse');
 

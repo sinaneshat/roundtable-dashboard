@@ -21,7 +21,6 @@ export {
   useDeleteParticipantMutation,
   useDeleteThreadMutation,
   useDeleteUserPresetMutation,
-  useSetRoundFeedbackMutation,
   useToggleFavoriteMutation,
   useTogglePublicMutation,
   useUpdateCustomRoleMutation,

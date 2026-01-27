@@ -14,7 +14,6 @@ import {
   chatMessage,
   chatParticipant,
   chatPreSearch,
-  chatRoundFeedback,
   chatThread,
   chatThreadChangelog,
   chatUserPreset,
@@ -36,7 +35,6 @@ export const chatThreadRelations = relations(chatThread, ({ many, one }) => ({
     fields: [chatThread.projectId],
     references: [chatProject.id],
   }),
-  roundFeedback: many(chatRoundFeedback),
   user: one(user, {
     fields: [chatThread.userId],
     references: [user.id],
@@ -93,17 +91,6 @@ export const chatPreSearchRelations = relations(chatPreSearch, ({ one }) => ({
   thread: one(chatThread, {
     fields: [chatPreSearch.threadId],
     references: [chatThread.id],
-  }),
-}));
-
-export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatRoundFeedback.threadId],
-    references: [chatThread.id],
-  }),
-  user: one(user, {
-    fields: [chatRoundFeedback.userId],
-    references: [user.id],
   }),
 }));
 

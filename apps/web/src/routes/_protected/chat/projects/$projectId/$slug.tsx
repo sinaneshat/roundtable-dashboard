@@ -113,7 +113,6 @@ function ProjectThreadRoute() {
     ? loaderData.threadData
     : (queryData?.success ? queryData.data : null);
   const changelog = loaderData?.changelog;
-  const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
 
   // Debug: Log data source selection
@@ -168,7 +167,6 @@ function ProjectThreadRoute() {
       slug={slug ?? ''}
       user={user}
       initialChangelog={changelog}
-      initialFeedback={feedback}
       initialPreSearches={preSearches}
     />
   );

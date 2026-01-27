@@ -130,7 +130,6 @@ export const queryKeys = {
     changelog: (id: string) => QueryKeyFactory.action('threads', 'changelog', id),
     detail: (id: string) => QueryKeyFactory.detail('threads', id),
     details: () => [...queryKeys.threads.all, 'detail'] as const,
-    feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
     list: (cursor?: string) =>
       cursor
         ? QueryKeyFactory.action('threads', 'list', cursor)

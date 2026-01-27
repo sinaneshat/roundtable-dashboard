@@ -19,7 +19,6 @@ import {
   deleteParticipantService,
   deleteThreadService,
   deleteUserPresetService,
-  setRoundFeedbackService,
   updateCustomRoleService,
   updateParticipantService,
   updateThreadService,
@@ -383,7 +382,6 @@ export function useDeleteThreadMutation() {
       // Remove all thread-specific caches
       queryClient.removeQueries({ queryKey: queryKeys.threads.detail(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.messages(threadId) });
-      queryClient.removeQueries({ queryKey: queryKeys.threads.feedback(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.changelog(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.preSearches(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.slugStatus(threadId) });
@@ -866,21 +864,6 @@ export function useDeleteCustomRoleMutation() {
     onSuccess: () => {
       invalidationPatterns.customRoles.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
-      });
-    },
-    retry: false,
-    throwOnError: false,
-  });
-}
-
-export function useSetRoundFeedbackMutation() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: setRoundFeedbackService,
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.threads.feedback(variables.param.threadId),
       });
     },
     retry: false,

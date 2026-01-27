@@ -16,7 +16,6 @@ import {
   DEFAULT_CHAT_MODE,
   ModelCategoryFilterSchema,
   ProjectIndexStatusSchema,
-  RoundFeedbackValueSchema,
 } from '@roundtable/shared/enums';
 
 import { APP_VERSION } from '@/constants/version';
@@ -438,15 +437,6 @@ export const RegenerateRoundInputSchema = z.object({
 }).openapi('RegenerateRoundInput');
 
 /**
- * Round Feedback Input
- */
-export const RoundFeedbackInputSchema = z.object({
-  feedback: RoundFeedbackValueSchema,
-  roundNumber: RoundNumberSchema,
-  threadId: CoreSchemas.id(),
-}).openapi('RoundFeedbackInput');
-
-/**
  * Remove Participant Input
  */
 export const RemoveParticipantInputSchema = z.object({
@@ -598,7 +588,6 @@ export const ToolArgsSchema = z.union([
   // Round tools
   ListRoundsInputSchema,
   RegenerateRoundInputSchema,
-  RoundFeedbackInputSchema,
   // Analysis tools
   GenerateAnalysisInputSchema,
   GetRoundAnalysisInputSchema,
@@ -646,7 +635,6 @@ export type AddParticipantInput = z.infer<typeof AddParticipantInputSchema>;
 export type GenerateResponsesInput = z.infer<typeof GenerateResponsesInputSchema>;
 export type GenerateAnalysisInput = z.infer<typeof GenerateAnalysisInputSchema>;
 export type RegenerateRoundInput = z.infer<typeof RegenerateRoundInputSchema>;
-export type RoundFeedbackInput = z.infer<typeof RoundFeedbackInputSchema>;
 export type RemoveParticipantInput = z.infer<typeof RemoveParticipantInputSchema>;
 export type UpdateParticipantInput = z.infer<typeof UpdateParticipantInputSchema>;
 export type GetRoundAnalysisInput = z.infer<typeof GetRoundAnalysisInputSchema>;
@@ -875,7 +863,7 @@ export const MCP_TOOLS: MCPTool[] = [
   },
   // Round Management
   {
-    description: 'List all rounds in a thread with metadata (message count, summary status, feedback).',
+    description: 'List all rounds in a thread with metadata (message count, summary status).',
     inputSchema: {
       properties: { threadId: { description: 'Thread ID', type: 'string' } },
       required: ['threadId'],
@@ -894,19 +882,6 @@ export const MCP_TOOLS: MCPTool[] = [
       type: 'object',
     },
     name: 'regenerate_round',
-  },
-  {
-    description: 'Submit like/dislike feedback for a round.',
-    inputSchema: {
-      properties: {
-        feedback: { description: 'Feedback type', enum: ['like', 'dislike', 'none'], type: 'string' },
-        roundNumber: { description: 'Round number (0-based)', type: 'integer' },
-        threadId: { description: 'Thread ID', type: 'string' },
-      },
-      required: ['threadId', 'roundNumber', 'feedback'],
-      type: 'object',
-    },
-    name: 'round_feedback',
   },
   // Summary
   {

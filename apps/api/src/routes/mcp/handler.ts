@@ -69,7 +69,6 @@ import type {
   MCPResource,
   RegenerateRoundInput,
   RemoveParticipantInput,
-  RoundFeedbackInput,
   SendMessageInput,
   ToolArgs,
   UpdateParticipantInput,
@@ -102,7 +101,6 @@ import {
   RegenerateRoundInputSchema,
   RemoveParticipantInputSchema,
   ResourceReadParamsSchema,
-  RoundFeedbackInputSchema,
   SendMessageInputSchema,
   ToolCallParamsSchema,
   toOpenAIFunctions,
@@ -547,14 +545,6 @@ async function executeToolInternal(
           return mcpError(`Invalid input: ${parsed.error.message}`);
         }
         return await toolRegenerateRound(parsed.data, user, db);
-      }
-
-      case MCPToolMethods.ROUND_FEEDBACK: {
-        const parsed = RoundFeedbackInputSchema.safeParse(args);
-        if (!parsed.success) {
-          return mcpError(`Invalid input: ${parsed.error.message}`);
-        }
-        return await toolRoundFeedback(parsed.data, user, db);
       }
 
       // ----------------------------------------------------------------------
@@ -1053,44 +1043,6 @@ async function toolRegenerateRound(
     note: 'Round cleaned up. Call generate_responses to regenerate.',
     roundNumber: input.roundNumber,
   });
-}
-
-async function toolRoundFeedback(
-  input: RoundFeedbackInput,
-  user: { id: string },
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-) {
-  await verifyThreadOwnership(input.threadId, user.id, db);
-
-  const existing = await db.query.chatRoundFeedback.findFirst({
-    where: and(
-      eq(tables.chatRoundFeedback.threadId, input.threadId),
-      eq(tables.chatRoundFeedback.userId, user.id),
-      eq(tables.chatRoundFeedback.roundNumber, input.roundNumber),
-    ),
-  });
-
-  if (input.feedback === 'none' && existing) {
-    await db.delete(tables.chatRoundFeedback).where(eq(tables.chatRoundFeedback.id, existing.id));
-  } else if (input.feedback !== 'none') {
-    if (existing) {
-      await db.update(tables.chatRoundFeedback)
-        .set({ feedbackType: input.feedback, updatedAt: new Date() })
-        .where(eq(tables.chatRoundFeedback.id, existing.id));
-    } else {
-      await db.insert(tables.chatRoundFeedback).values({
-        createdAt: new Date(),
-        feedbackType: input.feedback,
-        id: ulid(),
-        roundNumber: input.roundNumber,
-        threadId: input.threadId,
-        updatedAt: new Date(),
-        userId: user.id,
-      });
-    }
-  }
-
-  return mcpResult({ feedback: input.feedback, saved: true });
 }
 
 async function toolGenerateSummary(
