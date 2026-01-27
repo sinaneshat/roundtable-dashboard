@@ -1251,6 +1251,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // ✅ ORCHESTRATION: Trigger next phase (participants) via queue
           // Extract session token for queue authentication
           const sessionToken = extractSessionToken(c.req.header('cookie'));
+          if (!sessionToken) {
+            console.error('[PreSearch] No session token found - cannot trigger participant streaming. Cookie header:', c.req.header('cookie')?.slice(0, 50) ?? 'none');
+          }
           if (sessionToken) {
             c.executionCtx.waitUntil(
               markPreSearchCompletedInExecution(

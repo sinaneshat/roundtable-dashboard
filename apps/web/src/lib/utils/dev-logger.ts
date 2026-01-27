@@ -151,7 +151,9 @@ const RAPID_FIRE_KEYS = new Set([
   'noprefill-check',
   'noprefill-skip',
   'noprefill-completion',
-  'stream-check', // Debounce [STREAM] check logs (APPEND, resetting lastSeq, etc.)
+  'stream', // Debounce all [STREAM] logs (fires frequently during streaming)
+  'ui-groups', // Debounce [PHASE] UI-groups-in logs (fires on every render)
+  'moderator', // Debounce [MOD] logs (fires frequently during streaming)
 ]);
 
 function getRlogStyle(category: RlogCategory): string {
@@ -262,22 +264,25 @@ export const rlog = {
   // timeline-render fires on every re-render, causing excessive console spam
   init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
   isEnabled: (): boolean => rlogEnabled,
-  moderator: (action: string, detail: string): void => rlogNow(RlogCategories.MOD, `${action}: ${detail}`),
+  // ✅ DEBOUNCE FIX: Changed from rlogNow to rlogLog - fires frequently during streaming
+  moderator: (action: string, detail: string): void => rlogLog(RlogCategories.MOD, 'moderator', `${action}: ${detail}`),
   msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
-  phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),
+  phase: (phase: string, detail: string): void => {
+    // Debounce UI-groups-in logs which fire on every render
+    if (phase === 'UI-groups-in') {
+      rlogLog(RlogCategories.PHASE, 'ui-groups', `${phase}: ${detail}`);
+    } else {
+      rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`);
+    }
+  },
   presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
   // ✅ Race condition detection logging
   race: (action: string, detail: string): void => rlogNow(RlogCategories.RACE, `${action}: ${detail}`),
   resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
-  stream: (action: RlogStreamAction, detail: string): void => {
-    // Debounce 'check' actions (APPEND, resetting lastSeq, etc.) to reduce console clutter
-    if (action === 'check') {
-      rlogLog(RlogCategories.STREAM, 'stream-check', `${action}: ${detail}`);
-    } else {
-      rlogNow(RlogCategories.STREAM, `${action}: ${detail}`);
-    }
-  },
+  // ✅ DEBOUNCE FIX: All stream logs now debounced - fires frequently during streaming
+  stream: (action: RlogStreamAction, detail: string): void =>
+    rlogLog(RlogCategories.STREAM, 'stream', `${action}: ${detail}`),
   // ✅ Stuck state detection logging (blockers, timeouts, stuck rounds)
   stuck: (action: string, detail: string): void => rlogNow(RlogCategories.STUCK, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),

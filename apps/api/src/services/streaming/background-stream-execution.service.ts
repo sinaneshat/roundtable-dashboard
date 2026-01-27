@@ -826,12 +826,14 @@ export async function markPreSearchCompletedInExecution(
   }) as RoundExecutionRecord | undefined;
 
   if (!execution) {
-    logger?.warn('No execution record found for pre-search completion', LogHelpers.operation({
+    const errorMsg = `No execution record found for pre-search completion: thread=${threadId} round=${roundNumber}. This means participants will NOT be triggered.`;
+    logger?.error(errorMsg, LogHelpers.operation({
       operationName: 'markPreSearchCompletedInExecution',
       roundNumber,
       threadId,
     }));
-    return;
+    // Throw to make the issue visible instead of silently failing
+    throw new Error(errorMsg);
   }
 
   // Update status

@@ -3,10 +3,7 @@ import { z } from 'zod';
 
 import { ProjectDetailScreen } from '@/containers/screens/projects/ProjectDetailScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import {
-  projectQueryOptions,
-  projectThreadsQueryOptions,
-} from '@/lib/data/query-options';
+import { projectQueryOptions } from '@/lib/data/query-options';
 import type { GetProjectResponse } from '@/services/api';
 
 const searchSchema = z.object({
@@ -19,7 +16,6 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
 
   loader: async ({ params, context }) => {
     const { queryClient } = context;
-    const isServer = typeof window === 'undefined';
 
     if (!params.projectId) {
       return { project: null, projectName: null };
@@ -28,16 +24,9 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     const projectId = params.projectId;
     const options = projectQueryOptions(projectId);
 
-    let initialThreads;
-
     try {
-      // Always prefetch project data
+      // Prefetch project data (threads load client-side with skeleton)
       await queryClient.ensureQueryData(options);
-
-      // SSR: Prefetch threads for hydration
-      if (isServer) {
-        initialThreads = await queryClient.ensureInfiniteQueryData(projectThreadsQueryOptions(projectId));
-      }
     } catch (error) {
       console.error('[ProjectDetail] Loader error:', error);
       return { project: null, projectName: null };
@@ -49,7 +38,6 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     return {
       project,
       projectName: project?.name ?? null,
-      initialThreads,
     };
   },
 
@@ -82,7 +70,6 @@ function ProjectDetailRoute() {
     <ProjectDetailScreen
       projectId={projectId}
       initialProject={loaderData?.project ?? null}
-      initialThreads={loaderData?.initialThreads}
       openSettings={settings}
     />
   );

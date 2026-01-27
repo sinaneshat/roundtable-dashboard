@@ -8,7 +8,6 @@ import { useSessionQuerySync } from '@/hooks/utils/use-session-query-sync';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
-  sidebarProjectsQueryOptions,
   sidebarThreadsQueryOptions,
   subscriptionsQueryOptions,
   usageQueryOptions,
@@ -42,13 +41,13 @@ export const Route = createFileRoute('/_protected')({
 
     // Prefetch layout data - works on both server and client
     // Server functions automatically forward cookies via cookieMiddleware
+    // Note: Projects are fetched client-side with skeletons
     try {
       await Promise.all([
         queryClient.ensureQueryData(modelsQueryOptions),
         queryClient.ensureQueryData(subscriptionsQueryOptions),
         queryClient.ensureQueryData(usageQueryOptions),
         queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
-        queryClient.ensureInfiniteQueryData(sidebarProjectsQueryOptions),
       ]);
     } catch (error) {
       console.error('[PROTECTED] Loader prefetch error:', error);

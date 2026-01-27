@@ -19,7 +19,7 @@ import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, createPrefetchMeta, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, toISOString, toISOStringOrNull, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 
-import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
+import { createOptimisticChangelogItems, createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
 
 /**
@@ -70,6 +70,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   })));
 
   const actions = useChatStore(useShallow(s => ({
+    addChangelogItems: s.addChangelogItems,
     addPreSearch: s.addPreSearch,
     clearAttachments: s.clearAttachments,
     createStreamingPlaceholders: s.createStreamingPlaceholders,
@@ -495,6 +496,26 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         threadId,
         userQuery: trimmed,
       }));
+    }
+
+    // ✅ FRAME 9 FIX: Create optimistic changelog items immediately so UI shows them on send
+    // This ensures changelog appears instantly (Frame 9) before async API call completes
+    // Without this, changelog only appears after the entire round finishes
+    if (hasAnyChanges) {
+      const optimisticChangelog = createOptimisticChangelogItems({
+        currentParticipants: freshParticipants,
+        newMode: freshSelectedMode,
+        newWebSearch: freshEnableWebSearch,
+        oldMode: currentModeId,
+        oldWebSearch: currentWebSearch,
+        roundNumber: nextRoundNumber,
+        selectedParticipants: freshSelectedParticipants,
+        threadId,
+      });
+      if (optimisticChangelog.length > 0) {
+        actions.addChangelogItems(optimisticChangelog);
+        rlog.frame(9, 'optimistic-changelog', `r${nextRoundNumber} ${optimisticChangelog.length} changelog items created immediately`);
+      }
     }
 
     // CRITICAL: Set pending file parts for the hook to access via refs

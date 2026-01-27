@@ -64,6 +64,8 @@ export type UseRoundSubscriptionOptions = {
   onRoundComplete?: () => void;
   /** Called when an entity errors */
   onEntityError?: (entity: EntityType, error: Error) => void;
+  /** Called for presearch-specific events (query, result, start, complete, done) */
+  onPreSearchEvent?: (eventType: string, data: unknown) => void;
 };
 
 export type UseRoundSubscriptionReturn = {
@@ -124,6 +126,7 @@ export function useRoundSubscription({
   onChunk,
   onEntityComplete,
   onEntityError,
+  onPreSearchEvent,
   onRoundComplete,
   participantCount,
   roundNumber,
@@ -138,8 +141,14 @@ export function useRoundSubscription({
   }, [threadId, roundNumber]);
 
   // Create callbacks for each entity type
-  const presearchCallbacks = useEntityCallbacks('presearch', { onChunk, onEntityComplete, onEntityError });
+  const basePresearchCallbacks = useEntityCallbacks('presearch', { onChunk, onEntityComplete, onEntityError });
   const moderatorCallbacks = useEntityCallbacks('moderator', { onChunk, onEntityComplete, onEntityError });
+
+  // Presearch callbacks with additional presearch-specific event handler
+  const presearchCallbacks: EntitySubscriptionCallbacks = useMemo(() => ({
+    ...basePresearchCallbacks,
+    onPreSearchEvent,
+  }), [basePresearchCallbacks, onPreSearchEvent]);
 
   // Pre-search subscription (conditional)
   const presearchSub = usePreSearchSubscription({

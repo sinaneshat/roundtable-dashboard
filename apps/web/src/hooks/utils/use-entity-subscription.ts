@@ -48,6 +48,8 @@ export type EntitySubscriptionCallbacks = {
   onError?: (error: Error) => void;
   /** Called when status changes */
   onStatusChange?: (status: EntitySubscriptionState['status']) => void;
+  /** Called for presearch-specific events (query, result, start, complete, done) */
+  onPreSearchEvent?: (eventType: string, data: unknown) => void;
 };
 
 type UseEntitySubscriptionOptions = {
@@ -282,6 +284,8 @@ export function useEntitySubscription({
         const decoder = new TextDecoder();
         let currentSeq = lastSeqRef.current;
         let textDeltaCount = 0;
+        // Track SSE event type for presearch events (format: "event: query\ndata: {...}")
+        let currentEventType: string | null = null;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -297,6 +301,12 @@ export function useEntitySubscription({
               continue;
             }
 
+            // Track SSE event type lines (e.g., "event: query")
+            if (rawLine.startsWith('event: ')) {
+              currentEventType = rawLine.slice(7).trim();
+              continue;
+            }
+
             // Strip SSE framing
             const line = rawLine.startsWith('data: ') ? rawLine.slice(6) : rawLine;
 
@@ -308,6 +318,24 @@ export function useEntitySubscription({
             if (isAiSdkEvent || isJsonEvent) {
               currentSeq++;
               lastSeqRef.current = currentSeq;
+            }
+
+            // Handle presearch-specific SSE events (query, result, start, complete, done)
+            // These use standard SSE format: "event: query\ndata: {...}" not AI SDK format
+            if (phase === 'presearch' && currentEventType && isJsonEvent) {
+              try {
+                const eventData = JSON.parse(line);
+                callbacks?.onPreSearchEvent?.(currentEventType, eventData);
+                currentEventType = null; // Reset after processing
+
+                // Yield to React for gradual rendering
+                await new Promise<void>((resolve) => {
+                  requestAnimationFrame(() => resolve());
+                });
+              } catch {
+                // Ignore parse errors
+              }
+              continue; // Skip AI SDK handling for presearch events
             }
 
             // Handle AI SDK data stream format (0:) - call onTextChunk for actual text

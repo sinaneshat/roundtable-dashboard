@@ -182,6 +182,93 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
   }, [store]);
 
+  // Presearch event accumulator ref for gradual UI updates
+  const preSearchDataRef = useRef<{
+    queries: Array<{ index: number; query: string; rationale: string; searchDepth: string; total: number }>;
+    results: Array<{ index: number; query: string; results: unknown[]; responseTime: number; answer: string | null }>;
+    summary: string;
+    totalResults: number;
+  }>({
+    queries: [],
+    results: [],
+    summary: '',
+    totalResults: 0,
+  });
+
+  // Handle presearch SSE events for gradual UI updates
+  const handlePreSearchEvent = useCallback((eventType: string, data: unknown) => {
+    const state = store.getState();
+    const roundNumber = state.currentRoundNumber ?? 0;
+    const eventData = data as Record<string, unknown>;
+
+    switch (eventType) {
+      case 'start':
+        // Reset accumulator for new presearch
+        preSearchDataRef.current = {
+          queries: [],
+          results: [],
+          summary: (eventData.analysisRationale as string) || '',
+          totalResults: 0,
+        };
+        break;
+
+      case 'query': {
+        const queryData = {
+          index: eventData.index as number,
+          query: eventData.query as string,
+          rationale: (eventData.rationale as string) || '',
+          searchDepth: (eventData.searchDepth as string) || 'basic',
+          total: eventData.total as number,
+        };
+        // Update or add query at the given index
+        const existingIdx = preSearchDataRef.current.queries.findIndex(q => q.index === queryData.index);
+        if (existingIdx >= 0) {
+          preSearchDataRef.current.queries[existingIdx] = queryData;
+        } else {
+          preSearchDataRef.current.queries.push(queryData);
+        }
+        // Update store with partial data
+        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        break;
+      }
+
+      case 'result': {
+        const resultData = {
+          answer: (eventData.answer as string | null) || null,
+          index: eventData.index as number,
+          query: eventData.query as string,
+          responseTime: (eventData.responseTime as number) || 0,
+          results: (eventData.results as unknown[]) || [],
+        };
+        // Update or add result at the given index
+        const existingIdx = preSearchDataRef.current.results.findIndex(r => r.index === resultData.index);
+        if (existingIdx >= 0) {
+          preSearchDataRef.current.results[existingIdx] = resultData;
+        } else {
+          preSearchDataRef.current.results.push(resultData);
+        }
+        preSearchDataRef.current.totalResults = preSearchDataRef.current.results.reduce(
+          (sum, r) => sum + r.results.length,
+          0,
+        );
+        // Update store with partial data
+        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        break;
+      }
+
+      case 'complete':
+        // Complete event has stats, update totalResults
+        preSearchDataRef.current.totalResults = (eventData.totalResults as number) || 0;
+        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        break;
+
+      case 'done':
+        // Done event contains complete searchData - update store with full payload
+        state.updatePartialPreSearchData(roundNumber, eventData);
+        break;
+    }
+  }, [store]);
+
   // Round subscription hook
   const { abort: abortSubscriptions } = useRoundSubscription({
     enabled: shouldSubscribe,
@@ -189,6 +276,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onChunk: handleChunk,
     onEntityComplete: handleEntityComplete,
     onEntityError: handleEntityError,
+    onPreSearchEvent: handlePreSearchEvent,
     onRoundComplete: handleRoundComplete,
     participantCount: enabledParticipantCount,
     roundNumber: currentRoundNumber ?? 0,
