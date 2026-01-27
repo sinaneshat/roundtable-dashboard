@@ -1437,6 +1437,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         { text: body.newMessage.content, type: MessagePartTypes.TEXT },
       ];
 
+      // ✅ IDEMPOTENT: Use onConflictDoNothing to handle retry/double-submit cases
+      // The same message ID may be sent multiple times (StrictMode, retry, double-click)
       const [message] = await db
         .insert(tables.chatMessage)
         .values({
@@ -1451,9 +1453,18 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           roundNumber: body.newMessage.roundNumber,
           threadId: id,
         })
+        .onConflictDoNothing({ target: tables.chatMessage.id })
         .returning();
 
-      createdMessage = message;
+      // If conflict occurred, fetch the existing message
+      if (!message) {
+        const existingMessage = await db.query.chatMessage.findFirst({
+          where: eq(tables.chatMessage.id, messageId),
+        });
+        createdMessage = existingMessage ?? undefined;
+      } else {
+        createdMessage = message;
+      }
 
       // ✅ ATTACHMENT SUPPORT: Handle attachments if provided
       if (body.newMessage.attachmentIds && body.newMessage.attachmentIds.length > 0) {

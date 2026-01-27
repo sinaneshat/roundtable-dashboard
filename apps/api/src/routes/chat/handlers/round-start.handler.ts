@@ -145,6 +145,8 @@ export const startRoundHandler: RouteHandler<typeof startRoundRoute, ApiEnv> = c
         ? messageParts
         : [{ text: userQuery, type: MessagePartTypes.TEXT }];
 
+      // ✅ IDEMPOTENT: Use onConflictDoNothing to handle race conditions
+      // Thread PATCH may have inserted the message between our check and insert
       await db.insert(tables.chatMessage).values({
         id: messageId,
         metadata: {
@@ -157,7 +159,7 @@ export const startRoundHandler: RouteHandler<typeof startRoundRoute, ApiEnv> = c
         role: MessageRoles.USER,
         roundNumber,
         threadId,
-      });
+      }).onConflictDoNothing({ target: tables.chatMessage.id });
 
       rlog.phase('start-round', `Saved user message ${messageId} for r${roundNumber}`);
     }

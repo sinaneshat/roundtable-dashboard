@@ -1,21 +1,23 @@
 /**
  * Round Subscription Hook - Backend-First Streaming Architecture
  *
- * Unified hook that subscribes to all entity streams (presearch, participants, moderator)
- * in parallel for a given round.
+ * ✅ STAGGERED SUBSCRIPTIONS: Avoids HTTP/1.1 connection exhaustion
  *
  * Per FLOW_DOCUMENTATION.md:
  * - Frontend SUBSCRIBES and DISPLAYS only
  * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  *
  * This hook:
- * - Creates subscriptions to all entity streams when a round starts
+ * - Creates STAGGERED subscriptions to entity streams (not all at once!)
+ * - Only subscribes to P(n+1) after P(n) starts streaming or completes
  * - Receives chunks from backend as entities stream
  * - Calls callbacks when entities complete
  * - Detects when all entities are done to mark round complete
+ *
+ * Connection efficiency: ~2-3 concurrent SSE connections instead of 7+
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 
@@ -112,10 +114,10 @@ function useEntityCallbacks(
 /**
  * Hook for subscribing to all entity streams for a round.
  *
- * Creates parallel subscriptions to:
- * - Pre-search (if enabled)
- * - All participants (0 to participantCount-1)
- * - Moderator
+ * ✅ STAGGERED SUBSCRIPTIONS to avoid HTTP/1.1 connection exhaustion:
+ * - Presearch + P0 subscribe immediately
+ * - P(n+1) subscribes when P(n) starts streaming or completes
+ * - Moderator subscribes when all participants complete
  *
  * Each subscription handles 202 Accepted with retry, JSON status responses,
  * and SSE streaming automatically.
@@ -135,9 +137,18 @@ export function useRoundSubscription({
   // Track if round complete has been called to prevent duplicates
   const hasCalledRoundCompleteRef = useRef(false);
 
-  // Reset ref when round changes
+  // ✅ STAGGER STATE: Track which participant index is ready to subscribe
+  // Start with 0 - only P0 can subscribe initially
+  // When P(n) starts streaming, we enable P(n+1)
+  const [maxEnabledIndex, setMaxEnabledIndex] = useState(0);
+  const [moderatorEnabled, setModeratorEnabled] = useState(false);
+
+  // Reset stagger state when round changes
   useEffect(() => {
     hasCalledRoundCompleteRef.current = false;
+    setMaxEnabledIndex(0);
+    setModeratorEnabled(false);
+    rlog.stream('check', `r${roundNumber} stagger reset: maxIdx=0 modEnabled=false`);
   }, [threadId, roundNumber]);
 
   // Create callbacks for each entity type
@@ -160,6 +171,7 @@ export function useRoundSubscription({
 
   // Participant subscriptions (create hooks for up to 10 participants)
   // React hooks must be called unconditionally, so we create fixed number
+  // ✅ STAGGER: Each participant only enabled when index <= maxEnabledIndex
   const p0Callbacks = useEntityCallbacks('participant_0', { onChunk, onEntityComplete, onEntityError });
   const p1Callbacks = useEntityCallbacks('participant_1', { onChunk, onEntityComplete, onEntityError });
   const p2Callbacks = useEntityCallbacks('participant_2', { onChunk, onEntityComplete, onEntityError });
@@ -171,21 +183,22 @@ export function useRoundSubscription({
   const p8Callbacks = useEntityCallbacks('participant_8', { onChunk, onEntityComplete, onEntityError });
   const p9Callbacks = useEntityCallbacks('participant_9', { onChunk, onEntityComplete, onEntityError });
 
-  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && participantCount > 0, participantIndex: 0, roundNumber, threadId });
-  const p1Sub = useParticipantSubscription({ callbacks: p1Callbacks, enabled: enabled && participantCount > 1, participantIndex: 1, roundNumber, threadId });
-  const p2Sub = useParticipantSubscription({ callbacks: p2Callbacks, enabled: enabled && participantCount > 2, participantIndex: 2, roundNumber, threadId });
-  const p3Sub = useParticipantSubscription({ callbacks: p3Callbacks, enabled: enabled && participantCount > 3, participantIndex: 3, roundNumber, threadId });
-  const p4Sub = useParticipantSubscription({ callbacks: p4Callbacks, enabled: enabled && participantCount > 4, participantIndex: 4, roundNumber, threadId });
-  const p5Sub = useParticipantSubscription({ callbacks: p5Callbacks, enabled: enabled && participantCount > 5, participantIndex: 5, roundNumber, threadId });
-  const p6Sub = useParticipantSubscription({ callbacks: p6Callbacks, enabled: enabled && participantCount > 6, participantIndex: 6, roundNumber, threadId });
-  const p7Sub = useParticipantSubscription({ callbacks: p7Callbacks, enabled: enabled && participantCount > 7, participantIndex: 7, roundNumber, threadId });
-  const p8Sub = useParticipantSubscription({ callbacks: p8Callbacks, enabled: enabled && participantCount > 8, participantIndex: 8, roundNumber, threadId });
-  const p9Sub = useParticipantSubscription({ callbacks: p9Callbacks, enabled: enabled && participantCount > 9, participantIndex: 9, roundNumber, threadId });
+  // ✅ STAGGER: Only enable subscription if index <= maxEnabledIndex
+  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && participantCount > 0 && 0 <= maxEnabledIndex, participantIndex: 0, roundNumber, threadId });
+  const p1Sub = useParticipantSubscription({ callbacks: p1Callbacks, enabled: enabled && participantCount > 1 && 1 <= maxEnabledIndex, participantIndex: 1, roundNumber, threadId });
+  const p2Sub = useParticipantSubscription({ callbacks: p2Callbacks, enabled: enabled && participantCount > 2 && 2 <= maxEnabledIndex, participantIndex: 2, roundNumber, threadId });
+  const p3Sub = useParticipantSubscription({ callbacks: p3Callbacks, enabled: enabled && participantCount > 3 && 3 <= maxEnabledIndex, participantIndex: 3, roundNumber, threadId });
+  const p4Sub = useParticipantSubscription({ callbacks: p4Callbacks, enabled: enabled && participantCount > 4 && 4 <= maxEnabledIndex, participantIndex: 4, roundNumber, threadId });
+  const p5Sub = useParticipantSubscription({ callbacks: p5Callbacks, enabled: enabled && participantCount > 5 && 5 <= maxEnabledIndex, participantIndex: 5, roundNumber, threadId });
+  const p6Sub = useParticipantSubscription({ callbacks: p6Callbacks, enabled: enabled && participantCount > 6 && 6 <= maxEnabledIndex, participantIndex: 6, roundNumber, threadId });
+  const p7Sub = useParticipantSubscription({ callbacks: p7Callbacks, enabled: enabled && participantCount > 7 && 7 <= maxEnabledIndex, participantIndex: 7, roundNumber, threadId });
+  const p8Sub = useParticipantSubscription({ callbacks: p8Callbacks, enabled: enabled && participantCount > 8 && 8 <= maxEnabledIndex, participantIndex: 8, roundNumber, threadId });
+  const p9Sub = useParticipantSubscription({ callbacks: p9Callbacks, enabled: enabled && participantCount > 9 && 9 <= maxEnabledIndex, participantIndex: 9, roundNumber, threadId });
 
-  // Moderator subscription
+  // Moderator subscription - ✅ STAGGER: only enabled when all participants complete
   const moderatorSub = useModeratorSubscription({
     callbacks: moderatorCallbacks,
-    enabled,
+    enabled: enabled && moderatorEnabled,
     roundNumber,
     threadId,
   });
@@ -194,6 +207,36 @@ export function useRoundSubscription({
   const allParticipantSubs = [p0Sub, p1Sub, p2Sub, p3Sub, p4Sub, p5Sub, p6Sub, p7Sub, p8Sub, p9Sub];
   const activeParticipantSubs = allParticipantSubs.slice(0, participantCount);
   const participantStates = activeParticipantSubs.map(sub => sub.state);
+
+  // ✅ STAGGER EFFECT: Enable next subscription when current one starts streaming or completes
+  useEffect(() => {
+    if (!enabled) return;
+
+    // Find the highest index that is streaming or complete
+    let highestActiveIndex = -1;
+    for (let i = 0; i < participantCount; i++) {
+      const state = participantStates[i];
+      if (state && (state.isStreaming || state.status === 'complete' || state.status === 'error')) {
+        highestActiveIndex = i;
+      }
+    }
+
+    // Enable subscription for next participant (if any)
+    const nextIndex = highestActiveIndex + 1;
+    if (nextIndex < participantCount && nextIndex > maxEnabledIndex) {
+      rlog.stream('check', `r${roundNumber} stagger advance: P${highestActiveIndex} active → enabling P${nextIndex}`);
+      setMaxEnabledIndex(nextIndex);
+    }
+
+    // Check if all participants are complete to enable moderator
+    const allParticipantsComplete = participantCount > 0 && participantStates.every(
+      s => s.status === 'complete' || s.status === 'error',
+    );
+    if (allParticipantsComplete && !moderatorEnabled) {
+      rlog.stream('check', `r${roundNumber} all participants complete → enabling moderator`);
+      setModeratorEnabled(true);
+    }
+  }, [enabled, participantCount, participantStates, maxEnabledIndex, moderatorEnabled, roundNumber]);
 
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
