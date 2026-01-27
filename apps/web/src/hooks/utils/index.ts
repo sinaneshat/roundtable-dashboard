@@ -98,6 +98,12 @@ export { useRoundSubscription } from './use-round-subscription';
 export { useSessionQuerySync } from './use-session-query-sync';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
+export type {
+  StreamResumptionResult,
+  StreamResumptionStatus,
+  UseStreamResumptionOptions,
+} from './use-stream-resumption';
+export { useStreamResumption } from './use-stream-resumption';
 export { useSyncedRefs } from './use-synced-refs';
 export type { TimelineItem, UseThreadTimelineOptions } from './use-thread-timeline';
 export { useThreadTimeline } from './use-thread-timeline';

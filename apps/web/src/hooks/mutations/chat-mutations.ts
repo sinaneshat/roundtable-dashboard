@@ -603,7 +603,49 @@ export function useTogglePublicMutation() {
       }
     },
     onSuccess: (_data, variables) => {
-      // ✅ CACHE INVALIDATION: Invalidate public thread cache when visibility changes
+      // Update sidebar/list caches with new isPublic value
+      // Done in onSuccess (not onMutate) to avoid re-render closing the share dialog
+      queryClient.setQueriesData(
+        {
+          predicate: (query) => {
+            if (!Array.isArray(query.queryKey) || query.queryKey.length < 2) {
+              return false;
+            }
+            return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
+          },
+          queryKey: queryKeys.threads.all,
+        },
+        (old) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery) {
+            return old;
+          }
+
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map((page: PaginatedPageCache) => {
+              if (!page.success || !page.data?.items) {
+                return page;
+              }
+
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.map((thread: z.infer<typeof ChatThreadCacheSchema>) => {
+                    if (thread.id !== variables.threadId) {
+                      return thread;
+                    }
+                    return { ...thread, isPublic: variables.isPublic };
+                  }),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Invalidate public thread cache when visibility changes
       // This ensures the public page shows the correct state (no longer public / now public)
       if (variables.slug) {
         // Invalidate the public thread query - forces fresh fetch on next visit

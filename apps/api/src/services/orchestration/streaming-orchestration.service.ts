@@ -41,6 +41,7 @@ import {
   isFilePart,
 } from '@/lib/schemas/message-schemas';
 import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import { getExtractedText } from '@/lib/utils/metadata';
 import { chatMessagesToUIMessages } from '@/routes/chat/handlers/helpers';
 import {
@@ -1000,10 +1001,20 @@ export async function buildSystemPromptWithContext(
   }
 
   // Web search context with citation support
-  // ✅ FIX: Only inject web search context for P1+ participants
-  // P0 runs in parallel with pre-search, so P0 should NOT see search results
-  // This prevents P0 from mentioning/citing search content that it shouldn't know about
-  if (thread.enableWebSearch && participantIndex > 0) {
+  // ✅ FIX: Inject web search context for ALL participants (including P0)
+  // When web search is enabled, the queue orchestration ensures pre-search completes
+  // BEFORE any participants start. P0 does NOT run in parallel with pre-search -
+  // the queue waits for pre-search to complete, then triggers P0, then P1, etc.
+  // Previous comment was incorrect: "P0 runs in parallel" is only true for the
+  // non-queue flow (when web search is disabled), but in that case there's no
+  // search data anyway.
+  if (thread.enableWebSearch) {
+    // ✅ DEBUG: Log pre-search messages before building context
+    const preSearchMsgs = previousDbMessages.filter(
+      msg => msg.metadata && 'isPreSearch' in msg.metadata && (msg.metadata as { isPreSearch?: boolean }).isPreSearch === true,
+    );
+    rlog.presearch('context-build', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} preSearchMsgs=${preSearchMsgs.length} totalMsgs=${previousDbMessages.length}`);
+
     try {
       const searchResult = buildSearchContextWithCitations(previousDbMessages, {
         currentRoundNumber,
@@ -1018,24 +1029,27 @@ export async function buildSystemPromptWithContext(
           citableSources.push(source);
           citationSourceMap.set(source.id, source);
         }
-      }
 
-      logger?.info('Added web search context to system prompt', LogHelpers.operation({
-        citableSourcesAdded: searchResult.citableSources.length,
-        operationName: 'buildSystemPromptWithContext',
-        participantIndex,
-      }));
+        rlog.presearch('context-added', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} sources=${searchResult.citableSources.length} promptLen=${searchResult.formattedPrompt.length}`);
+        logger?.info('Added web search context to system prompt', LogHelpers.operation({
+          citableSourcesAdded: searchResult.citableSources.length,
+          operationName: 'buildSystemPromptWithContext',
+          participantIndex,
+        }));
+      } else {
+        rlog.presearch('context-empty', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} no formattedPrompt`);
+        logger?.info('No web search context found (pre-search may not have results)', LogHelpers.operation({
+          operationName: 'buildSystemPromptWithContext',
+          participantIndex,
+        }));
+      }
     } catch (error) {
+      rlog.stuck('context-error', `tid=${thread.id.slice(-8)} p${participantIndex} error: ${getErrorMessage(error)}`);
       logger?.warn('Search context building failed', LogHelpers.operation({
         error: getErrorMessage(error),
         operationName: 'buildSystemPromptWithContext',
       }));
     }
-  } else if (thread.enableWebSearch && participantIndex === 0) {
-    logger?.info('Skipping web search context for P0 (runs in parallel with pre-search)', LogHelpers.operation({
-      operationName: 'buildSystemPromptWithContext',
-      participantIndex,
-    }));
   }
 
   // If no project context, load thread attachments separately

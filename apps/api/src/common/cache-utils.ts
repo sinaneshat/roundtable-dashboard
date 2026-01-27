@@ -6,6 +6,7 @@
  */
 
 import type { getDbAsync } from '@/db';
+import { rlog } from '@/lib/utils/dev-logger';
 import {
   CreditCacheTags,
   MessageCacheTags,
@@ -53,8 +54,13 @@ export async function invalidateMessagesCache(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   threadId: string,
 ): Promise<void> {
+  const tags = MessageCacheTags.all(threadId);
+  rlog.resume('cache-invalidate', `tid=${threadId.slice(-8)} tags=${tags.join(',')}`);
   if (db.$cache?.invalidate) {
-    await db.$cache.invalidate({ tags: MessageCacheTags.all(threadId) });
+    await db.$cache.invalidate({ tags });
+    rlog.resume('cache-invalidate', `tid=${threadId.slice(-8)} DONE`);
+  } else {
+    rlog.stuck('cache', `tid=${threadId.slice(-8)} NO CACHE (db.$cache?.invalidate is falsy)`);
   }
 }
 

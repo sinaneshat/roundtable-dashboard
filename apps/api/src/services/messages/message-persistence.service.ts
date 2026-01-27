@@ -21,6 +21,7 @@ import * as tables from '@/db';
 import type { DbMessageParts } from '@/db/schemas/chat-metadata';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { UsageStats } from '@/services/errors';
 import { extractErrorMetadata } from '@/services/errors';
 import type { CitationSourceMap } from '@/types/citations';
@@ -400,6 +401,9 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
       usage: usageMetadata,
     });
 
+    // ✅ FIX: Use onConflictDoNothing to handle race conditions
+    // Multiple concurrent onFinish callbacks can try to insert the same messageId
+    // This prevents UNIQUE constraint errors while ensuring the message is saved
     await db
       .insert(tables.chatMessage)
       .values({
@@ -414,6 +418,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         roundNumber,
         threadId,
       })
+      .onConflictDoNothing()
       .returning();
 
     if (toolResults.length > 0) {
@@ -426,12 +431,10 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         type: 'tool-result',
       }));
 
-      const existingToolMessage = await db.query.chatMessage.findFirst({
-        where: eq(tables.chatMessage.id, toolMessageId),
-      });
-
-      if (!existingToolMessage) {
-        await db.insert(tables.chatMessage).values({
+      // ✅ FIX: Use onConflictDoNothing instead of check-then-insert
+      // Eliminates race condition between check and insert
+      await db.insert(tables.chatMessage)
+        .values({
           createdAt: new Date(),
           id: toolMessageId,
           metadata: null,
@@ -441,15 +444,18 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           role: MessageRoles.TOOL,
           roundNumber,
           threadId,
-        });
-      }
+        })
+        .onConflictDoNothing();
     }
 
+    rlog.resume('persist-cache', `tid=${threadId.slice(-8)} msgId=${messageId.slice(-8)} pIdx=${participantIndex} - invalidating`);
     await invalidateMessagesCache(db, threadId);
+    rlog.resume('persist-cache', `tid=${threadId.slice(-8)} - invalidated`);
   } catch (error) {
-    // ✅ DEBUG: Log the error instead of silently swallowing
+    // ✅ DEBUG: Log the error for debugging
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
+    rlog.stuck('PERSIST-FAILED', `tid=${threadId.slice(-8)} msgId=${messageId.slice(-8)} pIdx=${participantIndex} err=${errorMsg}`);
     console.error('[PERSIST] FAILED to save message:', {
       error: errorMsg,
       messageId,
@@ -459,6 +465,9 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
       stack: errorStack,
       threadId,
     });
-    // Non-blocking - allow round to continue
+    // ✅ FIX: Re-throw error so streaming handler knows persistence failed
+    // This prevents KV from being marked "complete" when D1 doesn't have the message
+    // The streaming handler's error handling will deal with the failure appropriately
+    throw error;
   }
 }

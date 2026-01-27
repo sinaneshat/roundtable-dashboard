@@ -330,6 +330,21 @@ export type ChatStoreActions = {
     roundNumber: number,
   ) => void;
 
+  // === RESUMPTION (Backend-First Architecture) ===
+  /**
+   * Resume an in-progress round detected on page refresh.
+   * Per FLOW_DOCUMENTATION.md: Frontend subscribes, backend orchestrates.
+   *
+   * Called when useStreamResumption detects active round in KV state.
+   * Creates placeholders, sets phase, initializes subscriptions.
+   */
+  resumeInProgressRound: (params: {
+    roundNumber: number;
+    phase: 'presearch' | 'participants' | 'moderator';
+    totalParticipants: number;
+    currentParticipantIndex: number | null;
+  }) => void;
+
   // === OPERATIONS ===
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], messages: UIMessage[]) => void;
   resetForThreadNavigation: () => void;

@@ -484,6 +484,12 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       // ✅ Define startTime outside try for error tracking access
       const startTime = performance.now();
 
+      // ✅ FIX: Analyze query complexity UPFRONT before streaming starts
+      // This prevents the race condition where frontend sees more queries than will execute
+      // Moved from line 860 to here - frontend now only sees queries that WILL execute
+      const complexityResult = analyzeQueryComplexity(body.userQuery);
+      const maxQueries = complexityResult.maxQueries;
+
       try {
         const searchCache = createSearchCache();
         const queryGenerationStartTime = performance.now();
@@ -582,22 +588,28 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                   ? Number.parseInt(partialResult.totalQueries, 10)
                   : partialResult.totalQueries;
 
-                if (totalQueries && totalQueries !== lastTotalQueries) {
-                  lastTotalQueries = totalQueries;
+                // ✅ FIX: Use maxQueries (from complexity analysis) to cap totalQueries
+                // This ensures frontend only sees as many queries as will actually execute
+                const effectiveTotalQueries = Math.min(totalQueries || 1, maxQueries);
+
+                if (effectiveTotalQueries && effectiveTotalQueries !== lastTotalQueries) {
+                  lastTotalQueries = effectiveTotalQueries;
                   await bufferedWriteSSE({
                     data: JSON.stringify({
                       analysisRationale: partialResult.analysisRationale || '',
                       timestamp: Date.now(),
-                      totalQueries,
+                      totalQueries: effectiveTotalQueries,
                       userQuery: body.userQuery,
                     }),
                     event: PreSearchSseEvents.START,
                   });
                 }
 
-                // Stream each query as it becomes available
+                // ✅ FIX: Only stream queries up to maxQueries limit
+                // Prevents race condition where frontend shows skeleton cards for queries that won't execute
                 if (partialResult.queries && partialResult.queries.length > 0) {
-                  for (let i = 0; i < partialResult.queries.length; i++) {
+                  const queriesToStream = Math.min(partialResult.queries.length, maxQueries);
+                  for (let i = 0; i < queriesToStream; i++) {
                     const query = partialResult.queries[i];
                     if (query?.query && query.query !== lastSentQueries[i]) {
                       await bufferedWriteSSE({
@@ -607,7 +619,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                           rationale: query.rationale || '',
                           searchDepth: query.searchDepth || WebSearchDepths.BASIC,
                           timestamp: Date.now(),
-                          total: totalQueries || 1,
+                          total: effectiveTotalQueries,
                         }),
                         event: PreSearchSseEvents.QUERY,
                       });
@@ -668,8 +680,10 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             // ✅ FIX: Send FINAL query events with correct searchDepth values
             // During streaming, partial objects may have incomplete searchDepth (defaulted to 'basic')
             // Send corrected events with the complete data from final result
+            // ✅ ALSO: Limit to maxQueries to match what will actually execute
             if (multiQueryResult?.queries) {
-              for (let i = 0; i < multiQueryResult.queries.length; i++) {
+              const finalQueriesToSend = Math.min(multiQueryResult.queries.length, maxQueries);
+              for (let i = 0; i < finalQueriesToSend; i++) {
                 const query = multiQueryResult.queries[i];
                 if (query?.query) {
                   await bufferedWriteSSE({
@@ -680,7 +694,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                       rationale: query.rationale || '',
                       searchDepth: query.searchDepth || WebSearchDepths.ADVANCED,
                       timestamp: Date.now(),
-                      total: multiQueryResult.totalQueries || multiQueryResult.queries.length,
+                      total: finalQueriesToSend,
                     }),
                     event: PreSearchSseEvents.QUERY,
                   });
@@ -857,14 +871,18 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         // Simple queries (definitions, single facts) = 1 query
         // Moderate queries (how-to, comparisons) = 2 queries max
         // Complex queries (multi-part, research) = 3 queries max
-        const complexityResult = analyzeQueryComplexity(body.userQuery);
+        // NOTE: complexityResult and maxQueries already computed UPFRONT before streaming
+        // to prevent race condition where frontend sees more queries than will execute
 
         // Apply complexity limits - slice queries to maxQueries
         // ✅ FIX: Filter out queries with empty/whitespace-only query strings (can occur from partial AI streaming)
+        // ✅ BUG FIX: Preserve original indices to match query events sent earlier
+        // Query events use indices from the RAW array, so result events must use the same indices
         const generatedQueries = rawGeneratedQueries
-          .slice(0, complexityResult.maxQueries)
+          .slice(0, maxQueries)
+          .map((q, originalIndex) => ({ ...q, _originalIndex: originalIndex }))
           .filter(q => q.query && q.query.trim().length > 0);
-        const totalQueries = Math.min(generatedQueries.length, complexityResult.maxQueries);
+        const totalQueries = Math.min(generatedQueries.length, maxQueries);
 
         // Apply default search depth and source count to queries that lack them
         for (const query of generatedQueries) {
@@ -926,7 +944,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               await bufferedWriteSSE({
                 data: JSON.stringify({
                   answer: result.answer,
-                  index: queryIndex,
+                  index: generatedQuery._originalIndex,
                   query: result.query,
                   responseTime: 0,
                   resultCount: result.results.length,
@@ -948,7 +966,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             await bufferedWriteSSE({
               data: JSON.stringify({
                 answer: null,
-                index: queryIndex,
+                index: generatedQuery._originalIndex,
                 query: generatedQuery.query,
                 responseTime: 0,
                 resultCount: 0,
@@ -1012,7 +1030,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 await bufferedWriteSSE({
                   data: JSON.stringify({
                     answer: null,
-                    index: queryIndex,
+                    index: generatedQuery._originalIndex,
                     query: result.query,
                     responseTime: searchDuration,
                     resultCount: i + 1,
@@ -1036,7 +1054,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             await bufferedWriteSSE({
               data: JSON.stringify({
                 answer: null,
-                index: queryIndex,
+                index: generatedQuery._originalIndex,
                 query: result.query,
                 responseTime: searchDuration,
                 resultCount: result.results.length,
@@ -1079,7 +1097,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               data: JSON.stringify({
                 answer: null,
                 error: error instanceof Error ? error.message : 'Search failed',
-                index: queryIndex,
+                index: generatedQuery._originalIndex,
                 query: generatedQuery.query,
                 responseTime: 0,
                 resultCount: 0,

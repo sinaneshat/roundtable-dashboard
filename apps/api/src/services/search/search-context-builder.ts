@@ -1,6 +1,7 @@
 import { CitationSourcePrefixes, CitationSourceTypes } from '@roundtable/shared/enums';
 
 import { DbPreSearchDataSchema, isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatMessage } from '@/db/validation';
 import { getRoundNumber } from '@/lib/utils';
 import type {
@@ -199,18 +200,24 @@ function extractValidatedPreSearchData(
   message: ChatMessage,
 ): ValidatedPreSearchData | null {
   if (!message.metadata) {
+    rlog.presearch('extract-fail', 'no metadata');
     return null;
   }
 
   if (!isPreSearchMessageMetadata(message.metadata)) {
+    rlog.presearch('extract-fail', `not presearch metadata, keys=${Object.keys(message.metadata).join(',')}`);
     return null;
   }
 
   const validation = DbPreSearchDataSchema.safeParse(message.metadata.preSearch);
   if (!validation.success) {
+    // Log validation errors to help debug schema mismatches
+    const errors = validation.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');
+    rlog.presearch('extract-fail', `validation failed: ${errors.slice(0, 300)}`);
     return null;
   }
 
+  rlog.presearch('extract-ok', `results=${validation.data.results.length} queries=${validation.data.queries.length}`);
   return validation.data;
 }
 

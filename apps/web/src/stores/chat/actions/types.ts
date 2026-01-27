@@ -9,7 +9,7 @@ import { z } from 'zod';
 export const ApiResponseSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
   success: z.boolean(),
-}).strict();
+}); // Note: Not strict - API responses may include meta, pagination, etc.
 
 export type ApiResponse = z.infer<typeof ApiResponseSchema>;
 
@@ -61,7 +61,7 @@ const UserCacheSchema = z.object({
   id: z.string().min(1).optional(),
   image: z.string().url().nullable().optional(),
   name: z.string().nullable().optional(),
-}).strict();
+}); // Note: Not strict - user may have additional fields from API
 
 /** Thread metadata schema - allows extensible key-value pairs */
 const ThreadMetadataSchema = z.record(z.string(), z.union([
@@ -110,7 +110,7 @@ const ChatParticipantCacheCompatSchema = z.object({
   settings: ParticipantSettingsSchema,
   threadId: z.string().min(1),
   updatedAt: z.union([z.date(), z.string()]),
-}).strict();
+}); // Note: Not strict - participants may have additional fields from API
 
 /** Message part schema - supports text, file, reasoning parts */
 const MessagePartCacheSchema = z.object({
@@ -119,13 +119,14 @@ const MessagePartCacheSchema = z.object({
   type: z.string().min(1),
 }).catchall(z.unknown());
 
-/** Message metadata schema - allows extensible metadata */
+/** Message metadata schema - allows extensible metadata including nested objects like usage */
 const MessageMetadataCacheSchema = z.record(z.string(), z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.null(),
   z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
 ])).optional();
 
 const UIMessageCacheCompatSchema = z.object({
@@ -135,7 +136,7 @@ const UIMessageCacheCompatSchema = z.object({
   metadata: MessageMetadataCacheSchema,
   parts: z.array(MessagePartCacheSchema).optional(),
   role: z.string().min(1),
-}).strict();
+}); // Note: Not strict - messages may have additional fields from API
 
 /** Changelog entry schema for cache validation */
 const ChangelogEntryCacheSchema = z.object({
@@ -154,7 +155,7 @@ const ChangelogEntryCacheSchema = z.object({
   roundNumber: z.number().int().nonnegative().optional(),
   threadId: z.string().min(1),
   updatedAt: z.union([z.date(), z.string()]).optional(),
-}).strict();
+}); // Note: Not strict - changelog entries may have additional fields from API
 
 export const ThreadDetailPayloadCacheSchema = z.object({
   changelog: z.array(ChangelogEntryCacheSchema).optional(),
@@ -162,7 +163,7 @@ export const ThreadDetailPayloadCacheSchema = z.object({
   participants: z.array(ChatParticipantCacheCompatSchema).optional(),
   thread: ChatThreadCacheSchema,
   user: UserCacheSchema.optional(),
-}).strict();
+}); // Note: Not strict - API may return additional fields (e.g., preSummary)
 
 export type ThreadDetailPayloadCache = z.infer<typeof ThreadDetailPayloadCacheSchema>;
 

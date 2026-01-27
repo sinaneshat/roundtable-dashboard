@@ -412,16 +412,20 @@ function determineCurrentPhase(
   participantStatus: ParticipantPhaseStatus,
   moderatorStatus: ModeratorPhaseStatus | null,
 ): RoundPhase {
+  rlog.resume('phase-logic', `preSearch=${preSearchStatus?.enabled ? `enabled:${preSearchStatus.status}` : 'disabled'} pAllComplete=${participantStatus.allComplete} pTotal=${participantStatus.totalParticipants} mod=${moderatorStatus?.status ?? 'null'}`);
+
   // Phase 1: Pre-search (if enabled and still in progress)
   if (preSearchStatus?.enabled) {
     const status = preSearchStatus.status;
     if (status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING) {
+      rlog.resume('phase-logic', `→ PRE_SEARCH (status=${status})`);
       return RoundPhases.PRE_SEARCH;
     }
   }
 
   // Phase 2: Participants (if not all complete)
   if (!participantStatus.allComplete) {
+    rlog.resume('phase-logic', `→ PARTICIPANTS (allComplete=false)`);
     return RoundPhases.PARTICIPANTS;
   }
 
@@ -429,13 +433,16 @@ function determineCurrentPhase(
   if (moderatorStatus) {
     const status = moderatorStatus.status;
     if (status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING) {
+      rlog.resume('phase-logic', `→ MODERATOR (status=${status})`);
       return RoundPhases.MODERATOR;
     }
     if (status === MessageStatuses.COMPLETE) {
+      rlog.resume('phase-logic', `→ COMPLETE (mod complete)`);
       return RoundPhases.COMPLETE;
     }
     // ✅ FIX: If moderator status exists but is FAILED, still need moderator
     if (status === MessageStatuses.FAILED) {
+      rlog.resume('phase-logic', `→ MODERATOR (mod failed, needs retry)`);
       return RoundPhases.MODERATOR;
     }
   }
@@ -443,11 +450,13 @@ function determineCurrentPhase(
   // ✅ FIX: If all participants complete but no moderator exists/started, need moderator
   // Only return MODERATOR phase if we've confirmed participants are actually complete
   if (participantStatus.allComplete && participantStatus.totalParticipants !== null && participantStatus.totalParticipants > 0) {
+    rlog.resume('phase-logic', `→ MODERATOR (all ${participantStatus.totalParticipants} participants complete, no mod yet)`);
     return RoundPhases.MODERATOR;
   }
 
   // ✅ FIX: Default to IDLE instead of MODERATOR
   // This prevents stuck state when phase can't be determined
+  rlog.resume('phase-logic', `→ IDLE (default - total=${participantStatus.totalParticipants})`);
   return RoundPhases.IDLE;
 }
 
@@ -470,6 +479,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
   async (c) => {
     const { user } = c.auth();
     const { threadId } = c.validated.params;
+
+    rlog.resume('state-handler', `tid=${threadId.slice(-8)} START`);
 
     const db = await getDbAsync();
     const thread = await db.query.chatThread.findFirst({
@@ -517,6 +528,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     });
 
     const currentRoundNumber = latestMessage?.roundNumber ?? 0;
+
+    rlog.resume('state-handler', `tid=${threadId.slice(-8)} round=${currentRoundNumber} hasKV=${hasKV} webSearch=${thread.enableWebSearch}`);
 
     let preSearchStatus: PreSearchPhaseStatus | null = null;
 
@@ -583,6 +596,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     if (hasKV) {
       const activeStream = await getThreadActiveStream(threadId, c.env);
+      rlog.resume('state-handler', `tid=${threadId.slice(-8)} KV activeStream=${activeStream ? `P${activeStream.participantIndex} r${activeStream.roundNumber} total=${activeStream.totalParticipants}` : 'null'}`);
 
       if (activeStream?.roundNumber === currentRoundNumber) {
         const chunks = await getParticipantStreamChunks(activeStream.streamId, c.env);
@@ -690,6 +704,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
             streamId: stale ? null : activeStream.streamId,
             totalParticipants: activeStream.totalParticipants,
           };
+
+          rlog.resume('state-handler', `tid=${threadId.slice(-8)} KV: activeP=${activeStream.participantIndex} total=${activeStream.totalParticipants} stale=${stale} allComplete=${allComplete} nextP=${nextParticipant?.participantIndex ?? 'null'}`);
         }
       }
     }
@@ -748,6 +764,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       participantStatus.nextParticipantToTrigger = dbNextParticipant;
       // ✅ FIX: Use filtered participant messages count, not all assistant messages
       participantStatus.allComplete = participantMessages.length >= totalParticipants;
+
+      rlog.resume('state-handler', `tid=${threadId.slice(-8)} DB-only: total=${totalParticipants} pMsgs=${participantMessages.length} allComplete=${participantStatus.allComplete} nextP=${dbNextParticipant}`);
     }
 
     let moderatorStatus: ModeratorPhaseStatus | null = null;
@@ -815,7 +833,10 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
     const currentPhase = determineCurrentPhase(preSearchStatus, participantStatus, moderatorStatus);
     const roundComplete = currentPhase === RoundPhases.COMPLETE;
 
+    rlog.resume('state-handler', `tid=${threadId.slice(-8)} RESULT: phase=${currentPhase} roundComplete=${roundComplete} hasActiveStream=${participantStatus.hasActiveStream} nextP=${participantStatus.nextParticipantToTrigger} modStatus=${moderatorStatus?.status ?? 'null'}`);
+
     if (currentPhase === RoundPhases.IDLE) {
+      rlog.resume('state-handler', `tid=${threadId.slice(-8)} returning IDLE response`);
       return Responses.ok(c, createIdleResponse());
     }
 

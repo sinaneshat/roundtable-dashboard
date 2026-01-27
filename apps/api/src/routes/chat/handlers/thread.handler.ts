@@ -35,6 +35,7 @@ import type {
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import {
   canAccessModelByPricing,
   checkFreeUserHasCreatedThread,
@@ -1981,6 +1982,12 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
   async (c) => {
     const { user } = c.auth();
     const { slug } = c.validated.params;
+
+    // ✅ DEBUG: Entry point log to verify handler is running latest code
+    // Using console.error to ensure visibility in all environments
+    console.error(`[BYSLUG-FIX] ENTRY slug=${slug} user=${user.id.slice(0, 8)} - IF YOU SEE THIS, SERVER HAS NEW CODE`);
+    rlog.resume('bySlug-ENTRY', `slug=${slug} user=${user.id.slice(0, 8)}`);
+
     const db = await getDbAsync();
 
     // ✅ PERF FIX: Cache thread lookup (was uncached, causing ~100ms per request)
@@ -2060,20 +2067,36 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     ]);
 
     // DEBUG: Log query results immediately after Promise.all
-    console.info(`[getThreadBySlug:query] threadId=${thread.id} rawParts=${rawParticipants.length} rawMsgs=${rawMessages.length} preSearch=${preSearches.length} cacheTag=${MessageCacheTags.byThread(thread.id)}`);
+    rlog.resume('bySlug-query', `tid=${thread.id.slice(-8)} rawParts=${rawParticipants.length} rawMsgs=${rawMessages.length} preSearch=${preSearches.length}`);
 
-    // DEBUG: Query DB directly without cache to compare
-    if (rawMessages.length === 0) {
-      const dbMessages = await db
-        .select()
-        .from(tables.chatMessage)
-        .where(eq(tables.chatMessage.threadId, thread.id))
-        .limit(5);
-      const dbParts = await db
-        .select()
-        .from(tables.chatParticipant)
-        .where(eq(tables.chatParticipant.threadId, thread.id));
-      console.info(`[getThreadBySlug:DB-DIRECT] threadId=${thread.id} dbMsgs=${dbMessages.length} dbParts=${dbParts.length} (bypassing cache)`);
+    // ✅ FIX: Detect stale cache and use fresh DB data instead
+    // Cache can be stale when round completes between cache population and page refresh
+    // Query DB directly to check for staleness
+    const dbMessagesForValidation = await db
+      .select()
+      .from(tables.chatMessage)
+      .where(
+        and(
+          eq(tables.chatMessage.threadId, thread.id),
+          notLike(tables.chatMessage.id, 'pre-search-%'),
+        ),
+      )
+      .orderBy(
+        asc(tables.chatMessage.roundNumber),
+        asc(tables.chatMessage.createdAt),
+        asc(tables.chatMessage.id),
+      );
+
+    const isStaleCache = dbMessagesForValidation.length > rawMessages.length;
+    rlog.resume('bySlug-validate', `tid=${thread.id.slice(-8)} dbMsgs=${dbMessagesForValidation.length} cachedMsgs=${rawMessages.length} isStale=${isStaleCache}`);
+
+    // Use fresh DB data if cache is stale, otherwise use cached data
+    let effectiveMessages = rawMessages;
+    if (isStaleCache) {
+      rlog.stuck('STALE-CACHE-FIX', `tid=${thread.id.slice(-8)} using fresh DB data (${dbMessagesForValidation.length} msgs) instead of stale cache (${rawMessages.length} msgs)`);
+      effectiveMessages = dbMessagesForValidation;
+      // Invalidate the stale cache so future requests get fresh data
+      await invalidateMessagesCache(db, thread.id);
     }
 
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
@@ -2083,7 +2106,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     }));
 
     // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
-    const userMessageIds = rawMessages
+    const userMessageIds = effectiveMessages
       .filter((m: typeof tables.chatMessage.$inferSelect) => m.role === MessageRoles.USER)
       .map((m: typeof tables.chatMessage.$inferSelect) => m.id);
 
@@ -2133,7 +2156,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     }));
     const signedPaths = await generateBatchSignedPaths(c, allUploads);
 
-    const messages = rawMessages.map((msg: typeof tables.chatMessage.$inferSelect) => {
+    const messages = effectiveMessages.map((msg: typeof tables.chatMessage.$inferSelect) => {
       const attachments = attachmentsByMessage.get(msg.id);
       if (!attachments || attachments.length === 0 || msg.role !== MessageRoles.USER) {
         return msg;
@@ -2176,7 +2199,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     c.header('CDN-Cache-Control', 'no-store');
 
     // DEBUG: Log message count
-    console.info(`[getThreadBySlug] slug=${slug} threadId=${thread.id} rawMsgs=${rawMessages.length} msgs=${messages.length} parts=${rawParticipants.length}`);
+    rlog.resume('bySlug-result', `tid=${thread.id.slice(-8)} msgs=${messages.length} parts=${participants.length} wasStale=${isStaleCache}`);
 
     return Responses.ok(c, {
       messages,

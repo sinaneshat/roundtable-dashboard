@@ -20,7 +20,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { EntityType } from '@/hooks/utils';
-import { useMultiParticipantChat, useRoundSubscription } from '@/hooks/utils';
+import { useMultiParticipantChat, useRoundSubscription, useStreamResumption } from '@/hooks/utils';
 import { useModeratorStream } from '@/hooks/utils/use-moderator-stream';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber } from '@/lib/utils';
@@ -68,6 +68,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     createdThreadId,
     currentRoundNumber,
     enableWebSearch,
+    hasInitiallyLoaded: storeHasInitiallyLoaded,
+    isStreaming,
     participants,
     pendingAttachmentIds,
     pendingFileParts,
@@ -78,6 +80,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     createdThreadId: s.createdThreadId,
     currentRoundNumber: s.currentRoundNumber,
     enableWebSearch: s.enableWebSearch,
+    hasInitiallyLoaded: s.hasInitiallyLoaded,
+    isStreaming: s.isStreaming,
     participants: s.participants,
     pendingAttachmentIds: s.pendingAttachmentIds,
     pendingFileParts: s.pendingFileParts,
@@ -98,6 +102,136 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     const isActivePhase = phase === ChatPhases.PARTICIPANTS || phase === ChatPhases.MODERATOR;
     return hasThread && hasRound && isActivePhase;
   }, [effectiveThreadId, currentRoundNumber, phase]);
+
+  // ============================================================================
+  // STREAM RESUMPTION - Detect in-progress rounds on page refresh
+  // ============================================================================
+
+  // Track which thread we've already resumed to prevent duplicate resumptions
+  const resumedThreadIdRef = useRef<string | null>(null);
+
+  // Check backend for in-progress round state on page load/refresh
+  const resumptionEnabled = storeHasInitiallyLoaded && !isStreaming && !waitingToStartStreaming;
+  rlog.resume('provider-hook-call', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} enabled=${resumptionEnabled} phase=${phase} hasLoaded=${storeHasInitiallyLoaded} isStreaming=${isStreaming} waiting=${waitingToStartStreaming}`);
+
+  const { hasInProgressRound, state: resumptionState, status: resumptionStatus } = useStreamResumption({
+    currentPhase: phase,
+    // Only check once store has loaded and we're not already streaming
+    enabled: resumptionEnabled,
+    // Skip if already in an active streaming phase (prevents double-check)
+    skipIfActivePhase: true,
+    threadId: effectiveThreadId || null,
+  });
+
+  // Resume in-progress round when detected by backend state
+  useEffect(() => {
+    rlog.resume('provider-effect', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} hasInProgress=${hasInProgressRound} status=${resumptionStatus} statePhase=${resumptionState?.currentPhase ?? 'null'} storePhase=${phase}`);
+
+    // Guard: Need an in-progress round
+    if (!hasInProgressRound || !resumptionState) {
+      rlog.resume('provider-guard', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} SKIP: hasInProgress=${hasInProgressRound} hasState=${!!resumptionState}`);
+      return;
+    }
+
+    // Guard: Need thread ID
+    if (!effectiveThreadId) {
+      rlog.resume('provider-guard', 'SKIP: no threadId');
+      return;
+    }
+
+    // Guard: Already resumed this thread
+    if (resumedThreadIdRef.current === effectiveThreadId) {
+      rlog.resume('skip-duplicate', `tid=${effectiveThreadId.slice(-8)} already resumed`);
+      return;
+    }
+
+    // Guard: Don't resume if user is actively starting a new round
+    if (waitingToStartStreaming) {
+      rlog.resume('skip-active', `tid=${effectiveThreadId.slice(-8)} user is starting new round`);
+      return;
+    }
+
+    // Guard: Don't resume if already in streaming phase (could be from user action)
+    if (phase === ChatPhases.PARTICIPANTS || phase === ChatPhases.MODERATOR) {
+      rlog.resume('skip-phase', `tid=${effectiveThreadId.slice(-8)} already in ${phase}`);
+      return;
+    }
+
+    // Extract resumption params from backend state
+    // Note: Backend returns lowercase phases: 'pre_search', 'participants', 'moderator'
+    // But there's no currentParticipantIndex in the schema - use nextParticipantToTrigger instead
+    const { currentPhase, nextParticipantToTrigger, roundNumber, totalParticipants } = resumptionState;
+
+    // Guard: Don't resume if round is already complete
+    // This can happen if the round finishes between the hook checking backend state
+    // and this effect running. The cached hasInProgressRound may be stale.
+    if (phase === ChatPhases.COMPLETE && roundNumber !== null && roundNumber !== undefined) {
+      // Check if store messages show the SAME or HIGHER round number as backend reports
+      // Same round: round finished since check (backend state is stale)
+      // Higher round: definitely stale
+      const storeMessages = store.getState().messages;
+      const messagesRoundNumber = getCurrentRoundNumber(storeMessages);
+
+      if (messagesRoundNumber >= roundNumber) {
+        rlog.resume('skip-stale', `tid=${effectiveThreadId.slice(-8)} backend r${roundNumber} stale - phase=COMPLETE messagesRound=${messagesRoundNumber}`);
+        return;
+      }
+    }
+
+    // Map backend phase (lowercase) to resumption phase
+    const mappedPhase = currentPhase === 'pre_search'
+      ? 'presearch'
+      : currentPhase === 'participants'
+        ? 'participants'
+        : currentPhase === 'moderator'
+          ? 'moderator'
+          : null;
+
+    if (!mappedPhase || roundNumber === null || roundNumber === undefined) {
+      rlog.resume('skip-invalid', `tid=${effectiveThreadId.slice(-8)} invalid state: phase=${currentPhase} round=${roundNumber}`);
+      return;
+    }
+
+    rlog.resume('trigger', `tid=${effectiveThreadId.slice(-8)} resuming r${roundNumber} phase=${mappedPhase} total=${totalParticipants} nextIdx=${nextParticipantToTrigger}`);
+
+    // Mark as resumed BEFORE calling action to prevent race conditions
+    resumedThreadIdRef.current = effectiveThreadId;
+
+    // Resume the round with proper state
+    // Use nextParticipantToTrigger as the current index (it's the next one to stream)
+    store.getState().resumeInProgressRound({
+      currentParticipantIndex: nextParticipantToTrigger ?? 0,
+      phase: mappedPhase,
+      roundNumber,
+      totalParticipants: totalParticipants ?? enabledParticipantCount,
+    });
+  }, [
+    hasInProgressRound,
+    resumptionState,
+    effectiveThreadId,
+    waitingToStartStreaming,
+    phase,
+    enabledParticipantCount,
+    store,
+  ]);
+
+  // Reset resumption ref when thread changes
+  useEffect(() => {
+    if (effectiveThreadId && effectiveThreadId !== resumedThreadIdRef.current) {
+      // Only reset if we're changing to a different thread, not on initial load
+      if (resumedThreadIdRef.current !== null) {
+        rlog.resume('reset', `thread changed ${resumedThreadIdRef.current.slice(-8)} → ${effectiveThreadId.slice(-8)}`);
+        resumedThreadIdRef.current = null;
+      }
+    }
+  }, [effectiveThreadId]);
+
+  // Log resumption status for debugging
+  useEffect(() => {
+    if (resumptionStatus === 'complete' && !hasInProgressRound && effectiveThreadId) {
+      rlog.resume('no-active', `tid=${effectiveThreadId.slice(-8)} no in-progress round detected`);
+    }
+  }, [resumptionStatus, hasInProgressRound, effectiveThreadId]);
 
   // ============================================================================
   // ROUND SUBSCRIPTION - Backend-First Pattern
@@ -483,10 +617,9 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   }, [chat.messages, store]);
 
   // Get store messages for AI SDK hydration
-  const { hasInitiallyLoaded, messages: storeMessages } = useStore(
+  const { messages: storeMessages } = useStore(
     store,
     useShallow(s => ({
-      hasInitiallyLoaded: s.hasInitiallyLoaded,
       messages: s.messages,
     })),
   );
@@ -513,7 +646,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   useEffect(() => {
     if (
       !hasHydratedToAiSdkRef.current
-      && hasInitiallyLoaded
+      && storeHasInitiallyLoaded
       && storeMessages.length > 0
       && chat.messages.length === 0
     ) {
@@ -521,7 +654,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       chat.setMessages(structuredClone(storeMessages) as UIMessage[]);
       hasHydratedToAiSdkRef.current = true;
     }
-  }, [hasInitiallyLoaded, storeMessages, chat]);
+  }, [storeHasInitiallyLoaded, storeMessages, chat]);
 
   // P0 streaming trigger - only triggers first participant when waitingToStartStreaming is set
   const hasTriggeredRef = useRef(false);

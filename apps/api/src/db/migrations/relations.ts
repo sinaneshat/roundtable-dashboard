@@ -1,6 +1,6 @@
 import { relations } from 'drizzle-orm/relations';
 
-import { account, apiKey, automatedJob, chatCustomRole, chatMessage, chatParticipant, chatPreSearch, chatProject, chatRoundFeedback, chatThread, chatThreadChangelog, chatUserPreset, creditTransaction, messageUpload, projectAttachment, projectMemory, session, stripeCustomer, stripeInvoice, stripePaymentMethod, stripePrice, stripeProduct, stripeSubscription, threadUpload, upload, user, userChatUsage, userChatUsageHistory, userCreditBalance } from './schema';
+import { account, apiKey, automatedJob, chatCustomRole, chatMessage, chatParticipant, chatPreSearch, chatProject, chatThread, chatThreadChangelog, chatUserPreset, creditTransaction, messageUpload, projectAttachment, projectMemory, session, stripeCustomer, stripeInvoice, stripePaymentMethod, stripePrice, stripeProduct, stripeSubscription, threadUpload, upload, user, userChatUsage, userChatUsageHistory, userCreditBalance } from './schema';
 
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, {
@@ -16,7 +16,6 @@ export const userRelations = relations(user, ({ many }) => ({
   stripeCustomers: many(stripeCustomer),
   stripeSubscriptions: many(stripeSubscription),
   chatCustomRoles: many(chatCustomRole),
-  chatRoundFeedbacks: many(chatRoundFeedback),
   chatThreads: many(chatThread),
   chatUserPresets: many(chatUserPreset),
   creditTransactions: many(creditTransaction),
@@ -136,7 +135,6 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
   chatMessages: many(chatMessage),
   chatParticipants: many(chatParticipant),
   chatPreSearches: many(chatPreSearch),
-  chatRoundFeedbacks: many(chatRoundFeedback),
   chatProject: one(chatProject, {
     fields: [chatThread.projectId],
     references: [chatProject.id],
@@ -155,17 +153,6 @@ export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
 export const chatPreSearchRelations = relations(chatPreSearch, ({ one }) => ({
   chatThread: one(chatThread, {
     fields: [chatPreSearch.threadId],
-    references: [chatThread.id],
-  }),
-}));
-
-export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one }) => ({
-  user: one(user, {
-    fields: [chatRoundFeedback.userId],
-    references: [user.id],
-  }),
-  chatThread: one(chatThread, {
-    fields: [chatRoundFeedback.threadId],
     references: [chatThread.id],
   }),
 }));

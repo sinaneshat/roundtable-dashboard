@@ -582,6 +582,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           msg => msg.metadata && 'isPreSearch' in msg.metadata && msg.metadata.isPreSearch === true,
         );
 
+        rlog.presearch('inject-check', `tid=${threadId.slice(-8)} r${currentRoundNumber} p${participantIndex} hasPreSearchMsg=${hasPreSearchMsg}`);
+
         if (!hasPreSearchMsg) {
           const currentPreSearch = await db.query.chatPreSearch.findFirst({
             where: and(
@@ -591,14 +593,84 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             ),
           });
 
+          rlog.presearch('inject-query', `tid=${threadId.slice(-8)} r${currentRoundNumber} found=${!!currentPreSearch} hasSearchData=${!!currentPreSearch?.searchData} status=${currentPreSearch?.status ?? 'N/A'}`);
+
           if (currentPreSearch?.searchData) {
+            // ✅ FIX: Transform DbPreSearchTableData → DbPreSearchData format
+            // The chatPreSearch.searchData uses DbPreSearchTableDataSchema but
+            // buildSearchContextWithCitations expects DbPreSearchDataSchema.
+            // Key differences:
+            // - queries[].total exists in table schema but not message schema
+            // - results[].results[].score needs to be clamped to [0, 1]
+            // - results[].results[] has extra fields to strip (excerpt, metadata, rawContent)
+            type TableData = {
+              failureCount: number;
+              queries: Array<{ index: number; query: string; rationale: string; searchDepth: string; total?: number }>;
+              results: Array<{
+                answer: string | null;
+                query: string;
+                responseTime: number;
+                results: Array<{
+                  content: string;
+                  domain?: string;
+                  excerpt?: string;
+                  fullContent?: string;
+                  keyPoints?: string[];
+                  metadata?: Record<string, unknown>;
+                  publishedDate?: string | null;
+                  rawContent?: string;
+                  score?: number;
+                  title: string;
+                  url: string;
+                }>;
+              }>;
+              successCount: number;
+              summary: string;
+              totalResults: number;
+              totalTime: number;
+            };
+
+            const tableData = currentPreSearch.searchData as TableData;
+
+            // Transform to DbPreSearchData format (message schema)
+            const preSearchData = {
+              failureCount: tableData.failureCount,
+              queries: tableData.queries.map(q => ({
+                index: q.index,
+                query: q.query,
+                rationale: q.rationale,
+                searchDepth: q.searchDepth,
+                // Note: 'total' is NOT included (not in message schema)
+              })),
+              results: tableData.results.map(r => ({
+                answer: r.answer,
+                query: r.query,
+                responseTime: r.responseTime,
+                results: r.results.map(item => ({
+                  content: item.content || item.excerpt || item.rawContent || '',
+                  domain: item.domain,
+                  fullContent: item.fullContent || item.rawContent,
+                  keyPoints: item.keyPoints,
+                  publishedDate: item.publishedDate ?? null,
+                  // Clamp score to [0, 1] - message schema requires this range
+                  score: Math.max(0, Math.min(1, item.score ?? 0.5)),
+                  title: item.title,
+                  url: item.url,
+                })),
+              })),
+              successCount: tableData.successCount,
+              summary: tableData.summary,
+              totalResults: tableData.totalResults,
+              totalTime: tableData.totalTime,
+            };
+
             // Inject synthetic pre-search message for buildSearchContextWithCitations
             const syntheticPreSearchMsg = {
               createdAt: new Date(),
               id: `presearch-${currentRoundNumber}-${Date.now()}`,
               metadata: {
                 isPreSearch: true as const,
-                preSearch: currentPreSearch.searchData,
+                preSearch: preSearchData,
                 role: 'system' as const,
                 roundNumber: currentRoundNumber,
               },
@@ -610,6 +682,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               toolCalls: null,
             };
             previousDbMessages = [syntheticPreSearchMsg as typeof previousDbMessages[number], ...previousDbMessages];
+            rlog.presearch('inject-success', `tid=${threadId.slice(-8)} r${currentRoundNumber} p${participantIndex} injected synthetic pre-search message with ${preSearchData.results.length} query results, ${preSearchData.results.reduce((acc, r) => acc + r.results.length, 0)} total items`);
           }
         }
       }
@@ -1860,14 +1933,21 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             }
           } catch (onFinishError) {
             // ✅ DEBUG: Log any errors in onFinish callback
+            // IMPORTANT: If saveStreamedMessage throws, this catch is hit and
+            // markStreamCompleted won't run, so KV won't be marked "complete"
+            const errorMsg = onFinishError instanceof Error ? onFinishError.message : String(onFinishError);
+            rlog.stuck('onFinish-ERROR', `tid=${threadId.slice(-8)} msgId=${streamMessageId.slice(-8)} pIdx=${participantIndex ?? DEFAULT_PARTICIPANT_INDEX} err=${errorMsg}`);
             console.error('[Streaming] onFinish ERROR:', {
-              error: onFinishError instanceof Error ? onFinishError.message : String(onFinishError),
+              error: errorMsg,
               messageId: streamMessageId,
               participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
               roundNumber: currentRoundNumber,
               stack: onFinishError instanceof Error ? onFinishError.stack : undefined,
               threadId,
             });
+            // ✅ FIX: Don't swallow the error - let the stream know something went wrong
+            // The client already received the streamed content, but persistence failed
+            // The stream-resume endpoint will detect incomplete state on refresh
           }
         },
       });

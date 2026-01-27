@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { useBoolean, useGetThreadPreSearchesForPolling } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { PreSearchDataPayload, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem as WebSearchResultItemType } from '@/services/api';
 
 import { WebSearchResultItem } from './web-search-result-item';
@@ -280,6 +281,9 @@ function PreSearchStreamComponent({
   const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
   const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
 
+  // Debug: Log skeleton visibility conditions
+  rlog.presearch('render-state', `status=${preSearch.status} isStreamingNow=${isStreamingNow} isComplete=${isEffectivelyComplete} hasQueries=${hasQueries} hasResults=${hasResults} queries=${validQueries.length} results=${validResults.length}`);
+
   if (isPendingWithNoData || isAutoRetrying.value) {
     return (
       <div className="space-y-3">
@@ -343,6 +347,10 @@ function PreSearchStreamComponent({
         const isLastQuery = queryIndex === validQueries.length - 1;
         const remainingQueriesCount = !isEffectivelyComplete && expectedQueryCount ? Math.max(0, expectedQueryCount - validQueries.length) : 0;
         const showSeparator = !isLastQuery || remainingQueriesCount > 0;
+
+        // Debug: Log per-query skeleton visibility
+        const showResultSkeleton = !hasResultsData && !isEffectivelyComplete && isStreamingNow;
+        rlog.presearch('query-render', `q${query.index} hasResult=${hasResult} hasResultsData=${hasResultsData} showSkeleton=${showResultSkeleton} isStreamingNow=${isStreamingNow}`);
 
         return (
           <AnimatedStreamingItem

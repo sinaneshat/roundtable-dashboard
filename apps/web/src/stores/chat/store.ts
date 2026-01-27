@@ -499,6 +499,24 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
          * Creates participant subscription state slots for each participant
          */
         initializeSubscriptions: (roundNumber: number, participantCount: number) => {
+          const currentState = get();
+          const currentSub = currentState.subscriptionState;
+
+          // ✅ FIX: Don't reset subscriptions if already initialized for this round
+          // Race condition: useRoundSubscription hook starts subscriptions BEFORE this effect runs
+          // If we reset to 'idle' after subscription already set 'waiting', the flow breaks
+          if (currentSub.activeRoundNumber === roundNumber) {
+            // Check if any subscription is already active (not 'idle')
+            const presearchActive = currentSub.presearch.status !== 'idle';
+            const participantActive = currentSub.participants.some(p => p.status !== 'idle');
+            const moderatorActive = currentSub.moderator.status !== 'idle';
+
+            if (presearchActive || participantActive || moderatorActive) {
+              rlog.stream('check', `initializeSubscriptions r${roundNumber} SKIP - already active (presearch=${currentSub.presearch.status})`);
+              return;
+            }
+          }
+
           rlog.stream('start', `initializeSubscriptions r${roundNumber} pCount=${participantCount}`);
           set((draft) => {
             draft.subscriptionState = {
@@ -527,13 +545,21 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             || currentState.phase === ChatPhases.MODERATOR;
           const preservePhase = isStreamingPending || isStreamingActive;
 
+          // ✅ FIX: Don't assume COMPLETE when messages exist
+          // Previously: messages.length > 0 → COMPLETE (WRONG when mid-round refresh)
+          // Now: Always start with IDLE, let resumption detection set correct phase
+          //
+          // If streaming is active, preserve current phase (handles React re-renders)
+          // If streaming is pending, use IDLE (user is about to send)
+          // Otherwise, use IDLE and let useStreamResumption check backend state
+          //
+          // This fixes the bug where refreshing mid-round showed only user message
+          // because phase was incorrectly set to COMPLETE, preventing subscriptions.
           const newPhase = isStreamingActive
             ? currentState.phase
-            : isStreamingPending
-              ? ChatPhases.IDLE
-              : (messages.length > 0 ? ChatPhases.COMPLETE : ChatPhases.IDLE);
+            : ChatPhases.IDLE;
 
-          rlog.init('initializeThread', `tid=${thread.id.slice(-8)} msgs=${messages.length} phase=${currentState.phase}→${newPhase} preserve=${preservePhase}`);
+          rlog.init('initializeThread', `tid=${thread.id.slice(-8)} msgs=${messages.length} phase=${currentState.phase}→${newPhase} preserve=${preservePhase} (resumption will check backend)`);
 
           set({
             changelogItems: [],
@@ -718,6 +744,70 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             triggeredPreSearchRounds: new Set<number>(),
           }, false, 'operations/resetToOverview');
         },
+
+        /**
+         * RESUME IN-PROGRESS ROUND - Stream Resumption Fix
+         *
+         * Called when useStreamResumption detects an active round in backend KV state
+         * after page refresh. This bridges the gap between backend state and frontend store.
+         *
+         * Per FLOW_DOCUMENTATION.md: Backend is source of truth for round execution.
+         * Frontend subscribes and displays.
+         *
+         * Flow:
+         * 1. User refreshes mid-round
+         * 2. useStreamResumption fetches backend state (phase=PARTICIPANTS)
+         * 3. This action sets correct phase, creates placeholders, enables subscriptions
+         * 4. useRoundSubscription picks up streams from KV
+         */
+        resumeInProgressRound: ({
+          currentParticipantIndex,
+          phase,
+          roundNumber,
+          totalParticipants,
+        }: {
+          roundNumber: number;
+          phase: 'presearch' | 'participants' | 'moderator';
+          totalParticipants: number;
+          currentParticipantIndex: number | null;
+        }) => {
+          const state = get();
+          const enabledCount = countEnabledParticipants(state.participants);
+          const actualCount = Math.min(totalParticipants, enabledCount);
+
+          rlog.resume('start', `resumeInProgressRound r${roundNumber} phase=${phase} total=${totalParticipants} actual=${actualCount} curIdx=${currentParticipantIndex}`);
+
+          // Map backend phase to frontend ChatPhases
+          const frontendPhase = phase === 'presearch'
+            ? ChatPhases.PARTICIPANTS // Frontend doesn't have presearch phase, use participants
+            : phase === 'participants'
+              ? ChatPhases.PARTICIPANTS
+              : ChatPhases.MODERATOR;
+
+          rlog.phase('resume', `IDLE→${frontendPhase} (backend phase=${phase})`);
+
+          // Create streaming placeholders for all entities (like startRound does)
+          // This ensures UI shows placeholders before streaming content arrives
+          rlog.resume('placeholders', `creating ${actualCount} participant + moderator placeholders`);
+          get().createStreamingPlaceholders(roundNumber, actualCount);
+
+          // Initialize subscription state so useRoundSubscription can pick up streams
+          rlog.resume('subscriptions', `initializing subscriptions for r${roundNumber} with ${actualCount} participants`);
+          get().initializeSubscriptions(roundNumber, actualCount);
+
+          // Set store state to match backend
+          set({
+            activeRoundParticipantCount: actualCount,
+            currentParticipantIndex: currentParticipantIndex ?? 0,
+            currentRoundNumber: roundNumber,
+            isStreaming: true,
+            phase: frontendPhase as ChatPhase,
+            waitingToStartStreaming: false,
+          }, false, 'operations/resumeInProgressRound');
+
+          rlog.resume('complete', `r${roundNumber} resumed - subscriptions should now connect`);
+        },
+
         setAnimationPhase: phase => set({ animationPhase: phase }, false, 'titleAnimation/setAnimationPhase'),
         setAutoMode: enabled => set({ autoMode: enabled }, false, 'form/setAutoMode'),
 
@@ -975,10 +1065,17 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
             if (ps) {
               (ps as { searchData: unknown }).searchData = partialData;
+              // ✅ FIX: Update status to STREAMING when data arrives
+              // Without this, status stays 'pending' and isStreamingNow=false,
+              // causing result skeletons to not render while waiting for results
+              if (ps.status === 'pending') {
+                ps.status = 'streaming' as typeof ps.status;
+                rlog.presearch('status-change', `r${roundNumber} pending→streaming`);
+              }
               // Debug: Log query count for gradual streaming visibility
               const queryCount = (partialData as { queries?: unknown[] } | null)?.queries?.length ?? 0;
               const resultCount = (partialData as { results?: unknown[] } | null)?.results?.length ?? 0;
-              rlog.presearch('partial-update', `r${roundNumber} queries=${queryCount} results=${resultCount}`);
+              rlog.presearch('partial-update', `r${roundNumber} queries=${queryCount} results=${resultCount} status=${ps.status}`);
             }
           }, false, 'preSearch/updatePartialPreSearchData');
         },

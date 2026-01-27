@@ -132,14 +132,8 @@ export function useEntitySubscription({
     lastSeqRef.current = state.lastSeq;
   }, [state.lastSeq]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+  // NOTE: Cleanup is handled in the main subscription effect (line ~517)
+  // Having duplicate cleanup effects can cause timing issues with abort
 
   const subscribe = useCallback(async () => {
     if (!enabled || !threadId) {
@@ -369,10 +363,18 @@ export function useEntitySubscription({
                   callbacks?.onComplete?.(currentSeq);
 
                   // Small delay before cancel to ensure all state updates flush
-                  await new Promise<void>((resolve) => {
-                    setTimeout(resolve, 50);
-                  });
-                  reader.cancel();
+                  // Check abort signal before waiting to avoid stale cleanup
+                  if (!controller.signal.aborted) {
+                    await new Promise<void>((resolve) => {
+                      setTimeout(resolve, 50);
+                    });
+                  }
+                  // Cancel reader with catch to prevent unhandled rejection on abort
+                  if (!controller.signal.aborted) {
+                    reader.cancel().catch(() => {
+                      // Ignore cancel errors - expected during abort
+                    });
+                  }
                   return; // Exit read loop
                 }
 
@@ -468,7 +470,13 @@ export function useEntitySubscription({
         callbacks?.onComplete?.(currentSeq);
       }
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      // Handle all abort-related errors (AbortError, BodyStreamBuffer aborted, etc.)
+      const isAbortError = error instanceof Error && (
+        error.name === 'AbortError'
+        || error.message.toLowerCase().includes('abort')
+        || error.message.includes('BodyStreamBuffer')
+      );
+      if (isAbortError) {
         rlog.stream('end', `${logPrefix} aborted`);
         return;
       }
@@ -488,10 +496,30 @@ export function useEntitySubscription({
   // Auto-subscribe when enabled and parameters are valid
   useEffect(() => {
     if (enabled && threadId && roundNumber >= 0) {
-      subscribe();
+      // FIX: Catch any promise rejections from subscribe to prevent uncaught errors
+      // when the component unmounts mid-stream. The subscribe() catch block handles
+      // most abort errors, but timing issues with React's cleanup can cause escapes.
+      subscribe().catch((error) => {
+        // Silently ignore AbortError - it's expected during unmount
+        const isAbortError = error instanceof Error && (
+          error.name === 'AbortError'
+          || error.message.toLowerCase().includes('abort')
+          || error.message.includes('BodyStreamBuffer')
+        );
+        if (!isAbortError) {
+          rlog.stuck('sub', `unexpected error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      });
     }
 
     return () => {
+      // BUG FIX: Set completion flag BEFORE aborting to prevent retry race conditions
+      // This stops any pending 202 retry setTimeout callbacks from firing
+      isCompleteRef.current = true;
+
+      // Abort any active stream - the abort() call doesn't throw, but pending
+      // async operations (reader.read()) will reject with AbortError which is
+      // caught by the subscribe().catch() handler above
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }

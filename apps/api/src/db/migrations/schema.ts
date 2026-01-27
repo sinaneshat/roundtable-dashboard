@@ -544,35 +544,6 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   check('check_history_period_order', sql`"user_chat_usage_history"."period_end" > "user_chat_usage_history"."period_start"`),
 ]);
 
-export const chatRoundFeedback = sqliteTable('chat_round_feedback', {
-  id: text().primaryKey().notNull(),
-  threadId: text('thread_id').notNull().references(() => chatThread.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  roundNumber: integer('round_number').notNull(),
-  feedbackType: text('feedback_type'),
-  createdAt: integer('created_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
-  updatedAt: integer('updated_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
-}, table => [
-  index('chat_round_feedback_round_idx').on(table.threadId, table.roundNumber),
-  index('chat_round_feedback_thread_idx').on(table.threadId),
-  index('chat_round_feedback_unique_idx').on(table.threadId, table.userId, table.roundNumber),
-  check('check_priority_non_negative', sql`"chat_participant"."priority" >= 0`),
-  check('check_balance_non_negative', sql`"user_credit_balance"."balance" >= 0`),
-  check('check_reserved_non_negative', sql`"user_credit_balance"."reserved_credits" >= 0`),
-  check('check_monthly_credits_non_negative', sql`"user_credit_balance"."monthly_credits" >= 0`),
-  check('check_version_positive', sql`"user_chat_usage"."version" > 0`),
-  check('check_threads_non_negative', sql`"user_chat_usage"."threads_created" >= 0`),
-  check('check_messages_non_negative', sql`"user_chat_usage"."messages_created" >= 0`),
-  check('check_custom_roles_non_negative', sql`"user_chat_usage"."custom_roles_created" >= 0`),
-  check('check_analysis_non_negative', sql`"user_chat_usage"."analysis_generated" >= 0`),
-  check('check_period_order', sql`"user_chat_usage"."current_period_end" > "user_chat_usage"."current_period_start"`),
-  check('check_history_threads_non_negative', sql`"user_chat_usage_history"."threads_created" >= 0`),
-  check('check_history_messages_non_negative', sql`"user_chat_usage_history"."messages_created" >= 0`),
-  check('check_history_custom_roles_non_negative', sql`"user_chat_usage_history"."custom_roles_created" >= 0`),
-  check('check_history_analysis_non_negative', sql`"user_chat_usage_history"."analysis_generated" >= 0`),
-  check('check_history_period_order', sql`"user_chat_usage_history"."period_end" > "user_chat_usage_history"."period_start"`),
-]);
-
 export const chatThread = sqliteTable('chat_thread', {
   id: text().primaryKey().notNull(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),

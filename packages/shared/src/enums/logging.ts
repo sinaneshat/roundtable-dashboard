@@ -152,7 +152,7 @@ export const RlogCategories = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const RLOG_STREAM_ACTIONS = ['start', 'end', 'resume', 'check'] as const;
+export const RLOG_STREAM_ACTIONS = ['start', 'end', 'resume', 'check', 'skip'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_RLOG_STREAM_ACTION = 'start' as const;
@@ -171,6 +171,7 @@ export const RlogStreamActions = {
   CHECK: 'check' as const,
   END: 'end' as const,
   RESUME: 'resume' as const,
+  SKIP: 'skip' as const,
   START: 'start' as const,
 } as const;
 
