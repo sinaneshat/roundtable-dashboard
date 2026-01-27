@@ -208,8 +208,18 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
                 // The previous merge-update caused P1's server message to be missing and
                 // streaming_* placeholders to persist
                 const allServerMessages = chatMessagesToUIMessages(result.data.items, participants);
+
+                // ✅ FIX: Replace messages FIRST, then update streaming state
+                // This ensures there's no intermediate render with isStreaming=false but streaming placeholders
+                // The subscription callbacks check for streaming placeholders and skip completion
+                // if they exist, so we handle completion here after replacing messages.
                 setMessages(allServerMessages);
-                rlog.moderator('poll', `replaced with ${allServerMessages.length} server messages`);
+
+                // Now it's safe to complete - messages are already replaced with server data
+                setIsModeratorStreaming(false);
+                store.getState().completeStreaming(); // Full cleanup including phase transition
+
+                rlog.moderator('poll', `replaced with ${allServerMessages.length} server messages + called completeStreaming`);
                 return true;
               }
             }

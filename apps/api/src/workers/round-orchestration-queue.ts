@@ -58,8 +58,16 @@ const BASE_RETRY_DELAY_SECONDS = 60;
 // ============================================================================
 
 /**
- * Check if participant should still be triggered by querying round status
- * Returns true if participant should be triggered, false if already started/completed
+ * Check if participant should still be triggered
+ * Returns true if participant should be triggered, false if round is already complete
+ *
+ * IMPORTANT: This check is intentionally minimal - we only skip if ALL participants
+ * are done (completed + failed >= total). We do NOT check:
+ * - nextParticipantIndex (excludes "triggered" participants, breaking direct triggers)
+ * - Individual participant status (status endpoint doesn't return per-participant map)
+ *
+ * The streaming endpoint has its own idempotency protection via ACTIVE status in KV,
+ * which prevents the same participant from streaming twice.
  */
 async function shouldTriggerParticipant(
   threadId: string,
@@ -87,8 +95,15 @@ async function shouldTriggerParticipant(
 
     // Lazy-load schema to avoid startup CPU limit
     const { RoundStatusSchema } = await import('@/routes/chat/schema');
-    const parseResult = RoundStatusSchema.safeParse(await stateResponse.json());
 
+    // Parse wrapped API response: { data: RoundStatus, meta: ... }
+    const json = await stateResponse.json() as { data?: unknown };
+    if (!json.data) {
+      // Invalid response - proceed with trigger
+      return true;
+    }
+
+    const parseResult = RoundStatusSchema.safeParse(json.data);
     if (!parseResult.success) {
       // Invalid response - proceed with trigger
       return true;
@@ -96,12 +111,11 @@ async function shouldTriggerParticipant(
 
     const roundState = parseResult.data;
 
-    // ✅ IDEMPOTENCY: Skip if participant is not the next expected participant
-    // This prevents duplicate triggers when both onFinish callback and
-    // checkRoundCompletion queue the same participant in quick succession
-    if (roundState.nextParticipantIndex !== participantIndex) {
-      // Participant either already started/completed, or a different participant is next
-      // LOG: console.log(`[RoundOrchestration] SKIP: P${participantIndex} not next (expected P${roundState.nextParticipantIndex})`);
+    // ✅ IDEMPOTENCY: Only skip if ALL participants are done
+    // This is a minimal check - let the streaming endpoint handle per-participant idempotency
+    const allParticipantsDone = (roundState.completedParticipants + roundState.failedParticipants) >= roundState.totalParticipants;
+    if (allParticipantsDone) {
+      rlog.race('queue-skip-all-done', `r${roundNumber} P${participantIndex} skipped - all participants done (${roundState.completedParticipants}/${roundState.totalParticipants})`);
       return false;
     }
 
@@ -348,10 +362,18 @@ async function checkRoundCompletion(
   // Lazy-load schema to avoid startup CPU limit
   const { RoundStatusSchema } = await import('@/routes/chat/schema');
 
+  // Parse wrapped API response: { data: RoundStatus, meta: ... }
+  const json = await stateResponse.json() as { data?: unknown };
+  if (!json.data) {
+    throw new Error('Invalid round status response: missing data field');
+  }
+
   // Validate response with Zod schema - single source of truth
-  const parseResult = RoundStatusSchema.safeParse(await stateResponse.json());
+  const parseResult = RoundStatusSchema.safeParse(json.data);
   if (!parseResult.success) {
-    throw new Error(`Invalid round status response: ${parseResult.error.message}`);
+    // Debug: Log what we actually received to diagnose the issue
+    const received = JSON.stringify(json).slice(0, 500);
+    throw new Error(`Invalid round status response. Received: ${received}. Errors: ${parseResult.error.message}`);
   }
   const roundState = parseResult.data;
 

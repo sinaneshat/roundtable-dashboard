@@ -1262,6 +1262,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 roundNum,
                 c.env.ROUND_ORCHESTRATION_QUEUE,
                 sessionToken,
+                c.env,
                 body.attachmentIds,
               ),
             );

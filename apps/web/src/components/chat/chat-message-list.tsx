@@ -699,16 +699,32 @@ export const ChatMessageList = memo(
           return { index, message, participantInfo: null };
         }
 
-        if (isModeratorMessage(message)) {
+        // ✅ FIX: Check raw metadata for isModerator BEFORE using schema-based isModeratorMessage
+        // Schema parsing fails for streaming placeholders because they have isStreaming field
+        // which isn't in DbModeratorMessageMetadataSchema (it's .strict())
+        // This caused moderator streaming text to appear in last participant's box
+        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
+        const isModeratorRaw = rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+
+        if (isModeratorRaw || isModeratorMessage(message)) {
           const moderatorMeta = getModeratorMetadata(message.metadata);
           const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta ? (moderatorMeta as { finishReason?: string }).finishReason : undefined;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
-          const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta ? (moderatorMeta as { model?: string }).model : undefined;
+          // For raw metadata (streaming placeholder), get model directly
+          const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta
+            ? (moderatorMeta as { model?: string }).model
+            : (rawMeta && 'model' in rawMeta ? String(rawMeta.model) : undefined);
 
           // FIX: Use store state as additional signal for streaming status
           // When isModeratorStreaming is false, streaming is definitely done
           // This handles the race condition where metadata finishReason hasn't updated yet
           const isStillStreaming = isModeratorStreaming && !hasActuallyFinished;
+
+          // DEBUG: Log when raw metadata detection catches streaming moderator
+          if (isModeratorRaw && !isModeratorMessage(message)) {
+            const roundNum = rawMeta && 'roundNumber' in rawMeta ? rawMeta.roundNumber : '?';
+            rlog.moderator('UI-raw-detect', `r${roundNum} - streaming placeholder detected via raw metadata`);
+          }
 
           return {
             index,
@@ -911,6 +927,13 @@ export const ChatMessageList = memo(
         }
 
         const participantKey = `${effectiveParticipantInfo.participantIndex}-${effectiveParticipantInfo.modelId || 'unknown'}`;
+
+        // DEBUG: Log message grouping decisions
+        const isMod = effectiveParticipantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
+        const roundNum = getRoundNumber(messageMetadata);
+        if (isMod || isStreamingPlaceholder) {
+          rlog.moderator('UI-group', `r${roundNum} id=${message.id?.slice(-12)} pIdx=${effectiveParticipantInfo.participantIndex} key=${participantKey} curGroup=${currentAssistantGroup?.participantKey || 'none'} match=${currentAssistantGroup?.participantKey === participantKey}`);
+        }
 
         if (
           currentAssistantGroup

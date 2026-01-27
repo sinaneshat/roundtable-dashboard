@@ -27,6 +27,7 @@ import * as z from 'zod';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { markParticipantTriggered } from '@/services/round-orchestration';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -482,6 +483,10 @@ async function executePendingPhase(
       status: RoundExecutionTableStatuses.PARTICIPANTS,
     }, logger);
 
+    // ✅ RACE FIX: Mark P0 as triggered BEFORE queueing
+    // This prevents duplicate triggers if queue processes before ACTIVE status is set
+    await markParticipantTriggered(threadId, roundNumber, 0, params.env, logger);
+
     // Queue first participant
     await queueTriggerParticipant(queue, threadId, roundNumber, 0, userId, sessionToken, attachmentIds, logger);
 
@@ -745,6 +750,7 @@ export async function markParticipantCompletedInExecution(
   participantIndex: number,
   queue: Queue<unknown>,
   sessionToken: string,
+  env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
   // Find execution record
@@ -801,6 +807,8 @@ export async function markParticipantCompletedInExecution(
   } else {
     // Queue next participant
     const nextIndex = newCompletedCount;
+    // ✅ RACE FIX: Mark next participant as triggered BEFORE queueing
+    await markParticipantTriggered(threadId, roundNumber, nextIndex, env, logger);
     await queueTriggerParticipant(queue, threadId, roundNumber, nextIndex, execution.userId, sessionToken, undefined, logger);
   }
 }
@@ -814,6 +822,7 @@ export async function markPreSearchCompletedInExecution(
   roundNumber: number,
   queue: Queue<unknown>,
   sessionToken: string,
+  env: ApiEnv['Bindings'],
   attachmentIds?: string[],
   logger?: TypedLogger,
 ): Promise<void> {
@@ -841,6 +850,10 @@ export async function markPreSearchCompletedInExecution(
     preSearchCompletedAt: new Date(),
     status: RoundExecutionTableStatuses.PARTICIPANTS,
   }, logger);
+
+  // ✅ RACE FIX: Mark P0 as triggered BEFORE queueing
+  // This prevents duplicate triggers if queue processes before ACTIVE status is set
+  await markParticipantTriggered(threadId, roundNumber, 0, env, logger);
 
   // Queue first participant
   await queueTriggerParticipant(queue, threadId, roundNumber, 0, execution.userId, sessionToken, attachmentIds, logger);

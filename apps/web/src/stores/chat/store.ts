@@ -190,8 +190,30 @@ export function createChatStore() {
               ? `${threadId}_r${roundNumber}_moderator`
               : `streaming_moderator_r${roundNumber}`; // Fallback if no thread yet
 
-            // Find existing streaming placeholder
-            const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+            // Primary lookup: by ID
+            let existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
+
+            // FIX: Fallback lookup by metadata if ID lookup fails (handles ID mismatch)
+            // This can happen if placeholder was created with fallback ID when threadId was null,
+            // but now threadId is available so we're looking for a different ID
+            if (existingIdx < 0) {
+              existingIdx = draft.messages.findIndex((m) => {
+                const meta = m.metadata && typeof m.metadata === 'object' ? m.metadata : null;
+                return meta
+                  && 'isModerator' in meta && meta.isModerator === true
+                  && 'roundNumber' in meta && (meta as { roundNumber: number }).roundNumber === roundNumber
+                  && 'isStreaming' in meta && meta.isStreaming === true;
+              });
+
+              if (existingIdx >= 0) {
+                const foundMsg = draft.messages[existingIdx];
+                if (foundMsg) {
+                  rlog.moderator('append', `ID mismatch fixed: found by metadata at idx=${existingIdx}, updating ID`);
+                  // Update the ID to match expected format for future appends
+                  foundMsg.id = streamingMsgId;
+                }
+              }
+            }
 
             if (existingIdx >= 0) {
               // Append text to existing placeholder
@@ -204,10 +226,12 @@ export function createChatStore() {
                 }
               }
             } else {
-              // Create new streaming placeholder for moderator
+              // Create new streaming placeholder for moderator (shouldn't happen if placeholder exists)
+              rlog.stuck('moderator', `No placeholder found for r${roundNumber}, creating new message id=${streamingMsgId}`);
               const streamingMessage: UIMessage = {
                 id: streamingMsgId,
                 metadata: {
+                  isModerator: true,
                   isStreaming: true,
                   model: 'moderator',
                   participantId: MODERATOR_NAME,
@@ -370,6 +394,12 @@ export function createChatStore() {
             const modId = threadId
               ? `${threadId}_r${roundNumber}_moderator`
               : `streaming_moderator_r${roundNumber}`;
+
+            // Log if threadId is missing - this could cause ID mismatch with appendModeratorStreamingText
+            if (!threadId) {
+              rlog.stuck('placeholder', `createStreamingPlaceholders: threadId missing for moderator r${roundNumber}, using fallback ID`);
+            }
+            rlog.moderator('placeholder', `creating moderator placeholder id=${modId} threadId=${threadId || 'null'}`);
 
             if (!draft.messages.some(m => m.id === modId)) {
               draft.messages.push({
@@ -680,6 +710,26 @@ export function createChatStore() {
           const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
           if (prevMessages === newMessages) {
             return;
+          }
+          // DEBUG: Track when messages are replaced (especially for moderator jump issue)
+          const prevStreamingCount = prevMessages.filter(m => {
+            const meta = m.metadata as Record<string, unknown> | null | undefined;
+            return meta && 'isStreaming' in meta && meta.isStreaming === true;
+          }).length;
+          const newStreamingCount = newMessages.filter(m => {
+            const meta = m.metadata as Record<string, unknown> | null | undefined;
+            return meta && 'isStreaming' in meta && meta.isStreaming === true;
+          }).length;
+          const prevModeratorIdx = prevMessages.findIndex(m => {
+            const meta = m.metadata as Record<string, unknown> | null | undefined;
+            return meta && 'isModerator' in meta && meta.isModerator === true;
+          });
+          const newModeratorIdx = newMessages.findIndex(m => {
+            const meta = m.metadata as Record<string, unknown> | null | undefined;
+            return meta && 'isModerator' in meta && meta.isModerator === true;
+          });
+          if (prevStreamingCount !== newStreamingCount || prevModeratorIdx !== newModeratorIdx) {
+            rlog.moderator('setMessages', `prev=${prevMessages.length}(stream=${prevStreamingCount},modIdx=${prevModeratorIdx}) → new=${newMessages.length}(stream=${newStreamingCount},modIdx=${newModeratorIdx})`);
           }
           set({ messages: newMessages }, false, 'thread/setMessages');
         },

@@ -102,6 +102,7 @@ import {
   markParticipantCompleted,
   markParticipantFailed,
   markParticipantStarted,
+  markParticipantTriggered,
 } from '@/services/round-orchestration';
 import {
   appendParticipantStreamChunk,
@@ -1713,7 +1714,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // =========================================================================
 
             if (hasMoreParticipants) {
-            // ✅ TRIGGER NEXT PARTICIPANT via Queue
+              // ✅ RACE FIX: Mark next participant as triggered BEFORE queueing
+              // This prevents duplicate triggers if queue processes before ACTIVE status is set
+              // Three-way idempotency: DB (complete) + KV ACTIVE + KV triggered
+              await markParticipantTriggered(threadId, currentRoundNumber, nextParticipantIndex, c.env);
+
+              // ✅ TRIGGER NEXT PARTICIPANT via Queue
               const queueMessage: TriggerParticipantQueueMessage = {
                 attachmentIds: resolvedAttachmentIds,
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-p${nextParticipantIndex}`,

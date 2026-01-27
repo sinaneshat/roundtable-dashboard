@@ -334,6 +334,41 @@ export async function updateRoundExecutionState(
 }
 
 /**
+ * Mark a participant as triggered (queued but not yet ACTIVE)
+ * Prevents race condition where duplicate triggers occur before ACTIVE status is set
+ *
+ * This is called BEFORE queueing the participant message to ensure three-way idempotency:
+ * 1. DB check - participant message saved (complete)
+ * 2. KV ACTIVE check - participant currently streaming
+ * 3. KV triggered check - participant queued but not yet ACTIVE
+ */
+export async function markParticipantTriggered(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  env: ApiEnv['Bindings'],
+  logger?: TypedLogger,
+): Promise<void> {
+  const state = await getRoundExecutionState(threadId, roundNumber, env);
+  if (!state) {
+    return;
+  }
+
+  const triggeredParticipants = [...state.triggeredParticipants];
+  if (!triggeredParticipants.includes(participantIndex)) {
+    triggeredParticipants.push(participantIndex);
+    await updateRoundExecutionState(threadId, roundNumber, { triggeredParticipants }, env, logger);
+
+    logger?.info(`Marked participant ${participantIndex} as triggered (total triggered: ${triggeredParticipants.length})`, LogHelpers.operation({
+      operationName: 'markParticipantTriggered',
+      participantIndex,
+      roundNumber,
+      threadId,
+    }));
+  }
+}
+
+/**
  * Mark a participant as started in round execution
  */
 export async function markParticipantStarted(
@@ -780,7 +815,7 @@ export async function getIncompleteParticipants(
     }
   }
 
-  // Get actively streaming participants from KV
+  // Get actively streaming participants from ThreadActiveStream KV
   const activeStream = await getThreadActiveStream(threadId, env, logger);
   const activeIndices = new Set<number>();
 
@@ -792,15 +827,27 @@ export async function getIncompleteParticipants(
     }
   }
 
-  // Return indices that are neither completed nor actively streaming
+  // ✅ RACE FIX: Get triggered participants from RoundExecutionState KV
+  // These are participants that have been queued but may not yet be ACTIVE
+  // Without this check, the same participant could be triggered multiple times
+  // if the queue processes before the ACTIVE status is set
+  const roundState = await getRoundExecutionState(threadId, roundNumber, env, logger);
+  const triggeredIndices = new Set<number>();
+  if (roundState?.triggeredParticipants) {
+    for (const idx of roundState.triggeredParticipants) {
+      triggeredIndices.add(idx);
+    }
+  }
+
+  // Return indices that are neither completed, actively streaming, NOR already triggered
   const incomplete: number[] = [];
   for (let i = 0; i < totalParticipants; i++) {
-    if (!completedIndices.has(i) && !activeIndices.has(i)) {
+    if (!completedIndices.has(i) && !activeIndices.has(i) && !triggeredIndices.has(i)) {
       incomplete.push(i);
     }
   }
 
-  logger?.info('Found incomplete participants', LogHelpers.operation({
+  logger?.info(`Found incomplete participants: ${incomplete.join(',')} (completed=${completedIndices.size}, active=${activeIndices.size}, triggered=${triggeredIndices.size})`, LogHelpers.operation({
     activeIndices: Array.from(activeIndices),
     completedIndices: Array.from(completedIndices),
     incompleteIndices: incomplete,

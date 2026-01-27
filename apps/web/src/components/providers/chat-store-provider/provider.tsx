@@ -113,6 +113,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       // instead of creating a duplicate. This is needed for gradual streaming when
       // useModeratorStream gets 204 (another request handling) and subscription handles streaming.
       if (text) {
+        rlog.moderator('chunk', `r${roundNumber} seq=${seq} +${text.length} chars`);
         state.appendModeratorStreamingText(text, roundNumber);
       }
     } else if (entity.startsWith('participant_')) {
@@ -137,8 +138,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
     } else if (entity === 'moderator') {
       state.updateEntitySubscriptionStatus('moderator', 'complete', lastSeq);
-      // Moderator complete means round is done
-      state.onModeratorComplete();
+
+      // ✅ FIX: Check if messages still have streaming placeholders before calling onModeratorComplete
+      // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
+      // If we call onModeratorComplete here while streaming placeholders exist, we get an intermediate
+      // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+      const hasStreamingPlaceholders = state.messages.some((m) => {
+        const meta = m.metadata as Record<string, unknown> | null | undefined;
+        return meta && 'isStreaming' in meta && meta.isStreaming === true;
+      });
+
+      if (hasStreamingPlaceholders) {
+        rlog.moderator('sub-complete', `skipping onModeratorComplete - streaming placeholders still exist, polling will handle`);
+      } else {
+        // Moderator complete means round is done
+        state.onModeratorComplete();
+      }
     } else if (entity.startsWith('participant_')) {
       const index = Number.parseInt(entity.replace('participant_', ''), 10);
       state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
@@ -165,7 +180,21 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const handleRoundComplete = useCallback(() => {
     const state = store.getState();
     rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
-    state.completeStreaming();
+
+    // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
+    // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
+    // If we call completeStreaming here while streaming placeholders exist, we get an intermediate
+    // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+    const hasStreamingPlaceholders = state.messages.some((m) => {
+      const meta = m.metadata as Record<string, unknown> | null | undefined;
+      return meta && 'isStreaming' in meta && meta.isStreaming === true;
+    });
+
+    if (hasStreamingPlaceholders) {
+      rlog.moderator('round-complete', `skipping completeStreaming - streaming placeholders still exist, polling will handle`);
+    } else {
+      state.completeStreaming();
+    }
   }, [store]);
 
   const handleEntityError = useCallback((entity: EntityType, error: Error) => {
