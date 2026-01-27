@@ -572,11 +572,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // - But chatMessage insert happens at END of SSE (race condition)
       // Fix: Query chatPreSearch directly and inject synthetic message if needed
       //
-      // NOTE: This injection happens for ALL participants. The fix to prevent P0
-      // from seeing search results is in buildSystemPromptWithContext() which
-      // skips adding search context to P0's system prompt (participantIndex === 0).
-      // The synthetic message is still needed here for buildSearchContextWithCitations
-      // to work correctly for P1+ participants.
+      // ✅ CORRECTED: This injection happens for ALL participants (including P0).
+      // Queue orchestration ensures pre-search completes BEFORE P0 starts.
+      // All participants should see search results in their system prompt.
       if (thread.enableWebSearch) {
         const hasPreSearchMsg = previousDbMessages.some(
           msg => msg.metadata && 'isPreSearch' in msg.metadata && msg.metadata.isPreSearch === true,
@@ -682,7 +680,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               toolCalls: null,
             };
             previousDbMessages = [syntheticPreSearchMsg as typeof previousDbMessages[number], ...previousDbMessages];
-            rlog.presearch('inject-success', `tid=${threadId.slice(-8)} r${currentRoundNumber} p${participantIndex} injected synthetic pre-search message with ${preSearchData.results.length} query results, ${preSearchData.results.reduce((acc, r) => acc + r.results.length, 0)} total items`);
+            // ✅ DEBUG: Log detailed content availability for debugging P0/P1 discrepancy
+            const totalItems = preSearchData.results.reduce((acc, r) => acc + r.results.length, 0);
+            const sampleItem = preSearchData.results[0]?.results[0];
+            rlog.presearch('inject-success', `tid=${threadId.slice(-8)} r${currentRoundNumber} p${participantIndex} injected synthetic pre-search message with ${preSearchData.results.length} query results, ${totalItems} total items`);
+            if (sampleItem) {
+              rlog.presearch('inject-sample', `tid=${threadId.slice(-8)} p${participantIndex} sampleTitle="${sampleItem.title?.slice(0, 30)}" hasRaw=${!!(sampleItem as { rawContent?: string }).rawContent} hasFull=${!!sampleItem.fullContent} hasContent=${!!sampleItem.content} contentLen=${(sampleItem.content || '').length}`)
+            }
           }
         }
       }
@@ -790,8 +794,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           },
           memoryLimits,
           participant,
-          // ✅ FIX: Pass participantIndex to skip web search context for P0
-          // P0 runs in parallel with pre-search, so P0 should NOT see search results
+          // ✅ CORRECTED: ALL participants (including P0) receive web search context
+          // Queue orchestration ensures pre-search completes BEFORE P0 starts
           participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           previousDbMessages,
           thread,
@@ -1710,34 +1714,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // phase=participants instead of next phase, triggering participant re-execution.
             // By calling these here (in onFinish which runs before response ends), we ensure
             // KV state is correct even if consumeSseStream hasn't finished buffering.
+            // ✅ DIAGNOSTIC: Log timing of KV updates for P1 delay debugging
+            const pIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+            console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} Starting KV updates...`);
+            const kvStartTime = Date.now();
+
             await Promise.all([
               markStreamCompleted(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                pIdx,
                 messageId,
                 c.env,
-              ),
+              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} markStreamCompleted done (${Date.now() - kvStartTime}ms)`)),
               // ✅ FIX: Update participant status instead of clearing thread active stream
               // Only clears thread active stream when ALL participants have finished
               // This enables proper multi-participant stream resumption after page reload
               updateParticipantStatus(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                pIdx,
                 ParticipantStreamStatuses.COMPLETED,
                 c.env,
-              ),
+              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} updateParticipantStatus done (${Date.now() - kvStartTime}ms)`)),
               // ✅ FIX: Mark buffer as COMPLETED (same fix as moderator.handler.ts)
-              completeParticipantStreamBuffer(streamMessageId, c.env),
+              completeParticipantStreamBuffer(streamMessageId, c.env)
+                .then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} completeStreamBuffer done (${Date.now() - kvStartTime}ms)`)),
               // ✅ FIX: Clear active key for this participant (same fix as moderator.handler.ts)
               clearActiveParticipantStream(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                pIdx,
                 c.env,
-              ),
+              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} clearActiveStream done (${Date.now() - kvStartTime}ms)`)),
             ]);
+            console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} All KV updates done (${Date.now() - kvStartTime}ms total)`);
 
             // =========================================================================
             // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background

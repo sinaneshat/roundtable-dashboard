@@ -11,7 +11,7 @@
  * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  */
 
-import { MessageRoles, MessageStatuses } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,9 +21,10 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { EntityType } from '@/hooks/utils';
 import { useMultiParticipantChat, useRoundSubscription, useStreamResumption } from '@/hooks/utils';
-import { useModeratorStream } from '@/hooks/utils/use-moderator-stream';
+// NOTE: useModeratorStream removed - moderator streaming handled by useRoundSubscription's
+// SSE subscription. Per FLOW_DOCUMENTATION.md, frontend only subscribes, never triggers.
 import { showApiErrorToast } from '@/lib/toast';
-import { getCurrentRoundNumber } from '@/lib/utils';
+import { chatMessagesToUIMessages, getCurrentRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import {
   areAllParticipantsComplete,
@@ -31,7 +32,7 @@ import {
   hasStreamingPlaceholders,
   parseParticipantEntityIndex,
 } from '@/lib/utils/streaming-helpers';
-import { startRoundService } from '@/services/api/chat';
+import { getThreadMessagesService, startRoundService } from '@/services/api/chat';
 import { ChatPhases, createChatStore } from '@/stores/chat';
 
 import { ChatStoreContext } from './context';
@@ -109,6 +110,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
   // Track which thread we've already resumed to prevent duplicate resumptions
   const resumedThreadIdRef = useRef<string | null>(null);
+  // Track the round number we resumed for fetching completed responses
+  const resumedRoundRef = useRef<number | null>(null);
+  // Track if we've already fetched completed responses for this resumption
+  const hasFetchedCompletedResponsesRef = useRef(false);
 
   // Check backend for in-progress round state on page load/refresh
   const resumptionEnabled = storeHasInitiallyLoaded && !isStreaming && !waitingToStartStreaming;
@@ -196,6 +201,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
     // Mark as resumed BEFORE calling action to prevent race conditions
     resumedThreadIdRef.current = effectiveThreadId;
+    resumedRoundRef.current = roundNumber;
+    hasFetchedCompletedResponsesRef.current = false;
 
     // Resume the round with proper state
     // Use nextParticipantToTrigger as the current index (it's the next one to stream)
@@ -215,13 +222,15 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     store,
   ]);
 
-  // Reset resumption ref when thread changes
+  // Reset resumption refs when thread changes
   useEffect(() => {
     if (effectiveThreadId && effectiveThreadId !== resumedThreadIdRef.current) {
       // Only reset if we're changing to a different thread, not on initial load
       if (resumedThreadIdRef.current !== null) {
         rlog.resume('reset', `thread changed ${resumedThreadIdRef.current.slice(-8)} → ${effectiveThreadId.slice(-8)}`);
         resumedThreadIdRef.current = null;
+        resumedRoundRef.current = null;
+        hasFetchedCompletedResponsesRef.current = false;
       }
     }
   }, [effectiveThreadId]);
@@ -232,6 +241,102 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       rlog.resume('no-active', `tid=${effectiveThreadId.slice(-8)} no in-progress round detected`);
     }
   }, [resumptionStatus, hasInProgressRound, effectiveThreadId]);
+
+  // ✅ FIX: Handle multiple scenarios where messages may be incomplete after page refresh:
+  // 1. Round was in-progress when refreshed, completed before subscriptions could stream
+  // 2. Round was already complete but moderator message wasn't in initial load (race condition)
+  // In both cases, fetch completed messages from server if store is missing expected data.
+  useEffect(() => {
+    // Only run when resumption check is complete
+    if (resumptionStatus !== 'complete' || !resumptionState) {
+      return;
+    }
+
+    // Only handle the case where backend reports complete
+    if (resumptionState.currentPhase !== 'complete') {
+      return;
+    }
+
+    // Don't fetch twice
+    if (hasFetchedCompletedResponsesRef.current) {
+      return;
+    }
+
+    // Need thread ID for fetch
+    if (!effectiveThreadId) {
+      return;
+    }
+
+    const storeState = store.getState();
+    const roundNumber = resumptionState.roundNumber ?? 0;
+
+    // Check if moderator message exists in store for this round
+    const hasModeratorMessage = storeState.messages.some((m) => {
+      if (m.role !== 'assistant') {
+        return false;
+      }
+      const meta = m.metadata as Record<string, unknown> | undefined;
+      return meta?.isModerator === true && meta?.roundNumber === roundNumber;
+    });
+
+    // Check if backend reports moderator is complete with a message ID
+    const backendHasModeratorMessage = resumptionState.moderator?.status === 'complete'
+      && resumptionState.moderator?.moderatorMessageId;
+
+    // Case 1: We resumed this round and it completed
+    const resumedThisRound = resumedThreadIdRef.current === effectiveThreadId
+      && resumedRoundRef.current === roundNumber;
+
+    // Case 2: Backend has moderator message but store doesn't (initial load race condition)
+    const missingModeratorMessage = backendHasModeratorMessage && !hasModeratorMessage;
+
+    // Determine if we need to fetch
+    const shouldFetch = resumedThisRound || missingModeratorMessage;
+
+    if (!shouldFetch) {
+      return;
+    }
+
+    // Check if store already has all expected assistant messages for this round
+    const hasAssistantResponses = storeState.messages.some((m) => {
+      if (m.role !== 'assistant') {
+        return false;
+      }
+      const meta = m.metadata as Record<string, unknown> | undefined;
+      const msgRound = meta?.roundNumber;
+      const hasContent = m.parts?.some(p => p.type === 'text' && p.text && p.text.length > 0);
+      return msgRound === roundNumber && hasContent && !meta?.isStreaming;
+    });
+
+    // Skip if we have responses AND moderator (nothing missing)
+    if (hasAssistantResponses && hasModeratorMessage) {
+      rlog.resume('fill-completed', `tid=${effectiveThreadId.slice(-8)} r${roundNumber} already has all responses, skipping fetch`);
+      hasFetchedCompletedResponsesRef.current = true;
+      return;
+    }
+
+    const reason = missingModeratorMessage ? 'missing moderator' : 'resumed round completed';
+    rlog.resume('fill-completed', `tid=${effectiveThreadId.slice(-8)} r${roundNumber} ${reason} - fetching messages`);
+    hasFetchedCompletedResponsesRef.current = true;
+
+    // Fetch completed messages from server
+    (async () => {
+      try {
+        const result = await getThreadMessagesService({ param: { id: effectiveThreadId } });
+        if (result.success && result.data.items) {
+          const participants = store.getState().participants;
+          const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
+          rlog.resume('fill-completed', `fetched ${serverMessages.length} messages, replacing store`);
+          store.getState().setMessages(serverMessages);
+          store.getState().completeStreaming();
+        } else {
+          rlog.stuck('fill-completed', `failed to fetch: ${result.success ? 'no items' : 'request failed'}`);
+        }
+      } catch (error) {
+        rlog.stuck('fill-completed', `error: ${error instanceof Error ? error.message : 'unknown'}`);
+      }
+    })();
+  }, [resumptionStatus, resumptionState, effectiveThreadId, store]);
 
   // ============================================================================
   // ROUND SUBSCRIPTION - Backend-First Pattern
@@ -255,10 +360,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       state.updateEntitySubscriptionStatus('presearch', 'streaming', seq);
     } else if (entity === 'moderator') {
       state.updateEntitySubscriptionStatus('moderator', 'streaming', seq);
-      // FIX: Re-enable moderator text appending - now uses same ID as useModeratorStream
-      // (${threadId}_r${roundNumber}_moderator) so it updates the existing placeholder
-      // instead of creating a duplicate. This is needed for gradual streaming when
-      // useModeratorStream gets 204 (another request handling) and subscription handles streaming.
+      // Append moderator text chunks received via SSE subscription
+      // Uses ID format ${threadId}_r${roundNumber}_moderator for placeholder updates
       if (text) {
         rlog.moderator('chunk', `r${roundNumber} seq=${seq} +${text.length} chars`);
         state.appendModeratorStreamingText(text, roundNumber);
@@ -330,8 +433,9 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     }
   }, [store]);
 
-  const handleRoundComplete = useCallback(() => {
+  const handleRoundComplete = useCallback(async () => {
     const state = store.getState();
+    const threadId = state.thread?.id;
     rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
 
     // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
@@ -339,7 +443,28 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     // If we call completeStreaming here while streaming placeholders exist, we get an intermediate
     // render with isStreaming=false but streaming placeholders still in messages = visual jump.
     if (hasStreamingPlaceholders(state.messages)) {
-      rlog.moderator('round-complete', `skipping completeStreaming - streaming placeholders still exist, polling will handle`);
+      // ✅ FIX: When resuming an already-complete round, placeholders exist but no streaming
+      // content will arrive. Fetch completed messages from server to fill the placeholders.
+      // This handles the race condition where page refresh happens right as round completes.
+      if (threadId) {
+        rlog.moderator('round-complete', `streaming placeholders exist - fetching completed messages from server`);
+        try {
+          const result = await getThreadMessagesService({ param: { id: threadId } });
+          if (result.success && result.data.items) {
+            const participants = store.getState().participants;
+            const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
+            rlog.moderator('round-complete', `fetched ${serverMessages.length} messages, replacing placeholders`);
+            store.getState().setMessages(serverMessages);
+            store.getState().completeStreaming();
+          } else {
+            rlog.stuck('round-complete', `failed to fetch messages: ${result.success ? 'no items' : 'request failed'}`);
+          }
+        } catch (error) {
+          rlog.stuck('round-complete', `error fetching messages: ${error instanceof Error ? error.message : 'unknown'}`);
+        }
+      } else {
+        rlog.moderator('round-complete', `skipping completeStreaming - no threadId for fetch`);
+      }
     } else {
       state.completeStreaming();
     }
@@ -787,53 +912,15 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   }, [store, chat.stop, abortSubscriptions]);
 
   // ============================================================================
-  // MODERATOR STREAM (for direct moderator trigger if needed)
+  // MODERATOR STREAM
   // ============================================================================
-
-  const { triggerModeratorStream } = useModeratorStream({
-    enabled: true,
-    store,
-    threadId: effectiveThreadId,
-  });
-
-  // Moderator trigger when phase transitions (backup for subscription)
-  const moderatorTriggerRoundRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (phase !== ChatPhases.MODERATOR) {
-      moderatorTriggerRoundRef.current = null;
-      return;
-    }
-
-    const roundNumber = currentRoundNumber ?? getCurrentRoundNumber(storeMessages);
-    if (roundNumber === null || moderatorTriggerRoundRef.current === roundNumber) {
-      return;
-    }
-
-    const participantMessageIds = storeMessages
-      .filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT) {
-          return false;
-        }
-        const metadata = m.metadata;
-        if (!metadata || typeof metadata !== 'object') {
-          return false;
-        }
-        const meta = metadata as Record<string, unknown>;
-        return (
-          'roundNumber' in meta
-          && meta.roundNumber === roundNumber
-          && !('isModerator' in meta && meta.isModerator === true)
-        );
-      })
-      .map(m => m.id);
-
-    if (participantMessageIds.length > 0) {
-      moderatorTriggerRoundRef.current = roundNumber;
-      rlog.handoff('moderator-auto-trigger', `r${roundNumber} triggering moderator via phase effect`);
-      triggerModeratorStream(roundNumber, participantMessageIds);
-    }
-  }, [phase, currentRoundNumber, storeMessages, triggerModeratorStream]);
+  // NOTE: Moderator streaming is handled by useRoundSubscription's moderator
+  // subscription (SSE-based pub/sub). Per FLOW_DOCUMENTATION.md:
+  // - "Frontend NEVER decides what happens next"
+  // - "Frontend ONLY subscribes and displays"
+  // The backend queue (queueTriggerModerator) triggers moderator generation.
+  // Frontend subscribes via GET /stream/moderator to receive chunks.
+  // No POST trigger needed - that would violate the backend-first architecture.
 
   // ============================================================================
   // OTHER HOOKS

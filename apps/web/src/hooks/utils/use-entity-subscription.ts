@@ -380,11 +380,8 @@ export function useEntitySubscription({
 
                 currentEventType = null; // Reset after processing
                 jsonBuffer = ''; // Clear buffer after successful parse
-
-                // Yield to React for gradual rendering
-                await new Promise<void>((resolve) => {
-                  requestAnimationFrame(() => resolve());
-                });
+                // Natural pacing: SSE chunk arrival provides gradual delivery
+                // No artificial delays - React handles state batching naturally
               } catch (parseError) {
                 // Check if it's an incomplete JSON error (unterminated string, unexpected end)
                 const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
@@ -424,12 +421,8 @@ export function useEntitySubscription({
                 if (typeof textData === 'string') {
                   textDeltaCount++;
                   callbacks?.onTextChunk?.(textData, currentSeq);
-
-                  // CRITICAL FIX: Yield to React AFTER each chunk for gradual rendering
-                  // Without this, React 18 batches all state updates together
-                  await new Promise<void>((resolve) => {
-                    requestAnimationFrame(() => resolve());
-                  });
+                  // Natural pacing: SSE chunk arrival provides gradual delivery
+                  // No artificial delays - React handles state batching naturally
                 }
               } catch {
                 // Ignore parse errors
@@ -442,11 +435,8 @@ export function useEntitySubscription({
                 if (event.type === 'text-delta' && typeof textContent === 'string') {
                   textDeltaCount++;
                   callbacks?.onTextChunk?.(textContent, currentSeq);
-
-                  // CRITICAL FIX: Yield to React AFTER each chunk for gradual rendering
-                  await new Promise<void>((resolve) => {
-                    requestAnimationFrame(() => resolve());
-                  });
+                  // Natural pacing: SSE chunk arrival provides gradual delivery
+                  // No artificial delays - React handles state batching naturally
                 }
               } catch {
                 // Ignore parse errors

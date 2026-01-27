@@ -440,6 +440,13 @@ export function useModeratorStream({ enabled = true, store, threadId }: UseModer
         ...prev,
         isStreaming: false,
       }));
+
+      // ✅ FIX: Call completeStreaming after successful moderator stream
+      // Previously this was removed with the comment "subscription system handles completion"
+      // but there's a race condition where the subscription may not be connected yet or
+      // may complete before detecting the moderator finished. This ensures phase transitions
+      // from MODERATOR → COMPLETE even when the subscription doesn't fire in time.
+      store.getState().completeStreaming();
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         rlog.moderator('stream', 'ABORTED');

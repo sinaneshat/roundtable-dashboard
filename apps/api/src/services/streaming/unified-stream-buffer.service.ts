@@ -624,6 +624,13 @@ export function createLiveParticipantResumeStream(
         return chunk.event !== 'reasoning-delta';
       };
 
+      // ✅ FIX: Send initial SSE comment to establish HTTP response immediately
+      // This prevents "Provisional headers" in browser DevTools during initial fetch
+      const initialComment = `:stream ${streamId.slice(-8)}\n\n`;
+      if (!safeEnqueue(controller, encoder.encode(initialComment))) {
+        return;
+      }
+
       try {
         const initialChunks = await getParticipantStreamChunks(streamId, env);
         if (initialChunks && initialChunks.length > startFromChunkIndex) {
@@ -633,11 +640,8 @@ export function createLiveParticipantResumeStream(
               if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                 return;
               }
-              // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-
-              await new Promise((resolve) => {
-                setTimeout(resolve, 5);
-              });
+              // Natural pacing: KV polling latency provides gradual delivery
+              // No artificial delays - chunks stream as fast as network allows
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -670,13 +674,8 @@ export function createLiveParticipantResumeStream(
                 if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                   return;
                 }
-                // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-                // This allows the browser to receive and process each chunk individually
-                // instead of receiving all chunks in a single burst
-
-                await new Promise((resolve) => {
-                  setTimeout(resolve, 5);
-                });
+                // Natural pacing: KV polling latency provides gradual delivery
+                // No artificial delays - chunks stream as fast as network allows
               }
             }
             lastChunkIndex = chunks.length;
@@ -785,10 +784,20 @@ export function createWaitingParticipantStream(
     async start(controller) {
       const startTime = Date.now();
       let streamId: string | null = null;
+      let lastKeepaliveTime = Date.now();
+      const KEEPALIVE_INTERVAL_MS = 15_000; // Send keepalive every 15s to prevent idle timeout
 
       // Phase 1: Wait for stream to appear (server-side waiting, not client retry)
       const pLabel = formatParticipantLabel(participantIndex);
       console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for stream to appear`);
+
+      // ✅ FIX: Send initial SSE comment immediately to establish HTTP response
+      // Without this, browser shows "Provisional headers are shown" until actual data arrives
+      // SSE comments (lines starting with :) are valid SSE but ignored by parsers
+      const initialComment = `:waiting for ${pLabel} stream\n\n`;
+      if (!safeEnqueue(controller, encoder.encode(initialComment))) {
+        return;
+      }
 
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
@@ -804,33 +813,51 @@ export function createWaitingParticipantStream(
         // - For moderator (negative index), verify ALL participants have completed
         // This prevents race conditions where P1 starts before P0 finishes
         const activeStream = await getThreadActiveStream(threadId, env);
+
+        // ✅ DIAGNOSTIC: Log activeStream state for debugging P1 delays
+        if (!activeStream) {
+          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - no activeStream in KV yet`);
+        } else if (activeStream.roundNumber !== roundNumber) {
+          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream is for r${activeStream.roundNumber}`);
+        } else if (!activeStream.participantStatuses) {
+          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream has no participantStatuses`);
+        }
+
         if (activeStream?.roundNumber === roundNumber && activeStream.participantStatuses) {
           const statuses = activeStream.participantStatuses;
           const participantIndices = Object.keys(statuses).map(Number).filter(i => i >= 0);
 
           if (participantIndex < 0) {
             // Moderator: ALL participants must be complete
-            const allParticipantsComplete = participantIndices.length > 0 && participantIndices.every((i) => {
-              const status = statuses[i];
+            const allStatuses = participantIndices.map(i => statuses[i]);
+            const allParticipantsComplete = participantIndices.length > 0 && allStatuses.every((status) => {
               return status === 'completed' || status === 'failed';
             });
 
             if (!allParticipantsComplete) {
               // Participants not done yet - keep waiting for moderator
+              // ✅ DIAGNOSTIC: Log what statuses we see while waiting
+              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - waiting: statuses=[${allStatuses.join(',')}]`);
               await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
               continue;
+            } else {
+              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - all complete: statuses=[${allStatuses.join(',')}]`);
             }
           } else if (participantIndex > 0) {
             // P1+: Previous participants must be complete
-            const allPreviousComplete = Array.from({ length: participantIndex }).every((_, i) => {
-              const status = statuses[i];
+            const prevStatuses = Array.from({ length: participantIndex }).map((_, i) => statuses[i]);
+            const allPreviousComplete = prevStatuses.every((status) => {
               return status === 'completed' || status === 'failed';
             });
 
             if (!allPreviousComplete) {
               // Previous participants not done yet - keep waiting
+              // ✅ DIAGNOSTIC: Log what statuses we see while waiting
+              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
               await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
               continue;
+            } else {
+              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
             }
           }
         }
@@ -847,6 +874,15 @@ export function createWaitingParticipantStream(
         }
 
         if (!streamId) {
+          // ✅ FIX: Send periodic keepalives to prevent Cloudflare idle timeout (100s)
+          // and to show the browser the connection is still active
+          if (Date.now() - lastKeepaliveTime > KEEPALIVE_INTERVAL_MS) {
+            const keepalive = `:keepalive ${pLabel} waiting\n\n`;
+            if (!safeEnqueue(controller, encoder.encode(keepalive))) {
+              return;
+            }
+            lastKeepaliveTime = Date.now();
+          }
           await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
       }
@@ -872,11 +908,8 @@ export function createWaitingParticipantStream(
               if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                 return;
               }
-              // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-
-              await new Promise((resolve) => {
-                setTimeout(resolve, 5);
-              });
+              // Natural pacing: KV polling latency provides gradual delivery
+              // No artificial delays - chunks stream as fast as network allows
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -911,11 +944,8 @@ export function createWaitingParticipantStream(
                 if (!safeEnqueue(controller, encoder.encode(chunk.data))) {
                   return;
                 }
-                // ✅ GRADUAL STREAMING FIX: Yield between chunks for network buffer flushing
-
-                await new Promise((resolve) => {
-                  setTimeout(resolve, 5);
-                });
+                // Natural pacing: KV polling latency provides gradual delivery
+                // No artificial delays - chunks stream as fast as network allows
               }
             }
             lastChunkIndex = chunks.length;
@@ -1327,6 +1357,12 @@ export function createLivePreSearchResumeStream(
       let lastChunkIndex = 0;
       const startTime = Date.now();
       let lastNewDataTime = Date.now();
+
+      // ✅ FIX: Send initial SSE comment to establish HTTP response immediately
+      const initialComment = `:presearch ${streamId.slice(-8)}\n\n`;
+      if (!safeEnqueue(controller, encoder.encode(initialComment))) {
+        return;
+      }
 
       try {
         const initialChunks = await getPreSearchStreamChunks(streamId, env);

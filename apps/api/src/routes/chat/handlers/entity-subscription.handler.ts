@@ -153,11 +153,35 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
       });
     }
 
-    // If completed, return status
+    // If completed AND frontend has all chunks, return JSON status
+    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
-      return Responses.ok(c, {
-        lastSeq: chunks?.length ?? 0,
-        status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+      const chunkCount = chunks?.length ?? 0;
+
+      // Frontend already has all chunks - return JSON status
+      if (startFromChunkIndex >= chunkCount) {
+        return Responses.ok(c, {
+          lastSeq: chunkCount,
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+        });
+      }
+
+      // Frontend needs chunks - stream via SSE (natural pacing from network)
+      console.log(`[ENTITY-SUB] PreSearch r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      const replayStream = createLivePreSearchResumeStream(
+        preSearchStreamId,
+        c.env,
+        100, // pollIntervalMs
+        10 * 60 * 1000, // maxPollDurationMs
+        90 * 1000, // noNewDataTimeoutMs
+      );
+
+      return Responses.sse(replayStream, {
+        isActive: false,
+        phase: 'presearch',
+        resumedFromBuffer: true,
+        roundNumber,
+        streamId: preSearchStreamId,
       });
     }
 
@@ -299,12 +323,34 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
       });
     }
 
-    // If completed, return status
+    // If completed AND frontend has all chunks, return JSON status
+    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
-      return Responses.ok(c, {
-        lastSeq: chunks?.length ?? 0,
+      const chunkCount = chunks?.length ?? 0;
+
+      // Frontend already has all chunks - return JSON status
+      if (startFromChunkIndex >= chunkCount) {
+        return Responses.ok(c, {
+          lastSeq: chunkCount,
+          participantIndex,
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+        });
+      }
+
+      // Frontend needs chunks - stream via SSE (natural pacing from network)
+      console.log(`[ENTITY-SUB] P${participantIndex} r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      const replayStream = createLiveParticipantResumeStream(participantStreamId, c.env, {
+        filterReasoningOnReplay: true,
+        startFromChunkIndex,
+      });
+
+      return Responses.sse(replayStream, {
+        isActive: false,
         participantIndex,
-        status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+        phase: 'participant',
+        resumedFromBuffer: true,
+        roundNumber,
+        streamId: participantStreamId,
       });
     }
 
@@ -438,11 +484,32 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
       });
     }
 
-    // If completed, return status
+    // If completed AND frontend has all chunks, return JSON status
+    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
-      return Responses.ok(c, {
-        lastSeq: chunks?.length ?? 0,
-        status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+      const chunkCount = chunks?.length ?? 0;
+
+      // Frontend already has all chunks - return JSON status
+      if (startFromChunkIndex >= chunkCount) {
+        return Responses.ok(c, {
+          lastSeq: chunkCount,
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+        });
+      }
+
+      // Frontend needs chunks - stream via SSE (natural pacing from network)
+      console.log(`[ENTITY-SUB] Moderator r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      const replayStream = createLiveParticipantResumeStream(moderatorStreamId, c.env, {
+        filterReasoningOnReplay: true,
+        startFromChunkIndex,
+      });
+
+      return Responses.sse(replayStream, {
+        isActive: false,
+        phase: 'moderator',
+        resumedFromBuffer: true,
+        roundNumber,
+        streamId: moderatorStreamId,
       });
     }
 

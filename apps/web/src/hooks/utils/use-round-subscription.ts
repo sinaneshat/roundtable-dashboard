@@ -283,6 +283,10 @@ export function useRoundSubscription({
       return;
     } // Wait for presearch to complete first
 
+    // ✅ DIAGNOSTIC: Log participant states when stagger effect runs
+    const statesSummary = participantStates.map((s, i) => `P${i}:${s?.status ?? 'null'}`).join(' ');
+    rlog.stream('check', `r${roundNumber} stagger-effect: ${statesSummary} maxIdx=${maxEnabledIndex}`);
+
     // Find the highest index that is COMPLETE (not streaming!)
     // This enforces sequential execution: P0 complete → P1 starts → P1 complete → P2 starts
     let highestCompleteIndex = -1;

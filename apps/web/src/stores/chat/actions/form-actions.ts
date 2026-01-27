@@ -412,7 +412,29 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const freshMessages = freshState.messages;
     const freshSelectedMode = freshState.selectedMode;
     const freshEnableWebSearch = freshState.enableWebSearch;
-    const freshSelectedParticipants = freshState.selectedParticipants;
+    let freshSelectedParticipants = freshState.selectedParticipants;
+
+    // ✅ FIX: Defensive check for stale closure race condition
+    // formState.selectedParticipants (from hook) might be stale while freshState is empty
+    // If fresh state has empty selectedParticipants but modelOrder has models, create participants from modelOrder
+    const freshModelOrder = freshState.modelOrder;
+    if (freshSelectedParticipants.length === 0 && freshModelOrder.length > 0) {
+      rlog.submit('sync-modelOrder-to-participants', `r${calculateNextRoundNumber(freshMessages)} creating ${freshModelOrder.length} participants from modelOrder`);
+      freshSelectedParticipants = freshModelOrder.map((modelId, index) => ({
+        id: modelId,
+        modelId,
+        priority: index,
+        role: '',
+      }));
+      // Update store to prevent future desyncs
+      actions.setSelectedParticipants(freshSelectedParticipants);
+    }
+
+    // ✅ FIX: Additional guard - if still empty after sync attempt, abort
+    if (freshSelectedParticipants.length === 0) {
+      rlog.submit('abort-empty-participants', `r${calculateNextRoundNumber(freshMessages)} cannot proceed with 0 participants`);
+      return;
+    }
 
     let nextRoundNumber = calculateNextRoundNumber(freshMessages);
     if (nextRoundNumber === 0 && freshMessages.length > 0) {

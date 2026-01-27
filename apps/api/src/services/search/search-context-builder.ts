@@ -1,12 +1,13 @@
 import { CitationSourcePrefixes, CitationSourceTypes } from '@roundtable/shared/enums';
 
-import { DbPreSearchDataSchema, isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
+import { isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatMessage } from '@/db/validation';
 import { getRoundNumber } from '@/lib/utils';
-import type {
-  SearchContextOptions,
-  ValidatedPreSearchData,
+import {
+  ValidatedPreSearchDataSchema,
+  type SearchContextOptions,
+  type ValidatedPreSearchData,
 } from '@/routes/chat/schema';
 import { filterDbToPreSearchMessages } from '@/services/messages';
 import type { CitableSource, CitationSourceMap } from '@/types/citations';
@@ -41,7 +42,11 @@ export function buildSearchContextWithCitations(
 
   const preSearchMessages = filterDbToPreSearchMessages(allMessages);
 
+  // ✅ DEBUG: Log filter results
+  rlog.presearch('filter-result', `totalMsgs=${allMessages.length} preSearchMsgs=${preSearchMessages.length}`);
+
   if (preSearchMessages.length === 0) {
+    rlog.presearch('filter-empty', `no pre-search messages found in ${allMessages.length} total messages`);
     return { citableSources, formattedPrompt: '', sourceMap };
   }
 
@@ -53,15 +58,18 @@ export function buildSearchContextWithCitations(
   for (const preSearchMsg of preSearchMessages) {
     const validatedData = extractValidatedPreSearchData(preSearchMsg);
     if (!validatedData) {
+      rlog.presearch('extract-skip', `msgId=${preSearchMsg.id.slice(-8)} - validation failed`);
       continue;
     }
 
     const msgRoundNumber = getRoundNumber(preSearchMsg.metadata) || 0;
     const isCurrentRound = msgRoundNumber === currentRoundNumber;
+    rlog.presearch('round-check', `msgId=${preSearchMsg.id.slice(-8)} msgRound=${msgRoundNumber} currentRound=${currentRoundNumber} isCurrent=${isCurrentRound} results=${validatedData.results.length}`);
 
     if (isCurrentRound && includeFullResults) {
       const result = buildCurrentRoundSearchContextWithCitations(validatedData);
       contextParts.push(result.content);
+      rlog.presearch('current-round-content', `msgId=${preSearchMsg.id.slice(-8)} contentLen=${result.content.length} sourcesAdded=${result.sources.length}`);
 
       // Add sources to collections
       for (const source of result.sources) {
@@ -69,7 +77,9 @@ export function buildSearchContextWithCitations(
         sourceMap.set(source.id, source);
       }
     } else {
-      contextParts.push(buildPreviousRoundSearchContext(msgRoundNumber, validatedData));
+      const prevContent = buildPreviousRoundSearchContext(msgRoundNumber, validatedData);
+      contextParts.push(prevContent);
+      rlog.presearch('prev-round-content', `msgId=${preSearchMsg.id.slice(-8)} round=${msgRoundNumber} contentLen=${prevContent.length}`);
     }
   }
 
@@ -123,9 +133,13 @@ function buildCurrentRoundSearchContextWithCitations(
     'The following content was retrieved from web sources. Reference information using the provided citation IDs:\n\n',
   ];
 
+  // ✅ DEBUG: Log pre-search data structure
+  rlog.presearch('build-current', `resultsCount=${preSearch.results.length} queriesCount=${preSearch.queries.length}`);
+
   let queryIndex = 0;
   for (const searchResult of preSearch.results) {
     parts.push(`---\n**Search Query:** "${searchResult.query}"\n\n`);
+    rlog.presearch('build-query', `q${queryIndex} query="${searchResult.query.slice(0, 50)}" itemCount=${searchResult.results.length}`);
 
     for (let resultIndex = 0; resultIndex < searchResult.results.length; resultIndex++) {
       const result = searchResult.results[resultIndex];
@@ -134,6 +148,8 @@ function buildCurrentRoundSearchContextWithCitations(
       }
 
       const citationId = generateSearchCitationId(queryIndex, resultIndex);
+      // ✅ DEBUG: Log content availability
+      rlog.presearch('build-item', `${citationId} title="${result.title.slice(0, 30)}" hasRaw=${!!result.rawContent} hasFull=${!!result.fullContent} hasContent=${!!result.content} len=${(result.rawContent || result.fullContent || result.content || '').length}`);
 
       // Add to citable sources
       const rawData = result.rawContent || result.fullContent || result.content || result.excerpt || '';
@@ -209,7 +225,10 @@ function extractValidatedPreSearchData(
     return null;
   }
 
-  const validation = DbPreSearchDataSchema.safeParse(message.metadata.preSearch);
+  // ✅ FIX: Use ValidatedPreSearchDataSchema instead of DbPreSearchDataSchema
+  // ValidatedPreSearchDataSchema includes rawContent, fullContent, metadata, etc.
+  // DbPreSearchDataSchema was missing these fields, causing data loss
+  const validation = ValidatedPreSearchDataSchema.safeParse(message.metadata.preSearch);
   if (!validation.success) {
     // Log validation errors to help debug schema mismatches
     const errors = validation.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ');

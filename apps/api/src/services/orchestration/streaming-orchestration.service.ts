@@ -278,8 +278,9 @@ export const BuildSystemPromptParamsSchema = z.object({
   logger: z.custom<TypedLogger>().optional(),
   memoryLimits: z.custom<MemoryBudgetConfig>().optional(), // Memory safety limits
   participant: z.custom<ChatParticipant>(),
-  // P0 runs in parallel with pre-search, so P0 should NOT receive web search context
-  // Only P1+ participants should see search results in their system prompt
+  // ✅ CORRECTED: ALL participants (including P0) receive web search context
+  // Queue orchestration ensures pre-search completes BEFORE P0 starts
+  // Previous comment was incorrect - P0 does NOT run in parallel with pre-search
   participantIndex: z.number().int().nonnegative(),
   previousDbMessages: z.array(z.custom<ChatMessage>()),
   thread: z.custom<Pick<ChatThread, 'id' | 'projectId' | 'enableWebSearch' | 'mode'>>(),
@@ -1013,6 +1014,12 @@ export async function buildSystemPromptWithContext(
     const preSearchMsgs = previousDbMessages.filter(
       msg => msg.metadata && 'isPreSearch' in msg.metadata && (msg.metadata as { isPreSearch?: boolean }).isPreSearch === true,
     );
+    // ✅ DEBUG: Log detailed pre-search message info
+    for (const psMsg of preSearchMsgs) {
+      const meta = psMsg.metadata as { preSearch?: { results?: unknown[] } } | null;
+      const resultCount = meta?.preSearch?.results?.length ?? 0;
+      rlog.presearch('context-msg-detail', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} msgId=${psMsg.id.slice(-8)} resultCount=${resultCount}`);
+    }
     rlog.presearch('context-build', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} preSearchMsgs=${preSearchMsgs.length} totalMsgs=${previousDbMessages.length}`);
 
     try {
