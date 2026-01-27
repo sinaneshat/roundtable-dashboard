@@ -50,6 +50,7 @@ import {
   enrichMessageWithParticipant,
   getAssistantMetadata,
   getParticipantId,
+  getParticipantIndex,
   getParticipantMetadata,
   getPreSearchMetadata,
   getRoundNumber,
@@ -351,9 +352,12 @@ export function chatMessagesToUIMessages(
           rlog.moderator('toUI-msg', `id=${message.id?.slice(-8)} role=${message.role} pIdInMeta=${participantId?.slice(-8) || 'null'} foundInMap=${!!participant} needsEnrich=${participant && !hasParticipantEnrichment(message.metadata)}`);
 
           if (participant && !hasParticipantEnrichment(message.metadata)) {
-            const assignedIndex = participantIndexMap?.get(participant.id) ?? 0;
+            // BUG FIX: Prefer participantIndex from message metadata (set by backend during stream)
+            // over array position lookup. Array position can be wrong if participants were reordered.
+            const metadataIndex = getParticipantIndex(message.metadata);
+            const assignedIndex = metadataIndex ?? participantIndexMap?.get(participant.id) ?? 0;
             // DEBUG: Log enrichment with assigned index
-            rlog.moderator('toUI-enrich', `pId=${participant.id?.slice(-8)} assignedIdx=${assignedIndex} mapHasKey=${participantIndexMap?.has(participant.id)}`);
+            rlog.moderator('toUI-enrich', `pId=${participant.id?.slice(-8)} metaIdx=${metadataIndex} assignedIdx=${assignedIndex} mapHasKey=${participantIndexMap?.has(participant.id)}`);
 
             const metadataForEnrichment = buildAssistantMetadata(
               getAssistantMetadata(message.metadata) || {},
@@ -432,9 +436,12 @@ export function chatMessagesToUIMessages(
         rlog.moderator('toUI-msg-fallback', `id=${message.id?.slice(-8)} role=${message.role} pIdInMeta=${participantId?.slice(-8) || 'null'} foundInMap=${!!participant}`);
 
         if (participant) {
-          const assignedIndexFallback = participantIndexMap?.get(participant.id) ?? 0;
+          // BUG FIX: Prefer participantIndex from message metadata (set by backend during stream)
+          // over array position lookup. Array position can be wrong if participants were reordered.
+          const metadataIndexFallback = getParticipantIndex(message.metadata);
+          const assignedIndexFallback = metadataIndexFallback ?? participantIndexMap?.get(participant.id) ?? 0;
           // DEBUG: Log enrichment with assigned index (fallback path)
-          rlog.moderator('toUI-enrich-fallback', `pId=${participant.id?.slice(-8)} assignedIdx=${assignedIndexFallback} mapHasKey=${participantIndexMap?.has(participant.id)}`);
+          rlog.moderator('toUI-enrich-fallback', `pId=${participant.id?.slice(-8)} metaIdx=${metadataIndexFallback} assignedIdx=${assignedIndexFallback} mapHasKey=${participantIndexMap?.has(participant.id)}`);
 
           enrichedMetadata = buildAssistantMetadata(
             getAssistantMetadata(message.metadata) || {},

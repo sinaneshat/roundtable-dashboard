@@ -102,6 +102,9 @@ export function useEntitySubscription({
   const retryCountRef = useRef(0);
   const lastSeqRef = useRef(initialLastSeq);
   const prevRoundNumberRef = useRef(roundNumber);
+  // BUG FIX: Track definitive completion to prevent retry race condition
+  // When 'done' event is received, this prevents any pending setTimeout retries from firing
+  const isCompleteRef = useRef(false);
 
   // Reset lastSeq when round number changes to prevent stale sequence numbers
   // This fixes the round 2+ submission failure where subscriptions detect "complete"
@@ -114,6 +117,7 @@ export function useEntitySubscription({
       );
       lastSeqRef.current = 0;
       retryCountRef.current = 0;
+      isCompleteRef.current = false; // BUG FIX: Reset completion flag for new round
       setState(prev => ({
         ...prev,
         lastSeq: 0,
@@ -201,12 +205,19 @@ export function useEntitySubscription({
         rlog.stream('check', `${logPrefix} 202 waiting, retry after ${retryAfter}ms`);
 
         retryCountRef.current++;
-        if (retryCountRef.current < MAX_RETRY_ATTEMPTS) {
+        // BUG FIX: Check isCompleteRef to prevent retries after 'done' event
+        // Race condition: setTimeout from 202 polling can fire AFTER 'done' event completes the stream
+        if (retryCountRef.current < MAX_RETRY_ATTEMPTS && !isCompleteRef.current) {
           setTimeout(() => {
-            if (!controller.signal.aborted) {
+            // BUG FIX: Double-check completion inside setTimeout callback
+            // The 'done' event may have been received between scheduling and execution
+            if (!controller.signal.aborted && !isCompleteRef.current) {
               subscribe();
             }
           }, retryAfter);
+        } else if (isCompleteRef.current) {
+          // Stream already completed via 'done' event - no error, just exit silently
+          rlog.stream('check', `${logPrefix} 202 retry skipped - stream already complete`);
         } else {
           rlog.stuck('sub', `${logPrefix} max retries exceeded`);
           setState(prev => ({
@@ -235,6 +246,8 @@ export function useEntitySubscription({
         rlog.stream('check', `${logPrefix} JSON response status=${result?.status}`);
 
         if (result?.status === 'complete') {
+          // Mark complete to prevent any pending retries
+          isCompleteRef.current = true;
           setState(prev => ({
             ...prev,
             isStreaming: false,
@@ -340,6 +353,9 @@ export function useEntitySubscription({
                 // The 'done' event is a data event, not a stream end signal.
                 // Without this, the subscription keeps polling with 202 after stream ends.
                 if (currentEventType === 'done') {
+                  // BUG FIX: Set completion flag BEFORE any async operations
+                  // This prevents pending setTimeout retries from 202 polling from firing
+                  isCompleteRef.current = true;
                   rlog.presearch('done-complete', `${logPrefix} 'done' event received, marking complete`);
                   setState(prev => ({
                     ...prev,
@@ -426,7 +442,8 @@ export function useEntitySubscription({
         // Log summary instead of per-line (reduces clutter)
         rlog.stream('check', `${logPrefix} parsed ${currentSeq} events, ${textDeltaCount} text deltas`);
 
-        // Stream ended
+        // Stream ended - mark complete to prevent any pending retries
+        isCompleteRef.current = true;
         setState(prev => ({
           ...prev,
           isStreaming: false,
