@@ -176,13 +176,33 @@ describe('subscription State Management', () => {
         expect(subscriptionState.presearch.lastSeq).toBe(10);
       });
 
-      it('should support all valid presearch status transitions', () => {
-        const statuses: EntityStatus[] = ['idle', 'waiting', 'streaming', 'complete', 'error', 'disabled'];
+      it('should support valid presearch status transitions (terminal states prevent regression)', () => {
+        // Test forward transitions (non-terminal states can change freely)
+        const forwardTransitions: EntityStatus[] = ['idle', 'waiting', 'streaming'];
 
-        statuses.forEach((status) => {
+        forwardTransitions.forEach((status) => {
           store.getState().updateEntitySubscriptionStatus('presearch', status);
           expect(store.getState().subscriptionState.presearch.status).toBe(status);
         });
+
+        // Terminal state: complete
+        store.getState().updateEntitySubscriptionStatus('presearch', 'complete');
+        expect(store.getState().subscriptionState.presearch.status).toBe('complete');
+
+        // Once complete, status should NOT regress to non-terminal states
+        // (This protects against race conditions from concurrent tabs/reconnects)
+        store.getState().updateEntitySubscriptionStatus('presearch', 'streaming');
+        expect(store.getState().subscriptionState.presearch.status).toBe('complete');
+
+        // But another terminal state (error) can still be set
+        store.getState().updateEntitySubscriptionStatus('presearch', 'error');
+        expect(store.getState().subscriptionState.presearch.status).toBe('error');
+      });
+
+      it('should support disabled status transition', () => {
+        // Test disabled separately (fresh state)
+        store.getState().updateEntitySubscriptionStatus('presearch', 'disabled');
+        expect(store.getState().subscriptionState.presearch.status).toBe('disabled');
       });
     });
 
@@ -313,13 +333,26 @@ describe('subscription State Management', () => {
         expect(subscriptionState.participants[0]?.status).toBe('complete');
       });
 
-      it('should allow lastSeq to be 0', () => {
+      it('should enforce monotonically increasing lastSeq (race condition protection)', () => {
+        // lastSeq should only increase - this prevents race conditions where
+        // out-of-order updates could overwrite newer data with older data
         store.getState().updateEntitySubscriptionStatus(0, 'streaming', 10);
-        store.getState().updateEntitySubscriptionStatus(0, 'idle', 0);
+        store.getState().updateEntitySubscriptionStatus(0, 'streaming', 5); // Older seq ignored
+        store.getState().updateEntitySubscriptionStatus(0, 'streaming', 20); // Higher seq accepted
 
         const { subscriptionState } = store.getState();
 
-        expect(subscriptionState.participants[0]?.lastSeq).toBe(0);
+        expect(subscriptionState.participants[0]?.lastSeq).toBe(20);
+      });
+
+      it('should reset lastSeq via initializeSubscriptions for new rounds', () => {
+        // To actually reset lastSeq to 0, use initializeSubscriptions (new round)
+        store.getState().updateEntitySubscriptionStatus(0, 'streaming', 100);
+        expect(store.getState().subscriptionState.participants[0]?.lastSeq).toBe(100);
+
+        // Initialize for a new round resets everything
+        store.getState().initializeSubscriptions(1, 2);
+        expect(store.getState().subscriptionState.participants[0]?.lastSeq).toBe(0);
       });
     });
   });

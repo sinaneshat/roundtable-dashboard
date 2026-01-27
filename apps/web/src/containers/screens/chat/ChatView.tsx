@@ -863,7 +863,7 @@ export function ChatView({
                   : null
               }
               streamingRoundNumber={streamingRoundNumber}
-              preSearches={preSearches}
+              preSearches={effectivePreSearches}
               isDataReady={isStoreReady}
               completedRoundNumbers={completedRoundNumbers}
               isModeratorStreaming={isModeratorStreaming}

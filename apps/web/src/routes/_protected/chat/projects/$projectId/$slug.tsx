@@ -6,20 +6,11 @@ import { ThreadContentSkeleton } from '@/components/skeletons';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import {
-  projectQueryOptions,
-  threadBySlugQueryOptions,
-  threadChangelogQueryOptions,
-  threadFeedbackQueryOptions,
-  threadPreSearchesQueryOptions,
-} from '@/lib/data/query-options';
+import { projectQueryOptions, threadBySlugQueryOptions } from '@/lib/data/query-options';
 import { useTranslations } from '@/lib/i18n';
+import { createEmptyLoaderData, fetchThreadData } from '@/lib/loaders';
 import { rlog } from '@/lib/utils/dev-logger';
-import type {
-  GetProjectResponse,
-  GetThreadBySlugResponse,
-  GetThreadFeedbackResponse,
-} from '@/services/api';
+import type { GetProjectResponse } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug')({
   component: ProjectThreadRoute,
@@ -41,112 +32,21 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     }
 
     if (!params.slug) {
-      return {
-        projectName,
-        threadTitle: null,
-        threadId: null,
-        threadData: null,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-        streamResumption: undefined,
-      };
+      return createEmptyLoaderData({ projectName });
     }
 
-    const options = threadBySlugQueryOptions(params.slug);
+    // Use shared loader logic for thread data
+    const threadLoaderData = await fetchThreadData({
+      queryClient,
+      slug: params.slug,
+      isServer,
+      loaderContext: 'ProjectThread',
+    });
 
-    // Check cache for prefetched thread data
-    const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
-    const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
-
-    // Early return when flow-controller prefetched VALID data (must have messages)
-    // CRITICAL: "Shell" data (thread metadata without messages) should NOT trigger early return
-    // This prevents blank screen when sidebar prefetch caches incomplete data
-    if (hasPrefetchMeta && cachedThreadData?.success && cachedThreadData.data.messages.length > 0) {
-      const threadData = cachedThreadData.data;
-      return {
-        projectName,
-        threadTitle: threadData.thread?.title ?? null,
-        threadId: threadData.thread?.id ?? null,
-        threadData,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-        streamResumption: undefined,
-      };
-    }
-
-    try {
-      await queryClient.ensureQueryData(options);
-    } catch (error) {
-      console.error('[ProjectThread] Loader error:', error);
-      return {
-        projectName,
-        threadTitle: null,
-        threadId: null,
-        threadData: null,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-      };
-    }
-
-    const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
-    const threadId = cachedData?.success && cachedData.data?.thread?.id;
-    const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
-
-    let preSearches;
-    let changelog;
-    let feedback;
-
-    if (threadId) {
-      const changelogOptions = threadChangelogQueryOptions(threadId);
-      const feedbackOptions = threadFeedbackQueryOptions(threadId);
-      const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
-
-      if (isServer) {
-        const [changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
-          queryClient.ensureQueryData(changelogOptions).catch(() => null),
-          queryClient.ensureQueryData(feedbackOptions).catch(() => null),
-          queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
-        ]);
-
-        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        feedback = feedbackResult?.success ? feedbackResult.data : undefined;
-        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
-      } else {
-        const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
-        const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
-
-        const [changelogResult, preSearchesResult] = await Promise.all([
-          cachedChangelog
-            ? Promise.resolve(cachedChangelog)
-            : queryClient.ensureQueryData(changelogOptions).catch(() => null),
-          cachedPreSearches
-            ? Promise.resolve(cachedPreSearches)
-            : queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
-        ]);
-        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
-
-        const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
-        feedback = cachedFeedback?.success ? cachedFeedback.data : undefined;
-
-        if (!cachedFeedback) {
-          queryClient.prefetchQuery(feedbackOptions).catch(() => {});
-        }
-      }
-    }
-
-    const threadData = cachedData?.success ? cachedData.data : null;
+    // Extend with projectName for project routes
     return {
+      ...threadLoaderData,
       projectName,
-      threadTitle,
-      threadId,
-      threadData,
-      preSearches,
-      changelog,
-      feedback,
     };
   },
 
@@ -265,7 +165,7 @@ function ProjectThreadRoute() {
       thread={thread}
       participants={participants}
       initialMessages={messages}
-      slug={slug}
+      slug={slug ?? ''}
       user={user}
       initialChangelog={changelog}
       initialFeedback={feedback}

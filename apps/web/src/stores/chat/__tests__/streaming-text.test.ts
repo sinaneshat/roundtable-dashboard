@@ -640,23 +640,17 @@ describe('edge Cases', () => {
     expect(store.getState().messages).toHaveLength(1); // No new moderator message
   });
 
-  it('should handle participant not found in participants array', () => {
+  it('should NOT create message when participant not found in participants array', () => {
     // No participants set
     store.getState().setParticipants([]);
 
-    // Should still create placeholder but with default/unknown values
+    // FIX: Should NOT create placeholder for invalid participant index
+    // Previously this created a message with modelId='unknown' which is a bug
     store.getState().appendEntityStreamingText(0, 'Orphan participant', 0);
 
     const state = store.getState();
-    expect(state.messages).toHaveLength(1);
-
-    const placeholder = state.messages[0];
-    const metadata = placeholder!.metadata as Record<string, unknown>;
-
-    // Should have fallback values
-    expect(metadata.model).toBe('unknown');
-    expect(metadata.participantId).toBeUndefined();
-    expect(metadata.participantIndex).toBe(0);
+    // No message should be created since participant 0 doesn't exist
+    expect(state.messages).toHaveLength(0);
   });
 
   it('should handle round number mismatch scenarios', () => {

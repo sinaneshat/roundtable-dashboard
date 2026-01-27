@@ -11,7 +11,7 @@ import { chatParticipantsToConfig } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
-export type { ChatStoreApi } from './store';
+export type { ChatStoreApi, ChatStoreInitialState } from './store';
 export { createChatStore } from './store';
 
 // Schemas & Types
@@ -86,6 +86,61 @@ export {
 // UTILITY EXPORTS
 // Helper functions and hooks used by screens
 // ============================================================================
+
+import type { MessageStatus } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared';
+
+/**
+ * Get effective web search enabled state.
+ * Form state takes precedence over thread default.
+ * Per FLOW_DOCUMENTATION.md: Form state is source of truth for current round.
+ *
+ * @param thread - Current thread (may be null for new threads)
+ * @param formEnableWebSearch - Form state for web search toggle
+ * @returns Whether web search is effectively enabled
+ */
+export function getEffectiveWebSearchEnabled(
+  _thread: { enableWebSearch?: boolean } | null | undefined,
+  formEnableWebSearch: boolean,
+): boolean {
+  // Form state takes precedence (thread param reserved for future hybrid logic)
+  return formEnableWebSearch;
+}
+
+/**
+ * Determines if participants should wait for pre-search to complete.
+ * Per FLOW_DOCUMENTATION.md: P0 runs in parallel with pre-search, P1+ wait.
+ *
+ * Used to determine if participant streaming should be blocked:
+ * - Returns true when pre-search is PENDING or STREAMING
+ * - Returns false when pre-search is COMPLETE, FAILED, or doesn't exist
+ *
+ * @param enableWebSearch - Whether web search is enabled for this round
+ * @param preSearch - The pre-search record for the current round
+ * @returns true if participants should wait for pre-search
+ */
+export function shouldWaitForPreSearch(
+  enableWebSearch: boolean,
+  preSearch: StoredPreSearch | undefined,
+): boolean {
+  // No web search enabled - no waiting
+  if (!enableWebSearch) return false;
+
+  // No pre-search record - no waiting
+  if (!preSearch) return false;
+
+  // Completed states don't block (graceful degradation on failure)
+  const nonBlockingStatuses: MessageStatus[] = [
+    MessageStatuses.COMPLETE,
+    MessageStatuses.FAILED,
+  ];
+  if (nonBlockingStatuses.includes(preSearch.status)) {
+    return false;
+  }
+
+  // PENDING or STREAMING - block P1+ participants
+  return true;
+}
 
 /** Get moderator message for round */
 export function getModeratorMessageForRound<T>(

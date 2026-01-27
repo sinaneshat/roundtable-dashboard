@@ -60,6 +60,12 @@ function PreSearchStreamComponent({
   const [expectedQueryCount, setExpectedQueryCount] = useState<number | null>(null);
   const [isStreamComplete, setIsStreamComplete] = useState(false);
 
+  // FIX 2: Track which queries/results have been rendered to animate only "new" items
+  // Without this, React batches multiple SSE events into one render cycle,
+  // causing all items to appear/animate simultaneously
+  const renderedQueriesRef = useRef<Set<number>>(new Set());
+  const renderedResultsRef = useRef<Set<number>>(new Set());
+
   // Reset progressive skeleton state when preSearch.id changes
   // useLayoutEffect ensures synchronous reset before paint
   useLayoutEffect(() => {
@@ -67,6 +73,9 @@ function PreSearchStreamComponent({
     setExpectedQueryCount(null);
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on prop change required
     setIsStreamComplete(false);
+    // Reset rendered item tracking for new conversation/round
+    renderedQueriesRef.current = new Set();
+    renderedResultsRef.current = new Set();
   }, [preSearch.id]);
 
   // Refs to access callback values in async polling without re-triggering effects
@@ -91,10 +100,12 @@ function PreSearchStreamComponent({
   // 3. Marks already-complete searches as triggered
 
   // Sync local state from store when preSearch.searchData changes (updated by use-streaming-trigger.ts)
+  // Use direct state updates - React 18 will process these efficiently
+  // Note: We avoid flushSync here because it can cause warnings when called during render cycles
   useEffect(() => {
     if (preSearch.searchData) {
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional prop-to-state sync for streaming UI
-      setPartialSearchData(preSearch.searchData);
+      setPartialSearchData(preSearch.searchData ?? null);
       if (preSearch.status === MessageStatuses.COMPLETE) {
         // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional prop-to-state sync for streaming UI
         setIsStreamComplete(true);
@@ -310,8 +321,23 @@ function PreSearchStreamComponent({
           return null;
         }
 
+        // FIX 2: Track if this query is new (not yet rendered) for gradual animation
+        // Without this tracking, React batches multiple SSE events into one render cycle,
+        // causing all items to appear simultaneously instead of one by one
+        const isNewQuery = !renderedQueriesRef.current.has(query.index);
+        if (isNewQuery) {
+          renderedQueriesRef.current.add(query.index);
+        }
+
         const searchResult = validResults.find((r: PreSearchResult) => r?.index === query?.index) || validResults.find((r: PreSearchResult) => r?.query === query?.query);
         const hasResult = !!searchResult;
+
+        // FIX 2: Track if this result is new for gradual animation
+        const isNewResult = hasResult && !renderedResultsRef.current.has(query.index);
+        if (isNewResult) {
+          renderedResultsRef.current.add(query.index);
+        }
+
         const uniqueKey = `query-${query?.query || queryIndex}`;
         const hasResultsData = hasResult && searchResult.results && searchResult.results.length > 0;
         const isLastQuery = queryIndex === validQueries.length - 1;
@@ -323,6 +349,7 @@ function PreSearchStreamComponent({
             key={uniqueKey}
             itemKey={uniqueKey}
             index={queryIndex + 1} // +1 because search-config is index 0
+            skipAnimation={!isNewQuery} // Only animate new items
           >
             <div className="space-y-2">
               {/* Query header with rationale and depth */}

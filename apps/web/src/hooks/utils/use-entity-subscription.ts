@@ -286,6 +286,9 @@ export function useEntitySubscription({
         let textDeltaCount = 0;
         // Track SSE event type for presearch events (format: "event: query\ndata: {...}")
         let currentEventType: string | null = null;
+        // FIX 2: Buffer incomplete JSON lines for chunked SSE data
+        // Large JSON payloads can be split across multiple SSE chunks
+        let jsonBuffer = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -304,6 +307,7 @@ export function useEntitySubscription({
             // Track SSE event type lines (e.g., "event: query")
             if (rawLine.startsWith('event: ')) {
               currentEventType = rawLine.slice(7).trim();
+              rlog.presearch('event-type', `${logPrefix} type=${currentEventType} phase=${phase}`);
               continue;
             }
 
@@ -313,29 +317,72 @@ export function useEntitySubscription({
             // Count ALL meaningful events for seq tracking (not just text)
             // This ensures frontend seq matches backend chunk count
             const isAiSdkEvent = line.startsWith('0:') || line.startsWith('8:') || line.startsWith('e:') || line.startsWith('d:');
-            const isJsonEvent = line.startsWith('{');
+            const isJsonEvent = line.startsWith('{') || jsonBuffer.length > 0;
 
-            if (isAiSdkEvent || isJsonEvent) {
-              currentSeq++;
-              lastSeqRef.current = currentSeq;
-            }
-
-            // Handle presearch-specific SSE events (query, result, start, complete, done)
-            // These use standard SSE format: "event: query\ndata: {...}" not AI SDK format
+            // FIX 2: Handle JSON buffering for chunked presearch events
+            // When we have a buffer or start of JSON, try to accumulate and parse
             if (phase === 'presearch' && currentEventType && isJsonEvent) {
+              // Append to buffer
+              jsonBuffer += line;
+
+              // Try to parse the accumulated buffer
               try {
-                const eventData = JSON.parse(line);
+                const eventData = JSON.parse(jsonBuffer);
+
+                // Success - process the complete JSON
+                currentSeq++;
+                lastSeqRef.current = currentSeq;
+
+                rlog.presearch('event-dispatch', `${logPrefix} dispatching type=${currentEventType}${jsonBuffer.length > 1000 ? ` (${jsonBuffer.length} chars buffered)` : ''}`);
                 callbacks?.onPreSearchEvent?.(currentEventType, eventData);
+
+                // FIX 1: Detect 'done' event as completion signal for presearch
+                // The 'done' event is a data event, not a stream end signal.
+                // Without this, the subscription keeps polling with 202 after stream ends.
+                if (currentEventType === 'done') {
+                  rlog.presearch('done-complete', `${logPrefix} 'done' event received, marking complete`);
+                  setState(prev => ({
+                    ...prev,
+                    isStreaming: false,
+                    lastSeq: currentSeq,
+                    status: 'complete',
+                  }));
+                  callbacks?.onStatusChange?.('complete');
+                  callbacks?.onComplete?.(currentSeq);
+                  reader.cancel(); // Stop polling
+                  return; // Exit read loop
+                }
+
                 currentEventType = null; // Reset after processing
+                jsonBuffer = ''; // Clear buffer after successful parse
 
                 // Yield to React for gradual rendering
                 await new Promise<void>((resolve) => {
                   requestAnimationFrame(() => resolve());
                 });
-              } catch {
-                // Ignore parse errors
+              } catch (parseError) {
+                // Check if it's an incomplete JSON error (unterminated string, unexpected end)
+                const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+                const isIncomplete = errorMsg.includes('Unterminated')
+                  || errorMsg.includes('Unexpected end')
+                  || errorMsg.includes('JSON at position');
+
+                if (isIncomplete) {
+                  // Keep buffering, wait for more data
+                  rlog.presearch('json-buffer', `${logPrefix} buffering incomplete JSON (${jsonBuffer.length} chars) for type=${currentEventType}`);
+                } else {
+                  // Other parse error - log and clear buffer
+                  rlog.presearch('event-error', `${logPrefix} parse error for type=${currentEventType}: ${errorMsg}`);
+                  jsonBuffer = '';
+                  currentEventType = null;
+                }
               }
               continue; // Skip AI SDK handling for presearch events
+            }
+
+            if (isAiSdkEvent) {
+              currentSeq++;
+              lastSeqRef.current = currentSeq;
             }
 
             // Handle AI SDK data stream format (0:) - call onTextChunk for actual text

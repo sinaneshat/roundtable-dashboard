@@ -51,6 +51,12 @@ export type TitleAnimationPhase = z.infer<typeof TitleAnimationPhaseSchema>;
 
 /** Thread and message state */
 export const ThreadStateSchema = z.object({
+  /**
+   * Captured participant count at round start.
+   * Used to prevent count divergence during streaming.
+   * Set by startRound(), consumed by subscriptions.
+   */
+  activeRoundParticipantCount: z.number(),
   currentParticipantIndex: z.number(),
   currentRoundNumber: z.number().nullable(),
   error: z.custom<Error | null>(),

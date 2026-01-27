@@ -34,6 +34,15 @@ import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { rlog } from '@/lib/utils/dev-logger';
+import { isModeratorMetadataFast } from '@/lib/utils/metadata';
+import {
+  areAllParticipantsComplete,
+  countEnabledParticipants,
+  getModeratorStreamingId,
+  getParticipantStreamingId,
+  isStreamingMetadata,
+  isTerminalStatus,
+} from '@/lib/utils/streaming-helpers';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import {
@@ -52,13 +61,54 @@ enableMapSet();
 export type ChatStoreApi = ReturnType<typeof createChatStore>;
 
 /**
- * Create chat store with frame-based flow tracking
+ * Initial state options for SSR hydration
+ * These values are applied at store creation time to prevent flash
  */
-export function createChatStore() {
+export type ChatStoreInitialState = {
+  messages?: UIMessage[];
+  participants?: ChatParticipant[];
+  thread?: ChatThread | null;
+  preSearches?: StoredPreSearch[];
+  changelogItems?: ApiChangelog[];
+  hasInitiallyLoaded?: boolean;
+};
+
+/**
+ * Create chat store with frame-based flow tracking
+ *
+ * @param initialState - Optional initial state for SSR hydration.
+ *   When provided, the store is created with data already populated,
+ *   preventing the flash that occurs when hydrating an empty store.
+ */
+export function createChatStore(initialState?: ChatStoreInitialState) {
+  // Compute initial values from provided state
+  const initialMessages = initialState?.messages ?? [];
+  const initialParticipants = initialState?.participants ?? [];
+  const initialThread = initialState?.thread ?? null;
+  const initialPreSearches = initialState?.preSearches ?? [];
+  const initialChangelogItems = initialState?.changelogItems ?? [];
+  const initialHasLoaded = initialState?.hasInitiallyLoaded ?? false;
+
+  // Determine initial phase based on messages
+  const hasMessages = initialMessages.length > 0;
+  const initialPhase = hasMessages ? ChatPhases.COMPLETE : ChatPhases.IDLE;
+
   return createStore<ChatStore>()(
     devtools(
       immer((set, get) => ({
         ...STORE_DEFAULTS,
+        // Apply initial state overrides for SSR
+        ...(initialState ? {
+          changelogItems: initialChangelogItems,
+          hasInitiallyLoaded: initialHasLoaded,
+          messages: initialMessages,
+          participants: initialParticipants,
+          phase: initialPhase as ChatPhase,
+          preSearches: initialPreSearches,
+          screenMode: initialThread ? ScreenModes.THREAD : STORE_DEFAULTS.screenMode,
+          showInitialUI: !initialThread,
+          thread: initialThread,
+        } : {}),
 
         // ============================================================
         // PHASE TRANSITIONS - Core Flow Machine
@@ -123,9 +173,21 @@ export function createChatStore() {
             return; // Skip empty text chunks
           }
 
+          // Validate participantIndex bounds BEFORE entering set()
+          // This prevents creating messages with 'unknown' modelId for invalid indices
+          const currentState = get();
+          if (
+            participantIndex < 0
+            || !Number.isInteger(participantIndex)
+            || participantIndex >= currentState.participants.length
+          ) {
+            rlog.stuck('streaming', `Invalid participantIndex ${participantIndex} (valid: 0-${currentState.participants.length - 1})`);
+            return; // Silently ignore invalid indices
+          }
+
           set((draft) => {
-            // Generate streaming message ID - matches pattern used elsewhere
-            const streamingMsgId = `streaming_p${participantIndex}_r${roundNumber}`;
+            // Generate streaming message ID using shared utility
+            const streamingMsgId = getParticipantStreamingId(participantIndex, roundNumber);
 
             // Find existing streaming placeholder
             const existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
@@ -142,7 +204,7 @@ export function createChatStore() {
               }
             } else {
               // Create new streaming placeholder
-              // Look up participant info from participants array
+              // Look up participant info from participants array (already validated above)
               const participant = draft.participants[participantIndex];
               const modelId = participant?.modelId ?? 'unknown';
               const participantId = participant?.id;
@@ -182,13 +244,9 @@ export function createChatStore() {
           }
 
           set((draft) => {
-            // FIX: Use the same ID format as useModeratorStream to avoid duplicate placeholders
-            // useModeratorStream creates: ${threadId}_r${roundNumber}_moderator
-            // Previously this used: streaming_moderator_r${roundNumber} which caused duplicates
-            const threadId = draft.thread?.id;
-            const streamingMsgId = threadId
-              ? `${threadId}_r${roundNumber}_moderator`
-              : `streaming_moderator_r${roundNumber}`; // Fallback if no thread yet
+            // Generate moderator streaming ID using shared utility
+            // This ensures consistency with useModeratorStream to avoid duplicate placeholders
+            const streamingMsgId = getModeratorStreamingId(draft.thread?.id ?? null, roundNumber);
 
             // Primary lookup: by ID
             let existingIdx = draft.messages.findIndex(m => m.id === streamingMsgId);
@@ -198,11 +256,11 @@ export function createChatStore() {
             // but now threadId is available so we're looking for a different ID
             if (existingIdx < 0) {
               existingIdx = draft.messages.findIndex((m) => {
-                const meta = m.metadata && typeof m.metadata === 'object' ? m.metadata : null;
-                return meta
-                  && 'isModerator' in meta && meta.isModerator === true
-                  && 'roundNumber' in meta && (meta as { roundNumber: number }).roundNumber === roundNumber
-                  && 'isStreaming' in meta && meta.isStreaming === true;
+                const meta = m.metadata;
+                return isModeratorMetadataFast(meta)
+                  && isStreamingMetadata(meta)
+                  && meta && typeof meta === 'object'
+                  && 'roundNumber' in meta && (meta as { roundNumber: number }).roundNumber === roundNumber;
               });
 
               if (existingIdx >= 0) {
@@ -359,8 +417,12 @@ export function createChatStore() {
         createStreamingPlaceholders: (roundNumber: number, participantCount: number) => {
           set((draft) => {
             // Create placeholders for P1+ (P0 is handled by AI SDK)
-            for (let i = 1; i < participantCount; i++) {
-              const streamingMsgId = `streaming_p${i}_r${roundNumber}`;
+            // IMPORTANT: Only create placeholders for participants that actually exist
+            // This prevents creating messages with 'unknown' modelId
+            const maxValidIndex = Math.min(participantCount, draft.participants.length);
+
+            for (let i = 1; i < maxValidIndex; i++) {
+              const streamingMsgId = getParticipantStreamingId(i, roundNumber);
 
               // Skip if already exists
               if (draft.messages.some(m => m.id === streamingMsgId)) {
@@ -368,8 +430,14 @@ export function createChatStore() {
               }
 
               const participant = draft.participants[i];
-              const modelId = participant?.modelId ?? 'unknown';
-              const participantId = participant?.id;
+              // Double-check participant exists (defensive)
+              if (!participant) {
+                rlog.stuck('placeholder', `Skipping P${i} - participant not found`);
+                continue;
+              }
+
+              const modelId = participant.modelId;
+              const participantId = participant.id;
 
               const placeholder: UIMessage = {
                 id: streamingMsgId,
@@ -389,11 +457,9 @@ export function createChatStore() {
               rlog.stream('check', `P${i} r${roundNumber} proactive placeholder created (empty)`);
             }
 
-            // Create moderator placeholder
-            const threadId = draft.thread?.id;
-            const modId = threadId
-              ? `${threadId}_r${roundNumber}_moderator`
-              : `streaming_moderator_r${roundNumber}`;
+            // Create moderator placeholder using shared utility
+            const threadId = draft.thread?.id ?? null;
+            const modId = getModeratorStreamingId(threadId, roundNumber);
 
             // Log if threadId is missing - this could cause ID mismatch with appendModeratorStreamingText
             if (!threadId) {
@@ -553,17 +619,16 @@ export function createChatStore() {
          */
         onParticipantComplete: (participantIndex: number) => {
           const state = get();
-          const enabledCount = state.participants.filter(p => p.isEnabled).length;
+          const enabledCount = countEnabledParticipants(state.participants);
           const roundNumber = state.currentRoundNumber ?? 0;
           const isRound1 = roundNumber === 0;
 
           // ✅ FIX: Check actual subscription state, not just index
           // This correctly handles out-of-order completion (e.g., P1 finishes before P0)
           const subState = state.subscriptionState;
-          const allParticipantsComplete = subState.participants.length > 0
-            && subState.participants.every(p => p.status === 'complete' || p.status === 'error');
+          const allComplete = areAllParticipantsComplete(subState.participants);
 
-          if (allParticipantsComplete) {
+          if (allComplete) {
             // Frame 5 (R1) / Frame 11→moderator transition (R2)
             // "All Participants Complete → Moderator Starts"
             if (isRound1) {
@@ -582,7 +647,8 @@ export function createChatStore() {
           } else {
             // Not all participants complete yet - this callback may have been called for
             // an individual participant completion, log it but don't transition
-            rlog.phase('onParticipantComplete', `P${participantIndex} complete, waiting for others (${subState.participants.filter(p => p.status === 'complete' || p.status === 'error').length}/${enabledCount})`);
+            const completedCount = subState.participants.filter(p => p.status === 'complete' || p.status === 'error').length;
+            rlog.phase('onParticipantComplete', `P${participantIndex} complete, waiting for others (${completedCount}/${enabledCount})`);
           }
         },
         prepareForNewMessage: () => {
@@ -712,22 +778,10 @@ export function createChatStore() {
             return;
           }
           // DEBUG: Track when messages are replaced (especially for moderator jump issue)
-          const prevStreamingCount = prevMessages.filter(m => {
-            const meta = m.metadata as Record<string, unknown> | null | undefined;
-            return meta && 'isStreaming' in meta && meta.isStreaming === true;
-          }).length;
-          const newStreamingCount = newMessages.filter(m => {
-            const meta = m.metadata as Record<string, unknown> | null | undefined;
-            return meta && 'isStreaming' in meta && meta.isStreaming === true;
-          }).length;
-          const prevModeratorIdx = prevMessages.findIndex(m => {
-            const meta = m.metadata as Record<string, unknown> | null | undefined;
-            return meta && 'isModerator' in meta && meta.isModerator === true;
-          });
-          const newModeratorIdx = newMessages.findIndex(m => {
-            const meta = m.metadata as Record<string, unknown> | null | undefined;
-            return meta && 'isModerator' in meta && meta.isModerator === true;
-          });
+          const prevStreamingCount = prevMessages.filter(m => isStreamingMetadata(m.metadata)).length;
+          const newStreamingCount = newMessages.filter(m => isStreamingMetadata(m.metadata)).length;
+          const prevModeratorIdx = prevMessages.findIndex(m => isModeratorMetadataFast(m.metadata));
+          const newModeratorIdx = newMessages.findIndex(m => isModeratorMetadataFast(m.metadata));
           if (prevStreamingCount !== newStreamingCount || prevModeratorIdx !== newModeratorIdx) {
             rlog.moderator('setMessages', `prev=${prevMessages.length}(stream=${prevStreamingCount},modIdx=${prevModeratorIdx}) → new=${newMessages.length}(stream=${newStreamingCount},modIdx=${newModeratorIdx})`);
           }
@@ -803,24 +857,38 @@ export function createChatStore() {
          *
          * Frame 2 (R1): "User Clicks Send → ALL Placeholders Appear Instantly"
          * Frame 8 (R2): "Send Clicked → Changelog + All Placeholders Appear"
+         *
+         * CRITICAL: Captures participant count at round start to prevent divergence
+         * between subscriptions and placeholders during the streaming phase.
          */
         startRound: (roundNumber: number, participantCount: number) => {
           const isRound1 = roundNumber === 0;
 
-          // Log the appropriate frame
-          if (isRound1) {
-            rlog.frame(2, 'startRound', `r${roundNumber} pCount=${participantCount} - ALL placeholders appear`);
-          } else {
-            rlog.frame(8, 'startRound', `r${roundNumber} pCount=${participantCount} - Changelog + placeholders appear`);
+          // ✅ CLAMP: Ensure participantCount doesn't exceed actual participants
+          // This prevents creating placeholders for non-existent participants
+          const actualCount = Math.min(participantCount, get().participants.length);
+
+          if (participantCount !== actualCount) {
+            rlog.stuck('startRound', `Clamping count from ${participantCount} to ${actualCount}`);
           }
 
-          rlog.phase('startRound', `IDLE→PARTICIPANTS r${roundNumber} with ${participantCount} participants`);
+          // Log the appropriate frame
+          if (isRound1) {
+            rlog.frame(2, 'startRound', `r${roundNumber} pCount=${actualCount} - ALL placeholders appear`);
+          } else {
+            rlog.frame(8, 'startRound', `r${roundNumber} pCount=${actualCount} - Changelog + placeholders appear`);
+          }
+
+          rlog.phase('startRound', `IDLE→PARTICIPANTS r${roundNumber} with ${actualCount} participants`);
 
           // ✅ Create streaming placeholders immediately so UI shows them
           // This ensures placeholders appear on send (Frame 2/8), not on first streaming chunk
-          get().createStreamingPlaceholders(roundNumber, participantCount);
+          get().createStreamingPlaceholders(roundNumber, actualCount);
 
           set({
+            // ✅ Capture participant count for this round
+            // Used by subscriptions to ensure consistent count throughout streaming
+            activeRoundParticipantCount: actualCount,
             currentParticipantIndex: 0,
             currentRoundNumber: roundNumber,
             isStreaming: true,
@@ -875,6 +943,10 @@ export function createChatStore() {
         /**
          * Update a specific entity's subscription status
          * @param entity - 'presearch', 'moderator', or participant index (number)
+         *
+         * IMPORTANT: This function enforces invariants:
+         * 1. Status cannot regress from terminal states ('complete', 'error') to non-terminal
+         * 2. lastSeq can only increase (monotonic) to handle out-of-order updates
          */
         updateEntitySubscriptionStatus: (
           entity: 'presearch' | 'moderator' | number,
@@ -888,10 +960,27 @@ export function createChatStore() {
               : draft.subscriptionState[entity];
 
             if (target) {
-              target.status = status;
-              if (lastSeq !== undefined) {
-                target.lastSeq = lastSeq;
+              // Invariant 1: Prevent status regression from terminal states
+              // 'complete' and 'error' are terminal - once reached, cannot go back
+              const isCurrentTerminal = isTerminalStatus(target.status);
+              const isNewTerminal = isTerminalStatus(status);
+
+              // Only allow status update if:
+              // - Current status is not terminal, OR
+              // - New status is also terminal (e.g., complete -> error is allowed for retry scenarios)
+              if (!isCurrentTerminal || isNewTerminal) {
+                target.status = status;
               }
+
+              // Invariant 2: lastSeq is monotonically increasing
+              // This handles out-of-order network updates
+              if (lastSeq !== undefined) {
+                const currentSeq = target.lastSeq ?? 0;
+                if (lastSeq > currentSeq) {
+                  target.lastSeq = lastSeq;
+                }
+              }
+
               if (errorMessage !== undefined) {
                 target.errorMessage = errorMessage;
               }
@@ -908,6 +997,10 @@ export function createChatStore() {
             const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
             if (ps) {
               (ps as { searchData: unknown }).searchData = partialData;
+              // Debug: Log query count for gradual streaming visibility
+              const queryCount = (partialData as { queries?: unknown[] } | null)?.queries?.length ?? 0;
+              const resultCount = (partialData as { results?: unknown[] } | null)?.results?.length ?? 0;
+              rlog.presearch('partial-update', `r${roundNumber} queries=${queryCount} results=${resultCount}`);
             }
           }, false, 'preSearch/updatePartialPreSearchData');
         },

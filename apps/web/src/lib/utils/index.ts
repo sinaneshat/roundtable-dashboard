@@ -21,6 +21,7 @@ export * from './project-metadata';
 export * from './round-utils';
 export * from './safe-storage';
 export * from './state-merge';
+export * from './streaming-helpers';
 export * from './subscription-helpers';
 export * from './type-guards';
 export * from './web-search-utils';

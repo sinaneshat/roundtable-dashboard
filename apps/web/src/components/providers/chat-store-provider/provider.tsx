@@ -15,6 +15,7 @@ import { MessageRoles, MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -24,6 +25,12 @@ import { useModeratorStream } from '@/hooks/utils/use-moderator-stream';
 import { showApiErrorToast } from '@/lib/toast';
 import { getCurrentRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import {
+  areAllParticipantsComplete,
+  countEnabledParticipants,
+  hasStreamingPlaceholders,
+  parseParticipantEntityIndex,
+} from '@/lib/utils/streaming-helpers';
 import { startRoundService } from '@/services/api/chat';
 import { ChatPhases, createChatStore } from '@/stores/chat';
 
@@ -40,12 +47,18 @@ import type { ChatStoreProviderProps } from './types';
  * Chat Store Provider - Zustand v5 SSR Pattern
  *
  * Factory pattern ensures SSR isolation - each request gets fresh store.
+ *
+ * @param initialState - Optional initial state for SSR hydration.
+ *   When provided at the layout level (from route loader data),
+ *   the store is created with data already populated,
+ *   preventing the flash that occurs when hydrating an empty store.
  */
-export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
+export function ChatStoreProvider({ children, initialState }: ChatStoreProviderProps) {
   const queryClient = useQueryClient();
 
   // Create store via useState lazy initializer (SSR isolation)
-  const [store] = useState(() => createChatStore());
+  // Pass initialState to pre-populate the store during creation
+  const [store] = useState(() => createChatStore(initialState));
 
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef(queryClient);
@@ -74,7 +87,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   })));
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
-  const enabledParticipantCount = participants.filter(p => p.isEnabled).length;
+  const enabledParticipantCount = countEnabledParticipants(participants);
 
   // Determine if subscriptions should be active
   // Active when we have a thread, a round number, and are in a streaming phase
@@ -116,16 +129,22 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         rlog.moderator('chunk', `r${roundNumber} seq=${seq} +${text.length} chars`);
         state.appendModeratorStreamingText(text, roundNumber);
       }
-    } else if (entity.startsWith('participant_')) {
-      const index = Number.parseInt(entity.replace('participant_', ''), 10);
-      state.updateEntitySubscriptionStatus(index, 'streaming', seq);
+    } else {
+      const index = parseParticipantEntityIndex(entity);
+      if (index !== null) {
+        state.updateEntitySubscriptionStatus(index, 'streaming', seq);
 
-      // FIX: Only create streaming placeholders for P1+ participants
-      // P0 is handled by AI SDK which manages its own rendering directly
-      // Creating streaming_p0_r0 alongside AI SDK's message causes duplicates
-      // P1+ need streaming placeholders because they're not handled by AI SDK
-      if (text && index > 0) {
-        state.appendEntityStreamingText(index, text, roundNumber);
+        // ✅ FIX Phase 5B: Accumulate text for ALL participants when web search is enabled
+        // When web search is enabled, backend orchestrates ALL participants (including P0)
+        // via the queue system. In this mode, AI SDK is NOT triggered, so P0 must use
+        // subscription-based streaming just like P1+.
+        //
+        // When web search is disabled, P0 is handled by AI SDK which manages its own
+        // rendering directly, so we skip P0 to avoid duplicates.
+        const shouldAccumulateP0 = state.enableWebSearch;
+        if (text && (index > 0 || shouldAccumulateP0)) {
+          state.appendEntityStreamingText(index, text, roundNumber);
+        }
       }
     }
   }, [store]);
@@ -146,91 +165,50 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     } else if (entity === 'moderator') {
       state.updateEntitySubscriptionStatus('moderator', 'complete', lastSeq);
 
-      // ✅ FIX: Check if messages still have streaming placeholders
-      const hasStreamingPlaceholders = state.messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown> | null | undefined;
-        return meta && 'isStreaming' in meta && meta.isStreaming === true;
-      });
-
-      if (hasStreamingPlaceholders) {
-        // ✅ FIX: Clean up streaming placeholders by marking them as not streaming
-        // This prevents UI from getting stuck in loading state
-        rlog.moderator('sub-complete', `cleaning up streaming placeholders before onModeratorComplete`);
-        const cleanedMessages = state.messages.map((m) => {
-          const meta = m.metadata as Record<string, unknown> | null | undefined;
-          if (meta && 'isStreaming' in meta && meta.isStreaming === true) {
-            return {
-              ...m,
-              metadata: {
-                ...meta,
-                isStreaming: false,
-              },
-            };
-          }
-          return m;
-        });
-        state.setMessages(cleanedMessages);
+      // ✅ FIX: Check if messages still have streaming placeholders before calling onModeratorComplete
+      // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
+      // If we call onModeratorComplete here while streaming placeholders exist, we get an intermediate
+      // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+      if (hasStreamingPlaceholders(state.messages)) {
+        rlog.moderator('sub-complete', `skipping onModeratorComplete - streaming placeholders still exist, polling will handle`);
+      } else {
+        // Moderator complete means round is done
+        state.onModeratorComplete();
       }
+    } else {
+      const index = parseParticipantEntityIndex(entity);
+      if (index !== null) {
+        state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
 
-      // Moderator complete means round is done
-      state.onModeratorComplete();
-    } else if (entity.startsWith('participant_')) {
-      const index = Number.parseInt(entity.replace('participant_', ''), 10);
-      state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
+        // NOTE: We no longer fetch messages from server on participant completion.
+        // Previously, this fetch would overwrite the gradually-streamed text,
+        // causing responses to appear "all at once" instead of streaming smoothly.
+        // The streamed text accumulated via appendEntityStreamingText is now preserved.
+        // Server messages are synced separately after the round completes.
 
-      // NOTE: We no longer fetch messages from server on participant completion.
-      // Previously, this fetch would overwrite the gradually-streamed text,
-      // causing responses to appear "all at once" instead of streaming smoothly.
-      // The streamed text accumulated via appendEntityStreamingText is now preserved.
-      // Server messages are synced separately after the round completes.
-
-      // Check if this was the last participant
-      const subState = store.getState().subscriptionState;
-      const allParticipantsDone = subState.participants.every(
-        p => p.status === 'complete' || p.status === 'error',
-      );
-
-      if (allParticipantsDone) {
-        rlog.phase('subscription', `All participants complete - transitioning to MODERATOR`);
-        store.getState().onParticipantComplete(index);
+        // Check if this was the last participant
+        const subState = store.getState().subscriptionState;
+        if (areAllParticipantsComplete(subState.participants)) {
+          rlog.phase('subscription', `All participants complete - transitioning to MODERATOR`);
+          store.getState().onParticipantComplete(index);
+        }
       }
     }
   }, [store]);
 
   const handleRoundComplete = useCallback(() => {
     const state = store.getState();
-    const roundNumber = state.currentRoundNumber ?? 0;
-    rlog.phase('subscription', `Round ${roundNumber} COMPLETE`);
+    rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
 
-    // ✅ FIX: Check if messages still have streaming placeholders
-    const hasStreamingPlaceholders = state.messages.some((m) => {
-      const meta = m.metadata as Record<string, unknown> | null | undefined;
-      return meta && 'isStreaming' in meta && meta.isStreaming === true;
-    });
-
-    if (hasStreamingPlaceholders) {
-      // ✅ FIX: Clean up streaming placeholders by marking them as not streaming
-      // This prevents UI from getting stuck in loading state when subscription
-      // completes but streaming placeholders still exist
-      rlog.moderator('round-complete', `cleaning up streaming placeholders before completeStreaming`);
-      const cleanedMessages = state.messages.map((m) => {
-        const meta = m.metadata as Record<string, unknown> | null | undefined;
-        if (meta && 'isStreaming' in meta && meta.isStreaming === true) {
-          return {
-            ...m,
-            metadata: {
-              ...meta,
-              isStreaming: false,
-            },
-          };
-        }
-        return m;
-      });
-      state.setMessages(cleanedMessages);
+    // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
+    // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
+    // If we call completeStreaming here while streaming placeholders exist, we get an intermediate
+    // render with isStreaming=false but streaming placeholders still in messages = visual jump.
+    if (hasStreamingPlaceholders(state.messages)) {
+      rlog.moderator('round-complete', `skipping completeStreaming - streaming placeholders still exist, polling will handle`);
+    } else {
+      state.completeStreaming();
     }
-
-    // Now safe to complete streaming - placeholders are cleaned up
-    state.completeStreaming();
   }, [store]);
 
   const handleEntityError = useCallback((entity: EntityType, error: Error) => {
@@ -241,9 +219,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
       store.getState().updateEntitySubscriptionStatus('presearch', 'error', undefined, error.message);
     } else if (entity === 'moderator') {
       store.getState().updateEntitySubscriptionStatus('moderator', 'error', undefined, error.message);
-    } else if (entity.startsWith('participant_')) {
-      const index = Number.parseInt(entity.replace('participant_', ''), 10);
-      store.getState().updateEntitySubscriptionStatus(index, 'error', undefined, error.message);
+    } else {
+      const index = parseParticipantEntityIndex(entity);
+      if (index !== null) {
+        store.getState().updateEntitySubscriptionStatus(index, 'error', undefined, error.message);
+      }
     }
   }, [store]);
 
@@ -260,21 +240,64 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     totalResults: 0,
   });
 
+  // FIX 3: Reset presearch accumulator when round number changes
+  const prevRoundRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentRoundNumber !== null && currentRoundNumber !== prevRoundRef.current) {
+      preSearchDataRef.current = {
+        queries: [],
+        results: [],
+        summary: '',
+        totalResults: 0,
+      };
+      prevRoundRef.current = currentRoundNumber;
+      rlog.presearch('reset', `r${currentRoundNumber} accumulator reset`);
+    }
+  }, [currentRoundNumber]);
+
   // Handle presearch SSE events for gradual UI updates
+  // CRITICAL: We must deep clone arrays before passing to Immer to avoid freezing
+  // the accumulator ref's arrays, which would cause "object is not extensible" errors
   const handlePreSearchEvent = useCallback((eventType: string, data: unknown) => {
     const state = store.getState();
     const roundNumber = state.currentRoundNumber ?? 0;
     const eventData = data as Record<string, unknown>;
 
+    // Enhanced logging to debug pre-search event routing
+    rlog.presearch('handler-received', `r${roundNumber} type=${eventType} hasData=${!!data} keys=${Object.keys(eventData).join(',').slice(0, 50)}`);
+
+    // Helper to deep clone the accumulator data for Immer
+    // This prevents Immer from freezing our mutable ref arrays
+    const cloneAccumulatorForStore = () => ({
+      queries: preSearchDataRef.current.queries.map(q => ({ ...q })),
+      results: preSearchDataRef.current.results.map(r => ({
+        ...r,
+        results: [...(r.results || [])],
+      })),
+      summary: preSearchDataRef.current.summary,
+      totalResults: preSearchDataRef.current.totalResults,
+    });
+
     switch (eventType) {
       case 'start':
-        // Reset accumulator for new presearch
-        preSearchDataRef.current = {
-          queries: [],
-          results: [],
-          summary: (eventData.analysisRationale as string) || '',
-          totalResults: 0,
-        };
+        // FIX 1: Only reset if accumulator is empty
+        // This handles the case where backend sends start AFTER query events
+        if (
+          preSearchDataRef.current.queries.length === 0
+          && preSearchDataRef.current.results.length === 0
+        ) {
+          preSearchDataRef.current = {
+            queries: [],
+            results: [],
+            summary: (eventData.analysisRationale as string) || '',
+            totalResults: 0,
+          };
+          rlog.presearch('start', `r${roundNumber} accumulator reset`);
+        } else {
+          // Just update summary without resetting data
+          preSearchDataRef.current.summary = (eventData.analysisRationale as string) || preSearchDataRef.current.summary;
+          rlog.presearch('start', `r${roundNumber} skipped reset (already has ${preSearchDataRef.current.queries.length} queries, ${preSearchDataRef.current.results.length} results)`);
+        }
         break;
 
       case 'query': {
@@ -292,8 +315,13 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
         } else {
           preSearchDataRef.current.queries.push(queryData);
         }
-        // Update store with partial data
-        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        // ✅ FIX Phase 5C: Use flushSync to force immediate render for gradual animation
+        // Without this, React 18 batches multiple SSE events into one render cycle,
+        // causing all queries to appear simultaneously instead of one by one
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for gradual streaming animation
+        flushSync(() => {
+          state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
+        });
         break;
       }
 
@@ -303,7 +331,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           index: eventData.index as number,
           query: eventData.query as string,
           responseTime: (eventData.responseTime as number) || 0,
-          results: (eventData.results as unknown[]) || [],
+          results: [...((eventData.results as unknown[]) || [])], // Clone the results array
         };
         // Update or add result at the given index
         const existingIdx = preSearchDataRef.current.results.findIndex(r => r.index === resultData.index);
@@ -316,21 +344,46 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
           (sum, r) => sum + r.results.length,
           0,
         );
-        // Update store with partial data
-        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        // ✅ FIX Phase 5C: Use flushSync to force immediate render for gradual animation
+        // Without this, React 18 batches multiple SSE events into one render cycle,
+        // causing all results to appear simultaneously instead of one by one
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required for gradual streaming animation
+        flushSync(() => {
+          state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
+        });
         break;
       }
 
       case 'complete':
         // Complete event has stats, update totalResults
         preSearchDataRef.current.totalResults = (eventData.totalResults as number) || 0;
-        state.updatePartialPreSearchData(roundNumber, { ...preSearchDataRef.current });
+        state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
         break;
 
-      case 'done':
-        // Done event contains complete searchData - update store with full payload
-        state.updatePartialPreSearchData(roundNumber, eventData);
+      case 'done': {
+        // FIX 2: Done event may contain complete searchData OR just {interrupted: true, reason: '...'}
+        // CRITICAL: Only replace accumulated data if done payload has MORE data, not less
+        // This prevents data corruption where done event replaces 2 accumulated queries with 1
+        const doneQueries = Array.isArray(eventData.queries) ? eventData.queries.length : 0;
+        const doneResults = Array.isArray(eventData.results) ? eventData.results.length : 0;
+        const accQueries = preSearchDataRef.current.queries.length;
+        const accResults = preSearchDataRef.current.results.length;
+
+        if (eventData.interrupted) {
+          // Interrupted - keep accumulated data
+          state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
+          rlog.presearch('done', `r${roundNumber} interrupted, using accumulated (q=${accQueries} r=${accResults})`);
+        } else if (doneQueries >= accQueries && doneResults >= accResults && (doneQueries > 0 || doneResults > 0)) {
+          // Done payload is complete (has >= accumulated data) - use it
+          state.updatePartialPreSearchData(roundNumber, eventData);
+          rlog.presearch('done', `r${roundNumber} full payload applied (q=${doneQueries} r=${doneResults})`);
+        } else {
+          // Done payload has less data than accumulated - prefer accumulated
+          state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
+          rlog.presearch('done', `r${roundNumber} using accumulated (done q=${doneQueries}/r=${doneResults} < acc q=${accQueries}/r=${accResults})`);
+        }
         break;
+      }
     }
   }, [store]);
 
@@ -433,6 +486,23 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // Sync store messages to AI SDK after thread initialization (Store -> AI SDK)
   const hasHydratedToAiSdkRef = useRef(false);
+  // Track last hydrated thread to detect thread changes
+  const lastHydratedThreadIdRef = useRef<string | null>(null);
+
+  // ✅ CRITICAL FIX: Reset hydration refs when thread changes
+  // Without this, navigating overview→thread1→overview→thread2 causes:
+  // 1. hasHydratedToAiSdkRef stays true from thread1
+  // 2. AI SDK never gets messages for thread2
+  // 3. chat.isReady stays false
+  // 4. Trigger effect can't fire → streaming never starts
+  useEffect(() => {
+    if (effectiveThreadId && effectiveThreadId !== lastHydratedThreadIdRef.current) {
+      rlog.trigger('thread-change', `Reset hydration refs: ${lastHydratedThreadIdRef.current?.slice(-8) ?? 'null'} → ${effectiveThreadId.slice(-8)}`);
+      hasHydratedToAiSdkRef.current = false;
+      lastHydratedThreadIdRef.current = effectiveThreadId;
+    }
+  }, [effectiveThreadId]);
+
   useEffect(() => {
     if (
       !hasHydratedToAiSdkRef.current
@@ -449,6 +519,18 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   // P0 streaming trigger - only triggers first participant when waitingToStartStreaming is set
   const hasTriggeredRef = useRef(false);
   const lastTriggerKeyRef = useRef<string | null>(null);
+
+  // ✅ CRITICAL FIX: Reset trigger refs when thread changes
+  // Without this, the dedupe check could block legitimate triggers for new threads
+  const lastTriggeredThreadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (effectiveThreadId && effectiveThreadId !== lastTriggeredThreadIdRef.current) {
+      rlog.trigger('thread-change', `Reset trigger refs: ${lastTriggeredThreadIdRef.current?.slice(-8) ?? 'null'} → ${effectiveThreadId.slice(-8)}`);
+      hasTriggeredRef.current = false;
+      lastTriggerKeyRef.current = null;
+      lastTriggeredThreadIdRef.current = effectiveThreadId;
+    }
+  }, [effectiveThreadId]);
 
   useEffect(() => {
     // Guard: Need to be waiting to start streaming
@@ -480,7 +562,7 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     lastTriggerKeyRef.current = triggerKey;
 
     // Start round - different paths for web search vs direct streaming
-    const enabledCount = participants.filter(p => p.isEnabled).length;
+    const enabledCount = countEnabledParticipants(participants);
 
     if (enableWebSearch) {
       // ✅ QUEUE-ORCHESTRATED FLOW: Backend handles presearch → P0 → P1 → ... → moderator

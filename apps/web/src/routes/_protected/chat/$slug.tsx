@@ -6,18 +6,10 @@ import { ThreadContentSkeleton } from '@/components/skeletons';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import {
-  threadBySlugQueryOptions,
-  threadChangelogQueryOptions,
-  threadFeedbackQueryOptions,
-  threadPreSearchesQueryOptions,
-} from '@/lib/data/query-options';
+import { threadBySlugQueryOptions } from '@/lib/data/query-options';
 import { useTranslations } from '@/lib/i18n';
+import { createEmptyLoaderData, fetchThreadData } from '@/lib/loaders';
 import { rlog } from '@/lib/utils/dev-logger';
-import type {
-  GetThreadBySlugResponse,
-  GetThreadFeedbackResponse,
-} from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   component: ChatThreadRoute,
@@ -25,117 +17,17 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const { queryClient } = context;
 
     if (!params.slug) {
-      return {
-        threadTitle: null,
-        threadId: null,
-        threadData: null,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-        streamResumption: undefined,
-      };
+      return createEmptyLoaderData();
     }
 
-    const options = threadBySlugQueryOptions(params.slug);
     const isServer = typeof window === 'undefined';
 
-    rlog.init('loader', `slug=${params.slug} server=${isServer ? 1 : 0}`);
-
-    // Check cache for prefetched thread data (from flow-controller)
-    const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
-    const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
-
-    // Early return when flow-controller prefetched VALID data (must have messages)
-    // CRITICAL: "Shell" data (thread metadata without messages) should NOT trigger early return
-    // This prevents blank screen when sidebar prefetch caches incomplete data
-    if (hasPrefetchMeta && cachedThreadData?.success && cachedThreadData.data.messages.length > 0) {
-      const threadData = cachedThreadData.data;
-      rlog.init('loader', `prefetch-hit: ${threadData.thread.slug} msgs=${threadData.messages.length}`);
-      return {
-        threadTitle: threadData.thread.title ?? null,
-        threadId: threadData.thread.id ?? null,
-        threadData,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-        streamResumption: undefined,
-      };
-    }
-
-    try {
-      await queryClient.ensureQueryData(options);
-    } catch (error) {
-      console.error('[ChatThread] Loader error:', error);
-      return {
-        threadTitle: null,
-        threadId: null,
-        threadData: null,
-        preSearches: undefined,
-        changelog: undefined,
-        feedback: undefined,
-        streamResumption: undefined,
-      };
-    }
-
-    const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
-    const threadId = cachedData?.success && cachedData.data?.thread?.id;
-    const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
-
-    let preSearches;
-    let changelog;
-    let feedback;
-
-    if (threadId) {
-      const changelogOptions = threadChangelogQueryOptions(threadId);
-      const feedbackOptions = threadFeedbackQueryOptions(threadId);
-      const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
-
-      if (isServer) {
-        // On server, await all for proper hydration
-        const [changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
-          queryClient.ensureQueryData(changelogOptions).catch(() => null),
-          queryClient.ensureQueryData(feedbackOptions).catch(() => null),
-          queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
-        ]);
-
-        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        feedback = feedbackResult?.success ? feedbackResult.data : undefined;
-        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
-      } else {
-        // On client, check cache first, then prefetch missing data
-        const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
-        const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
-
-        const [changelogResult, preSearchesResult] = await Promise.all([
-          cachedChangelog
-            ? Promise.resolve(cachedChangelog)
-            : queryClient.ensureQueryData(changelogOptions).catch(() => null),
-          cachedPreSearches
-            ? Promise.resolve(cachedPreSearches)
-            : queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
-        ]);
-        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
-
-        const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
-        feedback = cachedFeedback?.success ? cachedFeedback.data : undefined;
-
-        // Prefetch missing feedback data in background
-        if (!cachedFeedback) {
-          queryClient.prefetchQuery(feedbackOptions).catch(() => {});
-        }
-      }
-    }
-
-    const threadData = cachedData?.success ? cachedData.data : null;
-    return {
-      threadTitle,
-      threadId,
-      threadData,
-      preSearches,
-      changelog,
-      feedback,
-    };
+    return fetchThreadData({
+      queryClient,
+      slug: params.slug,
+      isServer,
+      loaderContext: 'ChatThread',
+    });
   },
 
   head: ({ loaderData, params }) => {
@@ -204,6 +96,10 @@ function ChatThreadRoute() {
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
+
+  // Debug: Log data source selection (parity with project-route)
+  const dataSource = hasValidLoaderData ? 'loader' : (queryData?.success ? 'query' : 'none');
+  rlog.init('normal-route', `url=${slug} source=${dataSource} loaderValid=${hasValidLoaderData} loaderMsgs=${loaderData?.threadData?.messages?.length ?? 0} queryOk=${queryData?.success ?? false} queryMsgs=${queryData?.success ? queryData.data?.messages?.length ?? 0 : 0}`);
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',

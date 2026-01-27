@@ -56,16 +56,51 @@ export function useNavigationCleanup({
 
     const currentState = store.getState();
 
-    // 🔍 DEBUG: Log navigation detection
-    rlog.init('nav-cleanup', `from=${prevPath?.split('/').pop() ?? '-'} to=${pathname?.split('/').pop() ?? '-'} storeT=${currentState.thread?.slug ?? '-'} msgs=${currentState.messages.length}`);
-
     // Detect navigation patterns
-    const isLeavingThread = prevPath?.startsWith('/chat/') && prevPath !== '/chat';
-    const isGoingToOverview = pathname === '/chat';
-    const isNavigatingBetweenThreads = prevPath?.startsWith('/chat/') && pathname?.startsWith('/chat/') && prevPath !== pathname;
-    const isGoingToThread = pathname?.startsWith('/chat/') && pathname !== '/chat';
-    const isFromOverviewToThread = prevPath === '/chat' && isGoingToThread;
+    // Helper to check if a path is a "new thread" page (overview-like, not an actual thread)
+    const isNewThreadPath = (path: string | null): boolean =>
+      path === '/chat' || (path?.endsWith('/new') ?? false);
+
+    // Helper to check if path is a project overview (not a thread)
+    const isProjectOverviewPath = (path: string | null): boolean =>
+      path?.match(/^\/chat\/projects\/[^/]+$/) !== null;
+
+    // Compute path classifications
+    const prevIsNewPath = isNewThreadPath(prevPath);
+    const prevIsProjectOverview = isProjectOverviewPath(prevPath);
+    const nextIsNewPath = isNewThreadPath(pathname);
+    const nextIsProjectOverview = isProjectOverviewPath(pathname);
+
+    const isLeavingThread = prevPath?.startsWith('/chat/') && prevPath !== '/chat' && !prevIsNewPath && !prevIsProjectOverview;
+    const isGoingToOverview = pathname === '/chat' || nextIsProjectOverview;
+    const isGoingToThread = pathname?.startsWith('/chat/') && pathname !== '/chat' && !nextIsNewPath && !nextIsProjectOverview;
+
+    // Navigation between actual threads (excluding /new routes which are overview-like)
+    const isNavigatingBetweenThreads =
+      prevPath?.startsWith('/chat/')
+      && pathname?.startsWith('/chat/')
+      && prevPath !== pathname
+      && !prevIsNewPath
+      && !nextIsNewPath
+      && !prevIsProjectOverview
+      && !nextIsProjectOverview;
+
+    // Navigation from any "overview" state (/chat, /chat/projects/$id, or /new routes) to a thread
+    const isFromOverviewToThread = (prevIsNewPath || prevIsProjectOverview) && isGoingToThread;
     const isComingFromNonChatPage = prevPath && !prevPath.startsWith('/chat') && isGoingToOverview;
+
+    // 🔍 DEBUG: Log navigation detection with full context
+    rlog.init('nav-cleanup', `from=${prevPath?.split('/').pop() ?? '-'} to=${pathname?.split('/').pop() ?? '-'} storeT=${currentState.thread?.slug ?? '-'} msgs=${currentState.messages.length} prevNew=${prevIsNewPath} prevProjOv=${prevIsProjectOverview} betweenThreads=${isNavigatingBetweenThreads} ovToThread=${isFromOverviewToThread} created=${currentState.createdThreadId?.slice(-8) ?? '-'}`);
+
+    // ✅ CRITICAL: Skip ALL cleanup during new thread creation
+    // When createdThreadId is set, we're in the middle of thread creation flow
+    // The store is already set up correctly, don't touch it
+    const isActiveThreadCreation = currentState.createdThreadId !== null;
+    if (isActiveThreadCreation) {
+      rlog.init('nav-cleanup', `SKIP: active thread creation (createdId=${currentState.createdThreadId?.slice(-8)})`);
+      prevPathnameRef.current = pathname;
+      return;
+    }
 
     // ✅ FIX: Only clear waitingToStartStreaming when NOT navigating from overview to thread
     // When user creates a new thread from overview, we navigate to /chat/{slug} and need
@@ -102,20 +137,16 @@ export function useNavigationCleanup({
     }
 
     // Reset when navigating from overview to a DIFFERENT thread
-    // ✅ FIX: Don't reset during new thread creation (preserves waitingToStartStreaming)
+    // NOTE: New thread creation is already handled by early return above (createdThreadId check)
     if (isFromOverviewToThread && (currentState.thread || currentState.messages.length > 0)) {
-      const isNewThreadCreation = currentState.createdThreadId !== null;
+      const targetSlug = pathname?.replace('/chat/', '');
+      const currentSlug = currentState.thread?.slug;
+      const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
 
-      if (!isNewThreadCreation) {
-        const targetSlug = pathname?.replace('/chat/', '');
-        const currentSlug = currentState.thread?.slug;
-        const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
-
-        // ✅ FIX: Immediate reset - remountDeps handles component remounting
-        if (!isNavigatingToSameThread && !currentState.isStreaming) {
-          currentState.chatStop?.();
-          currentState.resetForThreadNavigation();
-        }
+      // Reset if navigating to different thread and not streaming
+      if (!isNavigatingToSameThread && !currentState.isStreaming) {
+        currentState.chatStop?.();
+        currentState.resetForThreadNavigation();
       }
     }
 

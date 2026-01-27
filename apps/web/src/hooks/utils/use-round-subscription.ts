@@ -20,6 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
+import { areAllParticipantsComplete, parseParticipantEntityIndex } from '@/lib/utils/streaming-helpers';
 
 import type { EntitySubscriptionCallbacks, EntitySubscriptionState } from './use-entity-subscription';
 import {
@@ -138,18 +139,29 @@ export function useRoundSubscription({
   const hasCalledRoundCompleteRef = useRef(false);
 
   // ✅ STAGGER STATE: Track which participant index is ready to subscribe
-  // Start with 0 - only P0 can subscribe initially
+  // Start with -1 when presearch is enabled - participants wait for presearch
+  // Start with 0 when presearch is disabled - P0 can subscribe immediately
   // When P(n) starts streaming, we enable P(n+1)
-  const [maxEnabledIndex, setMaxEnabledIndex] = useState(0);
+  const [maxEnabledIndex, setMaxEnabledIndex] = useState(() => enablePreSearch ? -1 : 0);
   const [moderatorEnabled, setModeratorEnabled] = useState(false);
+  // Track if presearch has completed (allows participants to start)
+  const [presearchReady, setPresearchReady] = useState(!enablePreSearch);
+  // FIX 1: Explicit flag for P0 enable, bypasses stagger condition
+  // The stagger logic condition `nextIndex > maxEnabledIndex` (0 > 0 = false) prevents P0 from being enabled
+  // This flag is set when presearch completes, ensuring P0 subscription is enabled immediately
+  const [initialParticipantsEnabled, setInitialParticipantsEnabled] = useState(!enablePreSearch);
 
   // Reset stagger state when round changes
   useEffect(() => {
     hasCalledRoundCompleteRef.current = false;
-    setMaxEnabledIndex(0);
+    // When presearch is enabled, start with -1 (no participants)
+    // When presearch is disabled, start with 0 (P0 can start)
+    setMaxEnabledIndex(enablePreSearch ? -1 : 0);
     setModeratorEnabled(false);
-    rlog.stream('check', `r${roundNumber} stagger reset: maxIdx=0 modEnabled=false`);
-  }, [threadId, roundNumber]);
+    setPresearchReady(!enablePreSearch);
+    setInitialParticipantsEnabled(!enablePreSearch); // FIX 1: Reset explicit P0 flag
+    rlog.stream('check', `r${roundNumber} stagger reset: maxIdx=${enablePreSearch ? -1 : 0} modEnabled=false presearchEnabled=${enablePreSearch} initialEnabled=${!enablePreSearch}`);
+  }, [threadId, roundNumber, enablePreSearch]);
 
   // Create callbacks for each entity type
   const basePresearchCallbacks = useEntityCallbacks('presearch', { onChunk, onEntityComplete, onEntityError });
@@ -161,9 +173,34 @@ export function useRoundSubscription({
     onPreSearchEvent,
   }), [basePresearchCallbacks, onPreSearchEvent]);
 
+  // ✅ FIX Phase 5B: Callback-based presearch completion detection
+  // The previous effect-based approach relied on presearchSub.state.status polling,
+  // which could miss the status change due to React batching or stale closures.
+  // Using onStatusChange callback ensures immediate P0 enablement when presearch completes.
+  //
+  // IMPORTANT: Once presearchReady is true, we should NOT reset it even if status goes
+  // back to 'waiting' (which happens when subscription reconnects/retries). The presearch
+  // completion is a one-time gate - once passed, participants should stay enabled.
+  const presearchCallbacksWithStatusChange: EntitySubscriptionCallbacks = useMemo(() => ({
+    ...presearchCallbacks,
+    onStatusChange: (status) => {
+      rlog.gate('presearch-status', `r${roundNumber} status=${status} ready=${presearchReady}`);
+
+      // Only enable P0 once on complete/error - ignore subsequent status changes
+      if ((status === 'complete' || status === 'error') && !presearchReady) {
+        rlog.gate('presearch-gate', `r${roundNumber} COMPLETE → enabling P0 via callback`);
+        setPresearchReady(true);
+        setMaxEnabledIndex(0);
+        setInitialParticipantsEnabled(true);
+      }
+      // Note: We intentionally do NOT reset presearchReady when status goes back to 'waiting'
+      // This prevents the race condition where subscription reconnect resets participant enablement
+    },
+  }), [presearchCallbacks, roundNumber, presearchReady]);
+
   // Pre-search subscription (conditional)
   const presearchSub = usePreSearchSubscription({
-    callbacks: presearchCallbacks,
+    callbacks: presearchCallbacksWithStatusChange,
     enabled: enabled && enablePreSearch,
     roundNumber,
     threadId,
@@ -184,7 +221,8 @@ export function useRoundSubscription({
   const p9Callbacks = useEntityCallbacks('participant_9', { onChunk, onEntityComplete, onEntityError });
 
   // ✅ STAGGER: Only enable subscription if index <= maxEnabledIndex
-  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && participantCount > 0 && 0 <= maxEnabledIndex, participantIndex: 0, roundNumber, threadId });
+  // FIX 1: P0 uses explicit flag instead of relying on stagger index comparison (0 > 0 = false bug)
+  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && participantCount > 0 && initialParticipantsEnabled && 0 <= maxEnabledIndex, participantIndex: 0, roundNumber, threadId });
   const p1Sub = useParticipantSubscription({ callbacks: p1Callbacks, enabled: enabled && participantCount > 1 && 1 <= maxEnabledIndex, participantIndex: 1, roundNumber, threadId });
   const p2Sub = useParticipantSubscription({ callbacks: p2Callbacks, enabled: enabled && participantCount > 2 && 2 <= maxEnabledIndex, participantIndex: 2, roundNumber, threadId });
   const p3Sub = useParticipantSubscription({ callbacks: p3Callbacks, enabled: enabled && participantCount > 3 && 3 <= maxEnabledIndex, participantIndex: 3, roundNumber, threadId });
@@ -208,9 +246,30 @@ export function useRoundSubscription({
   const activeParticipantSubs = allParticipantSubs.slice(0, participantCount);
   const participantStates = activeParticipantSubs.map(sub => sub.state);
 
+  // ✅ PRESEARCH GATE: Backup effect for enabling participants after presearch completes
+  // Primary mechanism is the onStatusChange callback above; this effect serves as backup
+  // in case the callback doesn't fire (e.g., if status was already complete on mount)
+  useEffect(() => {
+    if (!enabled) return;
+    if (!enablePreSearch) return; // Presearch not enabled, participants can start immediately
+
+    const presearchComplete = presearchSub.state.status === 'complete' || presearchSub.state.status === 'error';
+
+    // Log gate state for debugging
+    rlog.gate('gate-effect', `r${roundNumber} enabled=${enabled} status=${presearchSub.state.status} ready=${presearchReady} complete=${presearchComplete}`);
+
+    if (presearchComplete && !presearchReady) {
+      rlog.gate('presearch-gate', `r${roundNumber} COMPLETE → enabling P0 via effect (backup)`);
+      setPresearchReady(true);
+      setMaxEnabledIndex(0); // Now P0 can subscribe
+      setInitialParticipantsEnabled(true); // FIX 1: Explicitly enable P0 (bypasses stagger condition)
+    }
+  }, [enabled, enablePreSearch, presearchSub.state.status, presearchReady, roundNumber]);
+
   // ✅ STAGGER EFFECT: Enable next subscription when current one starts streaming or completes
   useEffect(() => {
     if (!enabled) return;
+    if (!presearchReady) return; // Wait for presearch to complete first
 
     // Find the highest index that is streaming or complete
     let highestActiveIndex = -1;
@@ -229,25 +288,20 @@ export function useRoundSubscription({
     }
 
     // Check if all participants are complete to enable moderator
-    const allParticipantsComplete = participantCount > 0 && participantStates.every(
-      s => s.status === 'complete' || s.status === 'error',
-    );
-    if (allParticipantsComplete && !moderatorEnabled) {
+    if (areAllParticipantsComplete(participantStates) && !moderatorEnabled) {
       rlog.stream('check', `r${roundNumber} all participants complete → enabling moderator`);
       setModeratorEnabled(true);
     }
-  }, [enabled, participantCount, participantStates, maxEnabledIndex, moderatorEnabled, roundNumber]);
+  }, [enabled, presearchReady, participantCount, participantStates, maxEnabledIndex, moderatorEnabled, roundNumber]);
 
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
     const presearchComplete = !enablePreSearch || presearchSub.state.status === 'complete' || presearchSub.state.status === 'disabled';
-    // Guard against empty array: .every() returns true on [], which would prematurely complete
-    const allParticipantsComplete = participantStates.length > 0 && participantStates.every(
-      s => s.status === 'complete' || s.status === 'error',
-    );
+    // Guard against empty array: areAllParticipantsComplete returns false for empty array
+    const allParticipantsDone = areAllParticipantsComplete(participantStates);
     const moderatorComplete = moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error';
 
-    const isRoundComplete = presearchComplete && allParticipantsComplete && moderatorComplete;
+    const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
 
     const hasActiveStream
       = presearchSub.state.isStreaming
@@ -285,9 +339,9 @@ export function useRoundSubscription({
       presearchSub.retry();
     } else if (entity === 'moderator') {
       moderatorSub.retry();
-    } else if (entity.startsWith('participant_')) {
-      const index = Number.parseInt(entity.replace('participant_', ''), 10);
-      if (index >= 0 && index < activeParticipantSubs.length) {
+    } else {
+      const index = parseParticipantEntityIndex(entity);
+      if (index !== null && index >= 0 && index < activeParticipantSubs.length) {
         activeParticipantSubs[index]?.retry();
       }
     }

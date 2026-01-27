@@ -977,6 +977,18 @@ async function extractPageContent(
     alt?: string;
   }[];
 }> {
+  // ✅ FIX Phase 5D: Early check for ad/tracking URLs that will fail extraction
+  if (shouldSkipUrl(url)) {
+    console.warn(`[Search] Skipping ad/tracking URL: ${url.slice(0, 80)}...`);
+    return {
+      content: '',
+      metadata: {
+        readingTime: 0,
+        wordCount: 0,
+      },
+    };
+  }
+
   const browserResult = await initBrowser(env);
 
   // Fallback if no browser available - use lightweight HTML extraction
@@ -1221,13 +1233,16 @@ async function searchWithBrowser(
   try {
     // Use discriminated union to call type-specific helper
     // Use Cloudflare Browser Rendering for search
-    const results: ExtractedSearchResult[] = await searchWithCloudflareBrowser(
+    const rawResults: ExtractedSearchResult[] = await searchWithCloudflareBrowser(
       browserResult.browser,
       searchUrl,
-      maxResults,
+      maxResults + 5, // Fetch extra to compensate for filtered URLs
       userAgent,
     );
     await browserResult.browser.close();
+
+    // ✅ FIX Phase 5D: Filter out ad/tracking URLs that will fail extraction
+    const results = rawResults.filter(r => !shouldSkipUrl(r.url)).slice(0, maxResults);
 
     return results;
   } catch (error) {
@@ -1311,6 +1326,11 @@ async function searchWithFetch(
 
         // Skip invalid URLs
         if (!url.startsWith('http')) {
+          continue;
+        }
+
+        // ✅ FIX Phase 5D: Skip ad/tracking URLs that will fail extraction
+        if (shouldSkipUrl(url)) {
           continue;
         }
 
@@ -2399,6 +2419,32 @@ function extractDomain(url: string): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * ✅ FIX Phase 5D: Check if URL should be skipped for content extraction
+ *
+ * Ad redirect URLs and tracking URLs will fail extraction and cause server errors.
+ * These URLs are typically intermediary redirects that don't contain useful content.
+ *
+ * @param url - URL to check
+ * @returns true if URL should be skipped
+ */
+function shouldSkipUrl(url: string): boolean {
+  const skipPatterns = [
+    /duckduckgo\.com\/y\.js/i, // DuckDuckGo ad redirects
+    /duckduckgo\.com\/l\//i, // DuckDuckGo link redirects (may contain ads)
+    /bing\.com\/aclick/i, // Bing ad clicks
+    /googleadservices\.com/i, // Google ads
+    /googlesyndication\.com/i, // Google ad syndication
+    /doubleclick\.net/i, // DoubleClick ads
+    /facebook\.com\/tr/i, // Facebook tracking pixel
+    /pixel\./i, // Generic pixel tracking
+    /\.ad\./i, // Generic ad subdomain
+    /\/ad\/|\/ads\//i, // Ad paths
+  ];
+
+  return skipPatterns.some(pattern => pattern.test(url));
 }
 
 /**

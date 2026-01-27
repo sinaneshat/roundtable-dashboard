@@ -571,6 +571,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // - Pre-search SSE completes → frontend calls streaming
       // - But chatMessage insert happens at END of SSE (race condition)
       // Fix: Query chatPreSearch directly and inject synthetic message if needed
+      //
+      // NOTE: This injection happens for ALL participants. The fix to prevent P0
+      // from seeing search results is in buildSystemPromptWithContext() which
+      // skips adding search context to P0's system prompt (participantIndex === 0).
+      // The synthetic message is still needed here for buildSearchContextWithCitations
+      // to work correctly for P1+ participants.
       if (thread.enableWebSearch) {
         const hasPreSearchMsg = previousDbMessages.some(
           msg => msg.metadata && 'isPreSearch' in msg.metadata && msg.metadata.isPreSearch === true,

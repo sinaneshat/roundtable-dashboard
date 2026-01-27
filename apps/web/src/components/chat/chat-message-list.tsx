@@ -683,45 +683,156 @@ export const ChatMessageList = memo(
       return message.id;
     };
 
-    // Memoize participant info per message to prevent recalculation on every render
-    // This is critical because getParticipantInfoForMessage is expensive and runs for ALL messages
+    // ============================================================================
+    // PERFORMANCE OPTIMIZATION: Split message processing into stable vs dynamic
+    // ============================================================================
     //
-    // ✅ CRITICAL FIX: Only recalculate when messages actually change, not when participants change
-    // Completed messages have frozen metadata and should NEVER be affected by current participant state
+    // Previously, ALL messages recalculated when transient state changed (37-70×/round).
+    // Now we use a cache for completed messages (frozen metadata) and only recalculate
+    // streaming messages when their state changes.
     //
-    // ✅ BUG FIX: Dependencies optimization
-    // - Completed messages (with finishReason) should NEVER depend on current participant state
-    // - Only streaming messages need current participant info
-    // - Moderator messages are identified early and use frozen metadata when complete
-    const messagesWithParticipantInfo = useMemo(() => {
-      return deduplicatedMessages.map((message, index) => {
+    // Cache key: message.id + finishReason (stable once complete)
+    // Cache invalidation: Only when message content actually changes
+
+    // ✅ PERF: Cache for completed message participant info (frozen once set)
+    const completedMessageCacheRef = useRef<Map<string, {
+      isStreaming: boolean;
+      modelId: string | undefined;
+      participantIndex: number;
+      role: string | null | undefined;
+    } | null>>(new Map());
+
+    // ✅ PERF: Track which message IDs we've logged for raw detection (avoid spam)
+    const loggedRawDetectRef = useRef<Set<string>>(new Set());
+
+    // ✅ PERF: Stable memo for completed messages - ONLY depends on deduplicatedMessages
+    // Completed messages have frozen metadata and never change
+    const completedMessageInfo = useMemo(() => {
+      const cache = completedMessageCacheRef.current;
+      const results = new Map<string, {
+        isStreaming: boolean;
+        modelId: string | undefined;
+        participantIndex: number;
+        role: string | null | undefined;
+      } | null>();
+
+      for (const message of deduplicatedMessages) {
+        // User messages - always null, cache it
         if (message.role === MessageRoles.USER) {
-          return { index, message, participantInfo: null };
+          results.set(message.id, null);
+          continue;
         }
 
-        // ✅ FIX: Check raw metadata for isModerator BEFORE using schema-based isModeratorMessage
-        // Schema parsing fails for streaming placeholders because they have isStreaming field
-        // which isn't in DbModeratorMessageMetadataSchema (it's .strict())
-        // This caused moderator streaming text to appear in last participant's box
+        // Check if already cached with finishReason (fully complete)
+        const cacheKey = message.id;
+        const cached = cache.get(cacheKey);
+        if (cached !== undefined) {
+          // Verify it's still complete (has finishReason in cache means it won't change)
+          const metadata = getMessageMetadata(message.metadata);
+          const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
+          if (assistantMetadata?.finishReason && isCompletionFinishReason(assistantMetadata.finishReason)) {
+            results.set(message.id, cached);
+            continue;
+          }
+        }
+
+        // Check raw metadata for moderator
         const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
         const isModeratorRaw = rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
 
         if (isModeratorRaw || isModeratorMessage(message)) {
           const moderatorMeta = getModeratorMetadata(message.metadata);
-          const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta ? (moderatorMeta as { finishReason?: string }).finishReason : undefined;
+          const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta
+            ? (moderatorMeta as { finishReason?: string }).finishReason
+            : undefined;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
-          // For raw metadata (streaming placeholder), get model directly
+
+          if (hasActuallyFinished) {
+            // Completed moderator - cache it
+            const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta
+              ? (moderatorMeta as { model?: string }).model
+              : (rawMeta && 'model' in rawMeta ? String(rawMeta.model) : undefined);
+
+            const info = {
+              isStreaming: false,
+              modelId,
+              participantIndex: MODERATOR_PARTICIPANT_INDEX,
+              role: null as string | null,
+            };
+            cache.set(cacheKey, info);
+            results.set(message.id, info);
+            continue;
+          }
+          // Streaming moderator - mark as needing dynamic calculation
+          results.set(message.id, undefined as unknown as null); // undefined = needs dynamic calc
+          continue;
+        }
+
+        // Check for completed participant message
+        const metadata = getMessageMetadata(message.metadata);
+        const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
+        const finishReason = assistantMetadata?.finishReason;
+        const hasActualFinishReason = isCompletionFinishReason(finishReason);
+        const isComplete = !!(assistantMetadata?.model && hasActualFinishReason);
+
+        if (isComplete && assistantMetadata) {
+          const info = {
+            isStreaming: false,
+            modelId: assistantMetadata.model,
+            participantIndex: assistantMetadata.participantIndex,
+            role: assistantMetadata.participantRole,
+          };
+          cache.set(cacheKey, info);
+          results.set(message.id, info);
+          continue;
+        }
+
+        // Not complete - needs dynamic calculation
+        results.set(message.id, undefined as unknown as null);
+      }
+
+      return results;
+    }, [deduplicatedMessages]);
+
+    // ✅ PERF: Dynamic memo for streaming messages - depends on transient state
+    // Only recalculates for messages that aren't in completedMessageInfo
+    const messagesWithParticipantInfo = useMemo(() => {
+      return deduplicatedMessages.map((message, index) => {
+        // Check if we have cached info for this message
+        const cachedInfo = completedMessageInfo.get(message.id);
+
+        // User messages
+        if (message.role === MessageRoles.USER) {
+          return { index, message, participantInfo: null };
+        }
+
+        // Completed messages - use cached info
+        if (cachedInfo !== undefined && cachedInfo !== null) {
+          return { index, message, participantInfo: cachedInfo };
+        }
+
+        // ============================================================
+        // DYNAMIC CALCULATION - Only for streaming/incomplete messages
+        // ============================================================
+
+        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
+        const isModeratorRaw = rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+
+        if (isModeratorRaw || isModeratorMessage(message)) {
+          const moderatorMeta = getModeratorMetadata(message.metadata);
+          const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta
+            ? (moderatorMeta as { finishReason?: string }).finishReason
+            : undefined;
+          const hasActuallyFinished = isCompletionFinishReason(finishReason);
           const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta
             ? (moderatorMeta as { model?: string }).model
             : (rawMeta && 'model' in rawMeta ? String(rawMeta.model) : undefined);
 
-          // FIX: Use store state as additional signal for streaming status
-          // When isModeratorStreaming is false, streaming is definitely done
-          // This handles the race condition where metadata finishReason hasn't updated yet
           const isStillStreaming = isModeratorStreaming && !hasActuallyFinished;
 
-          // DEBUG: Log when raw metadata detection catches streaming moderator
-          if (isModeratorRaw && !isModeratorMessage(message)) {
+          // ✅ PERF: Only log once per message ID to avoid spam
+          if (isModeratorRaw && !isModeratorMessage(message) && !loggedRawDetectRef.current.has(message.id)) {
+            loggedRawDetectRef.current.add(message.id);
             const roundNum = rawMeta && 'roundNumber' in rawMeta ? rawMeta.roundNumber : '?';
             rlog.moderator('UI-raw-detect', `r${roundNum} - streaming placeholder detected via raw metadata`);
           }
@@ -731,32 +842,14 @@ export const ChatMessageList = memo(
             message,
             participantInfo: {
               isStreaming: isStillStreaming,
-              modelId, // Uses its own model ID from metadata
-              participantIndex: MODERATOR_PARTICIPANT_INDEX, // -99 for sort order
-              role: null, // No role badge displayed for moderator
+              modelId,
+              participantIndex: MODERATOR_PARTICIPANT_INDEX,
+              role: null,
             },
           };
         }
 
-        const metadata = getMessageMetadata(message.metadata);
-        const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
-        const finishReason = assistantMetadata?.finishReason;
-        const hasActualFinishReason = isCompletionFinishReason(finishReason);
-        const isComplete = !!(assistantMetadata?.model && hasActualFinishReason);
-
-        if (isComplete && assistantMetadata) {
-          return {
-            index,
-            message,
-            participantInfo: {
-              isStreaming: false,
-              modelId: assistantMetadata.model,
-              participantIndex: assistantMetadata.participantIndex,
-              role: assistantMetadata.participantRole,
-            },
-          };
-        }
-
+        // Streaming participant message - needs dynamic info
         const participantInfo = getParticipantInfoForMessage({
           currentParticipantIndex,
           currentStreamingParticipant,
@@ -768,17 +861,9 @@ export const ChatMessageList = memo(
           totalMessages: deduplicatedMessages.length,
         });
 
-        // DEBUG: Log when streaming placeholder has no participantInfo
-        const msgMeta = getMessageMetadata(message.metadata);
-        const isStreamingPlaceholder = msgMeta && typeof msgMeta === 'object' && 'isStreaming' in msgMeta && msgMeta.isStreaming === true;
-        if (isStreamingPlaceholder && !participantInfo) {
-          const roundNum = getRoundNumber(message.metadata);
-          rlog.phase('UI-skip-noInfo', `r${roundNum} id=${message.id?.slice(-8)} pCount=${participants.length} - streaming placeholder has NO participantInfo`);
-        }
-
         return { index, message, participantInfo };
       });
-    }, [deduplicatedMessages, isStreaming, currentParticipantIndex, participants, currentStreamingParticipant, isModeratorStreaming]);
+    }, [deduplicatedMessages, completedMessageInfo, isStreaming, currentParticipantIndex, participants, currentStreamingParticipant, isModeratorStreaming]);
 
     const allStreamingRoundParticipantsHaveContent = useMemo(() => {
       if (_streamingRoundNumber === null || participants.length === 0) {
@@ -800,18 +885,31 @@ export const ChatMessageList = memo(
       return allParticipantsHaveVisibleContent(participantMaps, enabledParticipants);
     }, [deduplicatedMessages, _streamingRoundNumber, participants]);
 
+    // ✅ PERF: Track logged group calculations to avoid spam
+    const loggedGroupCalcRef = useRef<{ round: number | null; count: number }>({ count: 0, round: null });
+
     const messageGroups = useMemo((): MessageGroup[] => {
       const groups: MessageGroup[] = [];
       let currentAssistantGroup: Extract<MessageGroup, { type: 'assistant-group' }> | null = null;
       let currentUserGroup: Extract<MessageGroup, { type: 'user-group' }> | null = null;
 
-      // DEBUG: Log what messages we're processing
-      const streamingMsgs = messagesWithParticipantInfo.filter(m => {
+      // ✅ PERF: Only log once per round change, not on every recalculation
+      const streamingMsgs = messagesWithParticipantInfo.filter((m) => {
         const raw = m.message.metadata as Record<string, unknown> | null | undefined;
         return raw && 'isStreaming' in raw && raw.isStreaming === true;
       });
       if (streamingMsgs.length > 0) {
-        rlog.phase('UI-groups-in', `r=${_streamingRoundNumber} total=${messagesWithParticipantInfo.length} streamingPlaceholders=${streamingMsgs.length} hasParticipantInfo=${streamingMsgs.filter(m => m.participantInfo !== null).length}`);
+        const shouldLog = loggedGroupCalcRef.current.round !== _streamingRoundNumber
+          || loggedGroupCalcRef.current.count < 2; // Log first 2 calcs per round only
+        if (shouldLog) {
+          loggedGroupCalcRef.current = {
+            count: loggedGroupCalcRef.current.round === _streamingRoundNumber
+              ? loggedGroupCalcRef.current.count + 1
+              : 1,
+            round: _streamingRoundNumber,
+          };
+          rlog.phase('UI-groups-in', `r=${_streamingRoundNumber} total=${messagesWithParticipantInfo.length} streamingPlaceholders=${streamingMsgs.length} hasParticipantInfo=${streamingMsgs.filter(m => m.participantInfo !== null).length}`);
+        }
       }
 
       for (const { index, message, participantInfo } of messagesWithParticipantInfo) {
@@ -927,13 +1025,6 @@ export const ChatMessageList = memo(
         }
 
         const participantKey = `${effectiveParticipantInfo.participantIndex}-${effectiveParticipantInfo.modelId || 'unknown'}`;
-
-        // DEBUG: Log message grouping decisions
-        const isMod = effectiveParticipantInfo.participantIndex === MODERATOR_PARTICIPANT_INDEX;
-        const roundNum = getRoundNumber(messageMetadata);
-        if (isMod || isStreamingPlaceholder) {
-          rlog.moderator('UI-group', `r${roundNum} id=${message.id?.slice(-12)} pIdx=${effectiveParticipantInfo.participantIndex} key=${participantKey} curGroup=${currentAssistantGroup?.participantKey || 'none'} match=${currentAssistantGroup?.participantKey === participantKey}`);
-        }
 
         if (
           currentAssistantGroup

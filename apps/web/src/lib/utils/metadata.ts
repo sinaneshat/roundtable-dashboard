@@ -132,6 +132,43 @@ export function isModeratorMessage(
 }
 
 // ============================================================================
+// Fast Moderator Detection (O(1) without Zod validation)
+// ============================================================================
+
+/**
+ * Fast check if metadata indicates a moderator message
+ *
+ * O(1) check without Zod validation - use when performance matters.
+ * Falls back to isModeratorMessageMetadata for full validation when needed.
+ *
+ * REPLACES: 11+ inline moderator detection patterns across:
+ * - provider.tsx line 673
+ * - store.ts lines 256-258
+ * - chat-message-list.tsx (multiple)
+ *
+ * @param metadata - Raw metadata object (unknown type)
+ * @returns true if metadata has isModerator: true
+ */
+export function isModeratorMetadataFast(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
+  return 'isModerator' in metadata && (metadata as { isModerator: unknown }).isModerator === true;
+}
+
+/**
+ * Fast check if a message is from the moderator
+ *
+ * O(1) check without full Zod validation - use when performance matters.
+ *
+ * @param message - UIMessage or ApiMessage to check
+ * @returns true if the message is from the moderator
+ */
+export function isModeratorMessageFast(message: UIMessage | ApiMessage): boolean {
+  return isModeratorMetadataFast(message.metadata);
+}
+
+// ============================================================================
 // Message-Level Helpers
 // ============================================================================
 

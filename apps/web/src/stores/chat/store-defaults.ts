@@ -38,6 +38,7 @@ export const DEFAULT_PRESET_PARTICIPANTS = [
 // ============================================================================
 
 export const THREAD_DEFAULTS: ThreadState = {
+  activeRoundParticipantCount: 0,
   currentParticipantIndex: 0,
   currentRoundNumber: null,
   error: null,
