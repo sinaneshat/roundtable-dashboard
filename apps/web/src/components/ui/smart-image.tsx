@@ -3,11 +3,12 @@ import { DEFAULT_IMAGE_STATE, ImageStates } from '@roundtable/shared';
 import type { ImgHTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 
+import type { BorderRadiusClass } from '@/lib/enums/ui-styles';
+import { BORDER_RADIUS_PIXEL_MAP, DEFAULT_BORDER_RADIUS_CLASS } from '@/lib/enums/ui-styles';
 import { cn } from '@/lib/ui/cn';
 
 import type { ImageProps } from './image';
 import Image from './image';
-
 import { Skeleton } from './skeleton';
 
 /**
@@ -170,9 +171,6 @@ export function SmartImage({
     </div>
   );
 }
-
-import type { BorderRadiusClass } from '@/lib/enums/ui-styles';
-import { BORDER_RADIUS_PIXEL_MAP, DEFAULT_BORDER_RADIUS_CLASS } from '@/lib/enums/ui-styles';
 
 type GradientImageProps = {
   gradient?: string;

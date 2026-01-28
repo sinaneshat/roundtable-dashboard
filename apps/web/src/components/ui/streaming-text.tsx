@@ -307,8 +307,9 @@ export const StreamingCursor = memo(({
   show = true,
   className,
 }: StreamingCursorProps) => {
-  if (!show)
+  if (!show) {
     return null;
+  }
 
   return (
     <motion.span

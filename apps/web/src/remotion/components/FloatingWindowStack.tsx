@@ -105,8 +105,9 @@ export function FloatingWindowStack({
       const presetConfig = STACK_PRESETS[preset];
       return windows.map((window, idx) => {
         const config = presetConfig[idx % presetConfig.length];
-        if (!config)
+        if (!config) {
           return window;
+        }
         return {
           ...window,
           zOffset: window.zOffset ?? config.zOffset,

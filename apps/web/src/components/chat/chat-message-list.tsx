@@ -483,8 +483,19 @@ export const ChatMessageList = memo(
     const userAvatarSrc = userAvatar?.src || userInfo.image || '';
     const userAvatarName = userAvatar?.name || userInfo.name;
 
-    // Debug logging for message list render
-    rlog.msg('list-render', `round=${_roundNumber ?? '-'} msgs=${messages.length} parts=${participants.length} readonly=${isReadOnly ? 1 : 0}`);
+    // Track previous render state to only log on meaningful changes
+    const prevRenderStateRef = useRef<{ msgCount: number; partCount: number }>({ msgCount: -1, partCount: -1 });
+
+    // Debug logging for message list render - only log for current streaming round or when props change
+    // This prevents old round ChatMessageList components from spamming logs
+    const isCurrentStreamingRound = _streamingRoundNumber !== null && _roundNumber === _streamingRoundNumber;
+    const renderStateChanged = messages.length !== prevRenderStateRef.current.msgCount
+      || participants.length !== prevRenderStateRef.current.partCount;
+
+    if (isCurrentStreamingRound || renderStateChanged) {
+      prevRenderStateRef.current = { msgCount: messages.length, partCount: participants.length };
+      rlog.msg(`list-r${_roundNumber ?? '-'}`, `round=${_roundNumber ?? '-'} msgs=${messages.length} parts=${participants.length} streaming=${isCurrentStreamingRound ? 1 : 0} readonly=${isReadOnly ? 1 : 0}`);
+    }
 
     // ✅ POST-MODERATOR FLASH FIX: Track rounds that were visible during streaming
     // When content transitions from pending cards to messageGroups, we must skip
@@ -1077,8 +1088,10 @@ export const ChatMessageList = memo(
           // Check if this is the user message group for this round
           const isUserGroupForRound = group.type === 'user-group';
           // ✅ DEFENSIVE GUARD: Ensure _preSearches is an array before calling .find()
+          // ✅ FIX: Also check threadId to prevent cross-thread contamination during navigation
+          // Without this, stale pre-searches from the previous thread can match the new thread's rounds
           const preSearch = isUserGroupForRound && _threadId && Array.isArray(_preSearches)
-            ? _preSearches.find(ps => ps.roundNumber === roundNumber)
+            ? _preSearches.find(ps => ps.roundNumber === roundNumber && ps.threadId === _threadId)
             : null;
 
           // User message group with header inside message box

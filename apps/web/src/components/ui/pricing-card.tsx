@@ -199,10 +199,12 @@ export function PricingCard({
               {VALUE_PROPS.map(prop => (
                 <motion.li
                   key={prop.key}
-                  variants={isServer ? undefined : {
-                    hidden: { opacity: 0, x: -10 },
-                    show: { opacity: 1, x: 0 },
-                  }}
+                  variants={isServer
+                    ? undefined
+                    : {
+                        hidden: { opacity: 0, x: -10 },
+                        show: { opacity: 1, x: 0 },
+                      }}
                   transition={{
                     type: 'spring',
                     stiffness: 500,

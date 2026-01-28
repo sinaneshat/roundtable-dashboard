@@ -7,7 +7,6 @@ import antfu from '@antfu/eslint-config';
 import drizzlePlugin from 'eslint-plugin-drizzle';
 import promisePlugin from 'eslint-plugin-promise';
 import securityPlugin from 'eslint-plugin-security';
-
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 
 interface ConfigOptions {

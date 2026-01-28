@@ -51,6 +51,6 @@ export function framesToSeconds(frames: number, fps: number = FPS): number {
 }
 
 // Delay helper for staggered animations
-export function staggerDelay(index: number, delayPerItem: number = 3): number {
+export function staggerDelay(index: number, delayPerItem = 3): number {
   return index * delayPerItem;
 }

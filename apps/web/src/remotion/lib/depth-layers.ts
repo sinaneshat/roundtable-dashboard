@@ -169,10 +169,10 @@ export function getLayerDepth(layer: DepthLayerName): number {
 export function getDepthLayerState(
   layer: DepthLayerName,
   frame: number,
-  cameraX: number = 0,
-  cameraY: number = 0,
+  cameraX = 0,
+  cameraY = 0,
   cameraFocusLayer: DepthLayerName = 'focus',
-  aperture: number = 2.8,
+  aperture = 2.8,
 ): DepthLayerState {
   const config = DEPTH_LAYERS[layer];
 
@@ -230,10 +230,10 @@ export function getDepthLayerState(
  */
 export function getAllLayerStates(
   frame: number,
-  cameraX: number = 0,
-  cameraY: number = 0,
+  cameraX = 0,
+  cameraY = 0,
   cameraFocusLayer: DepthLayerName = 'focus',
-  aperture: number = 2.8,
+  aperture = 2.8,
 ): Record<DepthLayerName, DepthLayerState> {
   const states = {} as Record<DepthLayerName, DepthLayerState>;
 
@@ -316,7 +316,7 @@ export function getParallaxPushState(
   layer: DepthLayerName,
   progress: number, // 0 to 1
   pushDirection: 'in' | 'out' = 'out',
-  maxPush: number = 500,
+  maxPush = 500,
 ): {
   translateZ: number;
   scale: number;
@@ -362,7 +362,7 @@ export function getParallaxPushStyle(
   layer: DepthLayerName,
   progress: number,
   pushDirection: 'in' | 'out' = 'out',
-  maxPush: number = 500,
+  maxPush = 500,
 ): CSSProperties {
   const state = getParallaxPushState(layer, progress, pushDirection, maxPush);
 

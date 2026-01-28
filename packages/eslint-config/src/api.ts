@@ -1,5 +1,4 @@
 import type { Linter } from 'eslint';
-
 /**
  * ESLint configuration for API package (Hono + Cloudflare Workers + Drizzle)
  * Includes strict backend rules and Drizzle ORM safety

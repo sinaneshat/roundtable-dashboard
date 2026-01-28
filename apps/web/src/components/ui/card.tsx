@@ -1,7 +1,6 @@
-import type { ComponentProps } from 'react';
-
 import type { CardVariant } from '@roundtable/shared';
 import { CardVariants, DEFAULT_CARD_VARIANT } from '@roundtable/shared';
+import type { ComponentProps } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 import { glassCard } from '@/lib/ui/glassmorphism';

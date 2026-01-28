@@ -346,6 +346,10 @@ export function useRoundSubscription({
   presearchReadyRef.current = presearchReady;
   maxEnabledIndexRef.current = maxEnabledIndex;
 
+  // Track if this is the first mount (for distinguishing resumption vs new round)
+  const isFirstMountRef = useRef(true);
+  const previousRoundNumberRef = useRef<number | null>(null);
+
   // Reset stagger state on round change - MUST run before other effects
   // This ensures entity state tracking is reset before any completion checks
   useLayoutEffect(() => {
@@ -355,7 +359,31 @@ export function useRoundSubscription({
     }
 
     rlog.stream('check', `r${roundNumber} stagger reset (key=${resetKey})`);
+
+    // Determine if this is a resumption scenario (page reload mid-stream) vs new round
+    // Resumption: first mount AND initialLastSeqs has actual data (non-zero values)
+    // New round: subsequent round changes within same session
+    const isResumingFromInterruption = isFirstMountRef.current
+      && initialLastSeqs !== undefined
+      && (
+        (initialLastSeqs.moderator !== undefined && initialLastSeqs.moderator > 0)
+        || (initialLastSeqs.presearch !== undefined && initialLastSeqs.presearch > 0)
+        || (initialLastSeqs.participants !== undefined
+          && Object.values(initialLastSeqs.participants).some(seq => seq > 0))
+      );
+
+    const isNewRound = previousRoundNumberRef.current !== null
+      && previousRoundNumberRef.current !== roundNumber;
+
+    if (isResumingFromInterruption) {
+      rlog.stream('check', `r${roundNumber} RESUMING from interruption - using initialLastSeqs`);
+    } else if (isNewRound) {
+      rlog.stream('check', `r${roundNumber} NEW ROUND (from r${previousRoundNumberRef.current}) - resetting seqs to 0`);
+    }
+
     lastResetKeyRef.current = resetKey;
+    previousRoundNumberRef.current = roundNumber;
+    isFirstMountRef.current = false;
 
     // Reset all round-specific state
     hasCalledRoundCompleteRef.current = false;
@@ -369,11 +397,22 @@ export function useRoundSubscription({
     setInitialParticipantsEnabled(!enablePreSearch);
 
     // Reset sequence tracking
-    expectedSeqsRef.current = {
-      moderator: initialLastSeqs?.moderator ?? 0,
-      participants: initialLastSeqs?.participants ?? {},
-      presearch: initialLastSeqs?.presearch ?? 0,
-    };
+    // CRITICAL: Only use initialLastSeqs for actual resumption (page reload mid-stream)
+    // For NEW rounds within the same session, always reset to 0
+    if (isResumingFromInterruption) {
+      expectedSeqsRef.current = {
+        moderator: initialLastSeqs?.moderator ?? 0,
+        participants: initialLastSeqs?.participants ?? {},
+        presearch: initialLastSeqs?.presearch ?? 0,
+      };
+    } else {
+      // New round starting - reset to 0 to avoid false seq-gap alerts
+      expectedSeqsRef.current = {
+        moderator: 0,
+        participants: {},
+        presearch: 0,
+      };
+    }
 
     // Reset completion logging ref
     prevCompletionKeyRef.current = '';

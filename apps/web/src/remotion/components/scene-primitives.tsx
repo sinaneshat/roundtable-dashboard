@@ -856,14 +856,18 @@ export function RainbowGlowOrbs({
         const animatedOpacity = Math.min(1, orb.opacity * opacityFactor);
 
         const position: CSSProperties = {};
-        if (orb.top !== undefined)
+        if (orb.top !== undefined) {
           position.top = `${orb.top}%`;
-        if (orb.bottom !== undefined)
+        }
+        if (orb.bottom !== undefined) {
           position.bottom = `${orb.bottom}%`;
-        if (orb.left !== undefined)
+        }
+        if (orb.left !== undefined) {
           position.left = `${orb.left}%`;
-        if (orb.right !== undefined)
+        }
+        if (orb.right !== undefined) {
           position.right = `${orb.right}%`;
+        }
 
         // Get color from rainbow palette, wrap around if needed
         const colorIdx = orb.colorIndex % RAINBOW.colors.length;

@@ -189,7 +189,12 @@ async function triggerParticipantStream(
   }
 
   // Drain the stream response to allow completion
-  await drainStream(response);
+  // Wrapped in try-catch as stream may already be consumed or connection closed
+  try {
+    await drainStream(response);
+  } catch {
+    // Stream already consumed or connection closed - this is expected
+  }
 }
 
 /**
@@ -233,7 +238,12 @@ async function triggerModeratorStream(
   slog.moderator('api-success', `r${roundNumber} moderator API returned ${response.status}, draining stream`);
 
   // Drain the stream response to allow completion
-  await drainStream(response);
+  // Wrapped in try-catch as stream may already be consumed or connection closed
+  try {
+    await drainStream(response);
+  } catch {
+    // Stream already consumed or connection closed - this is expected
+  }
 
   // ✅ MOD-STREAM-DRAINED: Log stream completion
   slog.moderator('stream-drained', `r${roundNumber} moderator stream fully consumed`);
@@ -281,7 +291,12 @@ async function triggerPreSearch(
   }
 
   // Drain the stream response to allow completion
-  await drainStream(response);
+  // Wrapped in try-catch as stream may already be consumed or connection closed
+  try {
+    await drainStream(response);
+  } catch {
+    // Stream already consumed or connection closed - this is expected
+  }
 }
 
 // ============================================================================

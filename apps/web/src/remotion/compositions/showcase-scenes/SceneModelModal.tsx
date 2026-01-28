@@ -353,12 +353,15 @@ export function SceneModelModal() {
     : 0;
 
   const getModelOffset = (index: number): number => {
-    if (reorderProgress === 0)
+    if (reorderProgress === 0) {
       return 0;
-    if (index === 0)
+    }
+    if (index === 0) {
       return interpolate(reorderProgress, [0, 1], [0, 72]);
-    if (index === 1)
+    }
+    if (index === 1) {
       return interpolate(reorderProgress, [0, 1], [0, -72]);
+    }
     return 0;
   };
 

@@ -121,14 +121,14 @@ export function getEnergyMultiplier(frame: number): number {
 /**
  * Check if frame is near a transition
  */
-export function isNearTransition(frame: number, tolerance: number = 15): boolean {
+export function isNearTransition(frame: number, tolerance = 15): boolean {
   return TRANSITION_FRAMES.some(t => Math.abs(frame - t) <= tolerance);
 }
 
 /**
  * Check if frame is on a beat (for animation sync)
  */
-export function isOnBeat(frame: number, tolerance: number = 2): boolean {
+export function isOnBeat(frame: number, tolerance = 2): boolean {
   const allBeats = [...BEATS.intro, ...BEATS.chatThread];
   return allBeats.some(beat => Math.abs(frame - beat) <= tolerance);
 }

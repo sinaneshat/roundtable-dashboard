@@ -562,8 +562,15 @@ export const rlog = {
     rlogLog(RlogCategories.MOD, 'moderator', `${action}: ${detail}`);
   },
 
-  /** Message logging - debounced to reduce noise */
+  /**
+   * Message logging - debounced with key-specific deduplication.
+   * The key parameter is included in the debounce key, so different keys
+   * (e.g., different rounds: list-r0, list-r1) have separate debounce windows.
+   * This prevents logs from different rounds from suppressing each other
+   * while still reducing noise from the SAME round re-rendering rapidly.
+   */
   msg: (key: string, detail: string): void => {
+    // Include key in debounce key so different rounds/components have separate debounce windows
     const debounceKey = `msg:${key}`;
     const { shouldLog, suppressedCount } = shouldLogDebounced(debounceKey, detail);
     if (!shouldLog) {

@@ -1,4 +1,3 @@
-import type { Linter } from 'eslint';
 /**
  * ESLint configuration for Web package (TanStack Start + React + shadcn)
  *
@@ -9,10 +8,10 @@ import type { Linter } from 'eslint';
  */
 import pluginQuery from '@tanstack/eslint-plugin-query';
 import pluginRouter from '@tanstack/eslint-plugin-router';
+import type { Linter } from 'eslint';
 import playwrightPlugin from 'eslint-plugin-playwright';
 import tailwindPlugin from 'eslint-plugin-tailwindcss';
 import testingLibraryPlugin from 'eslint-plugin-testing-library';
-
 import vitestPlugin from 'eslint-plugin-vitest';
 
 import { createConfig } from './base';

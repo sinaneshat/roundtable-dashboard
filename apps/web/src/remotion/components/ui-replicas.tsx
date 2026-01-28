@@ -210,8 +210,9 @@ export function VideoVoiceVisualization({
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  if (!isActive)
+  if (!isActive) {
     return null;
+  }
 
   // Generate bar heights with animation
   const bars = Array.from({ length: barCount }, (_, i) => {
@@ -1996,8 +1997,9 @@ export function VideoFeatureCaptions({ captions, position = 'bottom-left' }: Vid
   const { fps } = useVideoConfig();
 
   const activeCaption = captions.find(c => frame >= c.start && frame < c.end);
-  if (!activeCaption)
+  if (!activeCaption) {
     return null;
+  }
 
   const localFrame = frame - activeCaption.start;
   const duration = activeCaption.end - activeCaption.start;

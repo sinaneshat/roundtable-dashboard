@@ -125,7 +125,8 @@ function DialogBody({ className, glass = false, children, ...props }: DialogBody
       <div className={cn(
         'px-4 sm:px-6 py-3',
         glass && 'py-4 sm:py-6',
-      )}>
+      )}
+      >
         {children}
       </div>
     </div>
@@ -192,6 +193,5 @@ export {
   DialogOverlay,
   DialogPortal,
   DialogTitle,
-  DialogTrigger
+  DialogTrigger,
 };
-

@@ -171,40 +171,40 @@ export function truckDown(distance: number): CameraPosition {
 /**
  * Zoom movement
  */
-export function zoomIn(factor: number = 1.2): CameraPosition {
+export function zoomIn(factor = 1.2): CameraPosition {
   return { ...DEFAULT_CAMERA, z: factor };
 }
 
-export function zoomOut(factor: number = 0.8): CameraPosition {
+export function zoomOut(factor = 0.8): CameraPosition {
   return { ...DEFAULT_CAMERA, z: factor };
 }
 
 /**
  * Tilt movement (rotation around X axis)
  */
-export function tiltUp(degrees: number = 5): CameraPosition {
+export function tiltUp(degrees = 5): CameraPosition {
   return { ...DEFAULT_CAMERA, rotateX: degrees };
 }
 
-export function tiltDown(degrees: number = 5): CameraPosition {
+export function tiltDown(degrees = 5): CameraPosition {
   return { ...DEFAULT_CAMERA, rotateX: -degrees };
 }
 
 /**
  * Pan movement (rotation around Y axis)
  */
-export function panLeft(degrees: number = 5): CameraPosition {
+export function panLeft(degrees = 5): CameraPosition {
   return { ...DEFAULT_CAMERA, rotateY: degrees };
 }
 
-export function panRight(degrees: number = 5): CameraPosition {
+export function panRight(degrees = 5): CameraPosition {
   return { ...DEFAULT_CAMERA, rotateY: -degrees };
 }
 
 /**
  * Orbit movement (combined pan and dolly for circular motion)
  */
-export function orbit(angle: number, radius: number = 50): CameraPosition {
+export function orbit(angle: number, radius = 50): CameraPosition {
   const rad = (angle * Math.PI) / 180;
   return {
     ...DEFAULT_CAMERA,
@@ -216,7 +216,7 @@ export function orbit(angle: number, radius: number = 50): CameraPosition {
 /**
  * Hero shot - dramatic zoom with slight tilt
  */
-export function heroShot(zoomFactor: number = 1.3): CameraPosition {
+export function heroShot(zoomFactor = 1.3): CameraPosition {
   return {
     ...DEFAULT_CAMERA,
     z: zoomFactor,
@@ -246,7 +246,7 @@ export function createCameraPath(
   positions: Array<{ position: CameraPosition; frame: number }>,
   frame: number,
   fps: number,
-  transitionDuration: number = 30,
+  transitionDuration = 30,
   springConfig: SpringConfig = CAMERA_SPRINGS.cinematic,
 ): CameraPosition {
   // Find current segment
@@ -287,7 +287,7 @@ export function createCameraPath(
  */
 export function depthOfFieldBlur(
   elementDepth: number, // 0 = focus plane, negative = closer, positive = further
-  aperture: number = 2.8, // Lower = more blur, higher = less blur
+  aperture = 2.8, // Lower = more blur, higher = less blur
 ): number {
   const blurAmount = Math.abs(elementDepth) * (10 / aperture);
   return Math.min(blurAmount, 30); // Cap at 30px
@@ -298,8 +298,8 @@ export function depthOfFieldBlur(
  */
 export function getDepthStyles(
   depth: number,
-  focusDepth: number = 0,
-  aperture: number = 2.8,
+  focusDepth = 0,
+  aperture = 2.8,
 ): CSSProperties {
   const distance = depth - focusDepth;
   const blur = depthOfFieldBlur(distance, aperture);
@@ -329,7 +329,7 @@ export type Particle = {
 /**
  * Generate random particles for background effect
  */
-export function generateParticles(count: number, seed: number = 42): Particle[] {
+export function generateParticles(count: number, seed = 42): Particle[] {
   // Simple seeded random for deterministic particles
   const random = (n: number) => {
     const x = Math.sin(seed + n) * 10000;

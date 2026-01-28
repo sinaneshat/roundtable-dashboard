@@ -17,8 +17,8 @@ type HoverBorderGradientBaseProps<T extends PolymorphicElementType> = {
   clockwise?: boolean;
 };
 
-export type HoverBorderGradientProps<T extends PolymorphicElementType = 'button'> =
-  HoverBorderGradientBaseProps<T> & Omit<ComponentPropsWithoutRef<T>, keyof HoverBorderGradientBaseProps<T>>;
+export type HoverBorderGradientProps<T extends PolymorphicElementType = 'button'>
+  = HoverBorderGradientBaseProps<T> & Omit<ComponentPropsWithoutRef<T>, keyof HoverBorderGradientBaseProps<T>>;
 
 export function HoverBorderGradient<T extends PolymorphicElementType = 'button'>({
   children,

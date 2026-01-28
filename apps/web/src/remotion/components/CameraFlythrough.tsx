@@ -154,8 +154,9 @@ function TunnelRing({
   const ringOpacity = Math.max(0, (1 - ringProgress) * opacity);
 
   // Skip rendering if completely transparent
-  if (ringOpacity <= 0)
+  if (ringOpacity <= 0) {
     return null;
+  }
 
   const color = useRainbowColors
     ? BRAND.logoGradient[ring.colorIndex]
@@ -214,8 +215,9 @@ function SpeedLine({
   ) * opacity;
 
   // Skip rendering if too faint
-  if (lineOpacity <= 0.01)
+  if (lineOpacity <= 0.01) {
     return null;
+  }
 
   const color = useRainbowColors
     ? BRAND.logoGradient[line.colorIndex]

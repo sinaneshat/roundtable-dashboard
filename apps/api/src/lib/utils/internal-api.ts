@@ -32,6 +32,10 @@ export function buildSessionAuthHeaders(sessionToken: string): Record<string, st
 
 /**
  * Drain a response stream (consume all data without processing)
+ *
+ * Handles "Network connection lost" errors gracefully - these are expected
+ * when the stream is already being consumed elsewhere or when the connection
+ * closes during streaming. This is not an error condition.
  */
 export async function drainStream(response: Response): Promise<void> {
   const reader = response.body?.getReader();
@@ -46,7 +50,14 @@ export async function drainStream(response: Response): Promise<void> {
         break;
       }
     }
+  } catch {
+    // Expected when stream is already being consumed or connection closes
+    // This is not an error - just means the stream is done or unavailable
   } finally {
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch {
+      // Reader may already be released - this is expected
+    }
   }
 }

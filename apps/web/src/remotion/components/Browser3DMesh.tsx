@@ -63,7 +63,7 @@ function createRoundedBoxGeometry(
   height: number,
   depth: number,
   radius: number,
-  segments: number = 4,
+  segments = 4,
 ): THREE.BufferGeometry {
   // Use ExtrudeGeometry with a rounded rectangle shape
   const shape = new THREE.Shape();

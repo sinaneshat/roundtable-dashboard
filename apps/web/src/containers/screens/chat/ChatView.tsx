@@ -207,9 +207,17 @@ export function ChatView({
     () => contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []),
     [contextParticipants, initialParticipants],
   );
+  // ✅ FIX: Filter pre-searches by threadId to prevent cross-thread contamination during navigation
+  // During thread navigation, the store may still contain pre-searches from the previous thread.
+  // Without this filter, stale pre-searches could be displayed (e.g., showing "streaming" state
+  // for a completed pre-search from another thread that happens to have the same round number).
   const effectivePreSearches = useMemo(
-    () => preSearches.length > 0 ? preSearches : (initialPreSearches ?? []),
-    [preSearches, initialPreSearches],
+    () => {
+      const raw = preSearches.length > 0 ? preSearches : (initialPreSearches ?? []);
+      // Filter to only include pre-searches belonging to the current thread
+      return effectiveThreadId ? raw.filter(ps => ps.threadId === effectiveThreadId) : raw;
+    },
+    [preSearches, initialPreSearches, effectiveThreadId],
   );
 
   // ✅ MOVED UP: Need completedRoundNumbers early for shouldSkipAuxiliaryQueries

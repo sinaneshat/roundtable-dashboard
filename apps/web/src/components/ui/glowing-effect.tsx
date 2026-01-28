@@ -36,8 +36,9 @@ const GlowingEffect = memo(
 
     const handleMove = useCallback(
       (e?: MouseEvent | { x: number; y: number }) => {
-        if (!containerRef.current)
+        if (!containerRef.current) {
           return;
+        }
 
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
@@ -45,8 +46,9 @@ const GlowingEffect = memo(
 
         animationFrameRef.current = requestAnimationFrame(() => {
           const element = containerRef.current;
-          if (!element)
+          if (!element) {
             return;
+          }
 
           const { left, top, width, height } = element.getBoundingClientRect();
           const mouseX = e?.x ?? lastPosition.current.x;
@@ -77,8 +79,9 @@ const GlowingEffect = memo(
 
           element.style.setProperty('--active', isActive ? '1' : '0');
 
-          if (!isActive)
+          if (!isActive) {
             return;
+          }
 
           const currentAngle
             = Number.parseFloat(element.style.getPropertyValue('--start')) || 0;
@@ -103,8 +106,9 @@ const GlowingEffect = memo(
     );
 
     useEffect(() => {
-      if (disabled)
+      if (disabled) {
         return;
+      }
 
       const handleScroll = () => handleMove();
       const handlePointerMove = (e: PointerEvent) => handleMove(e);

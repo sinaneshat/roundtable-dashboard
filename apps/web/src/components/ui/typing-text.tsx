@@ -62,8 +62,9 @@ export function TypingText({
         setCurrentIndex((prev) => {
           const nextIndex = prev + 1;
           if (nextIndex >= text.length) {
-            if (intervalId)
+            if (intervalId) {
               clearInterval(intervalId);
+            }
             onComplete?.();
             return text.length;
           }
@@ -75,8 +76,9 @@ export function TypingText({
     // ✅ MEMORY LEAK FIX: Clean up BOTH timeout AND interval
     return () => {
       clearTimeout(startTimeout);
-      if (intervalId)
+      if (intervalId) {
         clearInterval(intervalId);
+      }
     };
   }, [text, speed, delay, onComplete, enabled]);
 

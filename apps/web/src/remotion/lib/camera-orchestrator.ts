@@ -136,7 +136,7 @@ export function getCameraAtFrame(
   fps: number,
   keyframes: CameraKeyframe[],
   defaultSpringConfig: PartialSpringConfig = CINEMATIC_SPRINGS.cameraMain,
-  defaultTransitionDuration: number = 30,
+  defaultTransitionDuration = 30,
 ): CameraState {
   if (keyframes.length === 0) {
     return DEFAULT_CAMERA;
@@ -207,8 +207,8 @@ export function getCameraAtFrame(
 export function addBreathingMotion(
   camera: CameraState,
   frame: number,
-  intensity: number = 3,
-  speed: number = 0.008,
+  intensity = 3,
+  speed = 0.008,
 ): CameraState {
   const breathX = Math.sin(frame * speed) * intensity;
   const breathY = Math.cos(frame * speed * 0.7) * intensity * 0.6;
@@ -233,8 +233,8 @@ export function addBreathingMotion(
  */
 export function depthOfFieldBlur(
   elementDepth: number,
-  aperture: number = 2.8,
-  maxBlur: number = 30,
+  aperture = 2.8,
+  maxBlur = 30,
 ): number {
   // Circle of confusion based on aperture
   // Lower aperture = larger CoC = more blur
@@ -248,7 +248,7 @@ export function depthOfFieldBlur(
 export function getDepthBlur(
   elementDepth: number,
   cameraFocusDepth: number,
-  aperture: number = 2.8,
+  aperture = 2.8,
 ): number {
   const distance = elementDepth - cameraFocusDepth;
   return depthOfFieldBlur(distance, aperture);
@@ -276,7 +276,7 @@ export function cameraStateToTransform(camera: CameraState): string {
  * Get perspective value based on camera state
  * Closer zoom = larger perspective for more dramatic effect
  */
-export function getCameraPerspective(camera: CameraState, basePerspective: number = 1200): number {
+export function getCameraPerspective(camera: CameraState, basePerspective = 1200): number {
   // Scale perspective with zoom - closer = more dramatic perspective
   return basePerspective / camera.z;
 }
@@ -339,7 +339,7 @@ export class CameraOrchestrator {
   /**
    * Get perspective value at frame
    */
-  getPerspective(frame: number, fps: number, basePerspective: number = 1200): number {
+  getPerspective(frame: number, fps: number, basePerspective = 1200): number {
     return getCameraPerspective(this.getCamera(frame, fps), basePerspective);
   }
 

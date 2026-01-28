@@ -74,8 +74,9 @@ type DepthBlurOverlayProps = {
 };
 
 function DepthBlurOverlay({ rotateX, rotateY, enabled, entranceProgress }: DepthBlurOverlayProps) {
-  if (!enabled)
+  if (!enabled) {
     return null;
+  }
 
   // Calculate blur parameters based on rotation
   const rotationMagnitude = Math.sqrt(rotateX ** 2 + rotateY ** 2);
@@ -94,8 +95,9 @@ function DepthBlurOverlay({ rotateX, rotateY, enabled, entranceProgress }: Depth
     { extrapolateRight: 'clamp' },
   );
 
-  if (blurIntensity < 0.05)
+  if (blurIntensity < 0.05) {
     return null;
+  }
 
   // Create edge-specific gradients
   const overlayStyle: CSSProperties = {
@@ -132,8 +134,9 @@ function DepthBlurOverlay({ rotateX, rotateY, enabled, entranceProgress }: Depth
     .filter(g => g !== 'none')
     .join(', ');
 
-  if (!gradients)
+  if (!gradients) {
     return null;
+  }
 
   return (
     <div

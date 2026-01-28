@@ -47,7 +47,7 @@ function BreadcrumbLink({
       className={cn(
         'hover:text-foreground transition-colors rounded-sm outline-none',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        className
+        className,
       )}
       {...props}
     />

@@ -93,8 +93,8 @@ export default function Image({
   ...props
 }: ImageProps) {
   // Convert width/height to numbers for @unpic
-  const numWidth = typeof width === 'string' ? parseInt(width, 10) : width;
-  const numHeight = typeof height === 'string' ? parseInt(height, 10) : height;
+  const numWidth = typeof width === 'string' ? Number.parseInt(width, 10) : width;
+  const numHeight = typeof height === 'string' ? Number.parseInt(height, 10) : height;
 
   // Fill mode styles for native img
   const fillStyle: CSSProperties = fill

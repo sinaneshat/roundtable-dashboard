@@ -60,8 +60,9 @@ function getMessageEntrance(
   fps: number,
 ): number {
   const elapsed = currentFrame - startFrame;
-  if (elapsed < 0)
+  if (elapsed < 0) {
     return 0;
+  }
 
   return spring({
     frame: elapsed,
@@ -209,8 +210,9 @@ const WEB_SEARCH_COLLAPSE = 80;
 function getCurrentStreamingIndex(frame: number): number {
   for (let i = AI_RESPONSES.length - 1; i >= 0; i--) {
     const response = AI_RESPONSES[i];
-    if (!response)
+    if (!response) {
       continue;
+    }
     if (frame >= response.streamStart && frame < response.streamStart + response.streamDuration) {
       return i;
     }
@@ -286,8 +288,9 @@ export function SceneChatThread() {
   // Returns blur amount for messages based on streaming state
   const getMessageDepthBlur = (isStreaming: boolean): number => {
     // Only apply blur when someone is streaming
-    if (currentStreamingIndex === -1)
+    if (currentStreamingIndex === -1) {
       return 0;
+    }
     return isStreaming ? 0 : INACTIVE_BLUR;
   };
 
@@ -326,8 +329,9 @@ export function SceneChatThread() {
   const renderParticipants = () => {
     return AI_RESPONSES.map((response, index) => {
       // Only show if past placeholder start
-      if (frame < response.placeholderStart)
+      if (frame < response.placeholderStart) {
         return null;
+      }
 
       // Entrance animation - simple opacity + Y translate
       const entranceProgress = getMessageEntrance(frame, response.placeholderStart, fps);
@@ -392,8 +396,9 @@ export function SceneChatThread() {
 
   // === MODERATOR RENDERING ===
   const renderModerator = () => {
-    if (frame < MODERATOR_CONFIG.placeholderStart)
+    if (frame < MODERATOR_CONFIG.placeholderStart) {
       return null;
+    }
 
     // Entrance animation - simple opacity + Y translate
     const entranceProgress = getMessageEntrance(frame, MODERATOR_CONFIG.placeholderStart, fps);

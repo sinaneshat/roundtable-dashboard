@@ -186,7 +186,7 @@ export function getIsometricStyle(config: IsometricConfig = {}): CSSProperties {
 /**
  * Get wrapper style for perspective container
  */
-export function getIsometricWrapperStyle(perspective: number = 1500): CSSProperties {
+export function getIsometricWrapperStyle(perspective = 1500): CSSProperties {
   return {
     perspective: `${perspective}px`,
     perspectiveOrigin: '50% 50%',

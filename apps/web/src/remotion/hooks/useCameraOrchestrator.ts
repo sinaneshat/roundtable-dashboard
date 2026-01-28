@@ -159,8 +159,8 @@ export function useCameraOrchestrator(config: UseCameraOrchestratorConfig): Came
 export function useCameraMovement(
   from: Partial<CameraState>,
   to: Partial<CameraState>,
-  startFrame: number = 0,
-  duration: number = 60,
+  startFrame = 0,
+  duration = 60,
   springConfig: PartialSpringConfig = CINEMATIC_SPRINGS.cameraMain,
 ): CameraOrchestratorResult {
   return useCameraOrchestrator({
@@ -176,8 +176,8 @@ export function useCameraMovement(
  * Hook for dramatic entrance animation
  */
 export function useDramaticEntrance(
-  entranceDuration: number = 45,
-  settleDuration: number = 30,
+  entranceDuration = 45,
+  settleDuration = 30,
 ): CameraOrchestratorResult {
   return useCameraOrchestrator({
     keyframes: [
@@ -194,7 +194,7 @@ export function useDramaticEntrance(
  */
 export function useOrbitCamera(
   amplitude: { x: number; y: number; rotateY: number } = { x: 30, y: 10, rotateY: 3 },
-  duration: number = 150,
+  duration = 150,
 ): CameraOrchestratorResult {
   return useCameraOrchestrator({
     keyframes: [
