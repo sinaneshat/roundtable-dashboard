@@ -16,6 +16,7 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import { getAdminJobs } from '@/server/admin-jobs';
+import { getSession } from '@/server/auth';
 import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
 import { getProjectAttachments, getProjectById, getProjectMemories } from '@/server/project';
@@ -27,6 +28,32 @@ import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
 import { GC_TIMES, STALE_TIMES } from './stale-times';
+
+/**
+ * Session query options
+ *
+ * Used by:
+ * - __root.tsx beforeLoad (direct call, but same cache)
+ * - useSessionQuery hook (useQuery)
+ * - useAuthCheck hook (via useSession)
+ *
+ * CRITICAL FOR FIX P1.5: Prevents 4+ getSession calls on page load.
+ * Session rarely changes mid-session, so 5 minute stale time is safe.
+ * Invalidation handles logout/impersonation.
+ *
+ * Server function getSession() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies via cookieMiddleware
+ * - Client: Makes RPC call to server function
+ */
+export const sessionQueryOptions = queryOptions({
+  gcTime: GC_TIMES.SESSION, // 10 minutes - keep in cache for navigation
+  queryFn: () => getSession(),
+  queryKey: queryKeys.session.current(),
+  refetchOnMount: false, // Don't refetch on mount - use cached
+  refetchOnWindowFocus: false, // Don't refetch on tab switch - session rarely changes
+  retry: 1,
+  staleTime: STALE_TIMES.session, // 5 minutes - session rarely changes mid-session
+});
 
 /**
  * Models query options
@@ -96,7 +123,7 @@ export const subscriptionsQueryOptions = queryOptions({
  * - _protected.tsx loader (ensureQueryData)
  * - useUsageStatsQuery hook (useQuery)
  *
- * IMPORTANT: staleTime is set to 30s for hydration to work.
+ * IMPORTANT: staleTime is set to 5 minutes for hydration and performance.
  * Usage is invalidated after chat operations, so stale data is acceptable.
  */
 export const usageQueryOptions = queryOptions({
@@ -105,7 +132,7 @@ export const usageQueryOptions = queryOptions({
   refetchOnMount: false,
   refetchOnWindowFocus: false,
   retry: 1,
-  staleTime: STALE_TIMES.threadsSidebar, // 30s - prevent immediate refetch on hydration
+  staleTime: STALE_TIMES.usageStats, // 5 minutes - prevent refetch, invalidation handles updates
 });
 
 /**
@@ -157,7 +184,7 @@ export const sidebarProjectsQueryOptions = infiniteQueryOptions({
   queryKey: queryKeys.projects.sidebar(),
   refetchOnMount: false,
   refetchOnWindowFocus: false,
-  staleTime: STALE_TIMES.threadsSidebar,
+  staleTime: STALE_TIMES.projects, // 60s - projects sidebar, invalidated on mutations
 });
 
 /**

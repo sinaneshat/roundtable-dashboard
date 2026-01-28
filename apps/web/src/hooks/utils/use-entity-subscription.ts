@@ -20,7 +20,7 @@
 
 import type { EntityPhase } from '@roundtable/shared/enums';
 import { EntityPhases, EntitySubscriptionStatuses } from '@roundtable/shared/enums';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 import type { EntitySubscriptionResponse } from '@/services/api';
@@ -89,6 +89,51 @@ const DEFAULT_RETRY_DELAY = 500;
 const MAX_RETRY_ATTEMPTS = 60; // 30 seconds with 500ms delay
 
 // ============================================================================
+// FAST COMPLETION HANDLING (seq=0)
+// ============================================================================
+
+/**
+ * Simulates streaming effect for fast completions where content exists
+ * but wasn't streamed (seq=0 case).
+ *
+ * This provides better UX by showing a typing animation rather than
+ * instant content appearance when the backend completes very quickly.
+ *
+ * @param content - The full content to simulate streaming
+ * @param onTextChunk - Callback to receive each chunk
+ * @param signal - AbortSignal to cancel simulation early
+ */
+async function simulateStreaming(
+  content: string,
+  onTextChunk: ((text: string, seq: number) => void) | undefined,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!content || !onTextChunk || signal.aborted) {
+    return;
+  }
+
+  // Stream at ~50 chars per 20ms for smooth animation
+  const chunkSize = 50;
+  let seq = 1;
+
+  for (let i = 0; i < content.length; i += chunkSize) {
+    if (signal.aborted) {
+      break;
+    }
+
+    const chunk = content.slice(i, i + chunkSize);
+    onTextChunk(chunk, seq++);
+
+    // Small delay between chunks for visual effect
+    if (i + chunkSize < content.length) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 20);
+      });
+    }
+  }
+}
+
+// ============================================================================
 // ✅ FIX P6: GLOBAL CONNECTION MANAGEMENT
 // ============================================================================
 
@@ -105,10 +150,40 @@ let globalActiveConnections = 0;
 /** Map of active requests for deduplication: key → AbortController */
 const activeRequestsMap = new Map<string, AbortController>();
 
+/** Timestamp of last stale connection cleanup check */
+let lastCleanupTime = 0;
+
+/** Interval between cleanup checks (30 seconds) */
+const CLEANUP_INTERVAL = 30_000;
+
+/**
+ * Check and reset drifted connection counters.
+ * This handles edge cases where aborts don't execute correctly during navigation,
+ * causing the counter to drift from the actual number of active connections.
+ */
+function maybeCleanupStaleConnections(): void {
+  const now = Date.now();
+  if (now - lastCleanupTime < CLEANUP_INTERVAL) {
+    return;
+  }
+  lastCleanupTime = now;
+
+  // Log current state for debugging
+  rlog.stream('check', `Connection state: active=${globalActiveConnections} requests=${activeRequestsMap.size}`);
+
+  // If map is empty but counter is positive, reset the drifted counter
+  if (activeRequestsMap.size === 0 && globalActiveConnections > 0) {
+    rlog.stuck('conn-drift', `Resetting drifted counter: ${globalActiveConnections} → 0`);
+    globalActiveConnections = 0;
+  }
+}
+
 /**
  * Check if we can start a new connection without exceeding the limit
  */
 function canStartConnection(): boolean {
+  // Check for stale connections before making decision
+  maybeCleanupStaleConnections();
   return globalActiveConnections < MAX_CONCURRENT_CONNECTIONS;
 }
 
@@ -117,15 +192,16 @@ function canStartConnection(): boolean {
  */
 function incrementConnections(entity: string, roundNumber: number): void {
   globalActiveConnections++;
-  rlog.stream('start', `${entity} r${roundNumber} conn started (active: ${globalActiveConnections})`);
+  rlog.stream('start', `${entity} r${roundNumber} conn++ (active: ${globalActiveConnections}, map: ${activeRequestsMap.size})`);
 }
 
 /**
  * Decrement the global connection counter and log
  */
 function decrementConnections(entity: string, roundNumber: number): void {
+  const before = globalActiveConnections;
   globalActiveConnections = Math.max(0, globalActiveConnections - 1);
-  rlog.stream('end', `${entity} r${roundNumber} conn ended (active: ${globalActiveConnections})`);
+  rlog.stream('end', `${entity} r${roundNumber} conn-- (${before}→${globalActiveConnections}, map: ${activeRequestsMap.size})`);
 }
 
 /**
@@ -184,27 +260,34 @@ export function useEntitySubscription({
   // This ref persists across 202 retries but is reset when round number changes
   const dispatchedPresearchEventsRef = useRef<Set<string>>(new Set());
 
-  // Reset lastSeq when round number changes to prevent stale sequence numbers
+  // Reset state when round number changes to prevent stale sequence numbers
   // This fixes the round 2+ submission failure where subscriptions detect "complete"
   // instantly because they're using stale lastSeq values from the previous round
-  // Using useLayoutEffect to ensure state is reset synchronously before render
+  // Using useLayoutEffect to ensure state is reset SYNCHRONOUSLY before any other effects
+  // CRITICAL: This must run BEFORE any completion checks can read stale state
   useLayoutEffect(() => {
     if (prevRoundNumberRef.current !== roundNumber) {
       rlog.stream(
         'check',
-        `${phase} r${prevRoundNumberRef.current}→r${roundNumber} resetting lastSeq from ${lastSeqRef.current} to 0`,
+        `${phase} r${prevRoundNumberRef.current}→r${roundNumber} resetting state synchronously`,
       );
+
+      // CRITICAL: Reset ALL state refs immediately before any other effects can read them
       lastSeqRef.current = 0;
       retryCountRef.current = 0;
-      isCompleteRef.current = false; // BUG FIX: Reset completion flag for new round
-      hasSubscribedKeyRef.current = null; // ✅ FIX P6: Reset subscription key for new round
-      dispatchedPresearchEventsRef.current.clear(); // FIX: Reset dispatched events for new round
-      setState(prev => ({
-        ...prev,
+      isCompleteRef.current = false;
+      hasSubscribedKeyRef.current = null;
+      dispatchedPresearchEventsRef.current.clear();
+
+      // Update state synchronously - include roundNumber to prevent stale round detection
+      setState({
+        errorMessage: undefined,
+        isStreaming: false,
         lastSeq: 0,
-        roundNumber, // Track which round this state belongs to
+        roundNumber, // CRITICAL: Update round number in state for stale detection
         status: 'idle',
-      }));
+      });
+
       prevRoundNumberRef.current = roundNumber;
     }
   }, [roundNumber, phase]);
@@ -268,9 +351,16 @@ export function useEntitySubscription({
     incrementConnections(phase, roundNumber);
 
     // Helper to clean up connection tracking on any exit path
-    const cleanupConnection = () => {
+    // FIX P1.3: Support preserving lastSeq across reconnections
+    // When preserveSeq=true (abort), keep lastSeq for resumption
+    // When preserveSeq=false (complete/error), reset lastSeq to 0
+    const cleanupConnection = (preserveSeq = false) => {
       activeRequestsMap.delete(requestKey);
       decrementConnections(phase, roundNumber);
+      // Only reset lastSeq if not preserving for resumption
+      if (!preserveSeq) {
+        lastSeqRef.current = 0;
+      }
     };
 
     rlog.stream('start', `${logPrefix} subscription lastSeq=${lastSeqRef.current}`);
@@ -371,17 +461,59 @@ export function useEntitySubscription({
           // Mark complete to prevent any pending retries
           // Guard against concurrent completion from another execution
           if (isCompleteRef.current) {
+            cleanupConnection();
             return;
           }
+
+          const receivedSeq = result.lastSeq ?? 0;
+
+          // FAST COMPLETION HANDLING: If seq=0, content was never streamed
+          // Try to artificially stream the content for better UX
+          if (receivedSeq === 0 && result.content && callbacksRef.current?.onTextChunk) {
+            rlog.stream('check', `${logPrefix} fast completion detected (seq=0) - simulating stream`);
+
+            // Set streaming state while we simulate
+            setState(prev => ({
+              ...prev,
+              isStreaming: true,
+              status: 'streaming',
+            }));
+            callbacksRef.current?.onStatusChange?.('streaming');
+
+            // Simulate streaming the content
+            await simulateStreaming(
+              result.content,
+              callbacksRef.current.onTextChunk,
+              controller.signal,
+            );
+
+            // Small delay before marking complete
+            if (!controller.signal.aborted) {
+              await new Promise<void>((resolve) => {
+                setTimeout(resolve, 100);
+              });
+            }
+          } else if (receivedSeq === 0) {
+            // seq=0 but no content available for simulation
+            // Log for debugging - backend may need enhancement to include content
+            rlog.stream('check', `${logPrefix} fast completion (seq=0) - no content available for simulation`);
+          }
+
+          // Guard against concurrent completion that may have happened during simulation
+          if (isCompleteRef.current) {
+            cleanupConnection();
+            return;
+          }
+
           isCompleteRef.current = true;
           setState(prev => ({
             ...prev,
             isStreaming: false,
-            lastSeq: result.lastSeq ?? prev.lastSeq,
+            lastSeq: receivedSeq,
             status: 'complete',
           }));
           callbacksRef.current?.onStatusChange?.('complete');
-          callbacksRef.current?.onComplete?.(result.lastSeq ?? lastSeqRef.current);
+          callbacksRef.current?.onComplete?.(receivedSeq);
         } else if (result?.status === EntitySubscriptionStatuses.DISABLED) {
           setState(prev => ({
             ...prev,
@@ -408,7 +540,9 @@ export function useEntitySubscription({
 
       // Handle SSE stream (active)
       if (contentType.includes('text/event-stream') || contentType.includes('text/plain')) {
-        rlog.stream('start', `${logPrefix} SSE stream active`);
+        // FIX P1.3: Log resumption seq for debugging reconnect issues
+        const resumeFromSeq = lastSeqRef.current;
+        rlog.stream('start', `${logPrefix} SSE stream active (resumeFrom=${resumeFromSeq})`);
 
         setState(prev => ({
           ...prev,
@@ -580,6 +714,17 @@ export function useEntitySubscription({
             }
 
             if (isAiSdkEvent) {
+              // FIX P1.3: Track tentative next seq before incrementing
+              const nextSeq = currentSeq + 1;
+
+              // FIX P1.3: Detect stale chunks on reconnect
+              // If server sends seq < resumeFromSeq, we've already seen this chunk
+              // This can happen if server restarts streaming from beginning
+              if (resumeFromSeq > 0 && nextSeq <= resumeFromSeq) {
+                rlog.race('seq-stale', `${logPrefix} skipping stale event, nextSeq=${nextSeq} resumeFromSeq=${resumeFromSeq}`);
+                continue; // Skip already-seen chunk
+              }
+
               currentSeq++;
               lastSeqRef.current = currentSeq;
 
@@ -654,6 +799,15 @@ export function useEntitySubscription({
                 const event = JSON.parse(line);
                 const textContent = event.delta ?? event.textDelta;
                 if (event.type === 'text-delta' && typeof textContent === 'string') {
+                  // FIX P1.3: Track tentative next seq before incrementing
+                  const nextSeq = currentSeq + 1;
+
+                  // FIX P1.3: Detect stale chunks on reconnect (JSON format)
+                  if (resumeFromSeq > 0 && nextSeq <= resumeFromSeq) {
+                    rlog.race('seq-stale', `${logPrefix} skipping stale JSON text-delta, nextSeq=${nextSeq} resumeFromSeq=${resumeFromSeq}`);
+                    continue; // Skip already-seen chunk
+                  }
+
                   // Increment sequence for JSON format text deltas (same as AI SDK events)
                   currentSeq++;
                   lastSeqRef.current = currentSeq;
@@ -722,9 +876,9 @@ export function useEntitySubscription({
         || error.message.includes('BodyStreamBuffer')
       );
       if (isAbortError) {
-        rlog.stream('end', `${logPrefix} aborted`);
-        // ✅ FIX P6: Clean up connection tracking on abort
-        cleanupConnection();
+        // FIX P1.3: Preserve seq on abort for resumption
+        rlog.stream('end', `${logPrefix} aborted (preserving seq=${lastSeqRef.current})`);
+        cleanupConnection(true); // PRESERVE seq for resumption
         return;
       }
 
@@ -848,6 +1002,12 @@ export function useEntitySubscription({
       // 5. No active request in flight (NEW)
       const requestKey = getRequestKey(threadId, roundNumber, phase, participantIndex);
 
+      // Log connection state when tab becomes visible (helps debug drift)
+      if (document.visibilityState === 'visible') {
+        rlog.stream('check', `Tab visible - conn state: active=${globalActiveConnections} map=${activeRequestsMap.size}`);
+        maybeCleanupStaleConnections();
+      }
+
       if (
         document.visibilityState === 'visible'
         && !isCompleteRef.current
@@ -916,6 +1076,474 @@ type UseParticipantSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'pha
  */
 export function useParticipantSubscription(options: UseParticipantSubscriptionOptions) {
   return useEntitySubscription({ ...options, phase: EntityPhases.PARTICIPANT });
+}
+
+// ============================================================================
+// MULTI-PARTICIPANT SUBSCRIPTION HOOK (DRY Pattern)
+// ============================================================================
+// This hook manages multiple participant subscriptions in a single hook call,
+// following the TanStack Query `useQueries` pattern. It satisfies React's
+// rules of hooks while eliminating repetitive code.
+// ============================================================================
+
+/** Configuration for a single participant subscription */
+export type ParticipantSubscriptionConfig = {
+  /** Participant index (0-9) */
+  index: number;
+  /** Whether this subscription is enabled */
+  enabled: boolean;
+  /** Initial lastSeq for resumption */
+  initialLastSeq?: number;
+  /** Callbacks for this participant */
+  callbacks: EntitySubscriptionCallbacks;
+};
+
+/** Result for a single participant subscription */
+export type ParticipantSubscriptionResult = {
+  /** Current subscription state */
+  state: EntitySubscriptionState;
+  /** Abort this subscription */
+  abort: () => void;
+  /** Retry this subscription */
+  retry: () => void;
+};
+
+/** Options for useParticipantSubscriptions hook */
+export type UseParticipantSubscriptionsOptions = {
+  /** Thread ID to subscribe to */
+  threadId: string;
+  /** Round number to subscribe to */
+  roundNumber: number;
+  /** Configurations for each participant */
+  configs: ParticipantSubscriptionConfig[];
+};
+
+/** Default idle state for uninitialized subscriptions */
+function createIdleState(roundNumber: number): EntitySubscriptionState {
+  return {
+    errorMessage: undefined,
+    isStreaming: false,
+    lastSeq: 0,
+    roundNumber,
+    status: 'idle',
+  };
+}
+
+/**
+ * Hook for managing multiple participant subscriptions in a single hook call.
+ *
+ * This follows the TanStack Query `useQueries` pattern:
+ * - Single hook call (satisfies React's rules of hooks)
+ * - Array-based configuration (scales without code changes)
+ * - Imperative subscription management via effects
+ * - Unified state array output
+ *
+ * @example
+ * ```ts
+ * const configs = participants.map((_, i) => ({
+ *   index: i,
+ *   enabled: i <= maxEnabledIndex,
+ *   callbacks: createCallbacks(i),
+ * }));
+ *
+ * const results = useParticipantSubscriptions({ threadId, roundNumber, configs });
+ * const p0State = results[0].state;
+ * ```
+ */
+export function useParticipantSubscriptions({
+  configs,
+  roundNumber,
+  threadId,
+}: UseParticipantSubscriptionsOptions): ParticipantSubscriptionResult[] {
+  // State map: index → EntitySubscriptionState
+  const [stateMap, setStateMap] = useState<Map<number, EntitySubscriptionState>>(() => new Map());
+
+  // Track active subscriptions: index → { controller, cleanup }
+  const subscriptionsRef = useRef<Map<number, {
+    controller: AbortController;
+    cleanup: () => void;
+  }>>(new Map());
+
+  // Ref to track previous round for reset detection
+  const prevRoundRef = useRef(roundNumber);
+
+  // Store configs in ref for use in subscription callbacks
+  const configsRef = useRef(configs);
+  configsRef.current = configs;
+
+  // Reset state when round changes
+  useLayoutEffect(() => {
+    if (prevRoundRef.current !== roundNumber) {
+      rlog.stream('check', `participants r${prevRoundRef.current}→r${roundNumber} resetting state`);
+
+      // Abort all active subscriptions
+      subscriptionsRef.current.forEach(({ cleanup, controller }) => {
+        controller.abort();
+        cleanup();
+      });
+      subscriptionsRef.current.clear();
+
+      // Reset state map
+      setStateMap(new Map());
+
+      prevRoundRef.current = roundNumber;
+    }
+  }, [roundNumber]);
+
+  // Main subscription management effect
+  useEffect(() => {
+    // Guard: Skip subscriptions if no threadId
+    if (!threadId) {
+      rlog.stream('skip', `participants r${roundNumber} - no threadId, skipping subscriptions`);
+      return;
+    }
+
+    rlog.stream('check', `participants r${roundNumber} effect - processing ${configs.length} configs`);
+
+    // Process each config - start/stop subscriptions based on enabled state
+    configs.forEach((config) => {
+      const { callbacks, enabled, index, initialLastSeq } = config;
+      const existingSub = subscriptionsRef.current.get(index);
+
+      // Start subscription if enabled and not already running
+      if (enabled && !existingSub) {
+        rlog.stream('start', `participant r${roundNumber} p${index} subscription starting`);
+        const controller = new AbortController();
+
+        // Update state to waiting
+        setStateMap((prev) => {
+          const next = new Map(prev);
+          next.set(index, {
+            errorMessage: undefined,
+            isStreaming: false,
+            lastSeq: initialLastSeq ?? 0,
+            roundNumber,
+            status: 'waiting',
+          });
+          return next;
+        });
+
+        // Start the subscription
+        const startSubscription = async () => {
+          let lastSeq = initialLastSeq ?? 0;
+          let retryCount = 0;
+          const MAX_RETRIES = 60;
+          let isComplete = false;
+
+          const subscribe = async (): Promise<void> => {
+            // Guard: Check for abort, completion, or missing threadId
+            if (controller.signal.aborted || isComplete || !threadId) {
+              if (!threadId) {
+                rlog.stream('skip', `participant r${roundNumber} p${index} - no threadId in subscribe`);
+              }
+              return;
+            }
+
+            rlog.stream('check', `participant r${roundNumber} p${index} subscribe attempt, lastSeq=${lastSeq}, retryCount=${retryCount}`);
+
+            try {
+              const response = await subscribeToParticipantStreamService(
+                { lastSeq, participantIndex: index, roundNumber, threadId },
+                { signal: controller.signal },
+              );
+
+              // Handle 202 (waiting)
+              if (response.status === 202) {
+                const data = await response.json() as { data: EntitySubscriptionResponse };
+                const retryAfter = data.data?.retryAfter ?? 500;
+
+                rlog.stream('check', `participant r${roundNumber} p${index} 202 waiting, retry after ${retryAfter}ms`);
+
+                retryCount++;
+                if (retryCount < MAX_RETRIES && !controller.signal.aborted && !isComplete) {
+                  await new Promise<void>((resolve) => {
+                    setTimeout(resolve, retryAfter);
+                  });
+                  return subscribe();
+                }
+                return;
+              }
+
+              // Reset retry count on success
+              retryCount = 0;
+
+              const contentType = response.headers.get('content-type') || '';
+              rlog.stream('check', `participant r${roundNumber} p${index} response contentType=${contentType.slice(0, 30)}`);
+
+              // Handle JSON response (complete/error)
+              if (contentType.includes('application/json')) {
+                const data = await response.json() as { data: EntitySubscriptionResponse };
+                const result = data.data;
+
+                rlog.stream('check', `participant r${roundNumber} p${index} JSON response status=${result?.status}`);
+
+                if (result?.status === EntitySubscriptionStatuses.COMPLETE) {
+                  isComplete = true;
+                  const receivedSeq = result.lastSeq ?? 0;
+                  rlog.stream('check', `participant r${roundNumber} p${index} complete, receivedSeq=${receivedSeq}`);
+
+                  // Fast completion simulation
+                  if (receivedSeq === 0 && result.content && callbacks.onTextChunk) {
+                    rlog.stream('check', `participant r${roundNumber} p${index} fast completion - simulating stream`);
+                    setStateMap((prev) => {
+                      const next = new Map(prev);
+                      const existing = prev.get(index) ?? createIdleState(roundNumber);
+                      next.set(index, { ...existing, isStreaming: true, status: 'streaming' });
+                      return next;
+                    });
+                    await simulateStreaming(result.content, callbacks.onTextChunk, controller.signal);
+                  }
+
+                  setStateMap((prev) => {
+                    const next = new Map(prev);
+                    next.set(index, {
+                      errorMessage: undefined,
+                      isStreaming: false,
+                      lastSeq: receivedSeq,
+                      roundNumber,
+                      status: 'complete',
+                    });
+                    return next;
+                  });
+                  callbacks.onStatusChange?.('complete');
+                  callbacks.onComplete?.(receivedSeq);
+                } else if (result?.status === EntitySubscriptionStatuses.ERROR) {
+                  setStateMap((prev) => {
+                    const next = new Map(prev);
+                    next.set(index, {
+                      errorMessage: 'Stream error',
+                      isStreaming: false,
+                      lastSeq: result.lastSeq ?? lastSeq,
+                      roundNumber,
+                      status: 'error',
+                    });
+                    return next;
+                  });
+                  callbacks.onStatusChange?.('error');
+                  callbacks.onError?.(new Error('Stream error'));
+                }
+                return;
+              }
+
+              // Handle SSE stream
+              if (contentType.includes('text/event-stream') || contentType.includes('text/plain')) {
+                rlog.stream('start', `participant r${roundNumber} p${index} SSE stream active`);
+                setStateMap((prev) => {
+                  const next = new Map(prev);
+                  const existing = prev.get(index) ?? createIdleState(roundNumber);
+                  next.set(index, { ...existing, isStreaming: true, status: 'streaming' });
+                  return next;
+                });
+                callbacks.onStatusChange?.('streaming');
+
+                const reader = response.body?.getReader();
+                if (!reader) {
+                  throw new Error('No response body');
+                }
+
+                const decoder = new TextDecoder();
+                let currentSeq = lastSeq;
+
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) {
+                    break;
+                  }
+
+                  const chunk = decoder.decode(value, { stream: true });
+                  const lines = chunk.split('\n');
+
+                  for (const rawLine of lines) {
+                    if (!rawLine.trim()) {
+                      continue;
+                    }
+
+                    const line = rawLine.startsWith('data: ') ? rawLine.slice(6) : rawLine;
+
+                    // Handle AI SDK events
+                    if (line.startsWith('0:') || line.startsWith('8:') || line.startsWith('e:') || line.startsWith('d:')) {
+                      currentSeq++;
+                      lastSeq = currentSeq;
+
+                      // Check for finish event
+                      if (line.startsWith('e:') || line.startsWith('d:')) {
+                        try {
+                          const finishData = JSON.parse(line.slice(2));
+                          if (finishData.finishReason) {
+                            rlog.stream('check', `participant r${roundNumber} p${index} finish event detected, reason=${finishData.finishReason}`);
+                            isComplete = true;
+                            setStateMap((prev) => {
+                              const next = new Map(prev);
+                              next.set(index, {
+                                errorMessage: undefined,
+                                isStreaming: false,
+                                lastSeq: currentSeq,
+                                roundNumber,
+                                status: 'complete',
+                              });
+                              return next;
+                            });
+                            callbacks.onStatusChange?.('complete');
+                            callbacks.onComplete?.(currentSeq);
+                            reader.cancel().catch(() => { /* ignore */ });
+                            return;
+                          }
+                        } catch { /* ignore parse errors */ }
+                      }
+                    }
+
+                    // Handle text chunks
+                    if (line.startsWith('0:')) {
+                      try {
+                        const textData = JSON.parse(line.slice(2));
+                        if (typeof textData === 'string') {
+                          callbacks.onTextChunk?.(textData, currentSeq);
+                        }
+                      } catch { /* ignore */ }
+                    } else if (line.startsWith('{')) {
+                      try {
+                        const event = JSON.parse(line);
+                        const textContent = event.delta ?? event.textDelta;
+                        if (event.type === 'text-delta' && typeof textContent === 'string') {
+                          currentSeq++;
+                          lastSeq = currentSeq;
+                          callbacks.onTextChunk?.(textContent, currentSeq);
+                        }
+                        if (event.type === 'finish' || event.finishReason) {
+                          rlog.stream('check', `participant r${roundNumber} p${index} JSON finish event detected, seq=${currentSeq}`);
+                          isComplete = true;
+                          setStateMap((prev) => {
+                            const next = new Map(prev);
+                            next.set(index, {
+                              errorMessage: undefined,
+                              isStreaming: false,
+                              lastSeq: currentSeq,
+                              roundNumber,
+                              status: 'complete',
+                            });
+                            return next;
+                          });
+                          callbacks.onStatusChange?.('complete');
+                          callbacks.onComplete?.(currentSeq);
+                          reader.cancel().catch(() => { /* ignore */ });
+                          return;
+                        }
+                      } catch { /* ignore */ }
+                    }
+                  }
+                }
+
+                // Natural stream end
+                if (!isComplete) {
+                  rlog.stream('end', `participant r${roundNumber} p${index} SSE reader done (natural end), seq=${currentSeq}`);
+                  isComplete = true;
+                  setStateMap((prev) => {
+                    const next = new Map(prev);
+                    next.set(index, {
+                      errorMessage: undefined,
+                      isStreaming: false,
+                      lastSeq: currentSeq,
+                      roundNumber,
+                      status: 'complete',
+                    });
+                    return next;
+                  });
+                  callbacks.onStatusChange?.('complete');
+                  callbacks.onComplete?.(currentSeq);
+                }
+              }
+            } catch (error) {
+              if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('abort'))) {
+                rlog.stream('end', `participant r${roundNumber} p${index} aborted`);
+                return; // Expected abort
+              }
+              rlog.stuck('sub', `participant r${roundNumber} p${index} error: ${error instanceof Error ? error.message : String(error)}`);
+              setStateMap((prev) => {
+                const next = new Map(prev);
+                next.set(index, {
+                  errorMessage: error instanceof Error ? error.message : String(error),
+                  isStreaming: false,
+                  lastSeq,
+                  roundNumber,
+                  status: 'error',
+                });
+                return next;
+              });
+              callbacks.onStatusChange?.('error');
+              callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+            }
+          };
+
+          subscribe().catch(() => { /* handled internally */ });
+        };
+
+        const cleanup = () => {
+          rlog.stream('end', `participant r${roundNumber} p${index} cleaned up`);
+        };
+
+        subscriptionsRef.current.set(index, { cleanup, controller });
+        startSubscription();
+      }
+
+      // Stop subscription if disabled and currently running
+      if (!enabled && existingSub) {
+        rlog.stream('end', `participant r${roundNumber} p${index} subscription stopping (disabled)`);
+        existingSub.controller.abort();
+        existingSub.cleanup();
+        subscriptionsRef.current.delete(index);
+
+        // Reset state to idle
+        setStateMap((prev) => {
+          const next = new Map(prev);
+          next.set(index, createIdleState(roundNumber));
+          return next;
+        });
+      }
+    });
+
+    // Copy ref to variable for cleanup function (React hooks best practice)
+    const currentSubscriptions = subscriptionsRef.current;
+
+    // Cleanup on unmount
+    return () => {
+      currentSubscriptions.forEach(({ cleanup, controller }) => {
+        controller.abort();
+        cleanup();
+      });
+      currentSubscriptions.clear();
+    };
+  }, [configs, roundNumber, threadId]);
+
+  // Build result array from configs
+  return useMemo(() => {
+    return configs.map((config) => {
+      const state = stateMap.get(config.index) ?? createIdleState(roundNumber);
+      const sub = subscriptionsRef.current.get(config.index);
+
+      return {
+        abort: () => {
+          if (sub) {
+            sub.controller.abort();
+          }
+        },
+        retry: () => {
+          // Mark as needs restart by removing from map - effect will recreate
+          if (sub) {
+            sub.controller.abort();
+            sub.cleanup();
+            subscriptionsRef.current.delete(config.index);
+          }
+          // State will trigger effect re-run
+          setStateMap((prev) => {
+            const next = new Map(prev);
+            next.set(config.index, createIdleState(roundNumber));
+            return next;
+          });
+        },
+        state,
+      };
+    });
+  }, [configs, stateMap, roundNumber]);
 }
 
 type UseModeratorSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'phase' | 'participantIndex'>;

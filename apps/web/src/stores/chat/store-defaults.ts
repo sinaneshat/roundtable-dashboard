@@ -67,6 +67,7 @@ export const UI_DEFAULTS: UIState = {
   createdThreadId: null,
   createdThreadProjectId: null,
   hasInitiallyLoaded: false,
+  _hasTransitionedToModerator: false,
   isAnalyzingPrompt: false,
   isCreatingThread: false,
   isModeratorStreaming: false,

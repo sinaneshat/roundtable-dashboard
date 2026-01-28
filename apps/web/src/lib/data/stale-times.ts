@@ -40,6 +40,12 @@ export const STALE_TIMES = {
   infinite: Infinity, // Never stale (static data like app config)
   messages: 2 * 60 * 1000, // 2 minutes - messages immutable, new ones added via streaming
 
+  // ============================================================================
+  // Session (auth state) - FIX P1.5 OVERFETCHING
+  // ============================================================================
+  /** 5 minutes - session rarely changes mid-session, rely on invalidation for logout */
+  session: 5 * 60 * 1000,
+
   modelDetail: 5 * 60 * 1000, // 5 minutes - individual model details can change
   // ============================================================================
   // AI Models (Aggressive caching: HTTP + KV + client cache)
@@ -57,6 +63,8 @@ export const STALE_TIMES = {
   // Products & Billing
   // ============================================================================
   products: 24 * 3600 * 1000, // 24 hours - matches server unstable_cache duration
+  /** 60 seconds - projects sidebar, invalidated on project mutations */
+  projects: 60 * 1000,
   providers: 10 * 60 * 1000, // 10 minutes - provider list changes infrequently
   publicMessagesKV: 3600, // 1 hour - public messages are immutable
   publicSlugsListKV: 3600, // 1 hour - public slugs list for SSG
@@ -74,7 +82,8 @@ export const STALE_TIMES = {
   // KV Cache TTLs (in seconds for $withCache DB-level caching)
   // ============================================================================
   threadListKV: 120, // 2 minutes - thread list DB cache
-  threadMessages: 0, // NO CACHE - messages may be added via streaming, must always be fresh
+  /** Infinity - messages immutable, only update via streaming/invalidation */
+  threadMessages: Infinity,
   threadMessagesKV: 300, // 5 minutes - messages immutable, fast load on nav
 
   threadModerators: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
@@ -82,7 +91,8 @@ export const STALE_TIMES = {
   // ============================================================================
   // Chat & Messages (optimized for navigation speed)
   // ============================================================================
-  threads: 60 * 1000, // 1 minute - sidebar list, invalidated on mutations
+  /** 30 seconds - sidebar thread list, short for fresh titles but not instant */
+  threads: 30 * 1000,
 
   threadSidebarKV: 60, // 60s - lightweight sidebar (KV min TTL is 60s)
   threadsSidebar: 30 * 1000, // 30s - lightweight sidebar endpoint, shorter TTL for fresher titles
@@ -91,6 +101,8 @@ export const STALE_TIMES = {
   // Usage & Quota
   // ============================================================================
   usage: 0, // ⚠️ NO CACHE - usage stats must always be fresh after plan changes and chat operations
+  /** 5 minutes - usage stats for display purposes, invalidated after chat ops */
+  usageStats: 5 * 60 * 1000,
   // ============================================================================
   // User & Settings (infrequent changes)
   // ============================================================================
@@ -165,11 +177,20 @@ export const GC_TIMES = {
   /** Long cache time - 10 minutes (for infrequently changing data) */
   LONG: 10 * 60 * 1000,
 
+  /** Session cache time - 10 minutes (matches session staleTime lifecycle) */
+  SESSION: 10 * 60 * 1000,
+
   /** Short cache time - 1 minute (for frequently changing data) */
   SHORT: 60 * 1000,
 
   /** Standard cache time - 5 minutes (most queries use this) */
   STANDARD: 5 * 60 * 1000,
+
+  /** Thread messages cache time - 30 minutes (messages are immutable) */
+  THREAD_MESSAGES: 30 * 60 * 1000,
+
+  /** Threads cache time - 5 minutes (for sidebar/list views) */
+  THREADS: 5 * 60 * 1000,
 } as const;
 
 // ============================================================================

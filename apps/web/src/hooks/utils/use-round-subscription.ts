@@ -6,23 +6,19 @@
  * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  *
  * ============================================================================
- * ARCHITECTURAL PATTERN: Fixed Hook Array with Dynamic Behavior
+ * ARCHITECTURAL PATTERN: Subscription Manager with Imperative Control
  * ============================================================================
  *
- * React's rules of hooks require unconditional hook calls. To support up to 10
- * participants while maintaining DRY code, we use:
+ * Following DRY and SOLID principles, participant subscriptions are managed
+ * via a single `useParticipantSubscriptions` hook that:
  *
- * 1. **Tuple-based Hook Registration**: All 10 participant hooks are called
- *    unconditionally but controlled via computed `enabled` flags
+ * 1. **Single Hook Call**: Satisfies React's rules of hooks (unconditional)
+ * 2. **Imperative Management**: Creates/destroys subscriptions via effects
+ * 3. **Array-based Config**: Scales to any participant count without code changes
+ * 4. **State Aggregation**: Returns unified array of subscription states
  *
- * 2. **Factory Functions**: Callback creation and enabled-state computation
- *    are centralized in reusable functions
- *
- * 3. **Index-based Access**: Arrays and tuples provide O(1) access to any
- *    participant's state by index
- *
- * This pattern aligns with AI SDK resumable streams where each entity is
- * independent and the backend orchestrates execution order.
+ * This pattern mirrors TanStack Query's `useQueries` - a single hook manages
+ * multiple queries/subscriptions internally.
  *
  * ✅ STAGGERED SUBSCRIPTIONS: Avoids HTTP/1.1 connection exhaustion
  * - Presearch + P0 subscribe immediately (when presearch completes)
@@ -40,16 +36,9 @@ import { parseParticipantEntityIndex } from '@/lib/utils/streaming-helpers';
 import type { EntitySubscriptionCallbacks, EntitySubscriptionState } from './use-entity-subscription';
 import {
   useModeratorSubscription,
-  useParticipantSubscription,
+  useParticipantSubscriptions,
   usePreSearchSubscription,
 } from './use-entity-subscription';
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-/** Participant indices as a tuple for type safety */
-const PARTICIPANT_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 // ============================================================================
 // TYPES
@@ -305,13 +294,13 @@ export function useRoundSubscription({
 
   const hasCalledRoundCompleteRef = useRef(false);
   const initialParticipantCountRef = useRef<number | null>(null);
-  const logDedupeRef = useRef<{ key: string; count: number }>({ count: 0, key: '' });
   const lastResetKeyRef = useRef<string | null>(null);
   const maxEnabledIndexRef = useRef(0);
   const staggerLogRef = useRef<string>('');
   const lastPresearchTransitionLogRef = useRef<string>('');
   const lastModeratorTransitionLogRef = useRef<string>('');
   const prevCompletionKeyRef = useRef<string>('');
+  const lastCompleteCheckTimeRef = useRef(0);
 
   // Seq validation tracking
   const expectedSeqsRef = useRef<ExpectedSeqsState>({
@@ -357,28 +346,37 @@ export function useRoundSubscription({
   presearchReadyRef.current = presearchReady;
   maxEnabledIndexRef.current = maxEnabledIndex;
 
-  // Reset stagger state on round change
+  // Reset stagger state on round change - MUST run before other effects
+  // This ensures entity state tracking is reset before any completion checks
   useLayoutEffect(() => {
     const resetKey = `${threadId}-${roundNumber}-${enablePreSearch}`;
     if (lastResetKeyRef.current === resetKey) {
       return;
     }
 
+    rlog.stream('check', `r${roundNumber} stagger reset (key=${resetKey})`);
     lastResetKeyRef.current = resetKey;
+
+    // Reset all round-specific state
     hasCalledRoundCompleteRef.current = false;
     initialParticipantCountRef.current = null;
+    lastCompleteCheckTimeRef.current = 0; // Reset throttle for new round
+
+    // Reset stagger state
     setMaxEnabledIndex(enablePreSearch ? -1 : 0);
     setModeratorEnabled(false);
     setPresearchReady(!enablePreSearch);
     setInitialParticipantsEnabled(!enablePreSearch);
 
+    // Reset sequence tracking
     expectedSeqsRef.current = {
       moderator: initialLastSeqs?.moderator ?? 0,
       participants: initialLastSeqs?.participants ?? {},
       presearch: initialLastSeqs?.presearch ?? 0,
     };
 
-    rlog.stream('check', `r${roundNumber} stagger reset`);
+    // Reset completion logging ref
+    prevCompletionKeyRef.current = '';
   }, [threadId, roundNumber, enablePreSearch, initialLastSeqs]);
 
   // ============================================================================
@@ -433,80 +431,62 @@ export function useRoundSubscription({
   }, [enabled, enablePreSearch, presearchSub.state.status, presearchReady, roundNumber]);
 
   // ============================================================================
-  // PARTICIPANT SUBSCRIPTIONS (Fixed Hook Array Pattern)
+  // PARTICIPANT SUBSCRIPTIONS (DRY Subscription Manager Pattern)
   // ============================================================================
-  // All 10 hooks are called unconditionally as required by React.
-  // The `enabled` flag controls which ones are actually active.
+  // Single hook call manages all participant subscriptions imperatively.
+  // This satisfies React's rules of hooks while eliminating repetitive code.
   // ============================================================================
 
-  // Create callbacks for each participant using the factory pattern
-  const p0Callbacks = useEntityCallbacks('participant_0', callbackOptions, expectedSeqsRef);
-  const p1Callbacks = useEntityCallbacks('participant_1', callbackOptions, expectedSeqsRef);
-  const p2Callbacks = useEntityCallbacks('participant_2', callbackOptions, expectedSeqsRef);
-  const p3Callbacks = useEntityCallbacks('participant_3', callbackOptions, expectedSeqsRef);
-  const p4Callbacks = useEntityCallbacks('participant_4', callbackOptions, expectedSeqsRef);
-  const p5Callbacks = useEntityCallbacks('participant_5', callbackOptions, expectedSeqsRef);
-  const p6Callbacks = useEntityCallbacks('participant_6', callbackOptions, expectedSeqsRef);
-  const p7Callbacks = useEntityCallbacks('participant_7', callbackOptions, expectedSeqsRef);
-  const p8Callbacks = useEntityCallbacks('participant_8', callbackOptions, expectedSeqsRef);
-  const p9Callbacks = useEntityCallbacks('participant_9', callbackOptions, expectedSeqsRef);
+  // Create callback factory for participants - generates callbacks on demand
+  const createParticipantCallbacks = useCallback((index: number): EntitySubscriptionCallbacks => ({
+    onComplete: (lastSeq) => {
+      rlog.stream('end', `🏁 participant_${index} complete! lastSeq=${lastSeq}`);
+      onEntityComplete?.(`participant_${index}`, lastSeq);
+    },
+    onError: (error) => {
+      rlog.stuck('sub', `participant_${index} error: ${error.message}`);
+      onEntityError?.(`participant_${index}`, error);
+    },
+    onTextChunk: (text, seq) => {
+      // Seq validation for gap detection
+      const expectedSeq = expectedSeqsRef.current.participants[String(index)] ?? 0;
+      const expectedNextSeq = expectedSeq + 1;
+      if (seq !== expectedNextSeq && expectedSeq !== 0) {
+        rlog.stuck('seq-gap', `participant_${index} seq gap: expected=${expectedNextSeq} received=${seq}`);
+      }
+      expectedSeqsRef.current.participants[String(index)] = seq;
+      onChunk?.(`participant_${index}`, text, seq);
+    },
+  }), [onChunk, onEntityComplete, onEntityError]);
 
-  // Callbacks array for indexed access
-  const allParticipantCallbacks = useMemo(() => [
-    p0Callbacks,
-    p1Callbacks,
-    p2Callbacks,
-    p3Callbacks,
-    p4Callbacks,
-    p5Callbacks,
-    p6Callbacks,
-    p7Callbacks,
-    p8Callbacks,
-    p9Callbacks,
-  ], [p0Callbacks, p1Callbacks, p2Callbacks, p3Callbacks, p4Callbacks, p5Callbacks, p6Callbacks, p7Callbacks, p8Callbacks, p9Callbacks]);
+  // Build subscription configs for all participants using array map (DRY)
+  const participantConfigs = useMemo(() => {
+    const configs = [];
+    for (let i = 0; i < stableParticipantCount; i++) {
+      configs.push({
+        callbacks: createParticipantCallbacks(i),
+        enabled: computeParticipantEnabled(i, enabled, stableParticipantCount, maxEnabledIndex, initialParticipantsEnabled),
+        index: i,
+        initialLastSeq: initialLastSeqs?.participants?.[String(i)],
+      });
+    }
+    return configs;
+  }, [stableParticipantCount, enabled, maxEnabledIndex, initialParticipantsEnabled, initialLastSeqs?.participants, createParticipantCallbacks]);
 
-  // Compute enabled state for each participant using the helper function
-  const participantEnabledStates = useMemo(() =>
-    PARTICIPANT_INDICES.map(i =>
-      computeParticipantEnabled(i, enabled, stableParticipantCount, maxEnabledIndex, initialParticipantsEnabled),
-    ), [enabled, stableParticipantCount, maxEnabledIndex, initialParticipantsEnabled]);
+  // Single hook call for all participant subscriptions (satisfies React's rules)
+  const allParticipantSubs = useParticipantSubscriptions({
+    configs: participantConfigs,
+    roundNumber,
+    threadId,
+  });
 
-  // All 10 participant subscriptions (unconditional hook calls)
-  const p0Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[0], enabled: participantEnabledStates[0], initialLastSeq: initialLastSeqs?.participants?.['0'], participantIndex: 0, roundNumber, threadId });
-  const p1Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[1], enabled: participantEnabledStates[1], initialLastSeq: initialLastSeqs?.participants?.['1'], participantIndex: 1, roundNumber, threadId });
-  const p2Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[2], enabled: participantEnabledStates[2], initialLastSeq: initialLastSeqs?.participants?.['2'], participantIndex: 2, roundNumber, threadId });
-  const p3Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[3], enabled: participantEnabledStates[3], initialLastSeq: initialLastSeqs?.participants?.['3'], participantIndex: 3, roundNumber, threadId });
-  const p4Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[4], enabled: participantEnabledStates[4], initialLastSeq: initialLastSeqs?.participants?.['4'], participantIndex: 4, roundNumber, threadId });
-  const p5Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[5], enabled: participantEnabledStates[5], initialLastSeq: initialLastSeqs?.participants?.['5'], participantIndex: 5, roundNumber, threadId });
-  const p6Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[6], enabled: participantEnabledStates[6], initialLastSeq: initialLastSeqs?.participants?.['6'], participantIndex: 6, roundNumber, threadId });
-  const p7Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[7], enabled: participantEnabledStates[7], initialLastSeq: initialLastSeqs?.participants?.['7'], participantIndex: 7, roundNumber, threadId });
-  const p8Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[8], enabled: participantEnabledStates[8], initialLastSeq: initialLastSeqs?.participants?.['8'], participantIndex: 8, roundNumber, threadId });
-  const p9Sub = useParticipantSubscription({ callbacks: allParticipantCallbacks[9], enabled: participantEnabledStates[9], initialLastSeq: initialLastSeqs?.participants?.['9'], participantIndex: 9, roundNumber, threadId });
+  // Active participants (already sliced by config generation)
+  const activeParticipantSubs = allParticipantSubs;
 
-  // Subscription tuple for indexed access
-  const allParticipantSubs = useMemo(() => [
-    p0Sub,
-    p1Sub,
-    p2Sub,
-    p3Sub,
-    p4Sub,
-    p5Sub,
-    p6Sub,
-    p7Sub,
-    p8Sub,
-    p9Sub,
-  ], [p0Sub, p1Sub, p2Sub, p3Sub, p4Sub, p5Sub, p6Sub, p7Sub, p8Sub, p9Sub]);
-
-  // Active participants (sliced by count)
-  const activeParticipantSubs = useMemo(
-    () => allParticipantSubs.slice(0, stableParticipantCount),
-    [allParticipantSubs, stableParticipantCount],
-  );
-
-  // Participant states array
+  // Participant states array (already filtered by participantConfigs)
   const participantStates = useMemo(
-    () => allParticipantSubs.map(sub => sub.state).slice(0, stableParticipantCount),
-    [allParticipantSubs, stableParticipantCount],
+    () => allParticipantSubs.map(sub => sub.state),
+    [allParticipantSubs],
   );
 
   // Status-only array for stagger effect optimization
@@ -537,6 +517,27 @@ export function useRoundSubscription({
     if (!enabled || !presearchReady) {
       return;
     }
+
+    // GUARD: Skip if moderator state is from wrong round
+    // This prevents false completion detection during round transitions
+    if (moderatorEnabled && moderatorSub.state.roundNumber !== roundNumber) {
+      rlog.race('stagger-skip', `r${roundNumber} skipping - moderator state from r${moderatorSub.state.roundNumber}`);
+      return;
+    }
+
+    // GUARD: Check for stale participant states from wrong round
+    // Skip if any active participant has state from a different round (except idle which is expected)
+    const hasStaleParticipantState = participantStates.some((s, i) =>
+      i < stableParticipantCount
+      && s.roundNumber !== roundNumber
+      && s.status !== 'idle'
+      && s.status !== 'waiting',
+    );
+    if (hasStaleParticipantState) {
+      rlog.race('stagger-skip', `r${roundNumber} skipping - participant state from wrong round`);
+      return;
+    }
+
     if (moderatorEnabled && participantStatuses.every((s, i) =>
       isParticipantCompleteForStagger(i, s, participantStates[i]?.roundNumber, roundNumber, aiSdkP0Complete),
     )) {
@@ -583,7 +584,7 @@ export function useRoundSubscription({
       rlog.stream('check', `r${roundNumber} all participants complete → moderator`);
       setModeratorEnabled(true);
     }
-  }, [enabled, presearchReady, stableParticipantCount, participantStatuses, participantStates, moderatorEnabled, roundNumber, aiSdkP0Complete]);
+  }, [enabled, presearchReady, stableParticipantCount, participantStatuses, participantStates, moderatorEnabled, roundNumber, aiSdkP0Complete, moderatorSub.state.roundNumber]);
 
   // ============================================================================
   // COMPLETION STATE
@@ -596,109 +597,125 @@ export function useRoundSubscription({
   const moderatorRound = moderatorSub.state.roundNumber;
   const moderatorIsStreaming = moderatorSub.state.isStreaming;
 
-  // Completion data for participants
-  const allCompletionData = useMemo(
+  // Completion data for participants (already filtered by participantConfigs)
+  const participantStatusesForCompletion = useMemo(
     () => allParticipantSubs.map(sub => extractCompletionData(sub.state)),
     [allParticipantSubs],
   );
 
-  const participantStatusesForCompletion = useMemo(
-    () => allCompletionData.slice(0, stableParticipantCount),
-    [allCompletionData, stableParticipantCount],
-  );
-
-  const completionState = useMemo(() => {
-    const presearchComplete = !enablePreSearch
+  // Split completionState into 3 focused memos to reduce re-render cascades
+  const presearchComplete = useMemo(() => {
+    return !enablePreSearch
       || presearchStatus === 'disabled'
       || presearchRound !== roundNumber
       || presearchStatus === 'complete'
       || presearchStatus === 'error';
+  }, [enablePreSearch, presearchStatus, presearchRound, roundNumber]);
 
-    const allParticipantsDone = participantStatusesForCompletion.length > 0
+  const allParticipantsDone = useMemo(() => {
+    return participantStatusesForCompletion.length > 0
       && participantStatusesForCompletion.every((s, i) =>
         (i === 0 && aiSdkP0Complete) || (s.roundNumber === roundNumber && (s.status === 'complete' || s.status === 'error')),
       );
+  }, [participantStatusesForCompletion, roundNumber, aiSdkP0Complete]);
 
-    const moderatorComplete = moderatorRound === roundNumber
+  const moderatorComplete = useMemo(() => {
+    return moderatorRound === roundNumber
       && (moderatorStatus === 'complete' || moderatorStatus === 'error');
+  }, [moderatorRound, roundNumber, moderatorStatus]);
 
-    const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
+  // Combined state only for final check - depends on 3 booleans instead of 12 values
+  const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
 
-    const hasActiveStream = presearchIsStreaming
+  const hasActiveStream = useMemo(() => {
+    return presearchIsStreaming
       || participantStatusesForCompletion.some((s, i) => !(i === 0 && aiSdkP0Complete) && s.isStreaming)
       || moderatorIsStreaming;
+  }, [presearchIsStreaming, participantStatusesForCompletion, aiSdkP0Complete, moderatorIsStreaming]);
 
-    return { allParticipantsDone, hasActiveStream, isRoundComplete, moderatorComplete, presearchComplete };
-  }, [
-    enablePreSearch,
-    presearchStatus,
-    presearchRound,
-    presearchIsStreaming,
-    moderatorStatus,
-    moderatorRound,
-    moderatorIsStreaming,
-    participantStatusesForCompletion,
-    roundNumber,
-    aiSdkP0Complete,
-  ]);
-
-  // Round-ref-lag detection
+  // Round state consistency verification
+  // After fixes above, round-ref-lag should never occur during normal operation
+  // This effect verifies consistency - if it triggers, investigate the cause
   useLayoutEffect(() => {
     lastPresearchTransitionLogRef.current = '';
     lastModeratorTransitionLogRef.current = '';
   }, [roundNumber]);
 
   useEffect(() => {
-    if (enablePreSearch && presearchRound !== roundNumber && presearchStatus !== 'disabled' && presearchStatus !== 'idle' && presearchStatus !== 'waiting') {
+    // Only verify after initial render when we have active states
+    if (!enabled) {
+      return;
+    }
+
+    // Presearch verification - should never have active state from wrong round
+    const presearchLag = enablePreSearch
+      && presearchRound !== roundNumber
+      && presearchStatus !== 'disabled'
+      && presearchStatus !== 'idle'
+      && presearchStatus !== 'waiting';
+
+    if (presearchLag) {
       const key = `r${roundNumber}<-r${presearchRound}`;
       if (lastPresearchTransitionLogRef.current !== key) {
         lastPresearchTransitionLogRef.current = key;
-        rlog.race('round-ref-lag', `r${roundNumber} presearch state from r${presearchRound}`);
+        // This should never happen after fixes - log as stuck if it does
+        rlog.stuck('round-desync', `UNEXPECTED: r${roundNumber} presearch state from r${presearchRound} - investigate!`);
       }
     }
-    if (moderatorRound !== roundNumber && moderatorStatus !== 'disabled' && moderatorStatus !== 'waiting' && moderatorStatus !== 'idle') {
+
+    // Moderator verification - should never have active state from wrong round
+    const moderatorLag = moderatorRound !== roundNumber
+      && moderatorStatus !== 'disabled'
+      && moderatorStatus !== 'waiting'
+      && moderatorStatus !== 'idle';
+
+    if (moderatorLag) {
       const key = `r${roundNumber}<-r${moderatorRound}`;
       if (lastModeratorTransitionLogRef.current !== key) {
         lastModeratorTransitionLogRef.current = key;
-        rlog.race('round-ref-lag', `r${roundNumber} moderator state from r${moderatorRound}`);
+        // This should never happen after fixes - log as stuck if it does
+        rlog.stuck('round-desync', `UNEXPECTED: r${roundNumber} moderator state from r${moderatorRound} - investigate!`);
       }
     }
-  }, [roundNumber, presearchRound, presearchStatus, enablePreSearch, moderatorRound, moderatorStatus]);
+  }, [enabled, roundNumber, presearchRound, presearchStatus, enablePreSearch, moderatorRound, moderatorStatus]);
 
-  // Completion logging
-  const completionLogKey = `${roundNumber}-pre:${completionState.presearchComplete}-allP:${completionState.allParticipantsDone}-mod:${completionState.moderatorComplete}`;
-  if (completionLogKey !== prevCompletionKeyRef.current) {
-    if (logDedupeRef.current.count > 1) {
-      rlog.phase('round-complete-check', `[×${logDedupeRef.current.count}] (deduplicated)`);
+  // Completion logging - only log on actual state CHANGES, moved to useEffect
+  const completionLogKey = `${roundNumber}-${presearchComplete}-${allParticipantsDone}-${moderatorComplete}`;
+  useEffect(() => {
+    if (completionLogKey !== prevCompletionKeyRef.current) {
+      prevCompletionKeyRef.current = completionLogKey;
+      rlog.phase('round-complete-check', `r${roundNumber} pre=${presearchComplete} allP=${allParticipantsDone} mod=${moderatorComplete}`);
     }
-    prevCompletionKeyRef.current = completionLogKey;
-    logDedupeRef.current = { count: 1, key: completionLogKey };
-    rlog.phase('round-complete-check', `r${roundNumber} pre=${completionState.presearchComplete} allP=${completionState.allParticipantsDone} mod=${completionState.moderatorComplete}`);
-  } else {
-    logDedupeRef.current.count++;
-  }
+  }, [completionLogKey, roundNumber, presearchComplete, allParticipantsDone, moderatorComplete]);
 
   // ============================================================================
   // COMBINED STATE
   // ============================================================================
 
   const state = useMemo((): RoundSubscriptionState => ({
-    hasActiveStream: completionState.hasActiveStream,
-    isRoundComplete: completionState.isRoundComplete,
+    hasActiveStream,
+    isRoundComplete,
     moderator: moderatorSub.state,
     participants: participantStates,
     presearch: presearchSub.state,
-  }), [completionState, moderatorSub.state, participantStates, presearchSub.state]);
+  }), [hasActiveStream, isRoundComplete, moderatorSub.state, participantStates, presearchSub.state]);
 
-  // Round completion callback
+  // Round completion callback - throttled to max once per 100ms
   useEffect(() => {
-    rlog.phase('round-complete-effect', `r${roundNumber} isComplete=${state.isRoundComplete} hasCalled=${hasCalledRoundCompleteRef.current}`);
-    if (state.isRoundComplete && !hasCalledRoundCompleteRef.current && enabled) {
+    const now = Date.now();
+    // Throttle to max once per 100ms
+    if (now - lastCompleteCheckTimeRef.current < 100) {
+      return;
+    }
+    lastCompleteCheckTimeRef.current = now;
+
+    rlog.phase('round-complete-effect', `r${roundNumber} isComplete=${isRoundComplete} hasCalled=${hasCalledRoundCompleteRef.current}`);
+    if (isRoundComplete && !hasCalledRoundCompleteRef.current && enabled) {
       hasCalledRoundCompleteRef.current = true;
       rlog.phase('round-subscription', `r${roundNumber} COMPLETE`);
       onRoundComplete?.();
     }
-  }, [state.isRoundComplete, enabled, roundNumber, onRoundComplete]);
+  }, [isRoundComplete, enabled, roundNumber, onRoundComplete]);
 
   // ============================================================================
   // IMPERATIVE METHODS

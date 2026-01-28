@@ -30,6 +30,7 @@ import { log } from '@/lib/logger';
 import { rlog } from '@/lib/utils/dev-logger';
 import { buildSessionAuthHeaders, drainStream, getBaseUrl } from '@/lib/utils/internal-api';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
+import { slog } from '@/lib/utils/stream-logger';
 import type {
   CheckRoundCompletionQueueMessage,
   CompleteAutomatedJobQueueMessage,
@@ -204,8 +205,14 @@ async function triggerModeratorStream(
   const { roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
 
+  // ✅ MOD-QUEUE-RECV: Log queue message received for moderator
+  slog.phase('MOD-QUEUE-RECV', `r${roundNumber} tid=${threadId.slice(-8)} queue consumer received moderator trigger`);
+
   // ✅ FRAME 5: Queue triggering moderator after all participants
   rlog.frame(5, 'queue-mod', `r${roundNumber} Queue triggering moderator via API`);
+
+  // ✅ MOD-API-CALL: Log the API call to moderator endpoint
+  slog.moderator('api-call', `r${roundNumber} calling POST /moderator endpoint`);
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
@@ -217,11 +224,19 @@ async function triggerModeratorStream(
   );
 
   if (!response.ok) {
+    // ✅ MOD-API-FAIL: Log API failure
+    slog.race('MOD-API-FAIL', `r${roundNumber} moderator API returned ${response.status} ${response.statusText}`);
     throw new Error(`Failed to trigger moderator: ${response.status} ${response.statusText}`);
   }
 
+  // ✅ MOD-API-SUCCESS: Log API success
+  slog.moderator('api-success', `r${roundNumber} moderator API returned ${response.status}, draining stream`);
+
   // Drain the stream response to allow completion
   await drainStream(response);
+
+  // ✅ MOD-STREAM-DRAINED: Log stream completion
+  slog.moderator('stream-drained', `r${roundNumber} moderator stream fully consumed`);
 
   // Check if this thread belongs to an automated job
   // If so, queue the continuation to the next round

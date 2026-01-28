@@ -28,6 +28,15 @@ export type EntitySubscriptionResponse = {
   message?: string;
   /** Participant index (for participant streams) */
   participantIndex?: number;
+  /**
+   * Full content when status is 'complete' and seq=0 (fast completion case).
+   * Used to simulate streaming animation for content that completed before
+   * the subscription connected.
+   *
+   * NOTE: Backend must be enhanced to include this field when returning
+   * a 'complete' status with lastSeq=0 or when the full content is available.
+   */
+  content?: string;
 };
 
 export type SubscribeToPreSearchStreamParams = {

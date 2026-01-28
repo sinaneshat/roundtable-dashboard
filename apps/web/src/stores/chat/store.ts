@@ -668,12 +668,21 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
          */
         onParticipantComplete: (participantIndex: number) => {
           const state = get();
+          const roundNumber = state.currentRoundNumber ?? 0;
+
+          // ✅ GUARD: Prevent triple baton-to-moderator handoff race condition
+          // Multiple sources (AI SDK onFinish, entity subscription onComplete, stagger effect)
+          // can call this within the same React render cycle. Only allow one transition.
+          if (state._hasTransitionedToModerator && state.phase === ChatPhases.MODERATOR) {
+            rlog.race('skip-handoff', `r${roundNumber} P${participantIndex} - already transitioned to moderator`);
+            return;
+          }
+
           // ✅ FIX: Use captured activeRoundParticipantCount instead of computing from state.participants
           // state.participants may be stale due to React batched updates, but activeRoundParticipantCount
           // was captured at round start and is the source of truth for the current streaming round
           const enabledCount = state.activeRoundParticipantCount;
           const stateEnabledCount = countEnabledParticipants(state.participants);
-          const roundNumber = state.currentRoundNumber ?? 0;
           const isRound1 = roundNumber === 0;
 
           // ✅ DIAGNOSTIC: Log if activeRoundParticipantCount diverges from state.participants
@@ -686,7 +695,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           const subState = state.subscriptionState;
           const allComplete = areAllParticipantsComplete(subState.participants);
 
-          if (allComplete) {
+          if (allComplete && !state._hasTransitionedToModerator) {
             // Frame 5 (R1) / Frame 11→moderator transition (R2)
             // "All Participants Complete → Moderator Starts"
             if (isRound1) {
@@ -699,10 +708,11 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             rlog.handoff('baton-to-moderator', `All participants → Moderator`);
 
             set({
+              _hasTransitionedToModerator: true,
               currentParticipantIndex: enabledCount - 1, // Set to last participant index
               phase: ChatPhases.MODERATOR,
             }, false, 'phase/toModerator');
-          } else {
+          } else if (!allComplete) {
             // Not all participants complete yet - this callback may have been called for
             // an individual participant completion, log it but don't transition
             const completedCount = subState.participants.filter(p => p.status === 'complete' || p.status === 'error').length;
@@ -854,7 +864,11 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
 
           // Set store state to match backend
           // ✅ GUARD: Clear resuming flag now that setup is complete
+          // ✅ FIX: Set _hasTransitionedToModerator based on resumed phase
+          // If resuming to moderator phase, participants already transitioned so set true
+          // If resuming to participants phase, reset to false for fresh transition detection
           set({
+            _hasTransitionedToModerator: frontendPhase === ChatPhases.MODERATOR,
             activeRoundParticipantCount: actualCount,
             currentParticipantIndex: currentParticipantIndex ?? 0,
             currentRoundNumber: roundNumber,
@@ -1045,6 +1059,8 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           get().createStreamingPlaceholders(roundNumber, actualCount);
 
           set({
+            // ✅ Reset moderator transition guard for new round
+            _hasTransitionedToModerator: false,
             // ✅ Capture participant count for this round
             // Used by subscriptions to ensure consistent count throughout streaming
             activeRoundParticipantCount: actualCount,

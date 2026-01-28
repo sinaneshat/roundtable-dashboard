@@ -10,7 +10,7 @@ import type { ChatHook } from '../types';
 type UseVisibilityStreamGuardParams = {
   store: ChatStoreApi;
   chat: ChatHook;
-  effectiveThreadId: string;
+  effectiveThreadId: string | null;
 };
 
 /**

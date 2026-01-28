@@ -27,6 +27,7 @@ import { log } from '@/lib/logger';
 import { extractTextFromParts, NO_PARTICIPANT_SENTINEL } from '@/lib/schemas';
 import { getParticipantIndex } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import { slog } from '@/lib/utils/stream-logger';
 import {
   AI_TIMEOUT_CONFIG,
   checkFreeUserHasCompletedRound,
@@ -684,8 +685,14 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     // NOTE: Actual deduction happens in onFinish via finalizeCredits() with real token counts
     await enforceCredits(user.id, 2, { skipRoundCheck: true }); // Analysis requires ~2 credits estimate
 
+    // ✅ MOD-START: Log moderator stream initialization
+    slog.phase('moderator-start', `r${roundNum} tid=${threadId.slice(-8)} initializing stream`);
+
     // ✅ RESUMABLE STREAMS: Initialize stream buffer for resumption
     await initializeParticipantStreamBuffer(messageId, threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
+
+    // ✅ MOD-STREAM-ID: Log stream buffer created
+    slog.moderator('stream-init', `r${roundNum} streamId=${messageId} buffer initialized`);
 
     // ✅ RESUMABLE STREAMS: Mark moderator stream as active in KV for resume detection
     await markStreamActive(threadId, roundNum, MODERATOR_PARTICIPANT_INDEX, c.env);
@@ -700,6 +707,9 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
       1, // Moderator is a single stream (not multi-participant)
       c.env,
     );
+
+    // ✅ MOD-ACTIVE: Log active stream set in KV
+    slog.moderator('stream-active', `r${roundNum} active stream set in KV, ready for AI`);
 
     const { session } = c.auth();
 

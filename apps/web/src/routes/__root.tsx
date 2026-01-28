@@ -21,8 +21,8 @@ import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { TurnstileProvider } from '@/lib/turnstile';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
+import { sessionQueryOptions } from '@/lib/data/query-options';
 import type { RouterContext } from '@/router';
-import { getSession } from '@/server/auth';
 import { getPublicEnv } from '@/server/env';
 import type { PublicEnv } from '@/server/schemas';
 import { DEFAULT_PUBLIC_ENV } from '@/server/schemas';
@@ -37,28 +37,17 @@ const siteDescription = BRAND.description;
 const twitterHandle = BRAND.social.twitterHandle;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // ✅ SSR SESSION STRATEGY: Fetch session on both server and client
-  // Server uses cookies via cookieMiddleware, client lets TanStack Query handle caching
-  // This enables true SSR with user data rendered on first paint
-  beforeLoad: async () => {
-    // Server-side: fetch session using cookies (SSR-safe)
-    if (typeof window === 'undefined') {
-      try {
-        const session = await getSession();
-        return { session };
-      } catch (error) {
-        console.error('[ROOT] SSR session error:', error);
-        return { session: null };
-      }
-    }
-
-    // Client-side: protected routes will handle session via TanStack Query
-    // Don't cache session in memory - let normal query caching handle it
+  // ✅ SSR SESSION STRATEGY: Use TanStack Query cache for session deduplication
+  // Server uses cookies via cookieMiddleware, client uses cached session
+  // This prevents 4+ getSession calls on page load (FIX P1.5)
+  beforeLoad: async ({ context }) => {
     try {
-      const session = await getSession();
+      // Use ensureQueryData to leverage TanStack Query cache
+      // On server: fetches session (SSR), on client: uses cached if fresh
+      const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
       return { session };
     } catch (error) {
-      console.error('[ROOT] Client session error:', error);
+      console.error('[ROOT] Session error:', error);
       return { session: null };
     }
   },

@@ -171,6 +171,8 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
   const storeApi = useChatStoreApi();
   const hasHydratedRef = useRef(false);
   const threadIdRef = useRef<string | null>(null);
+  // Track previous log state to avoid repeated identical logs
+  const prevLogStateRef = useRef<string | null>(null);
 
   // Use layoutEffect for synchronous hydration before paint
   useLayoutEffect(() => {
@@ -182,7 +184,12 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     // Store participant count (current runtime state)
     const storeEnabledCount = state.participants.filter(p => p.isEnabled).length;
 
-    rlog.init('useSyncHydrateStore', `tid=${thread.id.slice(-8)} curTid=${state.thread?.id?.slice(-8) ?? '-'} curPhase=${state.phase} r=${state.currentRoundNumber} streaming=${state.isStreaming} msgs=${initialMessages.length} pCount=${storeEnabledCount}(store)/${propsEnabledCount}(props) hydrated=${hasHydratedRef.current} prevTid=${threadIdRef.current?.slice(-8) ?? '-'}`);
+    // Build a state key for value-change logging (only log when state actually changes)
+    const logState = `tid=${thread.id.slice(-8)} curPhase=${state.phase} r=${state.currentRoundNumber} streaming=${state.isStreaming}`;
+    if (logState !== prevLogStateRef.current) {
+      prevLogStateRef.current = logState;
+      rlog.init('useSyncHydrateStore', `${logState} curTid=${state.thread?.id?.slice(-8) ?? '-'} msgs=${initialMessages.length} pCount=${storeEnabledCount}(store)/${propsEnabledCount}(props) hydrated=${hasHydratedRef.current}`);
+    }
 
     // Skip if already hydrated for this thread
     if (hasHydratedRef.current && threadIdRef.current === thread.id) {

@@ -94,6 +94,13 @@ export const UIStateSchema = z.object({
   createdThreadId: z.string().nullable(),
   createdThreadProjectId: z.string().nullable(),
   hasInitiallyLoaded: z.boolean(),
+  /**
+   * Guard flag to prevent triple baton-to-moderator handoff race condition.
+   * Set to true when transitioning from PARTICIPANTS to MODERATOR phase.
+   * Reset to false on startRound and resumeInProgressRound.
+   * Prevents duplicate transitions from multiple onParticipantComplete calls.
+   */
+  _hasTransitionedToModerator: z.boolean(),
   isAnalyzingPrompt: z.boolean(),
   isCreatingThread: z.boolean(),
   isModeratorStreaming: z.boolean(),

@@ -494,6 +494,10 @@ export async function markParticipantStarted(
 
 /**
  * Mark a participant as completed in round execution
+ *
+ * NOTE: This function reads from KV to get current state. Due to KV eventual consistency,
+ * callers should wait ~150ms after writing participant status to KV before calling this
+ * function to ensure consistent reads.
  */
 export async function markParticipantCompleted(
   threadId: string,
@@ -502,10 +506,20 @@ export async function markParticipantCompleted(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<{ allParticipantsComplete: boolean }> {
+  // ✅ RACE CONDITION LOGGING: Track what state we read from KV
+  slog.race('markParticipantCompleted-start', `r${roundNumber} P${participantIndex} reading KV state`);
+
   const state = await getRoundExecutionState(threadId, roundNumber, env);
   if (!state) {
+    slog.race('markParticipantCompleted-noState', `r${roundNumber} P${participantIndex} no state found in KV`);
     return { allParticipantsComplete: false };
   }
+
+  // ✅ RACE CONDITION LOGGING: Log current participant statuses from KV
+  const existingStatuses = Object.entries(state.participantStatuses)
+    .map(([idx, status]) => `P${idx}=${status}`)
+    .join(', ');
+  slog.race('markParticipantCompleted-readState', `r${roundNumber} P${participantIndex} KV statuses: [${existingStatuses}] total=${state.totalParticipants}`);
 
   const participantStatuses = { ...state.participantStatuses };
   participantStatuses[participantIndex] = ParticipantStreamStatuses.COMPLETED;
@@ -519,6 +533,12 @@ export async function markParticipantCompleted(
   ).length;
 
   const allParticipantsComplete = (completedParticipants + failedParticipants) >= state.totalParticipants;
+
+  // ✅ RACE CONDITION LOGGING: Track computed result before writing to KV
+  const updatedStatuses = Object.entries(participantStatuses)
+    .map(([idx, status]) => `P${idx}=${status}`)
+    .join(', ');
+  slog.race('markParticipantCompleted-computed', `r${roundNumber} P${participantIndex} after update: [${updatedStatuses}] completed=${completedParticipants} failed=${failedParticipants} allComplete=${allParticipantsComplete}`);
 
   await updateRoundExecutionState(threadId, roundNumber, {
     completedParticipants,

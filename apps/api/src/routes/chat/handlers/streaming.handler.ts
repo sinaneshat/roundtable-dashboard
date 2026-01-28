@@ -57,6 +57,7 @@ import { log } from '@/lib/logger';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import { slog } from '@/lib/utils/stream-logger';
 import {
   AI_RETRY_CONFIG,
   AI_TIMEOUT_CONFIG,
@@ -1394,6 +1395,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
             if (needsModerator && c.env.ROUND_ORCHESTRATION_QUEUE) {
+              // ✅ MOD-TRIGGER: Explicit logging for moderator trigger after participant error
+              log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} P${currentParticipantIdx} failed, all participants complete, triggering moderator`);
+              slog.phase('MOD-TRIGGER', `r${currentRoundNumber} P${currentParticipantIdx} failed, triggering moderator`);
               rlog.moderator('queue-start', `P${currentParticipantIdx} r${currentRoundNumber} failed, queueing moderator`);
 
               const queueMessage: TriggerModeratorQueueMessage = {
@@ -1408,8 +1412,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
               try {
                 await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                // ✅ MOD-TRIGGER: Confirm queue send success
+                log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} moderator queue message sent (after P${currentParticipantIdx} error)`);
+                slog.phase('MOD-TRIGGER', `r${currentRoundNumber} moderator queued after error`);
                 rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued after P${currentParticipantIdx} error`);
               } catch (queueError) {
+                // ✅ MOD-TRIGGER: Log queue failure explicitly
+                log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} FAILED to queue moderator: ${queueError instanceof Error ? queueError.message : String(queueError)}`);
+                slog.race('MOD-TRIGGER-FAIL', `r${currentRoundNumber} queue send failed after error: ${queueError instanceof Error ? queueError.message : String(queueError)}`);
                 log.queue('error', 'Moderator queue send failed (onError)', {
                   error: queueError instanceof Error ? queueError.message : String(queueError),
                   participantIndex: currentParticipantIdx,
@@ -1759,6 +1769,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             log.ai('perf', `[P${pIdx}-COMPLETE] All KV updates done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime });
 
             // =========================================================================
+            // ✅ RACE CONDITION FIX: Allow KV eventual consistency to settle
+            // =========================================================================
+            // PROBLEM: updateParticipantStatus() writes to KV (ThreadActiveStream)
+            // and markParticipantCompleted() reads from a DIFFERENT KV key (RoundExecutionState).
+            // However, both rely on the underlying KV infrastructure which has eventual
+            // consistency (~60ms propagation). If markParticipantCompleted reads immediately
+            // after writing, it may see stale state.
+            //
+            // FIX: Add a small delay to allow KV writes to propagate before reading.
+            // 150ms is chosen as it's well above the typical KV propagation time (~60ms)
+            // but short enough to not noticeably impact user experience.
+            // =========================================================================
+            log.ai('perf', `[P${pIdx}-COMPLETE] Waiting for KV propagation`, { roundNumber: currentRoundNumber });
+            await new Promise(resolve => setTimeout(resolve, 150));
+            log.ai('perf', `[P${pIdx}-COMPLETE] KV propagation delay complete`, { roundNumber: currentRoundNumber });
+
+            // =========================================================================
             // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background
             // =========================================================================
             // This is the key fix for "user navigates away" problem:
@@ -1776,12 +1803,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const currentParticipantIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
 
             // Update round execution state
+            log.ai('perf', `[P${pIdx}-COMPLETE] Calling markParticipantCompleted`, { roundNumber: currentRoundNumber });
             const { allParticipantsComplete } = await markParticipantCompleted(
               threadId,
               currentRoundNumber,
               currentParticipantIdx,
               c.env,
             );
+            log.ai('perf', `[P${pIdx}-COMPLETE] markParticipantCompleted returned`, { roundNumber: currentRoundNumber, allParticipantsComplete });
 
             // Determine next action based on round state
             const nextParticipantIndex = currentParticipantIdx + 1;
@@ -1855,6 +1884,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 }
               }
             } else if (needsModerator) {
+              // ✅ MOD-TRIGGER: Explicit logging for moderator trigger debugging
+              log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} all participants complete, triggering moderator`);
+              slog.phase('MOD-TRIGGER', `r${currentRoundNumber} all participants complete, triggering moderator`);
+
               // ✅ DEBUG: Log moderator trigger attempt
               rlog.moderator('queue-start', `r${currentRoundNumber} needsModerator=true hasQueue=${!!c.env.ROUND_ORCHESTRATION_QUEUE}`);
 
@@ -1873,8 +1906,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               if (c.env.ROUND_ORCHESTRATION_QUEUE) {
                 try {
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                  // ✅ MOD-TRIGGER: Confirm queue send success
+                  log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} moderator queue message sent successfully`);
+                  slog.phase('MOD-TRIGGER', `r${currentRoundNumber} moderator queue message sent`);
                   rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued`);
                 } catch (error) {
+                  // ✅ MOD-TRIGGER: Log queue failure explicitly
+                  log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} FAILED to queue moderator: ${error instanceof Error ? error.message : String(error)}`);
+                  slog.race('MOD-TRIGGER-FAIL', `r${currentRoundNumber} queue send failed: ${error instanceof Error ? error.message : String(error)}`);
                   log.queue('error', 'Failed to queue moderator', {
                     error: error instanceof Error ? error.message : String(error),
                     roundNumber: currentRoundNumber,
@@ -1882,6 +1921,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   });
                 }
               } else {
+                log.ai('phase', `[MOD-TRIGGER] r${currentRoundNumber} NO QUEUE BINDING - moderator will not trigger!`);
+                slog.race('MOD-TRIGGER-FAIL', `r${currentRoundNumber} no queue binding available`);
                 rlog.stuck('moderator', `r${currentRoundNumber} NO QUEUE - moderator will not trigger!`);
               }
             }
