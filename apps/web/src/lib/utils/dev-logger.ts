@@ -34,7 +34,7 @@ const EXCESSIVE_UPDATE_THRESHOLD = 10;
 // ENHANCED DEDUPLICATION SYSTEM
 // ============================================================================
 
-const LOG_DEDUPE_WINDOW_MS = 2000; // Collapse logs within 2 second window
+const LOG_DEDUPE_WINDOW_MS = 3000; // Collapse logs within 3 second window (increased from 2s)
 const LOG_DEDUPE_REPORT_THRESHOLD = 5; // Report count after N duplicates
 const LOG_THROTTLE_HIGH_FREQ_MS = 1000; // Throttle high-frequency logs to 1/second
 
@@ -45,6 +45,9 @@ type DedupeEntry = {
   lastArgs: string;
   reported: boolean;
 };
+
+// Track previous values for value-change detection (INIT/MSG/SYNC)
+const prevValuesMap = new Map<string, string>();
 
 const dedupeMap = new Map<string, DedupeEntry>();
 const throttleMap = new Map<string, number>(); // category -> lastLogTime
@@ -70,6 +73,8 @@ const CRITICAL_CATEGORIES = new Set([
   'round-complete',
   'pcount-mismatch',
   'race-detected',
+  'round-ref-lag', // NEW: when presearch/mod check references wrong round
+  'state-desync', // NEW: when store and props diverge
   'stuck',
   'error',
   'start',
@@ -83,7 +88,14 @@ const CRITICAL_CATEGORIES = new Set([
   'race',
 ]);
 
-function shouldLogWithDedupe(category: string, message: string): { shouldLog: boolean; suffix?: string } {
+// Categories that should only log on value changes
+const VALUE_CHANGE_CATEGORIES = new Set([
+  'init',
+  'msg',
+  'sync',
+]);
+
+function shouldLogWithDedupe(category: string, message: string, key?: string): { shouldLog: boolean; suffix?: string } {
   // Never dedupe critical categories
   if (CRITICAL_CATEGORIES.has(category)) {
     return { shouldLog: true };
@@ -95,19 +107,32 @@ function shouldLogWithDedupe(category: string, message: string): { shouldLog: bo
   }
 
   const now = Date.now();
-  const key = `${category}:${message.slice(0, 80)}`; // Truncate for key stability
+  const dedupeKey = `${category}:${message.slice(0, 80)}`; // Truncate for key stability
+
+  // Value-change detection for init/msg/sync categories
+  // Only log when the actual value changes
+  if (VALUE_CHANGE_CATEGORIES.has(category) && key) {
+    const valueKey = `${category}:${key}`;
+    const prevValue = prevValuesMap.get(valueKey);
+    if (prevValue === message) {
+      // Same value as before - skip entirely (no counting)
+      return { shouldLog: false };
+    }
+    prevValuesMap.set(valueKey, message);
+    // Continue to normal dedupe logic but with value changed
+  }
 
   // Throttle high-frequency categories
   if (HIGH_FREQ_CATEGORIES.has(category)) {
     const lastLog = throttleMap.get(category) ?? 0;
     if (now - lastLog < LOG_THROTTLE_HIGH_FREQ_MS) {
       // Update dedupe count silently
-      const entry = dedupeMap.get(key);
+      const entry = dedupeMap.get(dedupeKey);
       if (entry) {
         entry.count++;
         entry.lastTime = now;
       } else {
-        dedupeMap.set(key, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
+        dedupeMap.set(dedupeKey, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
       }
       return { shouldLog: false };
     }
@@ -115,7 +140,7 @@ function shouldLogWithDedupe(category: string, message: string): { shouldLog: bo
   }
 
   // Check dedupe window
-  const entry = dedupeMap.get(key);
+  const entry = dedupeMap.get(dedupeKey);
 
   if (!entry || now - entry.lastTime > LOG_DEDUPE_WINDOW_MS) {
     // Window expired or new entry - report previous count if needed
@@ -125,7 +150,7 @@ function shouldLogWithDedupe(category: string, message: string): { shouldLog: bo
     }
 
     // Start new window
-    dedupeMap.set(key, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
+    dedupeMap.set(dedupeKey, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
     return { shouldLog: true, suffix };
   }
 
@@ -306,9 +331,9 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
     return;
   }
 
-  // Use enhanced deduplication system
+  // Use enhanced deduplication system (pass key for value-change detection)
   const dedupeCategory = `${category}-${key}`;
-  const { shouldLog, suffix } = shouldLogWithDedupe(dedupeCategory, message);
+  const { shouldLog, suffix } = shouldLogWithDedupe(dedupeCategory, message, key);
 
   if (!shouldLog) {
     return;
@@ -402,10 +427,11 @@ export const rlog = {
    * Usage: rlog.frame(2, 'placeholders created', { p1: 'Thinking', p2: 'Thinking', mod: 'Observing' })
    */
   frame: (frameNumber: number, action: string, detail?: string): void => {
+    const timestamp = Date.now() % 100000; // Last 5 digits for readability
     const desc = FRAME_DESCRIPTIONS[frameNumber] || 'Unknown Frame';
     const msg = detail
-      ? `Frame ${frameNumber}: ${desc} | ${action} | ${detail}`
-      : `Frame ${frameNumber}: ${desc} | ${action}`;
+      ? `[${timestamp}] Frame ${frameNumber}: ${desc} | ${action} | ${detail}`
+      : `[${timestamp}] Frame ${frameNumber}: ${desc} | ${action}`;
     rlogNow(RlogCategories.FRAME, msg);
   },
   gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),

@@ -174,15 +174,22 @@ export const sidebarProjectsQueryOptions = infiniteQueryOptions({
  * IMPORTANT: Using server function ensures consistent behavior between
  * SSR prefetch and client-side hydration. Direct API calls can cause
  * hydration mismatches due to different cookie handling.
+ *
+ * CACHING STRATEGY:
+ * - staleTime: 5 minutes for thread metadata (title, slug, participants are stable)
+ * - gcTime: 10 minutes to keep data in cache for back navigation
+ * - Streaming updates are handled by Zustand store (ONE-WAY DATA FLOW)
+ * - Route components may override staleTime based on streaming state
  */
 export function threadBySlugQueryOptions(slug: string) {
   return queryOptions({
+    gcTime: GC_TIMES.LONG, // 10 minutes - keep data for back navigation
     queryFn: () => getThreadBySlug({ data: slug }),
     queryKey: queryKeys.threads.bySlug(slug),
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     retry: false,
-    staleTime: STALE_TIMES.threadDetail,
+    staleTime: STALE_TIMES.threadMetadata, // 5 minutes - thread metadata is stable
   });
 }
 

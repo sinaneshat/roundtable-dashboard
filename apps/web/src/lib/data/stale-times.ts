@@ -68,6 +68,7 @@ export const STALE_TIMES = {
   subscriptions: 60 * 1000, // 1 minute - matches subscriptionsQueryOptions for SSR hydration
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadDetail: 0, // NO CACHE - streaming updates require fresh data, store is source of truth (ONE-WAY DATA FLOW)
+  threadMetadata: 5 * 60 * 1000, // 5 minutes - thread metadata (title, slug, participants) is stable after creation
   threadDetailKV: 300, // 5 minutes - thread detail DB cache
   // ============================================================================
   // KV Cache TTLs (in seconds for $withCache DB-level caching)

@@ -255,3 +255,133 @@ export function countEnabledParticipants<T extends { isEnabled: boolean }>(
 ): number {
   return participants.filter(p => p.isEnabled).length;
 }
+
+// ============================================================================
+// MESSAGE MERGING UTILITIES
+// ============================================================================
+
+/**
+ * Generate a stable key for matching messages across placeholder and server versions
+ *
+ * Key format: `r{roundNumber}_p{participantIndex}_{role}` or `r{roundNumber}_moderator`
+ *
+ * This allows matching:
+ * - Placeholder: `streaming_p0_r0` -> key: `r0_p0_assistant`
+ * - Server: `{threadId}_r0_p0` -> key: `r0_p0_assistant`
+ *
+ * @param message - UIMessage to generate key for
+ * @returns Stable key string or null if message lacks required metadata
+ */
+export function getMessageMatchKey(message: UIMessage): string | null {
+  if (!message.metadata || typeof message.metadata !== 'object') {
+    return null;
+  }
+
+  const meta = message.metadata as Record<string, unknown>;
+
+  // Get roundNumber - required for matching
+  const roundNumber = typeof meta.roundNumber === 'number' ? meta.roundNumber : null;
+  if (roundNumber === null) {
+    return null;
+  }
+
+  // Check if moderator message
+  const isModerator = meta.isModerator === true || message.id.includes('_moderator');
+  if (isModerator) {
+    return `r${roundNumber}_moderator`;
+  }
+
+  // Get participantIndex for participant messages
+  const participantIndex = typeof meta.participantIndex === 'number' ? meta.participantIndex : null;
+  if (participantIndex === null) {
+    return null;
+  }
+
+  return `r${roundNumber}_p${participantIndex}_${message.role}`;
+}
+
+/**
+ * Merge server messages with current messages, replacing placeholders
+ *
+ * Optimization: Instead of replacing ALL messages with server fetch results,
+ * this function:
+ * 1. Keeps existing messages that have real IDs (already persisted)
+ * 2. Replaces placeholder messages with server versions using stable matching keys
+ * 3. Adds any new server messages not present in current state
+ *
+ * This reduces unnecessary re-renders and preserves local state for messages
+ * that haven't changed.
+ *
+ * @param currentMessages - Current messages in the store
+ * @param serverMessages - Messages fetched from server
+ * @returns Merged message array
+ */
+export function mergeServerMessages(
+  currentMessages: UIMessage[],
+  serverMessages: UIMessage[],
+): UIMessage[] {
+  // Build a map of server messages by stable key for O(1) lookup
+  const serverMessageMap = new Map<string, UIMessage>();
+  const serverMessageIds = new Set<string>();
+
+  for (const msg of serverMessages) {
+    serverMessageIds.add(msg.id);
+    const key = getMessageMatchKey(msg);
+    if (key) {
+      serverMessageMap.set(key, msg);
+    }
+  }
+
+  // Process current messages - replace placeholders, keep non-placeholders
+  const mergedMessages: UIMessage[] = [];
+  const usedServerKeys = new Set<string>();
+
+  for (const msg of currentMessages) {
+    const isPlaceholder = isPlaceholderId(msg.id);
+
+    if (isPlaceholder) {
+      // Try to find matching server message
+      const key = getMessageMatchKey(msg);
+      if (key) {
+        const serverMsg = serverMessageMap.get(key);
+        if (serverMsg) {
+          mergedMessages.push(serverMsg);
+          usedServerKeys.add(key);
+        } else {
+          // No server match for placeholder - keep it (still streaming?)
+          mergedMessages.push(msg);
+        }
+      } else {
+        // No match key - keep placeholder
+        mergedMessages.push(msg);
+      }
+    } else {
+      // Non-placeholder message - check if server has updated version
+      if (serverMessageIds.has(msg.id)) {
+        // Server has this message, use server version (may have updates)
+        const serverVersion = serverMessages.find(sm => sm.id === msg.id);
+        if (serverVersion) {
+          mergedMessages.push(serverVersion);
+        } else {
+          mergedMessages.push(msg);
+        }
+      } else {
+        // Keep local message (optimistic, presearch, etc.)
+        mergedMessages.push(msg);
+      }
+    }
+  }
+
+  // Add any server messages that weren't matched (edge case: new messages)
+  for (const serverMsg of serverMessages) {
+    const key = getMessageMatchKey(serverMsg);
+    const alreadyIncluded = mergedMessages.some(m => m.id === serverMsg.id)
+      || (key && usedServerKeys.has(key));
+
+    if (!alreadyIncluded) {
+      mergedMessages.push(serverMsg);
+    }
+  }
+
+  return mergedMessages;
+}

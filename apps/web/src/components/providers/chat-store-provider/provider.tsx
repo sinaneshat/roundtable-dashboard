@@ -27,6 +27,7 @@ import {
   areAllParticipantsComplete,
   countEnabledParticipants,
   hasStreamingPlaceholders,
+  mergeServerMessages,
   parseParticipantEntityIndex,
 } from '@/lib/utils/streaming-helpers';
 import { getThreadMessagesService, startRoundService } from '@/services/api/chat';
@@ -327,10 +328,15 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       try {
         const result = await getThreadMessagesService({ param: { id: effectiveThreadId } });
         if (result.success && result.data.items) {
-          const participants = store.getState().participants;
+          const currentState = store.getState();
+          const participants = currentState.participants;
+          const currentMessages = currentState.messages;
           const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
-          rlog.resume('fill-completed', `fetched ${serverMessages.length} messages, replacing store`);
-          store.getState().setMessages(serverMessages);
+
+          // Use incremental merge to preserve local state
+          const mergedMessages = mergeServerMessages(currentMessages, serverMessages);
+          rlog.resume('fill-completed', `fetched ${serverMessages.length} messages, merged to ${mergedMessages.length}`);
+          store.getState().setMessages(mergedMessages);
           store.getState().completeStreaming();
         } else {
           rlog.stuck('fill-completed', `failed to fetch: ${result.success ? 'no items' : 'request failed'}`);
@@ -483,17 +489,30 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       if (threadId) {
         rlog.moderator('round-complete', `streaming placeholders exist - fetching completed messages from server`);
         try {
-          rlog.phase('handleRoundComplete', `📡 Fetching messages for ${threadId.slice(-8)}`);
+          rlog.phase('handleRoundComplete', `Fetching messages for ${threadId.slice(-8)}`);
           const result = await getThreadMessagesService({ param: { id: threadId } });
-          rlog.phase('handleRoundComplete', `📡 Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
+          rlog.phase('handleRoundComplete', `Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
           if (result.success && result.data?.items) {
-            const participants = store.getState().participants;
+            const currentState = store.getState();
+            const participants = currentState.participants;
+            const currentMessages = currentState.messages;
             const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
-            rlog.moderator('round-complete', `fetched ${serverMessages.length} messages, replacing placeholders`);
-            rlog.phase('handleRoundComplete', `📡 Setting ${serverMessages.length} messages and calling completeStreaming`);
-            store.getState().setMessages(serverMessages);
+
+            // ✅ OPTIMIZATION: Use incremental merge instead of full replacement
+            // This keeps existing messages with real IDs, only replacing placeholders
+            const mergedMessages = mergeServerMessages(currentMessages, serverMessages);
+
+            // Log efficiency metrics
+            const currentCount = currentMessages.length;
+            const serverCount = serverMessages.length;
+            const mergedCount = mergedMessages.length;
+            const replacedCount = currentMessages.filter(m => m.id.startsWith('streaming_')).length;
+            rlog.moderator('fetch-efficiency', `current=${currentCount} server=${serverCount} merged=${mergedCount} placeholders_replaced=${replacedCount}`);
+
+            rlog.phase('handleRoundComplete', `Setting ${mergedMessages.length} merged messages and calling completeStreaming`);
+            store.getState().setMessages(mergedMessages);
             store.getState().completeStreaming();
-            rlog.phase('handleRoundComplete', `✅ completeStreaming called - phase should now be COMPLETE`);
+            rlog.phase('handleRoundComplete', `completeStreaming called - phase should now be COMPLETE`);
           } else {
             rlog.stuck('round-complete', `failed to fetch messages: ${result.success ? 'no items' : 'request failed'}`);
           }
@@ -558,6 +577,12 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // Logs showed two start events for same round - this ensures only first is processed
   const lastStartEventRef = useRef<{ roundNumber: number; timestamp: number } | null>(null);
 
+  // Track processed query/result indices to prevent duplicate event processing
+  // This prevents the issue where duplicate SSE events were being processed,
+  // causing logs like "queries=1" when multiple query events for the same index arrived
+  const processedQueryIndicesRef = useRef<Set<number>>(new Set());
+  const processedResultIndicesRef = useRef<Set<number>>(new Set());
+
   // FIX 3: Reset presearch accumulator when round number changes
   const prevRoundRef = useRef<number | null>(null);
   useEffect(() => {
@@ -575,6 +600,9 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         summary: '',
         totalResults: 0,
       };
+      // Reset processed indices tracking for new round
+      processedQueryIndicesRef.current.clear();
+      processedResultIndicesRef.current.clear();
       prevRoundRef.current = currentRoundNumber;
       rlog.presearch('reset', `r${currentRoundNumber} accumulator reset`);
     }
@@ -623,6 +651,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         }
         lastStartEventRef.current = { roundNumber, timestamp: eventTimestamp };
 
+        // Reset processed indices on start for new presearch cycle
+        processedQueryIndicesRef.current.clear();
+        processedResultIndicesRef.current.clear();
+
         // FIX 1: Only reset if accumulator is empty
         // This handles the case where backend sends start AFTER query events
         if (
@@ -645,13 +677,23 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       }
 
       case 'query': {
+        const queryIndex = eventData.index as number;
+
+        // DEDUPLICATION: Skip if we already processed this query index
+        if (processedQueryIndicesRef.current.has(queryIndex)) {
+          rlog.race('presearch-dupe', `r${roundNumber} duplicate query index=${queryIndex} - skipping`);
+          break;
+        }
+        processedQueryIndicesRef.current.add(queryIndex);
+
         const queryData = {
-          index: eventData.index as number,
+          index: queryIndex,
           query: eventData.query as string,
           rationale: (eventData.rationale as string) || '',
           searchDepth: (eventData.searchDepth as string) || 'basic',
           total: eventData.total as number,
         };
+        rlog.presearch('partial-update', `r${roundNumber} queries=${preSearchDataRef.current.queries.length + 1} results=${preSearchDataRef.current.results.length}`);
         // Update or add query at the given index
         const existingIdx = preSearchDataRef.current.queries.findIndex(q => q.index === queryData.index);
         if (existingIdx >= 0) {
@@ -675,15 +717,25 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       }
 
       case 'result': {
+        const resultIndex = eventData.index as number;
+
+        // DEDUPLICATION: Skip if we already processed this result index
+        if (processedResultIndicesRef.current.has(resultIndex)) {
+          rlog.race('presearch-dupe', `r${roundNumber} duplicate result index=${resultIndex} - skipping`);
+          break;
+        }
+        processedResultIndicesRef.current.add(resultIndex);
+
         // Type for web search results from SSE event
         type WebSearchResult = { description: string; favicon: string; snippet: string; title: string; url: string };
         const resultData = {
           answer: (eventData.answer as string | null) || null,
-          index: eventData.index as number,
+          index: resultIndex,
           query: eventData.query as string,
           responseTime: (eventData.responseTime as number) || 0,
           results: [...((eventData.results as WebSearchResult[]) || [])], // Clone the results array
         };
+        rlog.presearch('partial-update', `r${roundNumber} queries=${preSearchDataRef.current.queries.length} results=${preSearchDataRef.current.results.length + 1}`);
         // Update or add result at the given index
         const existingIdx = preSearchDataRef.current.results.findIndex(r => r.index === resultData.index);
         if (existingIdx >= 0) {
@@ -717,6 +769,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         break;
 
       case 'done': {
+        // Reset processed indices on done for next presearch cycle
+        processedQueryIndicesRef.current.clear();
+        processedResultIndicesRef.current.clear();
+
         // FIX 2: Done event may contain complete searchData OR just {interrupted: true, reason: '...'}
         // CRITICAL: Only replace accumulated data if done payload has MORE data, not less
         // This prevents data corruption where done event replaces 2 accumulated queries with 1

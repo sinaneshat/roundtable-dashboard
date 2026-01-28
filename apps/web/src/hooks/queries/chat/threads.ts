@@ -95,6 +95,11 @@ export function useThreadsQuery(options?: UseThreadsQueryOptions) {
  * Returns thread details including all participants and messages
  * Protected endpoint - requires authentication
  *
+ * CACHING STRATEGY:
+ * - staleTime: 5 minutes for thread metadata (stable after creation)
+ * - gcTime: 10 minutes to keep data for back navigation
+ * - Streaming updates are handled by Zustand store (ONE-WAY DATA FLOW)
+ *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: based on threadId and auth)
  */
@@ -103,10 +108,13 @@ export function useThreadQuery(threadId: string, enabled?: boolean) {
 
   return useQuery({
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
+    gcTime: 10 * 60 * 1000, // 10 minutes - keep for back navigation
     queryFn: () => getThreadService({ param: { id: threadId } }),
     queryKey: queryKeys.threads.detail(threadId),
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: false,
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds - match server-side prefetch
+    staleTime: STALE_TIMES.threadMetadata, // 5 minutes - thread metadata is stable
     throwOnError: false,
   });
 }

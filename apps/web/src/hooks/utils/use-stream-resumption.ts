@@ -65,17 +65,13 @@ export type UseStreamResumptionOptions = {
  */
 function isInProgressPhase(phase: string | null | undefined): boolean {
   if (!phase) {
-    rlog.resume('isInProgress', `phase=${phase} → false (null/undefined)`);
     return false;
   }
-  // RoundPhases uses lowercase: 'pre_search', 'participants', 'moderator'
-  const result = (
+  return (
     phase === RoundPhases.PRE_SEARCH
     || phase === RoundPhases.PARTICIPANTS
     || phase === RoundPhases.MODERATOR
   );
-  rlog.resume('isInProgress', `phase="${phase}" vs PRE_SEARCH="${RoundPhases.PRE_SEARCH}" PARTICIPANTS="${RoundPhases.PARTICIPANTS}" MODERATOR="${RoundPhases.MODERATOR}" → ${result}`);
-  return result;
 }
 
 // ============================================================================
@@ -112,13 +108,6 @@ export function useStreamResumption({
   // Track which thread we've checked to avoid duplicate checks
   const checkedThreadIdRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
-
-  // Determine if we should skip based on active phase
-  const shouldSkipDueToActivePhase = skipIfActivePhase && (
-    currentPhase === 'participants'
-    || currentPhase === 'moderator'
-    || currentPhase === 'presearch'
-  );
 
   const checkResumption = useCallback(async (tid: string) => {
     if (!isMountedRef.current) {
@@ -184,27 +173,23 @@ export function useStreamResumption({
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Guard: Need thread ID
+    // Early exits - no logging needed for normal guard behavior
     if (!threadId) {
-      rlog.resume('skip', 'no threadId');
       return;
     }
-
-    // Guard: Check not enabled
     if (!enabled) {
-      rlog.resume('skip', `tid=${threadId.slice(-8)} not enabled`);
       return;
     }
-
-    // Guard: Skip if already in active streaming phase
-    if (shouldSkipDueToActivePhase) {
-      rlog.resume('skip', `tid=${threadId.slice(-8)} active phase=${currentPhase}`);
-      return;
-    }
-
-    // Guard: Already checked this thread
     if (checkedThreadIdRef.current === threadId) {
-      rlog.resume('skip', `tid=${threadId.slice(-8)} already checked`);
+      return;
+    }
+
+    // Skip if already in active streaming phase (compute only when needed)
+    if (skipIfActivePhase && (
+      currentPhase === 'participants'
+      || currentPhase === 'moderator'
+      || currentPhase === 'presearch'
+    )) {
       return;
     }
 
@@ -213,7 +198,7 @@ export function useStreamResumption({
     return () => {
       isMountedRef.current = false;
     };
-  }, [threadId, enabled, shouldSkipDueToActivePhase, currentPhase, checkResumption]);
+  }, [threadId, enabled, skipIfActivePhase, currentPhase, checkResumption]);
 
   // Reset state when thread changes
   // Using useLayoutEffect to ensure synchronous state reset before render
@@ -227,9 +212,9 @@ export function useStreamResumption({
 
   const hasInProgressRound = status === StreamResumptionStatuses.COMPLETE && state !== null && isInProgressPhase(state.currentPhase);
 
-  // Log final computed value when it changes
-  if (status === StreamResumptionStatuses.COMPLETE) {
-    rlog.resume('hook-result', `status=${status} hasState=${!!state} phase=${state?.currentPhase ?? 'null'} → hasInProgressRound=${hasInProgressRound}`);
+  // Only log when we actually found an in-progress round
+  if (hasInProgressRound) {
+    rlog.resume('hook-result', `Found in-progress round: phase=${state?.currentPhase}`);
   }
 
   return {

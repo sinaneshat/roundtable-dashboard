@@ -471,9 +471,9 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             if (!threadId) {
               rlog.stuck('placeholder', `createStreamingPlaceholders: threadId missing for moderator r${roundNumber}, using fallback ID`);
             }
-            rlog.moderator('placeholder', `creating moderator placeholder id=${modId} threadId=${threadId || 'null'}`);
 
             if (!draft.messages.some(m => m.id === modId)) {
+              rlog.moderator('placeholder', `creating moderator placeholder id=${modId} threadId=${threadId || 'null'}`);
               draft.messages.push({
                 id: modId,
                 metadata: {
