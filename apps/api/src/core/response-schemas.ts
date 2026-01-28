@@ -157,6 +157,21 @@ export const StandardApiResponses = {
   },
 
   /**
+   * 429 Too Many Requests - Rate limit exceeded
+   * Used when: User has exceeded rate limits for the endpoint
+   */
+  TOO_MANY_REQUESTS: {
+    [HttpStatusCodes.TOO_MANY_REQUESTS]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.TOO_MANY_REQUESTS,
+    },
+  },
+
+  /**
    * 401 Unauthorized - Authentication required or failed
    * Used when: User is not authenticated or session/token is invalid
    */
@@ -168,6 +183,21 @@ export const StandardApiResponses = {
         },
       },
       description: HttpStatusPhrases.UNAUTHORIZED,
+    },
+  },
+
+  /**
+   * 410 Gone - Resource no longer available
+   * Used when: Resource has been permanently removed (e.g., archived/deleted thread)
+   */
+  GONE: {
+    [HttpStatusCodes.GONE]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.GONE,
     },
   },
 } as const;

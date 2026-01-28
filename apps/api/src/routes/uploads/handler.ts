@@ -61,6 +61,7 @@ import type {
   completeMultipartUploadRoute,
   createMultipartUploadRoute,
   deleteUploadRoute,
+  downloadPublicThreadFileRoute,
   downloadUploadRoute,
   getDownloadUrlRoute,
   getUploadRoute,
@@ -74,6 +75,7 @@ import {
   CompleteMultipartUploadRequestSchema,
   CreateMultipartUploadRequestSchema,
   ListUploadsQuerySchema,
+  PublicThreadDownloadQuerySchema,
   RequestUploadTicketSchema,
   UpdateUploadRequestSchema,
   UploadPartParamsSchema,
@@ -1154,5 +1156,161 @@ export const abortMultipartUploadHandler: RouteHandler<typeof abortMultipartUplo
       aborted: true,
       uploadId: r2UploadId,
     });
+  },
+);
+
+// ============================================================================
+// PUBLIC THREAD FILE DOWNLOAD HANDLER
+// ============================================================================
+
+/**
+ * Download file from public thread
+ *
+ * Security layers (6 total):
+ * 1. Session authentication required (no anonymous access)
+ * 2. Thread must exist
+ * 3. Thread must be public (isPublic=true)
+ * 4. Thread must not be archived or deleted
+ * 5. File must be attached to the specified thread (via threadUpload or messageUpload)
+ * 6. Upload record must exist and be ready
+ *
+ * Rate limited to 10 requests per minute per user (publicDownload preset)
+ * All download attempts are audit logged
+ */
+export const downloadPublicThreadFileHandler: RouteHandler<typeof downloadPublicThreadFileRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session', // LAYER 1: Authentication required
+    operationName: 'downloadPublicThreadFile',
+    validateParams: IdParamSchema,
+    validateQuery: PublicThreadDownloadQuerySchema,
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: uploadId } = c.validated.params;
+    const { threadId } = c.validated.query;
+    const db = await getDbAsync();
+    const ip = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown';
+
+    // LAYER 2: Thread exists
+    const thread = await db.query.chatThread.findFirst({
+      columns: { id: true, isPublic: true, status: true },
+      where: eq(tables.chatThread.id, threadId),
+    });
+
+    if (!thread) {
+      log.audit('public_download_denied', {
+        ip,
+        reason: 'thread_not_found',
+        threadId,
+        uploadId,
+        userId: user.id,
+      });
+      throw createError.notFound('Thread not found');
+    }
+
+    // LAYER 3: Thread is public
+    if (!thread.isPublic) {
+      log.audit('public_download_denied', {
+        ip,
+        reason: 'thread_not_public',
+        threadId,
+        uploadId,
+        userId: user.id,
+      });
+      throw createError.unauthorized('This file is not in a public thread');
+    }
+
+    // LAYER 4: Thread not archived/deleted
+    if (thread.status === 'archived' || thread.status === 'deleted') {
+      log.audit('public_download_denied', {
+        ip,
+        reason: 'thread_unavailable',
+        status: thread.status,
+        threadId,
+        uploadId,
+        userId: user.id,
+      });
+      throw createError.gone('Thread is no longer available');
+    }
+
+    // LAYER 5: File is attached to this thread (via threadUpload or messageUpload)
+    const [threadAttachment, messageAttachment] = await Promise.all([
+      db.query.threadUpload.findFirst({
+        columns: { id: true },
+        where: and(
+          eq(tables.threadUpload.uploadId, uploadId),
+          eq(tables.threadUpload.threadId, threadId),
+        ),
+      }),
+      db.query.messageUpload.findFirst({
+        columns: { id: true },
+        where: eq(tables.messageUpload.uploadId, uploadId),
+        with: { message: { columns: { threadId: true } } },
+      }),
+    ]);
+
+    const isMessageInThread = messageAttachment?.message?.threadId === threadId;
+
+    if (!threadAttachment && !isMessageInThread) {
+      log.audit('public_download_denied', {
+        ip,
+        reason: 'file_not_in_thread',
+        threadId,
+        uploadId,
+        userId: user.id,
+      });
+      throw createError.notFound('File not found in this thread');
+    }
+
+    // LAYER 6: Get upload record (must exist and be ready)
+    const uploadRecord = await db.query.upload.findFirst({
+      columns: { filename: true, mimeType: true, r2Key: true, status: true },
+      where: eq(tables.upload.id, uploadId),
+    });
+
+    if (!uploadRecord) {
+      throw createError.notFound('Upload not found');
+    }
+
+    if (uploadRecord.status !== ChatAttachmentStatuses.READY) {
+      throw createError.notFound('Upload not ready for download');
+    }
+
+    // Stream file from R2
+    const requestHeaders = c.req.raw.headers;
+    const result = await getFileStream(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key, {
+      onlyIf: requestHeaders,
+    });
+
+    if (!result.found) {
+      throw createError.notFound('File not found in storage');
+    }
+
+    // AUDIT: Successful download
+    log.audit('public_download_success', {
+      filename: uploadRecord.filename,
+      ip,
+      mimeType: uploadRecord.mimeType,
+      threadId,
+      uploadId,
+      userId: user.id,
+    });
+
+    // Build response headers following official Cloudflare R2 pattern
+    const headers = new Headers();
+    result.writeHttpMetadata(headers);
+    headers.set('etag', result.httpEtag);
+    headers.set('content-length', result.size.toString());
+    headers.set('content-type', uploadRecord.mimeType || 'application/octet-stream');
+    headers.set(
+      'content-disposition',
+      `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`,
+    );
+    // Security headers for public download
+    headers.set('cache-control', 'private, no-store');
+    headers.set('x-content-type-options', 'nosniff');
+    headers.set('cross-origin-resource-policy', 'cross-origin');
+
+    return new Response(result.body, { headers });
   },
 );

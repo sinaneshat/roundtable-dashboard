@@ -397,6 +397,7 @@
         "visualFileTooLarge": "{fileType} files must be {maxSize} or smaller for AI processing"
       },
       "loadingPreview": "Loading preview...",
+      "loginToDownload": "Sign in to download",
       "previewUnavailable": "Preview unavailable"
     },
     "autoMode": {

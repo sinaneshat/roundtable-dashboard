@@ -267,6 +267,7 @@ import {
   completeMultipartUploadHandler,
   createMultipartUploadHandler,
   deleteUploadHandler,
+  downloadPublicThreadFileHandler,
   downloadUploadHandler,
   getDownloadUrlHandler,
   getUploadHandler,
@@ -281,6 +282,7 @@ import {
   completeMultipartUploadRoute,
   createMultipartUploadRoute,
   deleteUploadRoute,
+  downloadPublicThreadFileRoute,
   downloadUploadRoute,
   getDownloadUrlRoute,
   getUploadRoute,
@@ -442,13 +444,14 @@ const utilityRoutes = createOpenApiApp()
   .openapi(openAIFunctionsRoute, openAIFunctionsHandler);
 
 /**
- * Group 9: Uploads (12 routes)
+ * Group 9: Uploads (13 routes)
  */
 const uploadRoutes = createOpenApiApp()
   .openapi(listUploadsRoute, listUploadsHandler)
   .openapi(getUploadRoute, getUploadHandler)
   .openapi(getDownloadUrlRoute, getDownloadUrlHandler)
   .openapi(downloadUploadRoute, downloadUploadHandler)
+  .openapi(downloadPublicThreadFileRoute, downloadPublicThreadFileHandler)
   .openapi(updateUploadRoute, updateUploadHandler)
   .openapi(deleteUploadRoute, deleteUploadHandler)
   .openapi(requestUploadTicketRoute, requestUploadTicketHandler)

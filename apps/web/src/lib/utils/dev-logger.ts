@@ -30,6 +30,107 @@ const DEBOUNCE_MS = 500;
 const UPDATE_WINDOW_MS = 1000;
 const EXCESSIVE_UPDATE_THRESHOLD = 10;
 
+// ============================================================================
+// ENHANCED DEDUPLICATION SYSTEM
+// ============================================================================
+
+const LOG_DEDUPE_WINDOW_MS = 2000; // Collapse logs within 2 second window
+const LOG_DEDUPE_REPORT_THRESHOLD = 5; // Report count after N duplicates
+const LOG_THROTTLE_HIGH_FREQ_MS = 500; // Throttle high-frequency logs
+
+type DedupeEntry = {
+  count: number;
+  firstTime: number;
+  lastTime: number;
+  lastArgs: string;
+  reported: boolean;
+};
+
+const dedupeMap = new Map<string, DedupeEntry>();
+const throttleMap = new Map<string, number>(); // category -> lastLogTime
+
+// Categories that should be throttled (high frequency, low value)
+const HIGH_FREQ_CATEGORIES = new Set(['stream-append', 'chunk', 'render-state', 'query-render', 'stream', 'moderator']);
+
+// Categories that should NEVER be deduplicated (critical for debugging)
+const CRITICAL_CATEGORIES = new Set([
+  'phase-transition', 'round-complete', 'pcount-mismatch', 'race-detected',
+  'stuck', 'error', 'start', 'end', 'complete', 'trigger', 'handoff',
+  'submit', 'changelog', 'frame', 'race',
+]);
+
+function shouldLogWithDedupe(category: string, message: string): { shouldLog: boolean; suffix?: string } {
+  // Never dedupe critical categories
+  if (CRITICAL_CATEGORIES.has(category)) {
+    return { shouldLog: true };
+  }
+
+  // Skip APPEND logs entirely - they add no debugging value
+  if (message.includes('APPEND')) {
+    return { shouldLog: false };
+  }
+
+  const now = Date.now();
+  const key = `${category}:${message.slice(0, 80)}`; // Truncate for key stability
+
+  // Throttle high-frequency categories
+  if (HIGH_FREQ_CATEGORIES.has(category)) {
+    const lastLog = throttleMap.get(category) ?? 0;
+    if (now - lastLog < LOG_THROTTLE_HIGH_FREQ_MS) {
+      // Update dedupe count silently
+      const entry = dedupeMap.get(key);
+      if (entry) {
+        entry.count++;
+        entry.lastTime = now;
+      } else {
+        dedupeMap.set(key, { count: 1, firstTime: now, lastTime: now, lastArgs: message, reported: false });
+      }
+      return { shouldLog: false };
+    }
+    throttleMap.set(category, now);
+  }
+
+  // Check dedupe window
+  const entry = dedupeMap.get(key);
+
+  if (!entry || now - entry.lastTime > LOG_DEDUPE_WINDOW_MS) {
+    // Window expired or new entry - report previous count if needed
+    let suffix: string | undefined;
+    if (entry && entry.count > 1 && !entry.reported) {
+      suffix = `[×${entry.count}]`;
+    }
+
+    // Start new window
+    dedupeMap.set(key, { count: 1, firstTime: now, lastTime: now, lastArgs: message, reported: false });
+    return { shouldLog: true, suffix };
+  }
+
+  // Within window - increment and check threshold
+  entry.count++;
+  entry.lastTime = now;
+
+  if (entry.count === LOG_DEDUPE_REPORT_THRESHOLD && !entry.reported) {
+    entry.reported = true;
+    return { shouldLog: true, suffix: `[×${entry.count}]` };
+  }
+
+  return { shouldLog: false };
+}
+
+// Periodic cleanup of old entries (runs every 10 seconds)
+if (typeof window !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    const staleThreshold = LOG_DEDUPE_WINDOW_MS * 5;
+
+    for (const [key, entry] of dedupeMap.entries()) {
+      if (now - entry.lastTime > staleThreshold) {
+        dedupeMap.delete(key);
+      }
+    }
+  }, 10000);
+}
+
 const logCache = new Map<string, LogEntry>();
 const updateCounts = new Map<string, UpdateTracker>();
 
@@ -171,6 +272,14 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
     return;
   }
 
+  // Use enhanced deduplication system
+  const dedupeCategory = `${category}-${key}`;
+  const { shouldLog, suffix } = shouldLogWithDedupe(dedupeCategory, message);
+
+  if (!shouldLog) {
+    return;
+  }
+
   const logKey = `${category}:${key}`;
   const fullMessage = `[${category}] ${message}`;
 
@@ -184,8 +293,9 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
     // Flush: either first call (lastFlush=0) or after RAPID_DEBOUNCE_MS
     if (tracker.lastFlush === 0 || now - tracker.lastFlush >= RLOG_RAPID_DEBOUNCE_MS) {
       const countStr = tracker.count > 1 ? ` [×${tracker.count}]` : '';
+      const dedupeStr = suffix ? ` ${suffix}` : '';
       // eslint-disable-next-line no-console
-      console.log(`%c[${category}]${countStr} ${message}`, getRlogStyle(category));
+      console.log(`%c[${category}]${countStr}${dedupeStr} ${message}`, getRlogStyle(category));
       tracker.count = 0;
       tracker.lastFlush = now;
     }
@@ -194,7 +304,7 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
     return;
   }
 
-  if (rlogLastLogged[logKey] === fullMessage) {
+  if (rlogLastLogged[logKey] === fullMessage && !suffix) {
     return;
   }
 
@@ -204,8 +314,9 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
 
   rlogDebounceTimers[logKey] = setTimeout(() => {
     rlogLastLogged[logKey] = fullMessage;
+    const logMessage = suffix ? `${fullMessage} ${suffix}` : fullMessage;
     // eslint-disable-next-line no-console
-    console.log(`%c${fullMessage}`, getRlogStyle(category));
+    console.log(`%c${logMessage}`, getRlogStyle(category));
   }, RLOG_DEBOUNCE_MS);
 }
 
@@ -281,14 +392,27 @@ export const rlog = {
       rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`);
     }
   },
-  presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
+  // Presearch - keep important logs, throttle render logs
+  presearch: (action: string, detail: string): void => {
+    // Throttle render-related logs that fire frequently
+    if (action === 'render-state' || action === 'query-render') {
+      rlogLog(RlogCategories.PRESRCH, 'presearch-render', `${action}: ${detail}`);
+    } else {
+      rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`);
+    }
+  },
   // ✅ Race condition detection logging
   race: (action: string, detail: string): void => rlogNow(RlogCategories.RACE, `${action}: ${detail}`),
   resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
   // ✅ DEBOUNCE FIX: All stream logs now debounced - fires frequently during streaming
-  stream: (action: RlogStreamAction, detail: string): void =>
-    rlogLog(RlogCategories.STREAM, 'stream', `${action}: ${detail}`),
+  // Skip APPEND logs entirely - they add no debugging value
+  stream: (action: RlogStreamAction, detail: string): void => {
+    if (detail.includes('APPEND')) {
+      return; // Skip APPEND logs entirely - they add no debugging value
+    }
+    rlogLog(RlogCategories.STREAM, 'stream', `${action}: ${detail}`);
+  },
   // ✅ Stuck state detection logging (blockers, timeouts, stuck rounds)
   stuck: (action: string, detail: string): void => rlogNow(RlogCategories.STUCK, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
@@ -296,6 +420,20 @@ export const rlog = {
   // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog
   // These fire frequently during renders and participant checks, causing console spam
   trigger: (action: string, detail: string): void => rlogLog(RlogCategories.TRIGGER, action, detail),
+  // Summary of deduplicated log counts (call at end of rounds for debugging)
+  logDedupeStats: (): void => {
+    if (!rlogEnabled) {
+      return;
+    }
+    const stats = Array.from(dedupeMap.entries())
+      .filter(([, e]) => e.count > 1)
+      .map(([k, e]) => `${k.split(':')[0]}:×${e.count}`)
+      .join(', ');
+    if (stats) {
+      // eslint-disable-next-line no-console
+      console.log(`%c[DEDUPE-STATS] ${stats}`, 'color: #9E9E9E; font-style: italic');
+    }
+  },
 };
 
 export const devLog = {

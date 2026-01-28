@@ -1139,7 +1139,9 @@ export const ChatMessageList = memo(
                           {fileAttachments.length > 0 && (
                             <MessageAttachmentPreview
                               attachments={fileAttachments}
+                              isPublicThread={isReadOnly}
                               messageId={message.id}
+                              threadId={_threadId ?? undefined}
                             />
                           )}
 

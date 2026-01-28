@@ -214,6 +214,38 @@ export function useRoundSubscription({
   // Track if round complete has been called to prevent duplicates
   const hasCalledRoundCompleteRef = useRef(false);
 
+  // ✅ FIX P0: Validate participant count consistency
+  // Once a round starts, participantCount should NOT change mid-round.
+  // If it does (e.g., via changelog adding participants), we use the initial count
+  // to prevent stagger logic from waiting for phantom participants.
+  const initialParticipantCountRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    // Capture initial participant count when enabled
+    if (enabled && participantCount > 0 && initialParticipantCountRef.current === null) {
+      initialParticipantCountRef.current = participantCount;
+    }
+
+    // Detect mid-round participant count changes
+    if (enabled && initialParticipantCountRef.current !== null
+        && initialParticipantCountRef.current !== participantCount) {
+      rlog.stuck('pcount-mismatch',
+        `r${roundNumber} participantCount changed mid-round: ${initialParticipantCountRef.current} → ${participantCount} (using initial count)`
+      );
+      // Note: We continue using initialParticipantCountRef.current, not the new value
+    }
+
+    // Reset on round change or disable
+    if (!enabled) {
+      initialParticipantCountRef.current = null;
+    }
+  }, [enabled, participantCount, roundNumber]);
+
+  // ✅ FIX P0: Use the stable initial count for all downstream logic
+  const stableParticipantCount = enabled && initialParticipantCountRef.current !== null
+    ? initialParticipantCountRef.current
+    : participantCount;
+
   // ✅ FIX #1: Log deduplication for round-complete-check
   // Prevents console pollution from 30-65 identical log lines per round
   const logDedupeRef = useRef<{ key: string; count: number }>({ count: 0, key: '' });
@@ -249,6 +281,8 @@ export function useRoundSubscription({
   // Using useLayoutEffect to ensure state is reset synchronously before render
   useLayoutEffect(() => {
     hasCalledRoundCompleteRef.current = false;
+    // ✅ FIX P0: Reset initial participant count ref on round change
+    initialParticipantCountRef.current = null;
     // When presearch is enabled, start with -1 (no participants)
     // When presearch is disabled, start with 0 (P0 can start)
     setMaxEnabledIndex(enablePreSearch ? -1 : 0);
@@ -263,7 +297,7 @@ export function useRoundSubscription({
       participants: initialLastSeqs?.participants ?? {},
       presearch: initialLastSeqs?.presearch ?? 0,
     };
-    rlog.stream('check', `r${roundNumber} stagger reset: maxIdx=${enablePreSearch ? -1 : 0} modEnabled=false presearchEnabled=${enablePreSearch} initialEnabled=${!enablePreSearch}`);
+    rlog.stream('check', `r${roundNumber} stagger reset: maxIdx=${enablePreSearch ? -1 : 0} modEnabled=false presearchEnabled=${enablePreSearch} initialEnabled=${!enablePreSearch} pCountRef=null`);
   }, [threadId, roundNumber, enablePreSearch, initialLastSeqs]);
 
   // Create callbacks for each entity type (with seq validation)
@@ -331,16 +365,17 @@ export function useRoundSubscription({
   // ✅ STAGGER: Only enable subscription if index <= maxEnabledIndex
   // FIX 1: P0 uses explicit flag instead of relying on stagger index comparison (0 > 0 = false bug)
   // ✅ RESUMPTION: Pass initialLastSeq from resumption state for each participant
-  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && participantCount > 0 && initialParticipantsEnabled && maxEnabledIndex >= 0, initialLastSeq: initialLastSeqs?.participants?.['0'], participantIndex: 0, roundNumber, threadId });
-  const p1Sub = useParticipantSubscription({ callbacks: p1Callbacks, enabled: enabled && participantCount > 1 && maxEnabledIndex >= 1, initialLastSeq: initialLastSeqs?.participants?.['1'], participantIndex: 1, roundNumber, threadId });
-  const p2Sub = useParticipantSubscription({ callbacks: p2Callbacks, enabled: enabled && participantCount > 2 && maxEnabledIndex >= 2, initialLastSeq: initialLastSeqs?.participants?.['2'], participantIndex: 2, roundNumber, threadId });
-  const p3Sub = useParticipantSubscription({ callbacks: p3Callbacks, enabled: enabled && participantCount > 3 && maxEnabledIndex >= 3, initialLastSeq: initialLastSeqs?.participants?.['3'], participantIndex: 3, roundNumber, threadId });
-  const p4Sub = useParticipantSubscription({ callbacks: p4Callbacks, enabled: enabled && participantCount > 4 && maxEnabledIndex >= 4, initialLastSeq: initialLastSeqs?.participants?.['4'], participantIndex: 4, roundNumber, threadId });
-  const p5Sub = useParticipantSubscription({ callbacks: p5Callbacks, enabled: enabled && participantCount > 5 && maxEnabledIndex >= 5, initialLastSeq: initialLastSeqs?.participants?.['5'], participantIndex: 5, roundNumber, threadId });
-  const p6Sub = useParticipantSubscription({ callbacks: p6Callbacks, enabled: enabled && participantCount > 6 && maxEnabledIndex >= 6, initialLastSeq: initialLastSeqs?.participants?.['6'], participantIndex: 6, roundNumber, threadId });
-  const p7Sub = useParticipantSubscription({ callbacks: p7Callbacks, enabled: enabled && participantCount > 7 && maxEnabledIndex >= 7, initialLastSeq: initialLastSeqs?.participants?.['7'], participantIndex: 7, roundNumber, threadId });
-  const p8Sub = useParticipantSubscription({ callbacks: p8Callbacks, enabled: enabled && participantCount > 8 && maxEnabledIndex >= 8, initialLastSeq: initialLastSeqs?.participants?.['8'], participantIndex: 8, roundNumber, threadId });
-  const p9Sub = useParticipantSubscription({ callbacks: p9Callbacks, enabled: enabled && participantCount > 9 && maxEnabledIndex >= 9, initialLastSeq: initialLastSeqs?.participants?.['9'], participantIndex: 9, roundNumber, threadId });
+  // ✅ FIX P0: Use stableParticipantCount to prevent phantom participant subscriptions
+  const p0Sub = useParticipantSubscription({ callbacks: p0Callbacks, enabled: enabled && stableParticipantCount > 0 && initialParticipantsEnabled && maxEnabledIndex >= 0, initialLastSeq: initialLastSeqs?.participants?.['0'], participantIndex: 0, roundNumber, threadId });
+  const p1Sub = useParticipantSubscription({ callbacks: p1Callbacks, enabled: enabled && stableParticipantCount > 1 && maxEnabledIndex >= 1, initialLastSeq: initialLastSeqs?.participants?.['1'], participantIndex: 1, roundNumber, threadId });
+  const p2Sub = useParticipantSubscription({ callbacks: p2Callbacks, enabled: enabled && stableParticipantCount > 2 && maxEnabledIndex >= 2, initialLastSeq: initialLastSeqs?.participants?.['2'], participantIndex: 2, roundNumber, threadId });
+  const p3Sub = useParticipantSubscription({ callbacks: p3Callbacks, enabled: enabled && stableParticipantCount > 3 && maxEnabledIndex >= 3, initialLastSeq: initialLastSeqs?.participants?.['3'], participantIndex: 3, roundNumber, threadId });
+  const p4Sub = useParticipantSubscription({ callbacks: p4Callbacks, enabled: enabled && stableParticipantCount > 4 && maxEnabledIndex >= 4, initialLastSeq: initialLastSeqs?.participants?.['4'], participantIndex: 4, roundNumber, threadId });
+  const p5Sub = useParticipantSubscription({ callbacks: p5Callbacks, enabled: enabled && stableParticipantCount > 5 && maxEnabledIndex >= 5, initialLastSeq: initialLastSeqs?.participants?.['5'], participantIndex: 5, roundNumber, threadId });
+  const p6Sub = useParticipantSubscription({ callbacks: p6Callbacks, enabled: enabled && stableParticipantCount > 6 && maxEnabledIndex >= 6, initialLastSeq: initialLastSeqs?.participants?.['6'], participantIndex: 6, roundNumber, threadId });
+  const p7Sub = useParticipantSubscription({ callbacks: p7Callbacks, enabled: enabled && stableParticipantCount > 7 && maxEnabledIndex >= 7, initialLastSeq: initialLastSeqs?.participants?.['7'], participantIndex: 7, roundNumber, threadId });
+  const p8Sub = useParticipantSubscription({ callbacks: p8Callbacks, enabled: enabled && stableParticipantCount > 8 && maxEnabledIndex >= 8, initialLastSeq: initialLastSeqs?.participants?.['8'], participantIndex: 8, roundNumber, threadId });
+  const p9Sub = useParticipantSubscription({ callbacks: p9Callbacks, enabled: enabled && stableParticipantCount > 9 && maxEnabledIndex >= 9, initialLastSeq: initialLastSeqs?.participants?.['9'], participantIndex: 9, roundNumber, threadId });
 
   // Moderator subscription - ✅ STAGGER: only enabled when all participants complete
   // ✅ RESUMPTION: Pass initialLastSeq from resumption state
@@ -353,14 +388,16 @@ export function useRoundSubscription({
   });
 
   // Collect all participant subscriptions into array
+  // ✅ FIX P0: Use stableParticipantCount for consistent slicing
   const allParticipantSubs = [p0Sub, p1Sub, p2Sub, p3Sub, p4Sub, p5Sub, p6Sub, p7Sub, p8Sub, p9Sub];
-  const activeParticipantSubs = allParticipantSubs.slice(0, participantCount);
+  const activeParticipantSubs = allParticipantSubs.slice(0, stableParticipantCount);
 
   // ✅ FIX: Create stable participantStates array using useMemo with individual state dependencies
   // Previously: `activeParticipantSubs.map(sub => sub.state)` created new array every render
   // This caused the stagger effect to run 32+ times per render because participantStates
   // was in its dependency array and always had a new reference.
   // Now: useMemo with explicit state dependencies ensures stable reference.
+  // ✅ FIX P0: Use stableParticipantCount to prevent phantom participant state tracking
   const participantStates = useMemo(
     () => [
       p0Sub.state,
@@ -373,7 +410,7 @@ export function useRoundSubscription({
       p7Sub.state,
       p8Sub.state,
       p9Sub.state,
-    ].slice(0, participantCount),
+    ].slice(0, stableParticipantCount),
     [
       p0Sub.state,
       p1Sub.state,
@@ -385,7 +422,7 @@ export function useRoundSubscription({
       p7Sub.state,
       p8Sub.state,
       p9Sub.state,
-      participantCount,
+      stableParticipantCount,
     ],
   );
 
@@ -468,8 +505,9 @@ export function useRoundSubscription({
 
     // Find the highest index that is COMPLETE (not streaming!)
     // This enforces sequential execution: P0 complete → P1 starts → P1 complete → P2 starts
+    // ✅ FIX P0: Use stableParticipantCount to iterate only over actual participants
     let highestCompleteIndex = -1;
-    for (let i = 0; i < participantCount; i++) {
+    for (let i = 0; i < stableParticipantCount; i++) {
       const status = participantStatuses[i];
       const state = participantStates[i];
 
@@ -494,8 +532,9 @@ export function useRoundSubscription({
     }
 
     // Check if state will actually change before logging
+    // ✅ FIX P0: Use stableParticipantCount in boundary check
     const nextIndex = highestCompleteIndex + 1;
-    const willEnableNextParticipant = nextIndex < participantCount && nextIndex > maxEnabledIndexRef.current;
+    const willEnableNextParticipant = nextIndex < stableParticipantCount && nextIndex > maxEnabledIndexRef.current;
     const allComplete = participantStatuses.every((status, i) => {
       const isP0ViaAiSdk = i === 0 && aiSdkP0Complete;
       return isP0ViaAiSdk || status === 'complete' || status === 'error';
@@ -523,7 +562,7 @@ export function useRoundSubscription({
       rlog.stream('check', `r${roundNumber} all participants complete → enabling moderator`);
       setModeratorEnabled(true);
     }
-  }, [enabled, presearchReady, participantCount, participantStatuses, participantStates, moderatorEnabled, roundNumber, aiSdkP0Complete]);
+  }, [enabled, presearchReady, stableParticipantCount, participantStatuses, participantStates, moderatorEnabled, roundNumber, aiSdkP0Complete]);
 
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
@@ -535,9 +574,17 @@ export function useRoundSubscription({
     const isCurrentRoundState = (entityState: { roundNumber: number; status: string }) =>
       entityState.roundNumber === roundNumber;
 
-    const presearchComplete = !enablePreSearch
-      || presearchSub.state.status === 'disabled'
-      || (isCurrentRoundState(presearchSub.state) && presearchSub.state.status === 'complete');
+    // ✅ FIX P2: Stricter presearch completion check
+    // - If enablePreSearch is false, presearch is complete (disabled)
+    // - If subscription reports disabled, presearch is complete
+    // - If state is from wrong round, treat as not blocking (previous round's presearch)
+    // - Otherwise check actual completion status
+    const presearchIsCurrentRound = presearchSub.state.roundNumber === roundNumber;
+    const presearchComplete = !enablePreSearch  // Prop says disabled for this round
+      || presearchSub.state.status === 'disabled'  // Subscription explicitly disabled
+      || !presearchIsCurrentRound  // State is stale from previous round, don't block
+      || presearchSub.state.status === 'complete'  // Actually complete
+      || presearchSub.state.status === 'error';  // Failed but unblocks participants
 
     // Guard against empty array: areAllParticipantsComplete returns false for empty array
     // Also verify each participant's state is for the current round
@@ -548,14 +595,17 @@ export function useRoundSubscription({
         return isP0ViaAiSdk || (isCurrentRoundState(s) && (s.status === 'complete' || s.status === 'error'));
       });
 
-    // ✅ FIX #7: Derive moderatorComplete directly from terminal status
-    // Removed isCurrentRoundState guard that caused timing issues during React batching.
-    // The roundNumber guard is overly strict - status is the source of truth.
-    const moderatorComplete = moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error';
+    // ✅ FIX P1: Re-add round validation for moderator - the previous removal caused stale state issues
+    // The round number check IS necessary to prevent using stale completion status from previous round
+    // The key is to handle the case where moderator hasn't started yet for current round
+    const moderatorIsCurrentRound = moderatorSub.state.roundNumber === roundNumber;
+    const moderatorComplete = moderatorIsCurrentRound
+      && (moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error');
 
     // ✅ FIX #1: Deduplicated round-complete-check logging
     // Collapses 30-65 identical log lines into one line with count suffix
-    const logKey = `${roundNumber}-${presearchComplete}-${allParticipantsDone}-${moderatorComplete}`;
+    // ✅ Include round numbers in log key for better debugging
+    const logKey = `${roundNumber}-pre:${presearchComplete}(r${presearchSub.state.roundNumber})-allP:${allParticipantsDone}-mod:${moderatorComplete}(r${moderatorSub.state.roundNumber})`;
     if (logKey !== logDedupeRef.current.key) {
       // Log previous count if we had duplicates
       if (logDedupeRef.current.count > 1) {
@@ -563,7 +613,7 @@ export function useRoundSubscription({
       }
       // Log new state
       logDedupeRef.current = { count: 1, key: logKey };
-      rlog.phase('round-complete-check', `r${roundNumber} presearch=${presearchComplete} allP=${allParticipantsDone} mod=${moderatorComplete} modState={round:${moderatorSub.state.roundNumber},status:${moderatorSub.state.status}}`);
+      rlog.phase('round-complete-check', `r${roundNumber} presearch=${presearchComplete}(r${presearchSub.state.roundNumber}) allP=${allParticipantsDone} mod=${moderatorComplete}(r${moderatorSub.state.roundNumber}) modStatus=${moderatorSub.state.status}`);
     } else {
       logDedupeRef.current.count++;
     }

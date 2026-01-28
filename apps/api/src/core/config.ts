@@ -433,13 +433,13 @@ let configPromise: Promise<z.infer<typeof completeConfigurationSchema>> | null =
  * Use this in async contexts (e.g., Hono handlers)
  */
 export async function getConfig(): Promise<z.infer<typeof completeConfigurationSchema>> {
-  if (!config) {
-    if (!configPromise) {
-      configPromise = parseEnvironment();
-    }
-    config = await configPromise;
+  if (!configPromise) {
+    configPromise = parseEnvironment().then((result) => {
+      config = result;
+      return result;
+    });
   }
-  return config;
+  return configPromise;
 }
 
 /**

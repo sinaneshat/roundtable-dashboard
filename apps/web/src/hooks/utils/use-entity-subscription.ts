@@ -10,6 +10,12 @@
  * - Handle 200 OK JSON (complete/error status)
  * - Handle 200 OK SSE (active streaming)
  * - Support resumption via lastSeq tracking
+ *
+ * ✅ FIX P6: Network Request Optimizations
+ * - Request deduplication via activeRequestsMap
+ * - Global connection limit (MAX_CONCURRENT_CONNECTIONS)
+ * - Visibility change handling for tab switching
+ * - Proper cleanup on unmount
  */
 
 import type { EntityPhase } from '@roundtable/shared/enums';
@@ -83,6 +89,54 @@ const DEFAULT_RETRY_DELAY = 500;
 const MAX_RETRY_ATTEMPTS = 60; // 30 seconds with 500ms delay
 
 // ============================================================================
+// ✅ FIX P6: GLOBAL CONNECTION MANAGEMENT
+// ============================================================================
+
+/**
+ * Maximum concurrent SSE connections to prevent browser connection exhaustion.
+ * HTTP/1.1 browsers typically limit to 6 connections per domain.
+ * We stay under with 4 to leave headroom for other requests.
+ */
+const MAX_CONCURRENT_CONNECTIONS = 4;
+
+/** Global counter for active SSE connections */
+let globalActiveConnections = 0;
+
+/** Map of active requests for deduplication: key → AbortController */
+const activeRequestsMap = new Map<string, AbortController>();
+
+/**
+ * Check if we can start a new connection without exceeding the limit
+ */
+function canStartConnection(): boolean {
+  return globalActiveConnections < MAX_CONCURRENT_CONNECTIONS;
+}
+
+/**
+ * Increment the global connection counter and log
+ */
+function incrementConnections(entity: string, roundNumber: number): void {
+  globalActiveConnections++;
+  rlog.stream('start', `${entity} r${roundNumber} conn started (active: ${globalActiveConnections})`);
+}
+
+/**
+ * Decrement the global connection counter and log
+ */
+function decrementConnections(entity: string, roundNumber: number): void {
+  globalActiveConnections = Math.max(0, globalActiveConnections - 1);
+  rlog.stream('end', `${entity} r${roundNumber} conn ended (active: ${globalActiveConnections})`);
+}
+
+/**
+ * Generate a unique key for request deduplication
+ */
+function getRequestKey(threadId: string, roundNumber: number, phase: EntityPhase, participantIndex?: number): string {
+  const participantSuffix = participantIndex !== undefined ? `:p${participantIndex}` : '';
+  return `${threadId}:r${roundNumber}:${phase}${participantSuffix}`;
+}
+
+// ============================================================================
 // MAIN HOOK
 // ============================================================================
 
@@ -119,6 +173,10 @@ export function useEntitySubscription({
   // When 'done' event is received, this prevents any pending setTimeout retries from firing
   const isCompleteRef = useRef(false);
 
+  // ✅ FIX P6: Track subscription key to prevent re-subscription for same params
+  // This prevents unnecessary subscription restarts when enabled toggles
+  const hasSubscribedKeyRef = useRef<string | null>(null);
+
   // Reset lastSeq when round number changes to prevent stale sequence numbers
   // This fixes the round 2+ submission failure where subscriptions detect "complete"
   // instantly because they're using stale lastSeq values from the previous round
@@ -132,6 +190,7 @@ export function useEntitySubscription({
       lastSeqRef.current = 0;
       retryCountRef.current = 0;
       isCompleteRef.current = false; // BUG FIX: Reset completion flag for new round
+      hasSubscribedKeyRef.current = null; // ✅ FIX P6: Reset subscription key for new round
       setState(prev => ({
         ...prev,
         lastSeq: 0,
@@ -169,6 +228,23 @@ export function useEntitySubscription({
       return;
     }
 
+    const logPrefix = `${phase} r${roundNumber}${participantIndex !== undefined ? ` p${participantIndex}` : ''}`;
+
+    // ✅ FIX P6: Request deduplication - check for existing active request
+    const requestKey = getRequestKey(threadId, roundNumber, phase, participantIndex);
+    if (activeRequestsMap.has(requestKey)) {
+      rlog.stream('skip', `${logPrefix} duplicate request blocked (already active)`);
+      return;
+    }
+
+    // ✅ FIX P6: Connection limit guard - wait if at capacity
+    if (!canStartConnection()) {
+      rlog.stream('skip', `${logPrefix} waiting for connection slot (active: ${globalActiveConnections})`);
+      // Don't block, just return - the stagger mechanism in use-round-subscription
+      // will naturally retry when a slot becomes available
+      return;
+    }
+
     // Abort any existing subscription
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -177,7 +253,18 @@ export function useEntitySubscription({
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    const logPrefix = `${phase} r${roundNumber}${participantIndex !== undefined ? ` p${participantIndex}` : ''}`;
+    // ✅ FIX P6: Track this request for deduplication
+    activeRequestsMap.set(requestKey, controller);
+
+    // ✅ FIX P6: Increment connection counter
+    incrementConnections(phase, roundNumber);
+
+    // Helper to clean up connection tracking on any exit path
+    const cleanupConnection = () => {
+      activeRequestsMap.delete(requestKey);
+      decrementConnections(phase, roundNumber);
+    };
+
     rlog.stream('start', `${logPrefix} subscription lastSeq=${lastSeqRef.current}`);
 
     setState(prev => ({
@@ -226,6 +313,10 @@ export function useEntitySubscription({
         const retryAfter = data.data?.retryAfter ?? DEFAULT_RETRY_DELAY;
 
         rlog.stream('check', `${logPrefix} 202 waiting, retry after ${retryAfter}ms`);
+
+        // ✅ FIX P6: Clean up current connection before scheduling retry
+        // The retry will create a new connection with its own tracking
+        cleanupConnection();
 
         retryCountRef.current++;
         // BUG FIX: Check isCompleteRef to prevent retries after 'done' event
@@ -298,6 +389,8 @@ export function useEntitySubscription({
           callbacksRef.current?.onStatusChange?.('error');
           callbacksRef.current?.onError?.(new Error('Stream encountered an error'));
         }
+        // ✅ FIX P6: Clean up connection tracking
+        cleanupConnection();
         return;
       }
 
@@ -402,6 +495,9 @@ export function useEntitySubscription({
                   callbacksRef.current?.onStatusChange?.('complete');
                   callbacksRef.current?.onComplete?.(currentSeq);
 
+                  // ✅ FIX P6: Clean up connection tracking
+                  cleanupConnection();
+
                   // Small delay before cancel to ensure all state updates flush
                   // Abort-aware wait: clears timeout and resolves early if signal aborts
                   if (!controller.signal.aborted) {
@@ -481,6 +577,9 @@ export function useEntitySubscription({
                     rlog.stream('check', `🏁 ${logPrefix} about to call onComplete, callback exists: ${!!callbacksRef.current?.onComplete}`);
                     callbacksRef.current?.onComplete?.(currentSeq);
 
+                    // ✅ FIX P6: Clean up connection tracking
+                    cleanupConnection();
+
                     // Small delay before cancel to ensure all state updates flush
                     // Abort-aware wait: clears timeout and resolves early if signal aborts
                     if (!controller.signal.aborted) {
@@ -548,6 +647,8 @@ export function useEntitySubscription({
                   rlog.stream('check', `🏁 ${logPrefix} calling onStatusChange and onComplete, callback exists: ${!!callbacksRef.current?.onComplete}`);
                   callbacksRef.current?.onStatusChange?.('complete');
                   callbacksRef.current?.onComplete?.(currentSeq);
+                  // ✅ FIX P6: Clean up connection tracking
+                  cleanupConnection();
                   reader.cancel().catch(() => {
                     // Ignore cancel errors - expected during abort
                   });
@@ -575,6 +676,8 @@ export function useEntitySubscription({
         rlog.stream('check', `🏁 ${logPrefix} calling onStatusChange and onComplete (natural end), callback exists: ${!!callbacksRef.current?.onComplete}`);
         callbacksRef.current?.onStatusChange?.('complete');
         callbacksRef.current?.onComplete?.(currentSeq);
+        // ✅ FIX P6: Clean up connection tracking
+        cleanupConnection();
       }
     } catch (error) {
       // Handle all abort-related errors (AbortError, BodyStreamBuffer aborted, etc.)
@@ -585,6 +688,8 @@ export function useEntitySubscription({
       );
       if (isAbortError) {
         rlog.stream('end', `${logPrefix} aborted`);
+        // ✅ FIX P6: Clean up connection tracking on abort
+        cleanupConnection();
         return;
       }
 
@@ -597,6 +702,8 @@ export function useEntitySubscription({
       }));
       callbacksRef.current?.onStatusChange?.('error');
       callbacksRef.current?.onError?.(error instanceof Error ? error : new Error(String(error)));
+      // ✅ FIX P6: Clean up connection tracking on error
+      cleanupConnection();
     }
   // Note: callbacks intentionally excluded from deps - we use callbacksRef to avoid stale closures
   }, [enabled, threadId, roundNumber, phase, participantIndex]);
@@ -604,6 +711,7 @@ export function useEntitySubscription({
   // Auto-subscribe when enabled and parameters are valid
   useEffect(() => {
     const logPrefix = `${phase} r${roundNumber}${participantIndex !== undefined ? ` p${participantIndex}` : ''}`;
+    const subscriptionKey = getRequestKey(threadId, roundNumber, phase, participantIndex);
 
     // 🔍 DEBUG: Log every time this effect runs
     rlog.stream('check', `${logPrefix} subscribe-effect: enabled=${enabled} threadId=${!!threadId} prevRound=${prevRoundNumberRef.current} isComplete=${isCompleteRef.current}`);
@@ -619,7 +727,21 @@ export function useEntitySubscription({
       return; // Reset effect will update prevRoundNumberRef, then this effect re-runs
     }
 
-    if (enabled && threadId && roundNumber >= 0) {
+    // ✅ FIX P6: Handle enabled state change
+    if (!enabled) {
+      // Reset subscription key when disabled so we can re-subscribe if re-enabled
+      hasSubscribedKeyRef.current = null;
+      return;
+    }
+
+    // ✅ FIX P6: Don't re-subscribe if already subscribed for same params
+    if (hasSubscribedKeyRef.current === subscriptionKey) {
+      rlog.stream('skip', `${logPrefix} already subscribed for same params`);
+      return;
+    }
+
+    if (threadId && roundNumber >= 0) {
+      hasSubscribedKeyRef.current = subscriptionKey;
       // FIX: Catch any promise rejections from subscribe to prevent uncaught errors
       // when the component unmounts mid-stream. The subscribe() catch block handles
       // most abort errors, but timing issues with React's cleanup can cause escapes.
@@ -652,6 +774,18 @@ export function useEntitySubscription({
       // - Max retries exceeded
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+      }
+
+      // ✅ FIX P6: Reset subscription key on cleanup so re-subscription is possible
+      hasSubscribedKeyRef.current = null;
+
+      // ✅ FIX P6: Clean up active request tracking on unmount/re-run
+      // This ensures the request key is available for new subscriptions
+      const requestKey = getRequestKey(threadId, roundNumber, phase, participantIndex);
+      if (activeRequestsMap.has(requestKey)) {
+        activeRequestsMap.delete(requestKey);
+        decrementConnections(phase, roundNumber);
+        rlog.stream('end', `${phase} r${roundNumber} cleaned up on effect cleanup`);
       }
     };
   }, [enabled, threadId, roundNumber, phase, participantIndex, subscribe]);

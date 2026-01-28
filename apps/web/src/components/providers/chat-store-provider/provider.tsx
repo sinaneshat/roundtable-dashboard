@@ -539,6 +539,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     };
   }, []);
 
+  // FIX P3: Track start event to dedupe duplicate start events with same timestamp
+  // Logs showed two start events for same round - this ensures only first is processed
+  const lastStartEventRef = useRef<{ roundNumber: number; timestamp: number } | null>(null);
+
   // FIX 3: Reset presearch accumulator when round number changes
   const prevRoundRef = useRef<number | null>(null);
   useEffect(() => {
@@ -589,7 +593,21 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     });
 
     switch (eventType) {
-      case 'start':
+      case 'start': {
+        // FIX P3: Dedupe duplicate start events using timestamp
+        // Backend may send multiple start events for same round - only process first
+        const eventTimestamp = (eventData.timestamp as number) ?? Date.now();
+        const eventKey = `${roundNumber}-${eventTimestamp}`;
+        const lastKey = lastStartEventRef.current
+          ? `${lastStartEventRef.current.roundNumber}-${lastStartEventRef.current.timestamp}`
+          : null;
+
+        if (lastKey === eventKey) {
+          rlog.presearch('start-dedupe', `r${roundNumber} duplicate start event ignored (same timestamp=${eventTimestamp})`);
+          break;
+        }
+        lastStartEventRef.current = { roundNumber, timestamp: eventTimestamp };
+
         // FIX 1: Only reset if accumulator is empty
         // This handles the case where backend sends start AFTER query events
         if (
@@ -609,6 +627,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
           rlog.presearch('start', `r${roundNumber} skipped reset (already has ${preSearchDataRef.current.queries.length} queries, ${preSearchDataRef.current.results.length} results)`);
         }
         break;
+      }
 
       case 'query': {
         const queryData = {

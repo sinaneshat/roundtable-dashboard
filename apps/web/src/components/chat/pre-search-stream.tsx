@@ -284,6 +284,19 @@ function PreSearchStreamComponent({
     };
   }, [displayData?.queries, displayData?.results, displayData?.summary, displayData?.totalResults, displayData?.totalTime]);
 
+  // FIX P4: Memoize result lookup by query index to avoid stale find() results
+  // Parent shows hasResults=true but child query shows hasResult=false due to React batching.
+  // Using a Map ensures the lookup uses the same reference as the parent's hasResults check.
+  const resultsByQueryIndex = useMemo(() => {
+    const map = new Map<number, PreSearchResult>();
+    for (const result of validResults) {
+      if (result?.index !== undefined) {
+        map.set(result.index, result);
+      }
+    }
+    return map;
+  }, [validResults]);
+
   if (errorFlags.shouldShowError) {
     return (
       <div className="flex flex-col gap-2 py-2">
@@ -309,7 +322,7 @@ function PreSearchStreamComponent({
   }
 
   // Debug: Log skeleton visibility conditions
-  rlog.presearch('render-state', `status=${preSearch.status} isStreamingNow=${statusFlags.isStreamingNow} isComplete=${statusFlags.isEffectivelyComplete} hasQueries=${statusFlags.hasQueries} hasResults=${statusFlags.hasResults} queries=${validQueries.length} results=${validResults.length}`);
+  rlog.presearch('render-state', `status=${preSearch.status} streaming=${statusFlags.isStreamingNow} complete=${statusFlags.isEffectivelyComplete} q=${validQueries.length}/${expectedQueryCount ?? '?'} r=${validResults.length} mapSize=${resultsByQueryIndex.size}`);
 
   if (statusFlags.isPendingWithNoData || isAutoRetrying.value) {
     return (
@@ -360,7 +373,9 @@ function PreSearchStreamComponent({
           renderedQueriesRef.current.add(query.index);
         }
 
-        const searchResult = validResults.find((r: PreSearchResult) => r?.index === query?.index) || validResults.find((r: PreSearchResult) => r?.query === query?.query);
+        // FIX P4: Use memoized map lookup instead of find() to avoid stale results during React batching
+        const searchResult = resultsByQueryIndex.get(query.index)
+          ?? validResults.find((r: PreSearchResult) => r?.query === query?.query);
         // ✅ FIX #8: Only consider having a result when data actually exists
         // Previously hasResult was true when object existed but data was empty, causing skeleton flash
         const hasResult = !!searchResult && searchResult.results && searchResult.results.length > 0;

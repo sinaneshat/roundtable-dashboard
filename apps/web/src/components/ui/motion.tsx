@@ -1,7 +1,7 @@
 import type { HTMLMotionProps, Variants } from 'motion/react';
 import { LayoutGroup, motion } from 'motion/react';
-import { memo, type ReactNode } from 'react';
-import { useSyncExternalStore } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useSyncExternalStore } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -215,14 +215,14 @@ type AnimatedStreamingItemProps = {
  * SSR-safe: renders visible content on server, animates on client
  * Memoized to prevent unnecessary re-renders during streaming
  */
-export const AnimatedStreamingItem = memo(function AnimatedStreamingItem({
+export const AnimatedStreamingItem = memo(({
   children,
   className,
   index = 0,
   delay = 0,
   staggerDelay = 0.03,
   skipAnimation = false,
-}: AnimatedStreamingItemProps) {
+}: AnimatedStreamingItemProps) => {
   const isClient = useIsClient();
 
   // SSR or skipAnimation: render visible immediately

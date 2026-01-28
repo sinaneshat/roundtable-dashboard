@@ -7,7 +7,7 @@
  * Following R2 patterns from Context7 Cloudflare docs
  */
 
-import { createRoute } from '@hono/zod-openapi';
+import { createRoute, z } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { IdParamSchema, StandardApiResponses } from '@/core';
@@ -496,6 +496,62 @@ export const downloadUploadRoute = createRoute({
 });
 
 // ============================================================================
+// PUBLIC THREAD FILE DOWNLOAD ROUTE
+// ============================================================================
+
+/**
+ * Download file from public thread
+ * Authenticated endpoint for downloading files attached to publicly shared threads.
+ *
+ * Security layers:
+ * 1. Session authentication required (no anonymous access)
+ * 2. Thread must exist
+ * 3. Thread must be public (isPublic=true)
+ * 4. Thread must not be archived or deleted
+ * 5. File must be attached to the specified thread
+ * 6. Upload record must exist and be ready
+ */
+export const downloadPublicThreadFileRoute = createRoute({
+  description: `
+Download a file attached to a publicly shared thread.
+
+**Security:**
+- Requires session authentication (no anonymous access)
+- File must be attached to a thread with isPublic=true
+- Thread must not be archived or deleted
+- Rate limited to 10 requests per minute per user
+- All download attempts are audit logged
+`,
+  method: 'get',
+  path: '/uploads/{id}/public-download',
+  request: {
+    params: IdParamSchema,
+    query: z.object({
+      threadId: z.string().min(1).openapi({
+        description: 'ID of the public thread this file belongs to',
+      }),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/octet-stream': {
+          schema: { format: 'binary', type: 'string' },
+        },
+      },
+      description: 'File content stream',
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.FORBIDDEN,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.TOO_MANY_REQUESTS,
+    ...StandardApiResponses.GONE,
+  },
+  summary: 'Download file from public thread',
+  tags: ['Uploads'],
+});
+
+// ============================================================================
 // ROUTE TYPE EXPORTS
 // ============================================================================
 
@@ -505,6 +561,7 @@ export type GetDownloadUrlRoute = typeof getDownloadUrlRoute;
 export type UpdateUploadRoute = typeof updateUploadRoute;
 export type DeleteUploadRoute = typeof deleteUploadRoute;
 export type DownloadUploadRoute = typeof downloadUploadRoute;
+export type DownloadPublicThreadFileRoute = typeof downloadPublicThreadFileRoute;
 export type RequestUploadTicketRoute = typeof requestUploadTicketRoute;
 export type UploadWithTicketRoute = typeof uploadWithTicketRoute;
 export type CreateMultipartUploadRoute = typeof createMultipartUploadRoute;

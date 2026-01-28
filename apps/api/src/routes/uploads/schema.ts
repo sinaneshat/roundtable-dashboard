@@ -270,6 +270,20 @@ export const UploadWithTicketQuerySchema = z.object({
 }).openapi('UploadWithTicketQuery');
 
 // ============================================================================
+// PUBLIC THREAD DOWNLOAD SCHEMAS
+// ============================================================================
+
+/**
+ * Public thread download - query params for authenticated download from public threads
+ */
+export const PublicThreadDownloadQuerySchema = z.object({
+  threadId: z.string().min(1).openapi({
+    description: 'ID of the public thread this file belongs to',
+    param: { in: 'query', name: 'threadId' },
+  }),
+}).openapi('PublicThreadDownloadQuery');
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 

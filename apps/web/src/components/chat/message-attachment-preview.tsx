@@ -8,7 +8,7 @@ import type { IconType } from '@roundtable/shared';
 import { FileIconNames, getFileTypeLabelFromMime, IconTypes } from '@roundtable/shared';
 import { SmartImage } from '@/components/ui/smart-image';
 import { useDownloadUrlQuery } from '@/hooks/queries';
-import { getFileIconName } from '@/hooks/utils';
+import { getFileIconName, useAuthCheck } from '@/hooks/utils';
 import { cn } from '@/lib/ui/cn';
 /* eslint-enable simple-import-sort/imports */
 
@@ -48,35 +48,60 @@ function getIconType(mimeType?: string): IconType {
 type MessageAttachmentPreviewProps = {
   attachments: MessageAttachment[];
   messageId: string;
+  /** Thread ID for public thread downloads */
+  threadId?: string;
+  /** Whether this is a public thread (enables public download endpoint) */
+  isPublicThread?: boolean;
 };
 
 function AttachmentThumbnail({
   attachment,
+  isPublicThread = false,
   messageId: _messageId,
+  threadId,
 }: {
   attachment: MessageAttachment;
   messageId: string;
+  threadId?: string;
+  isPublicThread?: boolean;
 }) {
   const t = useTranslations();
+  const { isAuthenticated } = useAuthCheck();
   const { filename, mediaType, uploadId, url: originalUrl } = attachment;
   const isImage = Boolean(mediaType?.startsWith('image/'));
   const iconType = getIconType(mediaType);
   const displayName = filename ?? t('chat.attachments.defaultName');
 
-  const needsFetch = !isValidDisplayUrl(originalUrl) && Boolean(uploadId);
+  // In public thread: use public download endpoint (requires auth, no ownership check)
+  // In private thread: use standard download endpoint (requires ownership)
+  const usePublicDownload = isPublicThread && isAuthenticated && Boolean(uploadId) && Boolean(threadId);
+  const useStandardDownload = !isPublicThread;
+
+  // Only fetch ownership-based download URL for private threads when needed
+  const needsFetch = useStandardDownload && !isValidDisplayUrl(originalUrl) && Boolean(uploadId);
 
   const { data: downloadUrlResult, isError: fetchError, isLoading } = useDownloadUrlQuery(
     uploadId ?? '',
     needsFetch,
   );
 
-  const resolvedUrl = (downloadUrlResult?.success && downloadUrlResult.data.url) ? downloadUrlResult.data.url : null;
+  // Public download URL (authentication-based, no pre-fetch needed)
+  // This URL is constructed directly - the endpoint validates auth + public thread
+  const publicDownloadUrl = usePublicDownload
+    ? `/api/v1/uploads/${uploadId}/public-download?threadId=${threadId}`
+    : null;
+
+  const resolvedUrl = publicDownloadUrl
+    ?? (downloadUrlResult?.success && downloadUrlResult.data.url ? downloadUrlResult.data.url : null);
   const effectiveUrl = resolvedUrl ?? originalUrl;
-  const hasValidUrl = isValidDisplayUrl(effectiveUrl);
+  const hasValidUrl = isValidDisplayUrl(effectiveUrl) || Boolean(publicDownloadUrl);
   const canShowImage = isImage && hasValidUrl;
 
-  const WrapperComponent = hasValidUrl ? 'a' : 'div';
-  const wrapperProps = hasValidUrl
+  // Disable link if public thread AND not authenticated (need to log in to download)
+  const disableLink = isPublicThread && !isAuthenticated;
+
+  const WrapperComponent = (hasValidUrl && !disableLink) ? 'a' : 'div';
+  const wrapperProps = (hasValidUrl && !disableLink)
     ? {
         download: filename,
         href: effectiveUrl,
@@ -88,6 +113,10 @@ function AttachmentThumbnail({
   const statusMessage = (() => {
     if (isLoading) {
       return t('chat.attachments.loadingPreview');
+    }
+    if (disableLink) {
+      // Public thread but user not authenticated - show login prompt
+      return t('chat.attachments.loginToDownload');
     }
     if (fetchError || !hasValidUrl) {
       return t('chat.attachments.previewUnavailable');
@@ -115,7 +144,7 @@ function AttachmentThumbnail({
         'hover:border-border hover:bg-muted',
         'transition-all duration-150',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-        !hasValidUrl && !isLoading && 'cursor-default opacity-70',
+        (!hasValidUrl || disableLink) && !isLoading && 'cursor-default opacity-70',
       )}
     >
       {isLoading
@@ -156,7 +185,9 @@ function AttachmentThumbnail({
 
 export function MessageAttachmentPreview({
   attachments,
+  isPublicThread = false,
   messageId,
+  threadId,
 }: MessageAttachmentPreviewProps) {
   if (!attachments?.length) {
     return null;
@@ -168,7 +199,9 @@ export function MessageAttachmentPreview({
         <AttachmentThumbnail
           key={`${messageId}-att-${attachment.url}`}
           attachment={attachment}
+          isPublicThread={isPublicThread}
           messageId={messageId}
+          threadId={threadId}
         />
       ))}
     </div>

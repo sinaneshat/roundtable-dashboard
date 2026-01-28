@@ -304,6 +304,8 @@ app.use('/uploads/ticket/upload', RateLimiterFactory.create('upload'), csrfProte
 app.on(['PATCH', 'DELETE'], '/uploads/:id', csrfProtection);
 app.use('/uploads/:id/download', RateLimiterFactory.create('download'));
 app.use('/uploads/:id/download-url', RateLimiterFactory.create('download'));
+// Public thread downloads: strictest rate limit (10/min) for authenticated non-owners
+app.use('/uploads/:id/public-download', RateLimiterFactory.create('publicDownload'));
 app.use('/uploads/multipart', RateLimiterFactory.create('upload'), csrfProtection);
 app.on(['PATCH', 'DELETE'], '/uploads/multipart/:id', csrfProtection);
 app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csrfProtection);
