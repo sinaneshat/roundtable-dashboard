@@ -129,7 +129,7 @@ function useEntityCallbacks(
 
   return useMemo(() => ({
     onComplete: (lastSeq) => {
-      rlog.stream('end', `${entity} r? complete lastSeq=${lastSeq}`);
+      rlog.stream('end', `🏁 ${entity} complete! lastSeq=${lastSeq}`);
       onEntityComplete?.(entity, lastSeq);
     },
     onError: (error) => {
@@ -228,6 +228,12 @@ export function useRoundSubscription({
   // This flag is set when presearch completes, ensuring P0 subscription is enabled immediately
   const [initialParticipantsEnabled, setInitialParticipantsEnabled] = useState(!enablePreSearch);
 
+  // FIX: Use ref to track presearchReady without causing callback recreation
+  // The presearchCallbacksWithStatusChange useMemo needs to read presearchReady but shouldn't
+  // recreate callbacks when it changes (which would cause subscription churn)
+  const presearchReadyRef = useRef(presearchReady);
+  presearchReadyRef.current = presearchReady;
+
   // Reset stagger state and seq validation when round changes
   useEffect(() => {
     hasCalledRoundCompleteRef.current = false;
@@ -266,13 +272,16 @@ export function useRoundSubscription({
   // IMPORTANT: Once presearchReady is true, we should NOT reset it even if status goes
   // back to 'waiting' (which happens when subscription reconnects/retries). The presearch
   // completion is a one-time gate - once passed, participants should stay enabled.
+  //
+  // FIX: Use presearchReadyRef instead of presearchReady in dependency array to prevent
+  // callback recreation when presearchReady changes. This avoids subscription churn.
   const presearchCallbacksWithStatusChange: EntitySubscriptionCallbacks = useMemo(() => ({
     ...presearchCallbacks,
     onStatusChange: (status) => {
-      rlog.gate('presearch-status', `r${roundNumber} status=${status} ready=${presearchReady}`);
+      rlog.gate('presearch-status', `r${roundNumber} status=${status} ready=${presearchReadyRef.current}`);
 
       // Only enable P0 once on complete/error - ignore subsequent status changes
-      if ((status === 'complete' || status === 'error') && !presearchReady) {
+      if ((status === 'complete' || status === 'error') && !presearchReadyRef.current) {
         rlog.gate('presearch-gate', `r${roundNumber} COMPLETE → enabling P0 via callback`);
         setPresearchReady(true);
         setMaxEnabledIndex(0);
@@ -281,7 +290,7 @@ export function useRoundSubscription({
       // Note: We intentionally do NOT reset presearchReady when status goes back to 'waiting'
       // This prevents the race condition where subscription reconnect resets participant enablement
     },
-  }), [presearchCallbacks, roundNumber, presearchReady]);
+  }), [presearchCallbacks, roundNumber]); // Removed presearchReady - use ref instead
 
   // Pre-search subscription (conditional)
   const presearchSub = usePreSearchSubscription({
@@ -475,6 +484,9 @@ export function useRoundSubscription({
     const moderatorComplete = isCurrentRoundState(moderatorSub.state)
       && (moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error');
 
+    // 🔍 DEBUG: Log round completion check details
+    rlog.phase('round-complete-check', `r${roundNumber} presearch=${presearchComplete} allP=${allParticipantsDone} mod=${moderatorComplete} modState={round:${moderatorSub.state.roundNumber},status:${moderatorSub.state.status}} hookRound=${roundNumber}`);
+
     const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
 
     // ✅ AI SDK P0 BRIDGE: P0 streaming via AI SDK should not count as "active subscription stream"
@@ -500,6 +512,9 @@ export function useRoundSubscription({
 
   // Check for round completion and call callback
   useEffect(() => {
+    // 🔍 DEBUG: Log every time this effect runs
+    rlog.phase('round-complete-effect', `r${roundNumber} isComplete=${state.isRoundComplete} hasCalled=${hasCalledRoundCompleteRef.current} enabled=${enabled}`);
+
     if (state.isRoundComplete && !hasCalledRoundCompleteRef.current && enabled) {
       hasCalledRoundCompleteRef.current = true;
       rlog.phase('round-subscription', `r${roundNumber} COMPLETE - all entities done`);

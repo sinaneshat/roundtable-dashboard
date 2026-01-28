@@ -481,13 +481,16 @@ describe('unified-stream-buffer.service', () => {
       );
 
       let putCallCount = 0;
-      const originalPut = mockKV.put;
-      vi.spyOn(mockKV, 'put').mockImplementation(async (key: string, value: string, options?: { expirationTtl: number }) => {
+      // Store the original put function BEFORE creating the spy
+      // The mockKV.put is a bound function, so we need to capture the underlying storage
+      const originalStorage = new Map(mockKV._storage as Map<string, string>);
+      vi.spyOn(mockKV, 'put').mockImplementation(async (key: string, value: string) => {
         putCallCount++;
         if (key.includes(':c:') && putCallCount < 3) {
           throw new Error('KV temporary failure');
         }
-        return originalPut(key, value, options);
+        // Directly write to storage instead of calling original (which is now the spy)
+        (mockKV._storage as Map<string, string>).set(key, value);
       });
 
       vi.useRealTimers();
@@ -944,10 +947,11 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        // Should only get chunks 3 and 4 (indices 3 and 4)
-        expect(results).toHaveLength(2);
-        expect(results[0]).toContain('chunk3');
-        expect(results[1]).toContain('chunk4');
+        // Should get initial comment + chunks 3 and 4 (indices 3 and 4)
+        expect(results).toHaveLength(3);
+        expect(results[0]).toContain(':stream'); // Initial SSE comment
+        expect(results[1]).toContain('chunk3');
+        expect(results[2]).toContain('chunk4');
       });
 
       it('should return empty stream when startFromChunkIndex exceeds chunk count', async () => {
@@ -977,7 +981,9 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        expect(results).toHaveLength(0);
+        // Should only have the initial SSE comment since all chunks are skipped
+        expect(results).toHaveLength(1);
+        expect(results[0]).toContain(':stream');
       });
     });
 
@@ -1025,10 +1031,11 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        // Should only get the text-delta chunk
-        expect(results).toHaveLength(1);
-        expect(results[0]).toContain('text-delta');
-        expect(results[0]).not.toContain('reasoning-delta');
+        // Should get initial comment + the text-delta chunk
+        expect(results).toHaveLength(2);
+        expect(results[0]).toContain(':stream'); // Initial SSE comment
+        expect(results[1]).toContain('text-delta');
+        expect(results[1]).not.toContain('reasoning-delta');
       });
 
       it('should include reasoning-delta events when disabled', async () => {
@@ -1072,7 +1079,9 @@ describe('unified-stream-buffer.service', () => {
         const stream = createLiveParticipantResumeStream(streamId, mockEnv, options);
         const results = await streamToArray(stream);
 
-        expect(results).toHaveLength(2);
+        // Should get initial comment + 2 chunks
+        expect(results).toHaveLength(3);
+        expect(results[0]).toContain(':stream'); // Initial SSE comment
       });
     });
 
@@ -1164,9 +1173,11 @@ describe('unified-stream-buffer.service', () => {
 
         // Should skip chunks 0,1, start from 2, and filter reasoning
         // From chunks 2,3,4: only 3 and 4 are text-delta
-        expect(results).toHaveLength(2);
-        expect(results[0]).toContain('chunk3-text');
-        expect(results[1]).toContain('chunk4-text');
+        // Plus initial SSE comment
+        expect(results).toHaveLength(3);
+        expect(results[0]).toContain(':stream'); // Initial SSE comment
+        expect(results[1]).toContain('chunk3-text');
+        expect(results[2]).toContain('chunk4-text');
       });
     });
   });
@@ -1496,10 +1507,12 @@ describe('unified-stream-buffer.service', () => {
       const stream = createLivePreSearchResumeStream(streamId, mockEnv);
       const results = await streamToArray(stream);
 
-      expect(results).toHaveLength(2);
+      // Should get initial comment + 2 chunks
+      expect(results).toHaveLength(3);
+      expect(results[0]).toContain(':presearch'); // Initial SSE comment
       // Should have SSE format: event: X\ndata: Y\n\n
-      expect(results[0]).toContain('event: search-result');
-      expect(results[0]).toContain('data: {"url":"https://example1.com"}');
+      expect(results[1]).toContain('event: search-result');
+      expect(results[1]).toContain('data: {"url":"https://example1.com"}');
     });
 
     it('should send synthetic done event on timeout', async () => {

@@ -383,6 +383,8 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           const state = get();
           const roundNumber = state.currentRoundNumber ?? 0;
 
+          rlog.phase('completeStreaming', `🎯 CALLED! r${roundNumber} phase=${state.phase} isStreaming=${state.isStreaming}`);
+
           // ✅ GUARD: Prevent duplicate completion - skip if already COMPLETE
           if (state.phase === ChatPhases.COMPLETE) {
             rlog.stream('check', `completeStreaming SKIP - already COMPLETE r${roundNumber}`);

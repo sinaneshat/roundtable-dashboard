@@ -343,18 +343,6 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // ROUND SUBSCRIPTION - Backend-First Pattern
   // ============================================================================
 
-  // Track which round the subscription callbacks were set up for
-  // This prevents cross-round message contamination if chunks arrive after round changes
-  const subscriptionRoundRef = useRef<number | null>(null);
-
-  // Update subscription round ref when subscriptions become active
-  useEffect(() => {
-    if (shouldSubscribe && currentRoundNumber !== null) {
-      subscriptionRoundRef.current = currentRoundNumber;
-      rlog.stream('check', `Set subscription round ref to r${currentRoundNumber}`);
-    }
-  }, [shouldSubscribe, currentRoundNumber]);
-
   // Subscription callbacks - track streaming progress
   const handleChunk = useCallback((entity: EntityType, text: string, seq: number) => {
     // Only log first chunk per entity to reduce noise
@@ -368,12 +356,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     const state = store.getState();
     const roundNumber = state.currentRoundNumber ?? 0;
 
-    // FIX: Validate chunk belongs to current subscription round
-    // Prevents cross-round message contamination if chunks arrive after round changes
-    if (subscriptionRoundRef.current !== null && subscriptionRoundRef.current !== roundNumber) {
-      rlog.stream('skip', `${entity} chunk discarded: subscription r${subscriptionRoundRef.current} != store r${roundNumber}`);
-      return;
-    }
+    // NOTE: Removed subscriptionRoundRef validation - same issue as handleEntityComplete.
+    // The entity subscriptions properly cleanup on round changes (useEffect cleanup aborts).
+    // If a stale chunk somehow arrives, it will just be appended to a placeholder that
+    // will be replaced by the real message fetch anyway.
 
     // Update subscription status for UI
     if (entity === 'presearch') {
@@ -407,16 +393,21 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   }, [store]);
 
   const handleEntityComplete = useCallback(async (entity: EntityType, lastSeq: number) => {
-    rlog.stream('end', `${entity} complete lastSeq=${lastSeq}`);
     const state = store.getState();
     const currentRound = state.currentRoundNumber ?? 0;
 
-    // FIX: Validate completion event belongs to current subscription round
-    // Prevents cross-round state corruption if completion arrives after round changes
-    if (subscriptionRoundRef.current !== null && subscriptionRoundRef.current !== currentRound) {
-      rlog.stream('skip', `${entity} complete discarded: subscription r${subscriptionRoundRef.current} != store r${currentRound}`);
-      return;
-    }
+    // Log completion AFTER getting state for accurate round info
+    rlog.stream('end', `${entity} r${currentRound} complete lastSeq=${lastSeq}`);
+
+    // NOTE: Removed subscriptionRoundRef validation - it caused a race condition where:
+    // 1. Old subscription from round N fires onComplete
+    // 2. subscriptionRoundRef was already updated to round N+1
+    // 3. Completion is silently discarded, leaving round N incomplete
+    //
+    // The entity subscriptions already track their own roundNumber in state,
+    // and the subscription hooks properly cleanup/reset on round changes.
+    // If a stale completion arrives, the store's terminal status guards will prevent
+    // regression (see updateEntitySubscriptionStatus invariants).
 
     if (entity === 'presearch') {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
@@ -459,26 +450,34 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const handleRoundComplete = useCallback(async () => {
     const state = store.getState();
     const threadId = state.thread?.id;
+    rlog.phase('handleRoundComplete', `🎯 CALLED! r${state.currentRoundNumber ?? 0} phase=${state.phase} isStreaming=${state.isStreaming}`);
     rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
 
     // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
     // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
     // If we call completeStreaming here while streaming placeholders exist, we get an intermediate
     // render with isStreaming=false but streaming placeholders still in messages = visual jump.
-    if (hasStreamingPlaceholders(state.messages)) {
+    const hasPlaceholders = hasStreamingPlaceholders(state.messages);
+    rlog.phase('handleRoundComplete', `hasPlaceholders=${hasPlaceholders} msgCount=${state.messages.length}`);
+
+    if (hasPlaceholders) {
       // ✅ FIX: When resuming an already-complete round, placeholders exist but no streaming
       // content will arrive. Fetch completed messages from server to fill the placeholders.
       // This handles the race condition where page refresh happens right as round completes.
       if (threadId) {
         rlog.moderator('round-complete', `streaming placeholders exist - fetching completed messages from server`);
         try {
+          rlog.phase('handleRoundComplete', `📡 Fetching messages for ${threadId.slice(-8)}`);
           const result = await getThreadMessagesService({ param: { id: threadId } });
+          rlog.phase('handleRoundComplete', `📡 Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
           if (result.success && result.data.items) {
             const participants = store.getState().participants;
             const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
             rlog.moderator('round-complete', `fetched ${serverMessages.length} messages, replacing placeholders`);
+            rlog.phase('handleRoundComplete', `📡 Setting ${serverMessages.length} messages and calling completeStreaming`);
             store.getState().setMessages(serverMessages);
             store.getState().completeStreaming();
+            rlog.phase('handleRoundComplete', `✅ completeStreaming called - phase should now be COMPLETE`);
           } else {
             rlog.stuck('round-complete', `failed to fetch messages: ${result.success ? 'no items' : 'request failed'}`);
           }
@@ -489,6 +488,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         rlog.moderator('round-complete', `skipping completeStreaming - no threadId for fetch`);
       }
     } else {
+      rlog.phase('handleRoundComplete', `✅ No placeholders - calling completeStreaming directly`);
       state.completeStreaming();
     }
   }, [store]);

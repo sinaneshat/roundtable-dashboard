@@ -564,6 +564,35 @@ export type ResumeStreamOptions = {
   startFromChunkIndex?: number;
 };
 
+/**
+ * Check if a chunk contains an AI SDK finish event
+ * AI SDK finish events are in format:
+ * - e:{"finishReason":"stop",...} (step-finish)
+ * - d:{"finishReason":"stop",...} (finish data)
+ */
+function chunkContainsFinishEvent(chunkData: string): boolean {
+  // Check for e: or d: prefix with finishReason
+  // Note: The data might contain multiple lines or partial data
+  const lines = chunkData.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if ((trimmed.startsWith('e:') || trimmed.startsWith('d:')) && trimmed.includes('finishReason')) {
+      try {
+        const json = JSON.parse(trimmed.slice(2));
+        if (json.finishReason) {
+          return true;
+        }
+      } catch {
+        // Not valid JSON, check raw string
+        if (trimmed.includes('"finishReason"')) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export function createLiveParticipantResumeStream(
   streamId: string,
   env: ApiEnv['Bindings'],
@@ -634,6 +663,9 @@ export function createLiveParticipantResumeStream(
       }
 
       try {
+        // Track if initial chunks contain finish event
+        let initialFinishEventFound = false;
+
         const initialChunks = await getParticipantStreamChunks(streamId, env);
         if (initialChunks && initialChunks.length > startFromChunkIndex) {
           for (let i = startFromChunkIndex; i < initialChunks.length; i++) {
@@ -644,6 +676,11 @@ export function createLiveParticipantResumeStream(
               }
               // Natural pacing: KV polling latency provides gradual delivery
               // No artificial delays - chunks stream as fast as network allows
+
+              // ✅ FIX: Check if initial chunks contain finish events
+              if (chunkContainsFinishEvent(chunk.data)) {
+                initialFinishEventFound = true;
+              }
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -651,8 +688,12 @@ export function createLiveParticipantResumeStream(
         }
 
         const initialMetadata = await getParticipantStreamMetadata(streamId, env);
+
+        // ✅ FIX: Close immediately if finish event was found in initial chunks
+        // This handles resumption where all chunks (including finish) are already buffered
         if (
-          initialMetadata?.status === StreamStatuses.COMPLETED
+          initialFinishEventFound
+          || initialMetadata?.status === StreamStatuses.COMPLETED
           || initialMetadata?.status === StreamStatuses.FAILED
         ) {
           safeClose(controller);
@@ -669,6 +710,9 @@ export function createLiveParticipantResumeStream(
           const chunks = await getParticipantStreamChunks(streamId, env);
           const metadata = await getParticipantStreamMetadata(streamId, env);
 
+          // Track if we found a finish event in buffered chunks
+          let foundFinishEventInChunks = false;
+
           if (chunks && chunks.length > lastChunkIndex) {
             for (let i = lastChunkIndex; i < chunks.length; i++) {
               const chunk = chunks[i];
@@ -678,24 +722,42 @@ export function createLiveParticipantResumeStream(
                 }
                 // Natural pacing: KV polling latency provides gradual delivery
                 // No artificial delays - chunks stream as fast as network allows
+
+                // ✅ FIX: Check if this chunk contains a finish event
+                // This handles the race condition where AI SDK finish events are buffered
+                // but KV metadata status hasn't been updated to COMPLETED yet
+                if (chunkContainsFinishEvent(chunk.data)) {
+                  foundFinishEventInChunks = true;
+                }
               }
             }
             lastChunkIndex = chunks.length;
             lastNewDataTime = Date.now();
           }
 
+          // ✅ FIX: Close stream if we found finish events in chunks OR metadata says complete
+          // This handles the KV eventual consistency race condition where:
+          // 1. AI SDK sends finish event → buffered to KV as chunk
+          // 2. completeParticipantStreamBuffer updates metadata status
+          // 3. But due to eventual consistency, metadata might not show COMPLETED yet
+          // 4. Previously: we'd wait 90s for timeout → STREAM_TIMEOUT error
+          // 5. Now: detect finish event in chunk content → close immediately
           if (
-            metadata?.status === StreamStatuses.COMPLETED
+            foundFinishEventInChunks
+            || metadata?.status === StreamStatuses.COMPLETED
             || metadata?.status === StreamStatuses.FAILED
           ) {
-            // AI SDK PATTERN: Send explicit finish events before closing
-            // This ensures frontend detects completion immediately without relying on reader.done
-            // Due to Cloudflare KV eventual consistency, status may not be visible immediately
-            const finishReason = metadata.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
-            const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
-            const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
-            safeEnqueue(controller, encoder.encode(finishEvent));
-            safeEnqueue(controller, encoder.encode(finishData));
+            // Only send synthetic finish events if we didn't already send them from buffered chunks
+            // The AI SDK finish events from buffered chunks are more accurate (contain real usage data)
+            if (!foundFinishEventInChunks) {
+              // AI SDK PATTERN: Send explicit finish events before closing
+              // This ensures frontend detects completion immediately without relying on reader.done
+              const finishReason = metadata?.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
+              const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
+              const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+              safeEnqueue(controller, encoder.encode(finishEvent));
+              safeEnqueue(controller, encoder.encode(finishData));
+            }
 
             safeClose(controller);
             return;
@@ -944,6 +1006,9 @@ export function createWaitingParticipantStream(
       let lastNewDataTime = Date.now();
 
       try {
+        // Track if initial chunks contain finish event
+        let initialFinishEventFound = false;
+
         // Send initial chunks
         const initialChunks = await getParticipantStreamChunks(streamId, env);
         if (initialChunks && initialChunks.length > startFromChunkIndex) {
@@ -955,6 +1020,11 @@ export function createWaitingParticipantStream(
               }
               // Natural pacing: KV polling latency provides gradual delivery
               // No artificial delays - chunks stream as fast as network allows
+
+              // ✅ FIX: Check if initial chunks contain finish events
+              if (chunkContainsFinishEvent(chunk.data)) {
+                initialFinishEventFound = true;
+              }
             }
           }
           lastChunkIndex = initialChunks.length;
@@ -963,11 +1033,15 @@ export function createWaitingParticipantStream(
 
         // Check if already completed
         const initialMetadata = await getParticipantStreamMetadata(streamId, env);
+
+        // ✅ FIX: Close immediately if finish event was found in initial chunks
+        // This handles the KV eventual consistency race condition
         if (
-          initialMetadata?.status === StreamStatuses.COMPLETED
+          initialFinishEventFound
+          || initialMetadata?.status === StreamStatuses.COMPLETED
           || initialMetadata?.status === StreamStatuses.FAILED
         ) {
-          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - already ${initialMetadata.status}`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - already complete (finishEvent=${initialFinishEventFound}, status=${initialMetadata?.status ?? 'unknown'})`);
           safeClose(controller);
           return;
         }
@@ -982,6 +1056,9 @@ export function createWaitingParticipantStream(
           const chunks = await getParticipantStreamChunks(streamId, env);
           const metadata = await getParticipantStreamMetadata(streamId, env);
 
+          // Track if we found a finish event in buffered chunks
+          let foundFinishEventInChunks = false;
+
           if (chunks && chunks.length > lastChunkIndex) {
             for (let i = lastChunkIndex; i < chunks.length; i++) {
               const chunk = chunks[i];
@@ -991,23 +1068,33 @@ export function createWaitingParticipantStream(
                 }
                 // Natural pacing: KV polling latency provides gradual delivery
                 // No artificial delays - chunks stream as fast as network allows
+
+                // ✅ FIX: Check if this chunk contains a finish event
+                if (chunkContainsFinishEvent(chunk.data)) {
+                  foundFinishEventInChunks = true;
+                }
               }
             }
             lastChunkIndex = chunks.length;
             lastNewDataTime = Date.now();
           }
 
-          if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
-            log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
+          // ✅ FIX: Close stream if we found finish events in chunks OR metadata says complete
+          if (
+            foundFinishEventInChunks
+            || metadata?.status === StreamStatuses.COMPLETED
+            || metadata?.status === StreamStatuses.FAILED
+          ) {
+            log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - stream complete (finishEvent=${foundFinishEventInChunks}, status=${metadata?.status ?? 'unknown'}), sent ${lastChunkIndex} total chunks`);
 
-            // AI SDK PATTERN: Send explicit finish events before closing
-            // This ensures frontend detects completion immediately without relying on reader.done
-            // Due to Cloudflare KV eventual consistency, status may not be visible immediately
-            const finishReason = metadata.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
-            const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
-            const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
-            safeEnqueue(controller, encoder.encode(finishEvent));
-            safeEnqueue(controller, encoder.encode(finishData));
+            // Only send synthetic finish events if we didn't already send them from buffered chunks
+            if (!foundFinishEventInChunks) {
+              const finishReason = metadata?.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
+              const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
+              const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+              safeEnqueue(controller, encoder.encode(finishEvent));
+              safeEnqueue(controller, encoder.encode(finishData));
+            }
 
             safeClose(controller);
             return;

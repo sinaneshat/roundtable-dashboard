@@ -139,8 +139,22 @@ export function useEntitySubscription({
   // NOTE: Cleanup is handled in the main subscription effect (line ~517)
   // Having duplicate cleanup effects can cause timing issues with abort
 
+  // Store callbacks in ref to avoid stale closures
+  // When callbacks prop changes mid-stream, the in-flight subscription would use stale callbacks
+  // By using a ref, we always call the latest callbacks
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
+
   const subscribe = useCallback(async () => {
     if (!enabled || !threadId) {
+      return;
+    }
+
+    // BUG FIX: Don't restart subscription if already completed for this round
+    // This prevents the race condition where callback changes cause subscription to restart
+    // after onComplete has already been called (e.g., when presearchReady state changes)
+    if (isCompleteRef.current) {
+      rlog.stream('check', `${phase} r${roundNumber} subscription skip - already complete`);
       return;
     }
 
@@ -160,7 +174,7 @@ export function useEntitySubscription({
       isStreaming: false,
       status: 'waiting',
     }));
-    callbacks?.onStatusChange?.('waiting');
+    callbacksRef.current?.onStatusChange?.('waiting');
 
     try {
       // Select the appropriate service based on phase
@@ -224,8 +238,8 @@ export function useEntitySubscription({
             isStreaming: false,
             status: 'error',
           }));
-          callbacks?.onStatusChange?.('error');
-          callbacks?.onError?.(new Error('Max retries exceeded waiting for stream'));
+          callbacksRef.current?.onStatusChange?.('error');
+          callbacksRef.current?.onError?.(new Error('Max retries exceeded waiting for stream'));
         }
         return;
       }
@@ -252,8 +266,8 @@ export function useEntitySubscription({
             lastSeq: result.lastSeq ?? prev.lastSeq,
             status: 'complete',
           }));
-          callbacks?.onStatusChange?.('complete');
-          callbacks?.onComplete?.(result.lastSeq ?? lastSeqRef.current);
+          callbacksRef.current?.onStatusChange?.('complete');
+          callbacksRef.current?.onComplete?.(result.lastSeq ?? lastSeqRef.current);
         } else if (result?.status === 'disabled') {
           setState(prev => ({
             ...prev,
@@ -261,7 +275,7 @@ export function useEntitySubscription({
             isStreaming: false,
             status: 'disabled',
           }));
-          callbacks?.onStatusChange?.('disabled');
+          callbacksRef.current?.onStatusChange?.('disabled');
         } else if (result?.status === 'error') {
           setState(prev => ({
             ...prev,
@@ -270,8 +284,8 @@ export function useEntitySubscription({
             lastSeq: result.lastSeq ?? prev.lastSeq,
             status: 'error',
           }));
-          callbacks?.onStatusChange?.('error');
-          callbacks?.onError?.(new Error('Stream encountered an error'));
+          callbacksRef.current?.onStatusChange?.('error');
+          callbacksRef.current?.onError?.(new Error('Stream encountered an error'));
         }
         return;
       }
@@ -285,7 +299,7 @@ export function useEntitySubscription({
           isStreaming: true,
           status: 'streaming',
         }));
-        callbacks?.onStatusChange?.('streaming');
+        callbacksRef.current?.onStatusChange?.('streaming');
 
         const reader = response.body?.getReader();
         if (!reader) {
@@ -304,6 +318,12 @@ export function useEntitySubscription({
 
         while (true) {
           const { done, value } = await reader.read();
+
+          // Debug logging for moderator stream end detection
+          if (phase === 'moderator') {
+            rlog.stream('check', `${logPrefix} reader.read() done=${done} valueLen=${value?.length ?? 0}`);
+          }
+
           if (done) {
             break;
           }
@@ -314,6 +334,11 @@ export function useEntitySubscription({
           for (const rawLine of lines) {
             if (!rawLine.trim()) {
               continue;
+            }
+
+            // Debug: Log all lines for moderator to see what format the stream uses
+            if (phase === 'moderator') {
+              rlog.stream('check', `${logPrefix} line: ${rawLine.slice(0, 80)}${rawLine.length > 80 ? '...' : ''}`);
             }
 
             // Track SSE event type lines (e.g., "event: query")
@@ -346,7 +371,7 @@ export function useEntitySubscription({
                 lastSeqRef.current = currentSeq;
 
                 rlog.presearch('event-dispatch', `${logPrefix} dispatching type=${currentEventType}${jsonBuffer.length > 1000 ? ` (${jsonBuffer.length} chars buffered)` : ''}`);
-                callbacks?.onPreSearchEvent?.(currentEventType, eventData);
+                callbacksRef.current?.onPreSearchEvent?.(currentEventType, eventData);
 
                 // FIX 1: Detect 'done' event as completion signal for presearch
                 // The 'done' event is a data event, not a stream end signal.
@@ -363,8 +388,8 @@ export function useEntitySubscription({
                     lastSeq: currentSeq,
                     status: 'complete',
                   }));
-                  callbacks?.onStatusChange?.('complete');
-                  callbacks?.onComplete?.(currentSeq);
+                  callbacksRef.current?.onStatusChange?.('complete');
+                  callbacksRef.current?.onComplete?.(currentSeq);
 
                   // Small delay before cancel to ensure all state updates flush
                   // Abort-aware wait: clears timeout and resolves early if signal aborts
@@ -428,8 +453,9 @@ export function useEntitySubscription({
               if (line.startsWith('e:') || line.startsWith('d:')) {
                 try {
                   const finishData = JSON.parse(line.slice(2));
+                  rlog.stream('check', `${logPrefix} e:/d: event parsed: ${JSON.stringify(finishData).slice(0, 100)}`);
                   if (finishData.finishReason) {
-                    rlog.stream('check', `${logPrefix} finish event detected (${line.slice(0, 2)}), marking complete`);
+                    rlog.stream('check', `🏁 ${logPrefix} finish event detected (${line.slice(0, 2)}), reason=${finishData.finishReason}`)
 
                     // Set completion flag BEFORE any async operations to prevent retry race conditions
                     isCompleteRef.current = true;
@@ -440,8 +466,9 @@ export function useEntitySubscription({
                       lastSeq: currentSeq,
                       status: 'complete',
                     }));
-                    callbacks?.onStatusChange?.('complete');
-                    callbacks?.onComplete?.(currentSeq);
+                    callbacksRef.current?.onStatusChange?.('complete');
+                    rlog.stream('check', `🏁 ${logPrefix} about to call onComplete, callback exists: ${!!callbacksRef.current?.onComplete}`);
+                    callbacksRef.current?.onComplete?.(currentSeq);
 
                     // Small delay before cancel to ensure all state updates flush
                     // Abort-aware wait: clears timeout and resolves early if signal aborts
@@ -475,7 +502,7 @@ export function useEntitySubscription({
                 const textData = JSON.parse(line.slice(2));
                 if (typeof textData === 'string') {
                   textDeltaCount++;
-                  callbacks?.onTextChunk?.(textData, currentSeq);
+                  callbacksRef.current?.onTextChunk?.(textData, currentSeq);
                   // Natural pacing: SSE chunk arrival provides gradual delivery
                   // No artificial delays - React handles state batching naturally
                 }
@@ -492,7 +519,7 @@ export function useEntitySubscription({
                   currentSeq++;
                   lastSeqRef.current = currentSeq;
                   textDeltaCount++;
-                  callbacks?.onTextChunk?.(textContent, currentSeq);
+                  callbacksRef.current?.onTextChunk?.(textContent, currentSeq);
                   // Natural pacing: SSE chunk arrival provides gradual delivery
                   // No artificial delays - React handles state batching naturally
                 }
@@ -500,15 +527,16 @@ export function useEntitySubscription({
                 // Handle finish signals in JSON format
                 if (event.type === 'finish' || event.finishReason) {
                   isCompleteRef.current = true;
-                  rlog.stream('check', `${logPrefix} JSON finish event detected, marking complete`);
+                  rlog.stream('check', `🏁 ${logPrefix} JSON finish event detected, marking complete seq=${currentSeq}`);
                   setState(prev => ({
                     ...prev,
                     isStreaming: false,
                     lastSeq: currentSeq,
                     status: 'complete',
                   }));
-                  callbacks?.onStatusChange?.('complete');
-                  callbacks?.onComplete?.(currentSeq);
+                  rlog.stream('check', `🏁 ${logPrefix} calling onStatusChange and onComplete, callback exists: ${!!callbacksRef.current?.onComplete}`);
+                  callbacksRef.current?.onStatusChange?.('complete');
+                  callbacksRef.current?.onComplete?.(currentSeq);
                   reader.cancel().catch(() => {
                     // Ignore cancel errors - expected during abort
                   });
@@ -525,6 +553,7 @@ export function useEntitySubscription({
         rlog.stream('check', `${logPrefix} parsed ${currentSeq} events, ${textDeltaCount} text deltas`);
 
         // Stream ended - mark complete to prevent any pending retries
+        rlog.stream('check', `🏁 ${logPrefix} SSE reader done (natural end) seq=${currentSeq}`);
         isCompleteRef.current = true;
         setState(prev => ({
           ...prev,
@@ -532,8 +561,9 @@ export function useEntitySubscription({
           lastSeq: currentSeq,
           status: 'complete',
         }));
-        callbacks?.onStatusChange?.('complete');
-        callbacks?.onComplete?.(currentSeq);
+        rlog.stream('check', `🏁 ${logPrefix} calling onStatusChange and onComplete (natural end), callback exists: ${!!callbacksRef.current?.onComplete}`);
+        callbacksRef.current?.onStatusChange?.('complete');
+        callbacksRef.current?.onComplete?.(currentSeq);
       }
     } catch (error) {
       // Handle all abort-related errors (AbortError, BodyStreamBuffer aborted, etc.)
@@ -554,13 +584,19 @@ export function useEntitySubscription({
         isStreaming: false,
         status: 'error',
       }));
-      callbacks?.onStatusChange?.('error');
-      callbacks?.onError?.(error instanceof Error ? error : new Error(String(error)));
+      callbacksRef.current?.onStatusChange?.('error');
+      callbacksRef.current?.onError?.(error instanceof Error ? error : new Error(String(error)));
     }
-  }, [enabled, threadId, roundNumber, phase, participantIndex, callbacks]);
+  // Note: callbacks intentionally excluded from deps - we use callbacksRef to avoid stale closures
+  }, [enabled, threadId, roundNumber, phase, participantIndex]);
 
   // Auto-subscribe when enabled and parameters are valid
   useEffect(() => {
+    const logPrefix = `${phase} r${roundNumber}${participantIndex !== undefined ? ` p${participantIndex}` : ''}`;
+
+    // 🔍 DEBUG: Log every time this effect runs
+    rlog.stream('check', `${logPrefix} subscribe-effect: enabled=${enabled} threadId=${!!threadId} prevRound=${prevRoundNumberRef.current} isComplete=${isCompleteRef.current}`);
+
     // ✅ FIX: Skip subscription if round reset hasn't happened yet
     // When roundNumber changes, both this effect and the reset effect run.
     // If prevRoundNumberRef doesn't match current roundNumber, the reset effect
@@ -568,6 +604,7 @@ export function useEntitySubscription({
     // stale state (isCompleteRef, lastSeqRef) from causing P1 to be marked
     // complete without streaming in non-initial rounds.
     if (prevRoundNumberRef.current !== roundNumber) {
+      rlog.stream('check', `${logPrefix} subscribe-effect: SKIP - round mismatch (prev=${prevRoundNumberRef.current} curr=${roundNumber})`);
       return; // Reset effect will update prevRoundNumberRef, then this effect re-runs
     }
 
@@ -589,13 +626,19 @@ export function useEntitySubscription({
     }
 
     return () => {
-      // BUG FIX: Set completion flag BEFORE aborting to prevent retry race conditions
-      // This stops any pending 202 retry setTimeout callbacks from firing
-      isCompleteRef.current = true;
-
-      // Abort any active stream - the abort() call doesn't throw, but pending
-      // async operations (reader.read()) will reject with AbortError which is
-      // caught by the subscribe().catch() handler above
+      // NOTE: We intentionally do NOT set isCompleteRef.current = true here
+      // The cleanup runs both on unmount AND when effect re-runs due to dep changes.
+      // If we set isCompleteRef = true on re-run, the new subscription won't start
+      // because subscribe() checks isCompleteRef and returns early.
+      //
+      // The abort is sufficient - it will:
+      // 1. Cancel any in-flight fetch/reader operations
+      // 2. Cause pending setTimeout callbacks to be ignored (they check aborted signal)
+      //
+      // isCompleteRef is only set to true when:
+      // - The stream naturally completes (finish event or reader done)
+      // - The 'done' event is received (presearch)
+      // - Max retries exceeded
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
