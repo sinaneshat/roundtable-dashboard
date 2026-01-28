@@ -7,6 +7,14 @@ import { Icons } from '@/components/icons';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/ui/cn';
 
+function PreviousMonthButton() {
+  return <Icons.chevronLeft className="size-4" />;
+}
+
+function NextMonthButton() {
+  return <Icons.chevronRight className="size-4" />;
+}
+
 type CalendarProps = ComponentProps<typeof DayPicker>;
 
 function Calendar({
@@ -54,8 +62,8 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        PreviousMonthButton: () => <Icons.chevronLeft className="size-4" />,
-        NextMonthButton: () => <Icons.chevronRight className="size-4" />,
+        PreviousMonthButton,
+        NextMonthButton,
       }}
       {...props}
     />

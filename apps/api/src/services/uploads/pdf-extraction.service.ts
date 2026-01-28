@@ -61,26 +61,35 @@ const PDF_MIME_TYPE = 'application/pdf';
 // PDF.js INITIALIZATION
 // ============================================================================
 
-let pdfJsInitialized = false;
+// Promise cache for PDF.js initialization (prevents race conditions)
+let pdfJsInitPromise: Promise<void> | null = null;
 
 /**
  * Initialize PDF.js module for serverless environment.
  * Only needs to be called once per worker instance.
+ * Uses promise caching pattern to prevent race conditions.
  */
 async function ensurePdfJsInitialized(): Promise<void> {
-  if (pdfJsInitialized) {
-    return;
+  // Return cached promise if already initializing/initialized
+  if (pdfJsInitPromise) {
+    return pdfJsInitPromise;
   }
 
-  try {
-    log.pdf('init', 'Initializing PDF.js module...');
-    await definePDFJSModule(async () => await import('unpdf/pdfjs'));
-    pdfJsInitialized = true;
-    log.pdf('done', 'PDF.js initialized successfully');
-  } catch (error) {
-    log.error('Failed to initialize PDF.js', error instanceof Error ? error : undefined);
-    throw error;
-  }
+  // Create and cache the initialization promise
+  pdfJsInitPromise = (async () => {
+    try {
+      log.pdf('init', 'Initializing PDF.js module...');
+      await definePDFJSModule(async () => await import('unpdf/pdfjs'));
+      log.pdf('done', 'PDF.js initialized successfully');
+    } catch (error) {
+      // Clear cache on failure to allow retry
+      pdfJsInitPromise = null;
+      log.error('Failed to initialize PDF.js', error instanceof Error ? error : undefined);
+      throw error;
+    }
+  })();
+
+  return pdfJsInitPromise;
 }
 
 // ============================================================================

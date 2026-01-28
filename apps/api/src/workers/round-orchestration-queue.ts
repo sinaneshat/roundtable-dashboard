@@ -84,7 +84,7 @@ async function shouldTriggerParticipant(
     const stateResponse = await fetch(
       `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/status`,
       {
-        headers: buildSessionAuthHeaders(sessionToken),
+        headers: buildSessionAuthHeaders(sessionToken, env),
         method: 'GET',
       },
     );
@@ -180,7 +180,7 @@ async function triggerParticipantStream(
 
   const response = await fetch(`${baseUrl}/api/v1/chat`, {
     body: JSON.stringify(requestBody),
-    headers: buildSessionAuthHeaders(sessionToken),
+    headers: buildSessionAuthHeaders(sessionToken, env),
     method: 'POST',
   });
 
@@ -223,7 +223,7 @@ async function triggerModeratorStream(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
     {
       body: JSON.stringify({}),
-      headers: buildSessionAuthHeaders(sessionToken),
+      headers: buildSessionAuthHeaders(sessionToken, env),
       method: 'POST',
     },
   );
@@ -281,7 +281,7 @@ async function triggerPreSearch(
         attachmentIds: attachmentIds || [],
         userQuery,
       }),
-      headers: buildSessionAuthHeaders(sessionToken),
+      headers: buildSessionAuthHeaders(sessionToken, env),
       method: 'POST',
     },
   );
@@ -377,7 +377,7 @@ async function checkRoundCompletion(
   const stateResponse = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/status`,
     {
-      headers: buildSessionAuthHeaders(sessionToken),
+      headers: buildSessionAuthHeaders(sessionToken, env),
       method: 'GET',
     },
   );
@@ -504,7 +504,7 @@ async function handleStartRound(
 
 /**
  * Recover a stalled round execution
- * Called by scheduled cron or stale stream detection
+ * Called by stale stream detection
  */
 async function handleRecoverRound(
   message: RecoverRoundQueueMessage,

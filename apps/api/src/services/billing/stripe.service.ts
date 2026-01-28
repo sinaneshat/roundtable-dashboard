@@ -19,13 +19,19 @@ import type { ApiEnv } from '@/types';
 // ============================================================================
 
 // Cache the Stripe module to avoid repeated dynamic imports
-let StripeModule: typeof import('stripe').default | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let stripeModulePromise: Promise<typeof import('stripe')> | null = null;
+
+function getStripeModulePromise(): Promise<typeof import('stripe')> {
+  if (!stripeModulePromise) {
+    stripeModulePromise = import('stripe');
+  }
+  return stripeModulePromise;
+}
 
 async function getStripeModule(): Promise<typeof import('stripe').default> {
-  if (!StripeModule) {
-    StripeModule = (await import('stripe')).default;
-  }
-  return StripeModule;
+  const stripeModule = await getStripeModulePromise();
+  return stripeModule.default;
 }
 
 // ============================================================================

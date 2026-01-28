@@ -441,6 +441,8 @@ export function useMultiParticipantChat(
       setIsExplicitlyStreaming(true);
       setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
 
+      // Use local flag to track success/failure without race conditions
+      let succeeded = false;
       try {
         await aiSendMessage({
           metadata: {
@@ -450,12 +452,15 @@ export function useMultiParticipantChat(
           },
           text: trimmed,
         });
+        succeeded = true;
+      } finally {
+        // Always reset triggering state
         isTriggeringRef.current = false;
-      } catch (error) {
-        isStreamingRef.current = false;
-        isTriggeringRef.current = false;
-        setIsExplicitlyStreaming(false);
-        throw error;
+        // Only reset streaming state on failure (success keeps streaming active)
+        if (!succeeded) {
+          isStreamingRef.current = false;
+          setIsExplicitlyStreaming(false);
+        }
       }
     },
     [status, isExplicitlyStreaming, participants, aiSendMessage],

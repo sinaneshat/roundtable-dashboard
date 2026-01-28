@@ -37,9 +37,33 @@ vi.mock('@/services/api', async (importOriginal) => {
 
 vi.mock('@/lib/utils/dev-logger', () => ({
   rlog: {
+    changelog: vi.fn(),
+    disable: vi.fn(),
+    disableVerbose: vi.fn(),
+    enable: vi.fn(),
+    enableVerbose: vi.fn(),
+    flow: vi.fn(),
+    frame: vi.fn(),
+    gate: vi.fn(),
+    getVerboseResume: vi.fn(),
+    handoff: vi.fn(),
+    init: vi.fn(),
+    isEnabled: vi.fn(),
+    logDedupeStats: vi.fn(),
+    moderator: vi.fn(),
+    msg: vi.fn(),
     phase: vi.fn(),
+    presearch: vi.fn(),
+    race: vi.fn(),
+    resume: vi.fn(),
+    resumeAlways: vi.fn(),
+    setVerboseResume: vi.fn(),
+    state: vi.fn(),
     stream: vi.fn(),
     stuck: vi.fn(),
+    submit: vi.fn(),
+    sync: vi.fn(),
+    trigger: vi.fn(),
   },
 }));
 

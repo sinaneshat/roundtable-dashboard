@@ -56,7 +56,6 @@ export function backendOutput(
         console.debug(`%c${formattedMsg}`, style);
         break;
       case 'warn':
-
         console.warn(`%c${formattedMsg}`, style);
         break;
       case 'error':

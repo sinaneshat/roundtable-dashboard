@@ -569,27 +569,32 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           const currentState = get();
 
           // Preserve phase if streaming is pending or active
-          const isStreamingPending = currentState.waitingToStartStreaming;
-          const isStreamingActive = currentState.isStreaming
+          const isStreamingActive = currentState.waitingToStartStreaming
+            || currentState.isStreaming
             || currentState.phase === ChatPhases.PARTICIPANTS
             || currentState.phase === ChatPhases.MODERATOR;
-          const preservePhase = isStreamingPending || isStreamingActive;
 
-          // ✅ FIX: Don't assume COMPLETE when messages exist
-          // Previously: messages.length > 0 → COMPLETE (WRONG when mid-round refresh)
-          // Now: Always start with IDLE, let resumption detection set correct phase
+          // Detect if the last round is complete (has moderator message)
+          // A complete round has: user message + all participant messages + moderator message
+          // We only need to check for moderator message presence since it's added last
+          const hasModeratorMessage = messages.some(m => isModeratorMetadataFast(m.metadata));
+
+          // Determine phase:
+          // 1. If streaming is active, preserve current phase (handles React re-renders)
+          // 2. If messages include a moderator message, round is complete → COMPLETE phase
+          // 3. Otherwise, use IDLE and let useStreamResumption check backend state
           //
-          // If streaming is active, preserve current phase (handles React re-renders)
-          // If streaming is pending, use IDLE (user is about to send)
-          // Otherwise, use IDLE and let useStreamResumption check backend state
-          //
-          // This fixes the bug where refreshing mid-round showed only user message
-          // because phase was incorrectly set to COMPLETE, preventing subscriptions.
+          // This ensures:
+          // - Completed threads show COMPLETE immediately (no need to check backend)
+          // - Mid-round refresh correctly uses IDLE (resumption will detect active stream)
+          // - Active streaming is not interrupted
           const newPhase: ChatPhase = isStreamingActive
             ? currentState.phase
-            : ChatPhases.IDLE;
+            : hasModeratorMessage
+              ? ChatPhases.COMPLETE
+              : ChatPhases.IDLE;
 
-          rlog.init('initializeThread', `tid=${thread.id.slice(-8)} msgs=${messages.length} phase=${currentState.phase}→${newPhase} preserve=${preservePhase} (resumption will check backend)`);
+          rlog.init('initializeThread', `tid=${thread.id.slice(-8)} msgs=${messages.length} hasMod=${hasModeratorMessage} phase=${currentState.phase}→${newPhase}`);
 
           set({
             changelogItems: [],
@@ -673,6 +678,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           // ✅ GUARD: Prevent triple baton-to-moderator handoff race condition
           // Multiple sources (AI SDK onFinish, entity subscription onComplete, stagger effect)
           // can call this within the same React render cycle. Only allow one transition.
+          // Only block if we're already IN moderator phase - transitions FROM other phases are valid.
           if (state._hasTransitionedToModerator && state.phase === ChatPhases.MODERATOR) {
             rlog.race('skip-handoff', `r${roundNumber} P${participantIndex} - already transitioned to moderator`);
             return;
@@ -695,7 +701,16 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           const subState = state.subscriptionState;
           const allComplete = areAllParticipantsComplete(subState.participants);
 
-          if (allComplete && !state._hasTransitionedToModerator) {
+          // ✅ FIX: Allow transition to MODERATOR if:
+          // 1. All participants are complete, AND
+          // 2. Either we haven't transitioned to moderator yet in this round, OR
+          //    we're coming from a non-MODERATOR phase (e.g., COMPLETE → MODERATOR for late callbacks)
+          // The guard above already blocks duplicate transitions when already in MODERATOR.
+          const shouldTransitionToModerator = allComplete && (
+            !state._hasTransitionedToModerator || state.phase !== ChatPhases.MODERATOR
+          );
+
+          if (shouldTransitionToModerator) {
             // Frame 5 (R1) / Frame 11→moderator transition (R2)
             // "All Participants Complete → Moderator Starts"
             if (isRound1) {
@@ -704,7 +719,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
               rlog.frame(11, 'all-participants-complete', `All ${enabledCount} participants complete → Moderator will start`);
             }
 
-            rlog.phase('onParticipantComplete', `PARTICIPANTS→MODERATOR r${roundNumber} (all ${enabledCount} done)`);
+            rlog.phase('onParticipantComplete', `${state.phase}→MODERATOR r${roundNumber} (all ${enabledCount} done)`);
             rlog.handoff('baton-to-moderator', `All participants → Moderator`);
 
             set({

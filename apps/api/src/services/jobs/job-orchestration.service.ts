@@ -96,7 +96,7 @@ export async function startAutomatedJob(
         mode: analysis.mode,
         participants: analysis.participants,
       }),
-      headers: buildSessionAuthHeaders(sessionToken),
+      headers: buildSessionAuthHeaders(sessionToken, env),
       method: 'POST',
     });
 

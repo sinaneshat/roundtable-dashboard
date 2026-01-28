@@ -1,3 +1,4 @@
+/* eslint-disable ts/no-use-before-define -- Drizzle schema requires forward references for foreign keys */
 import { sql } from 'drizzle-orm';
 import { check, index, integer, numeric, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
@@ -5,7 +6,7 @@ export const d1Migrations = sqliteTable('d1_migrations', {
   id: integer().primaryKey({ autoIncrement: true }),
   name: text(),
   appliedAt: numeric('applied_at').default(sql`(CURRENT_TIMESTAMP)`).notNull(),
-}, table => [
+}, _table => [
   check('check_priority_non_negative', sql`"chat_participant"."priority" >= 0`),
   check('check_balance_non_negative', sql`"user_credit_balance"."balance" >= 0`),
   check('check_reserved_non_negative', sql`"user_credit_balance"."reserved_credits" >= 0`),
@@ -37,7 +38,7 @@ export const account = sqliteTable('account', {
   password: text(),
   createdAt: integer('created_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
   updatedAt: integer('updated_at').notNull(),
-}, table => [
+}, _table => [
   check('check_priority_non_negative', sql`"chat_participant"."priority" >= 0`),
   check('check_balance_non_negative', sql`"user_credit_balance"."balance" >= 0`),
   check('check_reserved_non_negative', sql`"user_credit_balance"."reserved_credits" >= 0`),
@@ -77,7 +78,7 @@ export const apiKey = sqliteTable('api_key', {
   updatedAt: integer('updated_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
   permissions: text(),
   metadata: text(),
-}, table => [
+}, _table => [
   check('check_priority_non_negative', sql`"chat_participant"."priority" >= 0`),
   check('check_balance_non_negative', sql`"user_credit_balance"."balance" >= 0`),
   check('check_reserved_non_negative', sql`"user_credit_balance"."reserved_credits" >= 0`),
@@ -162,7 +163,7 @@ export const verification = sqliteTable('verification', {
   expiresAt: integer('expires_at').notNull(),
   createdAt: integer('created_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
   updatedAt: integer('updated_at').default(sql`(cast((julianday('now') - 2440587.5)*86400000 as integer))`).notNull(),
-}, table => [
+}, _table => [
   check('check_priority_non_negative', sql`"chat_participant"."priority" >= 0`),
   check('check_balance_non_negative', sql`"user_credit_balance"."balance" >= 0`),
   check('check_reserved_non_negative', sql`"user_credit_balance"."reserved_credits" >= 0`),

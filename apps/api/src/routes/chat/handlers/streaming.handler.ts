@@ -138,13 +138,18 @@ import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages, validateRequestMessage } from './helpers';
 
 // Cache the AI SDK module to avoid repeated dynamic imports
-let aiSdkModule: typeof import('ai') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let aiSdkModulePromise: Promise<typeof import('ai')> | null = null;
+
+function getAiSdkModule() {
+  if (!aiSdkModulePromise) {
+    aiSdkModulePromise = import('ai');
+  }
+  return aiSdkModulePromise;
+}
 
 async function getAiSdk() {
-  if (!aiSdkModule) {
-    aiSdkModule = await import('ai');
-  }
-  return aiSdkModule;
+  return getAiSdkModule();
 }
 
 // ============================================================================
@@ -735,13 +740,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
 
       // ✅ FIX: Resolve attachmentIds from KV for subsequent participants (P1+)
       // P0 receives attachmentIds from request body, P1+ need to fetch from KV
-      let resolvedAttachmentIds = attachmentIds;
-      if (!resolvedAttachmentIds?.length && (participantIndex ?? 0) > 0) {
-        const activeStream = await getThreadActiveStream(threadId, c.env);
-        if (activeStream?.attachmentIds?.length) {
-          resolvedAttachmentIds = activeStream.attachmentIds;
+      // Use const with conditional to avoid race condition on let binding
+      const resolvedAttachmentIds = await (async () => {
+        if (attachmentIds?.length) {
+          return attachmentIds;
         }
-      }
+        if ((participantIndex ?? 0) > 0) {
+          const activeStream = await getThreadActiveStream(threadId, c.env);
+          if (activeStream?.attachmentIds?.length) {
+            return activeStream.attachmentIds;
+          }
+        }
+        return attachmentIds;
+      })();
 
       // Prepare and validate messages
       // ✅ HYBRID FILE LOADING: Pass params for URL-based delivery of large files (>4MB)
@@ -1782,7 +1793,9 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // but short enough to not noticeably impact user experience.
             // =========================================================================
             log.ai('perf', `[P${pIdx}-COMPLETE] Waiting for KV propagation`, { roundNumber: currentRoundNumber });
-            await new Promise(resolve => setTimeout(resolve, 150));
+            await new Promise((resolve) => {
+              setTimeout(resolve, 150);
+            });
             log.ai('perf', `[P${pIdx}-COMPLETE] KV propagation delay complete`, { roundNumber: currentRoundNumber });
 
             // =========================================================================

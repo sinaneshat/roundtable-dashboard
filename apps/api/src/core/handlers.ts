@@ -23,12 +23,18 @@ import { ValidationErrorDetailsSchema } from './schemas';
 import { validateWithSchema } from './validation';
 
 // Lazy auth module loading - only initialized when session auth is needed
-let authModule: typeof import('@/lib/auth/server') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let authModulePromise: Promise<typeof import('@/lib/auth/server')> | null = null;
+
+function getAuthModule() {
+  if (!authModulePromise) {
+    authModulePromise = import('@/lib/auth/server');
+  }
+  return authModulePromise;
+}
 
 async function getAuth() {
-  if (!authModule) {
-    authModule = await import('@/lib/auth/server');
-  }
+  const authModule = await getAuthModule();
   return authModule.auth;
 }
 
@@ -721,7 +727,9 @@ export function createHandlerWithBatch<
             // ✅ ATOMIC BATCH: Using shared executeBatch helper
             // Following Drizzle ORM best practices with automatic D1/SQLite fallback
             // No type assertion needed - statements is already typed as BatchItem<'sqlite'>[]
-            const results = await executeBatch(db, statements);
+            // Capture current statements before async operation to avoid race condition
+            const statementsToExecute = [...statements];
+            const results = await executeBatch(db, statementsToExecute);
 
             // Clear statements after successful execution
             statements.length = 0;

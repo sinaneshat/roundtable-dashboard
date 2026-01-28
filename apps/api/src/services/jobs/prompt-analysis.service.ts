@@ -24,13 +24,18 @@ import type { ApiEnv } from '@/types';
 import { HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '../models';
 
 // Lazy load AI SDK
-let aiSdkModule: typeof import('ai') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let aiSdkModulePromise: Promise<typeof import('ai')> | null = null;
+
+function getAiSdkModule() {
+  if (!aiSdkModulePromise) {
+    aiSdkModulePromise = import('ai');
+  }
+  return aiSdkModulePromise;
+}
 
 async function getAiSdk() {
-  if (!aiSdkModule) {
-    aiSdkModule = await import('ai');
-  }
-  return aiSdkModule;
+  return getAiSdkModule();
 }
 
 // Schema for AI structured output - same structure as analyze.handler.ts but with job-specific limits

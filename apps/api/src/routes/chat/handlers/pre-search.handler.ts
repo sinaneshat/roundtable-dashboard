@@ -358,12 +358,17 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       if (!newSearch) {
         throw createError.internal('Failed to create pre-search record', ErrorContextBuilders.database('insert', 'chatPreSearch'));
       }
-      existingSearch = newSearch;
+      // Use local variable to avoid race condition on let binding
+      const createdSearch = newSearch;
+      existingSearch = createdSearch;
     }
 
+    // Capture current search state to avoid race conditions
+    const currentSearch = existingSearch;
+
     // ✅ IDEMPOTENT: Return existing if already completed
-    if (existingSearch.status === MessageStatuses.COMPLETE && existingSearch.searchData) {
-      return Responses.ok(c, existingSearch);
+    if (currentSearch.status === MessageStatuses.COMPLETE && currentSearch.searchData) {
+      return Responses.ok(c, currentSearch);
     }
 
     // Check for stale STREAMING status

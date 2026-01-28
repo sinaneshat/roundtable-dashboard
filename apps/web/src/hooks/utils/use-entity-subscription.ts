@@ -1226,20 +1226,20 @@ export function useParticipantSubscriptions({
         // Start the subscription
         const startSubscription = async () => {
           let lastSeq = initialLastSeq ?? 0;
-          let retryCount = 0;
+          // Use object for mutable state to avoid race conditions on primitive reassignment
+          const state = { retryCount: 0, isComplete: false };
           const MAX_RETRIES = 60;
-          let isComplete = false;
 
           const subscribe = async (): Promise<void> => {
             // Guard: Check for abort, completion, or missing threadId
-            if (controller.signal.aborted || isComplete || !threadId) {
+            if (controller.signal.aborted || state.isComplete || !threadId) {
               if (!threadId) {
                 rlog.stream('skip', `participant r${roundNumber} p${index} - no threadId in subscribe`);
               }
               return;
             }
 
-            rlog.stream('check', `participant r${roundNumber} p${index} subscribe attempt, lastSeq=${lastSeq}, retryCount=${retryCount}`);
+            rlog.stream('check', `participant r${roundNumber} p${index} subscribe attempt, lastSeq=${lastSeq}, retryCount=${state.retryCount}`);
 
             try {
               const response = await subscribeToParticipantStreamService(
@@ -1254,8 +1254,9 @@ export function useParticipantSubscriptions({
 
                 rlog.stream('check', `participant r${roundNumber} p${index} 202 waiting, retry after ${retryAfter}ms`);
 
-                retryCount++;
-                if (retryCount < MAX_RETRIES && !controller.signal.aborted && !isComplete) {
+                const currentRetryCount = state.retryCount + 1;
+                state.retryCount = currentRetryCount;
+                if (currentRetryCount < MAX_RETRIES && !controller.signal.aborted && !state.isComplete) {
                   await new Promise<void>((resolve) => {
                     setTimeout(resolve, retryAfter);
                   });
@@ -1265,7 +1266,7 @@ export function useParticipantSubscriptions({
               }
 
               // Reset retry count on success
-              retryCount = 0;
+              state.retryCount = 0;
 
               const contentType = response.headers.get('content-type') || '';
               rlog.stream('check', `participant r${roundNumber} p${index} response contentType=${contentType.slice(0, 30)}`);
@@ -1278,7 +1279,7 @@ export function useParticipantSubscriptions({
                 rlog.stream('check', `participant r${roundNumber} p${index} JSON response status=${result?.status}`);
 
                 if (result?.status === EntitySubscriptionStatuses.COMPLETE) {
-                  isComplete = true;
+                  state.isComplete = true;
                   const receivedSeq = result.lastSeq ?? 0;
                   rlog.stream('check', `participant r${roundNumber} p${index} complete, receivedSeq=${receivedSeq}`);
 
@@ -1371,7 +1372,7 @@ export function useParticipantSubscriptions({
                           const finishData = JSON.parse(line.slice(2));
                           if (finishData.finishReason) {
                             rlog.stream('check', `participant r${roundNumber} p${index} finish event detected, reason=${finishData.finishReason}`);
-                            isComplete = true;
+                            state.isComplete = true;
                             setStateMap((prev) => {
                               const next = new Map(prev);
                               next.set(index, {
@@ -1411,7 +1412,7 @@ export function useParticipantSubscriptions({
                         }
                         if (event.type === 'finish' || event.finishReason) {
                           rlog.stream('check', `participant r${roundNumber} p${index} JSON finish event detected, seq=${currentSeq}`);
-                          isComplete = true;
+                          state.isComplete = true;
                           setStateMap((prev) => {
                             const next = new Map(prev);
                             next.set(index, {
@@ -1434,9 +1435,9 @@ export function useParticipantSubscriptions({
                 }
 
                 // Natural stream end
-                if (!isComplete) {
+                if (!state.isComplete) {
                   rlog.stream('end', `participant r${roundNumber} p${index} SSE reader done (natural end), seq=${currentSeq}`);
-                  isComplete = true;
+                  state.isComplete = true;
                   setStateMap((prev) => {
                     const next = new Map(prev);
                     next.set(index, {

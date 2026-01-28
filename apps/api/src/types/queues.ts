@@ -294,10 +294,9 @@ export type StartRoundQueueMessage = z.infer<typeof StartRoundQueueMessageSchema
 
 /**
  * Recover round queue message schema
- * Sent by scheduled recovery cron or stale stream detection.
+ * Sent by stale stream detection.
  *
  * @see src/workers/round-orchestration-queue.ts - Consumer
- * @see src/workers/round-recovery-cron.ts - Producer (scheduled)
  */
 export const RecoverRoundQueueMessageSchema = z.object({
   /** round_execution.id from database */

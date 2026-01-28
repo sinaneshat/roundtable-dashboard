@@ -26,6 +26,12 @@ type FormFieldContextValue<
 
 const FormFieldContext = createContext<FormFieldContextValue | null>(null);
 
+type FormItemContextValue = {
+  id: string;
+};
+
+const FormItemContext = createContext<FormItemContextValue | null>(null);
+
 function FormField<
   TFieldValues extends FieldValues = FieldValues,
   TName extends FieldPath<TFieldValues> = FieldPath<TFieldValues>,
@@ -67,16 +73,11 @@ function useFormField() {
   };
 }
 
-type FormItemContextValue = {
-  id: string;
-};
-
-const FormItemContext = createContext<FormItemContextValue | null>(null);
-
 function FormItem({ className, ...props }: ComponentProps<'div'>) {
   const fieldContext = use(FormFieldContext);
+  const generatedId = useId();
   // Use field name for stable ID generation to prevent hydration mismatches
-  const id = fieldContext?.name ? `field-${fieldContext.name}` : useId();
+  const id = fieldContext?.name ? `field-${fieldContext.name}` : generatedId;
 
   return (
     <FormItemContext value={{ id }}>

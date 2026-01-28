@@ -12,13 +12,18 @@ import type { StreamChatRequest } from '../schema';
 
 // Cache the AI SDK module to avoid repeated dynamic imports
 // This is critical for Cloudflare Workers which have a 400ms startup limit
-let aiSdkModule: typeof import('ai') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let aiSdkModulePromise: Promise<typeof import('ai')> | null = null;
+
+function getAiSdkModule() {
+  if (!aiSdkModulePromise) {
+    aiSdkModulePromise = import('ai');
+  }
+  return aiSdkModulePromise;
+}
 
 async function getAiSdk() {
-  if (!aiSdkModule) {
-    aiSdkModule = await import('ai');
-  }
-  return aiSdkModule;
+  return getAiSdkModule();
 }
 
 /**

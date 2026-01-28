@@ -649,8 +649,8 @@ describe('thread Initialization', () => {
 
       store.getState().initializeThread(thread, participants, messages);
 
-      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
-      expect(store.getState().phase).toBe(ChatPhases.IDLE);
+      // Completed round (has moderator message) sets phase to COMPLETE
+      expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
     });
   });
 

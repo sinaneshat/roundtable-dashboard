@@ -8,12 +8,18 @@ import type { Session, User } from '@/lib/auth/types';
 import type { ApiEnv } from '@/types';
 
 // Lazy load auth to reduce worker startup CPU time
-let authModule: typeof import('@/lib/auth/server') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let authModulePromise: Promise<typeof import('@/lib/auth/server')> | null = null;
+
+function getAuthModule() {
+  if (!authModulePromise) {
+    authModulePromise = import('@/lib/auth/server');
+  }
+  return authModulePromise;
+}
 
 async function getAuth() {
-  if (!authModule) {
-    authModule = await import('@/lib/auth/server');
-  }
+  const authModule = await getAuthModule();
   return authModule.auth;
 }
 

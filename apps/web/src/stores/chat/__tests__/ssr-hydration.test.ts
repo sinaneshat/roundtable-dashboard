@@ -140,8 +140,8 @@ describe('sSR Hydration Consistency', () => {
       simulateSSRHydration(store, { messages, participants, thread });
 
       const state = store.getState();
-      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
-      expect(state.phase).toBe(ChatPhases.IDLE);
+      // Completed round (has moderator message) sets phase to COMPLETE
+      expect(state.phase).toBe(ChatPhases.COMPLETE);
     });
 
     it('should preserve message order after hydration', () => {
@@ -317,15 +317,15 @@ describe('sSR Hydration Consistency', () => {
       expect(store.getState().phase).toBe(ChatPhases.IDLE);
     });
 
-    it('should set IDLE phase for thread with completed round (resumption checks backend)', () => {
+    it('should set COMPLETE phase for thread with completed round', () => {
       const thread = createMockThread({ id: 'thread-123' });
       const participants = createMockParticipants(2, 'thread-123');
       const messages = createCompletedRoundMessages(0, 2, 'thread-123');
 
       simulateSSRHydration(store, { messages, participants, thread });
 
-      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
-      expect(store.getState().phase).toBe(ChatPhases.IDLE);
+      // Completed round (has moderator message) sets phase to COMPLETE
+      expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
     });
 
     it('should set screenMode to THREAD after hydration', () => {
@@ -492,8 +492,8 @@ describe('sSR Hydration Consistency', () => {
       const state = store.getState();
       // 3 rounds × (1 user + 2 participants + 1 moderator) = 12 messages
       expect(state.messages).toHaveLength(12);
-      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
-      expect(state.phase).toBe(ChatPhases.IDLE);
+      // All rounds complete (has moderator messages) sets phase to COMPLETE
+      expect(state.phase).toBe(ChatPhases.COMPLETE);
     });
 
     it('should correctly identify highest round number', () => {

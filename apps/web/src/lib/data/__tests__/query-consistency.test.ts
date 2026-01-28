@@ -42,9 +42,11 @@ describe('query consistency - SSR/client alignment', () => {
       expect(sidebarThreadsQueryOptions.staleTime).toBe(STALE_TIMES.threadsSidebar);
     });
 
-    it('threadBySlugQueryOptions.staleTime matches STALE_TIMES.threadDetail', () => {
+    it('threadBySlugQueryOptions.staleTime matches STALE_TIMES.threadMetadata', () => {
+      // threadBySlugQueryOptions uses threadMetadata (5 min) for stable data like title, slug, participants
+      // Streaming updates are handled by Zustand store via ONE-WAY DATA FLOW pattern
       const options = threadBySlugQueryOptions('test-slug');
-      expect(options.staleTime).toBe(STALE_TIMES.threadDetail);
+      expect(options.staleTime).toBe(STALE_TIMES.threadMetadata);
     });
   });
 

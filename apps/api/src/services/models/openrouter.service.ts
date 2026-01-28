@@ -14,21 +14,30 @@ import type { ApiEnv } from '@/types';
 
 // Cache modules to avoid repeated dynamic imports
 // This is critical for Cloudflare Workers which have a 400ms startup limit
-let aiSdkModule: typeof import('ai') | null = null;
-let openRouterModule: typeof import('@openrouter/ai-sdk-provider') | null = null;
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
+let aiSdkModulePromise: Promise<typeof import('ai')> | null = null;
+let openRouterModulePromise: Promise<typeof import('@openrouter/ai-sdk-provider')> | null = null;
+
+function getAiSdkModule() {
+  if (!aiSdkModulePromise) {
+    aiSdkModulePromise = import('ai');
+  }
+  return aiSdkModulePromise;
+}
 
 async function getAiSdk() {
-  if (!aiSdkModule) {
-    aiSdkModule = await import('ai');
+  return getAiSdkModule();
+}
+
+function getOpenRouterSdkModule() {
+  if (!openRouterModulePromise) {
+    openRouterModulePromise = import('@openrouter/ai-sdk-provider');
   }
-  return aiSdkModule;
+  return openRouterModulePromise;
 }
 
 async function getOpenRouterSdk() {
-  if (!openRouterModule) {
-    openRouterModule = await import('@openrouter/ai-sdk-provider');
-  }
-  return openRouterModule;
+  return getOpenRouterSdkModule();
 }
 
 function isValidOpenRouterModelId(modelId: string) {

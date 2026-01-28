@@ -14,14 +14,19 @@
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 // Lazy load asset functions to avoid 449KB module at startup
+// Uses Promise caching to avoid race condition (ESLint require-atomic-updates)
 type OGAssetsModule = typeof import('./og-assets.generated');
-let ogAssetsModule: OGAssetsModule | null = null;
+let ogAssetsModulePromise: Promise<OGAssetsModule> | null = null;
+
+function getOGAssetsModule(): Promise<OGAssetsModule> {
+  if (!ogAssetsModulePromise) {
+    ogAssetsModulePromise = import('./og-assets.generated');
+  }
+  return ogAssetsModulePromise;
+}
 
 async function getOGAssets(): Promise<OGAssetsModule> {
-  if (!ogAssetsModule) {
-    ogAssetsModule = await import('./og-assets.generated');
-  }
-  return ogAssetsModule;
+  return getOGAssetsModule();
 }
 
 // ============================================================================

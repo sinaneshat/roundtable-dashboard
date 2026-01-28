@@ -2,7 +2,7 @@ import type { BorderGradientDirection } from '@roundtable/shared';
 import { BORDER_GRADIENT_DIRECTIONS, BorderGradientDirections } from '@roundtable/shared';
 import { motion } from 'motion/react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
-import { createElement, useEffect, useState } from 'react';
+import { createElement, useCallback, useEffect, useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -33,14 +33,14 @@ export function HoverBorderGradient<T extends PolymorphicElementType = 'button'>
   const [hovered, setHovered] = useState<boolean>(false);
   const [direction, setDirection] = useState<BorderGradientDirection>(BorderGradientDirections.TOP);
 
-  const rotateDirection = (currentDirection: BorderGradientDirection): BorderGradientDirection => {
+  const rotateDirection = useCallback((currentDirection: BorderGradientDirection): BorderGradientDirection => {
     const directions = [...BORDER_GRADIENT_DIRECTIONS];
     const currentIndex = directions.indexOf(currentDirection);
     const nextIndex = clockwise
       ? (currentIndex - 1 + directions.length) % directions.length
       : (currentIndex + 1) % directions.length;
-    return directions[nextIndex]!;
-  };
+    return directions[nextIndex] ?? BorderGradientDirections.TOP;
+  }, [clockwise]);
 
   const movingMap: Record<BorderGradientDirection, string> = {
     [BorderGradientDirections.TOP]: 'radial-gradient(20.7% 50% at 50% 0%, hsl(var(--primary) / 0.5) 0%, hsl(var(--primary) / 0) 100%)',
@@ -62,7 +62,7 @@ export function HoverBorderGradient<T extends PolymorphicElementType = 'button'>
       return () => clearInterval(interval);
     }
     return undefined;
-  }, [hovered, duration]);
+  }, [hovered, duration, rotateDirection]);
 
   const containerProps = {
     onMouseEnter: () => setHovered(true),

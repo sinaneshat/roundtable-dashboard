@@ -265,7 +265,8 @@ function Sidebar({
           onKeyDown={isCollapsed
             ? (e) => {
                 if (e.key === KeyboardKeys.ENTER || e.key === KeyboardKeys.SPACE) {
-                  e.preventDefault(); handleCollapsedClick();
+                  e.preventDefault();
+                  handleCollapsedClick();
                 }
               }
             : undefined}

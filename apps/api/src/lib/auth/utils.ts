@@ -2,15 +2,35 @@
  * Authentication Utilities
  *
  * Reusable helper functions for authentication and email domain validation
+ *
+ * @see https://better-auth.com/docs/concepts/cookies - Better Auth cookie configuration
  */
 
-import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG, UserRoles } from '@roundtable/shared';
+import { EMAIL_DOMAIN_CONFIG, UserRoles } from '@roundtable/shared';
 import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { APIError } from 'better-auth/api';
 import { env as workersEnv } from 'cloudflare:workers';
 import { z } from 'zod';
 
 import { createError } from '@/common/error-handling';
+
+// ============================================================================
+// BETTER AUTH COOKIE CONFIGURATION
+// ============================================================================
+
+/**
+ * Better Auth cookie prefix - must match the auth.ts configuration.
+ * Default is 'better-auth' per Better Auth docs.
+ *
+ * @see https://better-auth.com/docs/concepts/cookies
+ */
+export const BETTER_AUTH_COOKIE_PREFIX = 'better-auth';
+
+/**
+ * Better Auth session cookie name (without prefix).
+ * The full cookie name is: `{prefix}.session_token` or `__Secure-{prefix}.session_token` in secure mode.
+ */
+export const BETTER_AUTH_SESSION_COOKIE_NAME = 'session_token';
 
 // ============================================================================
 // SCHEMAS
@@ -130,8 +150,12 @@ export function validateEmailDomain(ctx: AuthContext): void {
 }
 
 /**
- * Extract session token from cookie header
- * Used for queue-based operations that need to authenticate with Better Auth
+ * Extract session token from cookie header string.
+ * Used when we only have the cookie header string, not a full Request object.
+ *
+ * IMPORTANT: In production/preview, Better Auth uses `useSecureCookies: true` which
+ * adds the `__Secure-` prefix to cookie names. This function looks for both variants
+ * to handle all environments.
  *
  * @param {string | undefined} cookieHeader - The Cookie header string
  * @returns {string} The session token value, or empty string if not found
@@ -141,8 +165,19 @@ export function extractSessionToken(cookieHeader: string | undefined): string {
     return '';
   }
 
-  const sessionTokenMatch = cookieHeader.match(new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`));
-  return sessionTokenMatch?.[1] || '';
+  // Build full cookie names with prefix
+  const baseCookieName = `${BETTER_AUTH_COOKIE_PREFIX}.${BETTER_AUTH_SESSION_COOKIE_NAME}`;
+
+  // First try the secure cookie name (production/preview: __Secure-better-auth.session_token)
+  const secureCookieName = `__Secure-${baseCookieName}`;
+  const secureMatch = cookieHeader.match(new RegExp(`${secureCookieName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]+)`));
+  if (secureMatch?.[1]) {
+    return secureMatch[1];
+  }
+
+  // Fall back to non-secure cookie name (local development: better-auth.session_token)
+  const nonSecureMatch = cookieHeader.match(new RegExp(`${baseCookieName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]+)`));
+  return nonSecureMatch?.[1] || '';
 }
 
 // ============================================================================
