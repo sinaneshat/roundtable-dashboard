@@ -15,7 +15,7 @@ import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { useMemoizedReturn } from '@/lib/utils';
 
 export type UseOverviewActionsOptions = {

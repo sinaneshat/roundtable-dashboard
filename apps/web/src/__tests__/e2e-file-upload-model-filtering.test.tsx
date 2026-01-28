@@ -26,7 +26,7 @@ import type { PendingAttachment } from '@/hooks/utils';
 import testMessages from '@/i18n/locales/en/common.json';
 import { I18nProvider } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
-import { act, render, screen } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
 import { toastManager } from '@/lib/toast';
 import { filesHaveDocuments, filesHaveImages, getDetailedIncompatibleModelIds } from '@/lib/utils/file-capability';
 import type { ChatParticipant, ChatThread, Model } from '@/services/api';
@@ -219,10 +219,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       );
 
       // Switch to Custom tab
-      await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /build custom/i });
-        await userEvent.click(customTab);
-      });
+      const customTab = screen.getByRole('tab', { name: /build custom/i });
+      await userEvent.click(customTab);
 
       // Non-vision model should show badge
       expect(screen.getByText('Non-Vision Model')).toBeInTheDocument();
@@ -270,10 +268,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       );
 
       // Switch to Custom tab
-      await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /build custom/i });
-        await userEvent.click(customTab);
-      });
+      const customTab = screen.getByRole('tab', { name: /build custom/i });
+      await userEvent.click(customTab);
 
       // Non-file model should show badge
       expect(screen.getByText('Non-File Model')).toBeInTheDocument();
@@ -339,10 +335,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       );
 
       // Switch to Custom tab
-      await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /build custom/i });
-        await userEvent.click(customTab);
-      });
+      const customTab = screen.getByRole('tab', { name: /build custom/i });
+      await userEvent.click(customTab);
 
       // Vision Only model should show file badge
       expect(screen.getByText('Vision Only Model')).toBeInTheDocument();
@@ -395,10 +389,8 @@ describe('e2E: File Upload Model Filtering Flow', () => {
       );
 
       // Switch to Custom tab
-      await act(async () => {
-        const customTab = screen.getByRole('tab', { name: /build custom/i });
-        await userEvent.click(customTab);
-      });
+      const customTab = screen.getByRole('tab', { name: /build custom/i });
+      await userEvent.click(customTab);
 
       // Try to toggle the non-vision model - switch should be disabled
       const switches = screen.getAllByRole('switch');

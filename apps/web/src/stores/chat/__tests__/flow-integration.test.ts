@@ -1,3 +1,4 @@
+/* eslint-disable ts/no-non-null-assertion -- Test assertions on array indices require non-null assertions */
 /**
  * Flow Integration Tests
  *
@@ -483,12 +484,12 @@ describe('race Condition Scenarios', () => {
       const completionOrder = [4, 1, 3, 0, 2];
 
       for (let i = 0; i < completionOrder.length - 1; i++) {
-        completeParticipant(store, completionOrder[i]!, 100 + i);
+        completeParticipant(store, completionOrder[i] ?? 0, 100 + i);
         expect(store.getState().phase).toBe(ChatPhases.PARTICIPANTS);
       }
 
       // Last one should trigger MODERATOR
-      completeParticipant(store, completionOrder[4]!, 104);
+      completeParticipant(store, completionOrder[4] ?? 0, 104);
       expect(store.getState().phase).toBe(ChatPhases.MODERATOR);
     });
   });

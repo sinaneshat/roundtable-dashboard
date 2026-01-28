@@ -20,7 +20,7 @@ import {
 
 import { APP_VERSION } from '@/constants/version';
 import { CoreSchemas, createApiResponseSchema } from '@/core/schemas';
-import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
+import { RoundNumberSchema } from '@/lib/schemas';
 
 // ============================================================================
 // MCP Protocol Version
@@ -33,6 +33,19 @@ export const MCP_PROTOCOL_VERSION = '2024-11-05';
 // ============================================================================
 
 /**
+ * JSON-RPC 2.0 Params Schema
+ *
+ * DESIGN NOTE: JSON-RPC 2.0 specification requires params to accept any JSON value.
+ * We use z.unknown() here because:
+ * 1. Protocol compliance: JSON-RPC 2.0 params can be any structured object
+ * 2. Runtime validation: Each method validates params via safeParse in handler
+ * 3. This is the outer transport layer - inner validation is type-safe per-method
+ *
+ * @see https://www.jsonrpc.org/specification#request_object
+ */
+export const JsonRpcParamsSchema = z.record(z.string(), z.unknown());
+
+/**
  * JSON-RPC 2.0 Request Schema
  * Base structure for all MCP requests
  */
@@ -40,17 +53,39 @@ export const JsonRpcRequestSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   jsonrpc: z.literal('2.0'),
   method: z.string(),
-  params: z.record(z.string(), z.unknown()).optional(),
+  params: JsonRpcParamsSchema.optional(),
 }).openapi('JsonRpcRequest');
+
+/**
+ * JSON-RPC 2.0 Error Data Schema
+ *
+ * DESIGN NOTE: JSON-RPC 2.0 error.data can be any primitive or structured value.
+ * Using z.unknown() is required for protocol compliance.
+ * Runtime consumers should use safeParse on specific error types.
+ *
+ * @see https://www.jsonrpc.org/specification#error_object
+ */
+export const JsonRpcErrorDataSchema = z.unknown();
 
 /**
  * JSON-RPC 2.0 Error Schema
  */
 export const JsonRpcErrorSchema = z.object({
   code: z.number(),
-  data: z.unknown().optional(),
+  data: JsonRpcErrorDataSchema.optional(),
   message: z.string(),
 }).openapi('JsonRpcError');
+
+/**
+ * JSON-RPC 2.0 Result Schema
+ *
+ * DESIGN NOTE: JSON-RPC 2.0 result can be any JSON value.
+ * Using z.unknown() is required for protocol compliance.
+ * Each method returns typed data - runtime consumers validate via safeParse.
+ *
+ * @see https://www.jsonrpc.org/specification#response_object
+ */
+export const JsonRpcResultSchema = z.unknown();
 
 /**
  * JSON-RPC 2.0 Response Schema
@@ -59,7 +94,7 @@ export const JsonRpcResponseSchema = z.object({
   error: JsonRpcErrorSchema.optional(),
   id: z.union([z.string(), z.number(), z.null()]),
   jsonrpc: z.literal('2.0'),
-  result: z.unknown().optional(),
+  result: JsonRpcResultSchema.optional(),
 }).openapi('JsonRpcResponse');
 
 // ============================================================================
@@ -110,6 +145,28 @@ export const MCPContentSchema = z.discriminatedUnion('type', [
 // ============================================================================
 
 /**
+ * JSON Schema Property Schema
+ *
+ * DESIGN NOTE: JSON Schema properties can be any valid JSON Schema definition.
+ * Using z.unknown() is required because JSON Schema allows arbitrary nested schemas.
+ * The MCP/OpenAI function calling format requires this flexibility.
+ *
+ * @see https://json-schema.org/specification
+ * @see https://platform.openai.com/docs/guides/function-calling
+ */
+export const JsonSchemaPropertiesSchema = z.record(z.string(), z.unknown());
+
+/**
+ * JSON Schema Object Schema
+ * Represents a JSON Schema object type with properties and required fields
+ */
+export const JsonSchemaObjectSchema = z.object({
+  properties: JsonSchemaPropertiesSchema,
+  required: z.array(z.string()).optional(),
+  type: z.literal('object'),
+});
+
+/**
  * MCP Tool Schema - Following MCP spec with OpenAI compatibility
  * inputSchema follows JSON Schema format (OpenAI function parameters)
  */
@@ -118,22 +175,14 @@ export const MCPToolSchema = z.object({
     description: 'Human-readable description for AI model context',
     example: 'Creates a new multi-model brainstorming chat thread',
   }),
-  inputSchema: z.object({
-    properties: z.record(z.string(), z.unknown()),
-    required: z.array(z.string()).optional(),
-    type: z.literal('object'),
-  }).openapi({
+  inputSchema: JsonSchemaObjectSchema.openapi({
     description: 'JSON Schema for tool parameters (OpenAI compatible)',
   }),
   name: z.string().openapi({
     description: 'Unique tool identifier (snake_case)',
     example: 'create_thread',
   }),
-  outputSchema: z.object({
-    properties: z.record(z.string(), z.unknown()),
-    required: z.array(z.string()).optional(),
-    type: z.literal('object'),
-  }).optional().openapi({
+  outputSchema: JsonSchemaObjectSchema.optional().openapi({
     description: 'JSON Schema for structured output validation',
   }),
 }).openapi('MCPTool');
@@ -225,12 +274,36 @@ export const ToolsListResultSchema = z.object({
 }).openapi('ToolsListResult');
 
 /**
+ * Tool Call Arguments Schema
+ *
+ * DESIGN NOTE: Tool arguments from MCP clients can be any JSON object.
+ * Using z.unknown() for values is required because:
+ * 1. MCP protocol allows arbitrary argument types per tool
+ * 2. Each tool validates its own args via safeParse in executeToolInternal
+ * 3. This provides flexibility while maintaining type safety at the tool level
+ *
+ * @see https://modelcontextprotocol.io/specification/2025-06-18/server/tools
+ */
+export const ToolCallArgumentsSchema = z.record(z.string(), z.unknown());
+
+/**
  * Tool Call Params
  */
 export const ToolCallParamsSchema = z.object({
-  arguments: z.record(z.string(), z.unknown()).optional(),
+  arguments: ToolCallArgumentsSchema.optional(),
   name: z.string(),
 }).openapi('ToolCallParams');
+
+/**
+ * Structured Content Schema
+ *
+ * DESIGN NOTE: MCP structuredContent can be any JSON object for tool-specific data.
+ * Using z.unknown() for values is required per MCP specification.
+ * Tools that return structured content define their own validation schemas.
+ *
+ * @see https://modelcontextprotocol.io/specification/2025-06-18/server/tools
+ */
+export const StructuredContentSchema = z.record(z.string(), z.unknown());
 
 /**
  * Tool Call Result - MCP Compliant
@@ -238,7 +311,7 @@ export const ToolCallParamsSchema = z.object({
 export const ToolCallResultSchema = z.object({
   content: z.array(MCPContentSchema),
   isError: z.boolean().optional(),
-  structuredContent: z.record(z.string(), z.unknown()).optional(),
+  structuredContent: StructuredContentSchema.optional(),
 }).openapi('ToolCallResult');
 
 /**
@@ -528,7 +601,7 @@ export const MCPToolCallResponseSchema = createApiResponseSchema(
     }).optional(),
     content: z.array(MCPContentSchema),
     isError: z.boolean().optional(),
-    structuredContent: z.record(z.string(), z.unknown()).optional(),
+    structuredContent: StructuredContentSchema.optional(),
   }),
 ).openapi('MCPToolCallResponse');
 
@@ -539,11 +612,7 @@ export const OpenAIFunctionSchema = z.object({
   function: z.object({
     description: z.string(),
     name: z.string(),
-    parameters: z.object({
-      properties: z.record(z.string(), z.unknown()),
-      required: z.array(z.string()).optional(),
-      type: z.literal('object'),
-    }),
+    parameters: JsonSchemaObjectSchema,
   }),
   type: z.literal('function'),
 }).openapi('OpenAIFunction');

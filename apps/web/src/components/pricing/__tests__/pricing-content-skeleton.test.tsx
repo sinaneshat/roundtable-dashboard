@@ -7,116 +7,126 @@
  * - Consistent layout with actual content
  */
 
+import { within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { render } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
 
 import { PricingContentSkeleton } from '../pricing-content-skeleton';
 
 describe('pricingContentSkeleton', () => {
   describe('skeleton rendering', () => {
     it('renders skeleton structure', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      expect(container.querySelector('.mx-auto')).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton).toBeInTheDocument();
+      expect(skeleton).toHaveClass('mx-auto');
     });
 
     it('renders with proper max-width layout', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const maxWidthContainer = container.querySelector('.max-w-md');
-      expect(maxWidthContainer).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton).toHaveClass('max-w-md');
     });
 
     it('renders skeleton card wrapper', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const cardWrapper = container.querySelector('.rounded-2xl');
-      expect(cardWrapper).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const cardWrapper = within(skeleton).getByTestId('pricing-skeleton').parentElement?.querySelector('.rounded-2xl');
+      expect(cardWrapper || skeleton.querySelector('.rounded-2xl')).toBeInTheDocument();
     });
 
     it('renders skeleton card content', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const cardContent = container.querySelector('.rounded-xl');
-      expect(cardContent).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton.querySelector('.rounded-xl')).toBeInTheDocument();
     });
   });
 
   describe('skeleton elements', () => {
     it('renders title skeleton', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const skeletons = container.querySelectorAll('[class*="animate-pulse"]');
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const skeletons = skeleton.querySelectorAll('[class*="animate-pulse"]');
       expect(skeletons.length).toBeGreaterThan(0);
     });
 
     it('renders feature list skeletons', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const featureItems = container.querySelectorAll('.flex.items-center.gap-3');
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const featureItems = skeleton.querySelectorAll('.flex.items-center.gap-3');
       expect(featureItems).toHaveLength(4);
     });
 
     it('renders price skeleton', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const priceArea = container.querySelector('.flex.items-baseline.gap-1');
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const priceArea = skeleton.querySelector('.flex.items-baseline.gap-1');
       expect(priceArea).toBeInTheDocument();
     });
 
     it('renders button skeleton', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const buttonSkeleton = container.querySelector('.h-11.w-full');
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const buttonSkeleton = skeleton.querySelector('.h-11.w-full');
       expect(buttonSkeleton).toBeInTheDocument();
     });
   });
 
   describe('animation', () => {
     it('has pulse animation class', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const animatedElements = container.querySelectorAll('[class*="animate-pulse"]');
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      const animatedElements = skeleton.querySelectorAll('[class*="animate-pulse"]');
       expect(animatedElements.length).toBeGreaterThan(0);
     });
   });
 
   describe('layout consistency', () => {
     it('uses same max-width as content', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const maxWidthContainer = container.querySelector('.max-w-md');
-      expect(maxWidthContainer).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton).toHaveClass('max-w-md');
     });
 
     it('uses same padding as content', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const paddedContainer = container.querySelector('.px-4');
-      expect(paddedContainer).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton).toHaveClass('px-4');
     });
 
     it('uses same gap spacing as content', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      const spacedContainer = container.querySelector('.space-y-4');
-      expect(spacedContainer).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton.querySelector('.space-y-4')).toBeInTheDocument();
     });
   });
 
   describe('accessibility', () => {
     it('renders semantic HTML structure', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      expect(container.querySelector('div')).toBeInTheDocument();
+      const skeleton = screen.getByTestId('pricing-skeleton');
+      expect(skeleton.tagName).toBe('DIV');
     });
 
     it('does not have interactive elements', () => {
-      const { container } = render(<PricingContentSkeleton />);
+      render(<PricingContentSkeleton />);
 
-      expect(container.querySelector('button')).not.toBeInTheDocument();
-      expect(container.querySelector('a')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
     });
   });
 });

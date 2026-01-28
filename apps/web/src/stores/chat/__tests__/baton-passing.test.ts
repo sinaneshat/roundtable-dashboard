@@ -26,7 +26,7 @@ import { ChatPhases } from '../store-schemas';
 // Test Setup
 // ============================================================================
 
-type TestStore = ReturnType<typeof createChatStore>;
+type _TestStore = ReturnType<typeof createChatStore>;
 
 function setupStore(participantCount = 3) {
   const store = createChatStore();

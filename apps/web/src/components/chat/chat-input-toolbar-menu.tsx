@@ -21,7 +21,7 @@ import {
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { useTranslations } from '@/lib/i18n';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 import type { Model } from '@/services/api';
 

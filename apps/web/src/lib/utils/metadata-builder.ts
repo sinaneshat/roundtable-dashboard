@@ -12,7 +12,7 @@ import type { CitationSourceType, ErrorType, FinishReason } from '@roundtable/sh
 import { FinishReasons, MessageRoles } from '@roundtable/shared';
 import type { LanguageModelUsage } from 'ai';
 
-import type { RoundNumber } from '@/lib/schemas/round-schemas';
+import type { RoundNumber } from '@/lib/schemas';
 import type { DbAssistantMessageMetadata, DbCitation } from '@/services/api';
 
 // ============================================================================

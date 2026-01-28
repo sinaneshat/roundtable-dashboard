@@ -335,7 +335,7 @@ export async function appendParticipantStreamChunk(
       if (!metadata) {
         if (attempt < MAX_RETRIES - 1) {
           // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms, 1000ms, 1000ms
-          const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+          const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
           await new Promise((resolve) => {
             setTimeout(resolve, delay);
           });
@@ -380,7 +380,7 @@ export async function appendParticipantStreamChunk(
       return; // Success - exit retry loop
     } catch (error) {
       if (attempt < MAX_RETRIES - 1) {
-        const delay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt), MAX_DELAY_MS);
+        const delay = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
         await new Promise((resolve) => {
           setTimeout(resolve, delay);
         });

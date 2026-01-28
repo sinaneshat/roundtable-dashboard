@@ -25,7 +25,7 @@ import { useMemo } from 'react';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { CreditEstimationStatus } from '@/lib/enums/billing-ui';
 import { CreditEstimationStatuses } from '@/lib/enums/billing-ui';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 
 import { useModelLookup } from './use-model-lookup';
 

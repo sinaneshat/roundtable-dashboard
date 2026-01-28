@@ -403,14 +403,16 @@ describe('preSearch Tracking', () => {
         const firstTime = store.getState().preSearchActivityTimes.get(1);
 
         // Small delay to ensure different timestamp
-        await new Promise(resolve => setTimeout(resolve, 10));
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 10);
+        });
 
         // ACT
         store.getState().updatePreSearchActivity(1);
 
         // ASSERT
         const secondTime = store.getState().preSearchActivityTimes.get(1);
-        expect(secondTime).toBeGreaterThanOrEqual(firstTime!);
+        expect(secondTime).toBeGreaterThanOrEqual(firstTime ?? 0);
       });
 
       it('should track multiple rounds independently', () => {
@@ -499,7 +501,7 @@ describe('preSearch Tracking', () => {
         // ASSERT
         const preSearch = store.getState().preSearches[0];
         expect(preSearch?.completedAt).toBeDefined();
-        expect(new Date(preSearch!.completedAt!).getTime()).toBeGreaterThanOrEqual(new Date(beforeTime).getTime() - 1000);
+        expect(preSearch?.completedAt ? new Date(preSearch.completedAt).getTime() : 0).toBeGreaterThanOrEqual(new Date(beforeTime).getTime() - 1000);
       });
 
       it('should store searchData', () => {

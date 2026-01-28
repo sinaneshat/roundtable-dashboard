@@ -2,7 +2,7 @@ import type { ChatMode } from '@roundtable/shared';
 
 import { Icons } from '@/components/icons';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import dynamic from '@/lib/utils/dynamic';
 import type { Model } from '@/services/api';
 

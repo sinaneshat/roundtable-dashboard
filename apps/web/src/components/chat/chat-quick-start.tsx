@@ -8,7 +8,7 @@ import { QuickStartSkeleton } from '@/components/skeletons';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import type { QuickStartData } from '@/lib/config';
 import { getChatModeLabel, getExampleParticipantCount, getPromptsByIndices } from '@/lib/config';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 import type { Model } from '@/services/api';
 

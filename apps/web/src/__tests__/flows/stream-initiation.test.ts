@@ -710,13 +710,7 @@ describe('stream Initiation - Premature Start Prevention', () => {
     store.getState().setEnableWebSearch(true);
   });
 
-  it('prevents streaming until thread ID is set', () => {
-    // Clear thread
-    store.getState().setThread(null as never);
-
-    // Even if all other conditions met, cannot stream without thread
-    // Note: This is checked in provider logic, not canStreamingProceed
-  });
+  it.todo('prevents streaming until thread ID is set - checked in provider logic, not canStreamingProceed');
 
   it('prevents streaming during config change PATCH', () => {
     store.getState().setPreSearches([createPreSearch(0, MessageStatuses.COMPLETE)]);

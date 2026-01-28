@@ -148,7 +148,8 @@ describe('thread Initialization', () => {
 
       store.getState().initializeThread(thread, participants, messages);
 
-      expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
+      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
+      expect(store.getState().phase).toBe(ChatPhases.IDLE);
     });
 
     it('should set phase to IDLE if no messages', () => {
@@ -648,7 +649,8 @@ describe('thread Initialization', () => {
 
       store.getState().initializeThread(thread, participants, messages);
 
-      expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
+      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
+      expect(store.getState().phase).toBe(ChatPhases.IDLE);
     });
   });
 

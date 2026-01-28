@@ -51,6 +51,17 @@ function findDuplicates(messages: UIMessage[]): string[] {
 }
 
 /**
+ * Get message at index with safe access (throws if undefined for better test messages)
+ */
+function getMessageAt(messages: UIMessage[], index: number): UIMessage {
+  const message = messages[index];
+  if (!message) {
+    throw new Error(`Expected message at index ${index} but found undefined. Total messages: ${messages.length}`);
+  }
+  return message;
+}
+
+/**
  * Get text content from message
  */
 function getMessageText(message: UIMessage): string {
@@ -120,7 +131,7 @@ describe('rendering Consistency', () => {
 
       expect(duplicates).toHaveLength(0);
       expect(state.messages).toHaveLength(1);
-      expect(getMessageText(state.messages[0]!)).toBe('First chunk second chunk third chunk');
+      expect(getMessageText(getMessageAt(state.messages, 0))).toBe('First chunk second chunk third chunk');
     });
 
     it('should not duplicate messages when setMessages is called with same data', () => {
@@ -248,7 +259,9 @@ describe('rendering Consistency', () => {
       expect(p0Messages).toHaveLength(1);
 
       // Content check: either has content or is empty placeholder
-      const hasContent = hasMeaningfulContent(p0Messages[0]!);
+      expect(p0Messages[0]).toBeDefined();
+      const firstMessage = p0Messages[0] as UIMessage;
+      const hasContent = hasMeaningfulContent(firstMessage);
       expect(hasContent).toBe(true);
     });
 
@@ -272,10 +285,9 @@ describe('rendering Consistency', () => {
       // Each snapshot should have consistent state (no flash to empty)
       for (const snapshot of snapshots) {
         const content = snapshot.messageContents.get('streaming_p0_r0');
-        if (content !== undefined) {
-          // Content should only grow, never shrink or flash to empty
-          expect(content.length).toBeGreaterThan(0);
-        }
+        const hasContent = content !== undefined;
+        // Content should only grow, never shrink or flash to empty when present
+        expect(hasContent ? content.length > 0 : true).toBe(true);
       }
     });
   });
@@ -316,12 +328,13 @@ describe('rendering Consistency', () => {
 
       // After startRound, isStreaming should stay true
       const afterStartIndex = streamingHistory.findIndex(s => s === true);
-      if (afterStartIndex >= 0) {
-        const afterStart = streamingHistory.slice(afterStartIndex);
-        // Should not flip back to false during streaming
-        const falseAfterTrue = afterStart.filter(s => s === false);
-        expect(falseAfterTrue).toHaveLength(0);
-      }
+      const hasStreamingStarted = afterStartIndex >= 0;
+      expect(hasStreamingStarted).toBe(true);
+
+      const afterStart = streamingHistory.slice(afterStartIndex);
+      // Should not flip back to false during streaming
+      const falseAfterTrue = afterStart.filter(s => s === false);
+      expect(falseAfterTrue).toHaveLength(0);
     });
   });
 
@@ -370,7 +383,8 @@ describe('rendering Consistency', () => {
       });
 
       expect(moderatorMessages).toHaveLength(1);
-      expect(getMessageText(moderatorMessages[0]!)).toBe('First second third.');
+      expect(moderatorMessages[0]).toBeDefined();
+      expect(getMessageText(moderatorMessages[0] as UIMessage)).toBe('First second third.');
     });
   });
 
@@ -383,11 +397,11 @@ describe('rendering Consistency', () => {
 
     it('should not append empty text to existing message', () => {
       store.getState().appendEntityStreamingText(0, 'Initial', 0);
-      const contentBefore = getMessageText(store.getState().messages[0]!);
+      const contentBefore = getMessageText(getMessageAt(store.getState().messages, 0));
 
       store.getState().appendEntityStreamingText(0, '', 0);
 
-      const contentAfter = getMessageText(store.getState().messages[0]!);
+      const contentAfter = getMessageText(getMessageAt(store.getState().messages, 0));
       expect(contentAfter).toBe(contentBefore);
     });
 
@@ -397,7 +411,7 @@ describe('rendering Consistency', () => {
 
       const state = store.getState();
       expect(state.messages).toHaveLength(1);
-      expect(getMessageText(state.messages[0]!)).toBe('   ');
+      expect(getMessageText(getMessageAt(state.messages, 0))).toBe('   ');
     });
   });
 
@@ -405,7 +419,7 @@ describe('rendering Consistency', () => {
     it('should consider whitespace-only as having content for length check', () => {
       store.getState().appendEntityStreamingText(0, '   ', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       const text = getMessageText(message);
 
       // Length > 0 check passes
@@ -417,7 +431,7 @@ describe('rendering Consistency', () => {
     it('should detect actual content correctly', () => {
       store.getState().appendEntityStreamingText(0, 'Real content', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       expect(hasMeaningfulContent(message)).toBe(true);
     });
 
@@ -425,7 +439,7 @@ describe('rendering Consistency', () => {
       store.getState().appendEntityStreamingText(0, '  \n\t  ', 0);
       store.getState().appendEntityStreamingText(0, 'Actual text', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       const text = getMessageText(message);
 
       expect(text).toBe('  \n\t  Actual text');
@@ -437,12 +451,12 @@ describe('rendering Consistency', () => {
     it('should update message in-place rather than replacing', () => {
       store.getState().appendEntityStreamingText(0, 'Initial', 0);
 
-      const messageBefore = store.getState().messages[0]!;
+      const messageBefore = getMessageAt(store.getState().messages, 0);
       const idBefore = messageBefore.id;
 
       store.getState().appendEntityStreamingText(0, ' appended', 0);
 
-      const messageAfter = store.getState().messages[0]!;
+      const messageAfter = getMessageAt(store.getState().messages, 0);
 
       // Same ID means same message slot
       expect(messageAfter.id).toBe(idBefore);
@@ -463,7 +477,7 @@ describe('rendering Consistency', () => {
       store.getState().appendEntityStreamingText(0, 'D', 0);
       expect(store.getState().messages).toHaveLength(1);
 
-      expect(getMessageText(store.getState().messages[0]!)).toBe('ABCD');
+      expect(getMessageText(getMessageAt(store.getState().messages, 0))).toBe('ABCD');
     });
   });
 
@@ -479,7 +493,7 @@ describe('rendering Consistency', () => {
       expect(findDuplicates(state.messages)).toHaveLength(0);
 
       // Verify all content is preserved
-      const text = getMessageText(state.messages[0]!);
+      const text = getMessageText(getMessageAt(state.messages, 0));
       expect(text).toContain('0');
       expect(text).toContain('99');
     });
@@ -489,7 +503,7 @@ describe('rendering Consistency', () => {
       store.getState().appendEntityStreamingText(0, 'Second', 0);
       store.getState().appendEntityStreamingText(0, 'Third', 0);
 
-      const text = getMessageText(store.getState().messages[0]!);
+      const text = getMessageText(getMessageAt(store.getState().messages, 0));
       expect(text).toBe('FirstSecondThird');
     });
   });
@@ -498,7 +512,7 @@ describe('rendering Consistency', () => {
     it('should set isStreaming metadata on placeholder', () => {
       store.getState().appendEntityStreamingText(0, 'Content', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       const metadata = message.metadata as Record<string, unknown>;
 
       expect(metadata.isStreaming).toBe(true);
@@ -507,7 +521,7 @@ describe('rendering Consistency', () => {
     it('should preserve participantIndex in metadata', () => {
       store.getState().appendEntityStreamingText(2, 'Content', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       const metadata = message.metadata as Record<string, unknown>;
 
       expect(metadata.participantIndex).toBe(2);
@@ -516,7 +530,7 @@ describe('rendering Consistency', () => {
     it('should preserve roundNumber in metadata', () => {
       store.getState().appendEntityStreamingText(0, 'Content', 5);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       const metadata = message.metadata as Record<string, unknown>;
 
       expect(metadata.roundNumber).toBe(5);
@@ -527,10 +541,10 @@ describe('rendering Consistency', () => {
     it('should create message with TEXT part type', () => {
       store.getState().appendEntityStreamingText(0, 'Content', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
 
       expect(message.parts).toHaveLength(1);
-      expect(message.parts![0]).toEqual({
+      expect(message.parts?.[0]).toEqual({
         text: 'Content',
         type: MessagePartTypes.TEXT,
       });
@@ -540,10 +554,10 @@ describe('rendering Consistency', () => {
       store.getState().appendEntityStreamingText(0, 'First', 0);
       store.getState().appendEntityStreamingText(0, 'Second', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
 
       expect(message.parts).toHaveLength(1);
-      expect(message.parts![0]).toEqual({
+      expect(message.parts?.[0]).toEqual({
         text: 'FirstSecond',
         type: MessagePartTypes.TEXT,
       });
@@ -552,7 +566,7 @@ describe('rendering Consistency', () => {
     it('should maintain assistant role on streaming messages', () => {
       store.getState().appendEntityStreamingText(0, 'Content', 0);
 
-      const message = store.getState().messages[0]!;
+      const message = getMessageAt(store.getState().messages, 0);
       expect(message.role).toBe(UIMessageRoles.ASSISTANT);
     });
   });

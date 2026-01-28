@@ -90,7 +90,7 @@ export {
  * Form state takes precedence over thread default.
  * Per FLOW_DOCUMENTATION.md: Form state is source of truth for current round.
  *
- * @param thread - Current thread (may be null for new threads)
+ * @param _thread - Current thread (may be null for new threads)
  * @param formEnableWebSearch - Form state for web search toggle
  * @returns Whether web search is effectively enabled
  */

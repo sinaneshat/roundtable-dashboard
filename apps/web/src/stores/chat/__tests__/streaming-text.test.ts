@@ -47,6 +47,26 @@ function findStreamingPlaceholder(messages: UIMessage[], id: string): UIMessage 
   return messages.find(m => m.id === id);
 }
 
+/**
+ * Assert a message exists and return it for further assertions.
+ * Uses expect internally to fail the test if message is undefined.
+ */
+function assertMessage(messages: UIMessage[], index: number): UIMessage {
+  const message = messages[index];
+  expect(message).toBeDefined();
+  return message as UIMessage;
+}
+
+/**
+ * Assert a placeholder exists and return it for further assertions.
+ * Uses expect internally to fail the test if placeholder is undefined.
+ */
+function assertPlaceholder(messages: UIMessage[], id: string): UIMessage {
+  const placeholder = findStreamingPlaceholder(messages, id);
+  expect(placeholder).toBeDefined();
+  return placeholder as UIMessage;
+}
+
 // ============================================================================
 // Test Suite: appendEntityStreamingText (Participant Streaming)
 // ============================================================================
@@ -77,12 +97,11 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
     expect(updatedState.messages).toHaveLength(1);
 
     // Verify placeholder was created
-    const placeholder = findStreamingPlaceholder(updatedState.messages, 'streaming_p0_r0');
-    expect(placeholder).toBeDefined();
-    expect(getMessageText(placeholder!)).toBe('Hello');
+    const placeholder = assertPlaceholder(updatedState.messages, 'streaming_p0_r0');
+    expect(getMessageText(placeholder)).toBe('Hello');
   });
 
-  it('should generate correct ID: streaming_p${index}_r${round}', () => {
+  it('should generate correct ID: streaming_p{index}_r{round}', () => {
     // Test various participant/round combinations
     const testCases = [
       { expectedId: 'streaming_p0_r0', participantIndex: 0, roundNumber: 0 },
@@ -103,9 +122,8 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
       store.getState().appendEntityStreamingText(participantIndex, 'Test', roundNumber);
 
       const state = store.getState();
-      const placeholder = findStreamingPlaceholder(state.messages, expectedId);
-      expect(placeholder).toBeDefined();
-      expect(placeholder!.id).toBe(expectedId);
+      const placeholder = assertPlaceholder(state.messages, expectedId);
+      expect(placeholder.id).toBe(expectedId);
     }
   });
 
@@ -115,21 +133,24 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
 
     let state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('Hello');
+    const firstMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(firstMessage)).toBe('Hello');
 
     // Append more text
     store.getState().appendEntityStreamingText(0, ' world', 0);
 
     state = store.getState();
     expect(state.messages).toHaveLength(1); // Still just one message
-    expect(getMessageText(state.messages[0]!)).toBe('Hello world');
+    const secondMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(secondMessage)).toBe('Hello world');
 
     // Append even more
     store.getState().appendEntityStreamingText(0, '!', 0);
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('Hello world!');
+    const thirdMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(thirdMessage)).toBe('Hello world!');
   });
 
   it('should skip empty text chunks', () => {
@@ -144,26 +165,26 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('Initial');
+    const initialMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(initialMessage)).toBe('Initial');
 
     // Try to append empty string to existing
     store.getState().appendEntityStreamingText(0, '', 0);
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('Initial'); // Unchanged
+    const unchangedMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(unchangedMessage)).toBe('Initial'); // Unchanged
   });
 
   it('should set correct metadata (isStreaming, participantIndex, roundNumber)', () => {
     store.getState().appendEntityStreamingText(1, 'Streaming content', 2);
 
     const state = store.getState();
-    const placeholder = state.messages[0];
+    const placeholder = assertMessage(state.messages, 0);
+    expect(placeholder.metadata).toBeDefined();
 
-    expect(placeholder).toBeDefined();
-    expect(placeholder!.metadata).toBeDefined();
-
-    const metadata = placeholder!.metadata as Record<string, unknown>;
+    const metadata = placeholder.metadata as Record<string, unknown>;
     expect(metadata.isStreaming).toBe(true);
     expect(metadata.participantIndex).toBe(1);
     expect(metadata.roundNumber).toBe(2);
@@ -180,8 +201,8 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
     store.getState().appendEntityStreamingText(0, 'Hello', 0);
 
     const state = store.getState();
-    const placeholder = state.messages[0];
-    const metadata = placeholder!.metadata as Record<string, unknown>;
+    const placeholder = assertMessage(state.messages, 0);
+    const metadata = placeholder.metadata as Record<string, unknown>;
 
     expect(metadata.model).toBe('gpt-4');
     expect(metadata.participantId).toBe('participant-alpha');
@@ -206,13 +227,11 @@ describe('appendEntityStreamingText - Participant Streaming', () => {
     const state = store.getState();
     expect(state.messages).toHaveLength(2);
 
-    const p0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
-    const p1Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p1_r0');
+    const p0Placeholder = assertPlaceholder(state.messages, 'streaming_p0_r0');
+    const p1Placeholder = assertPlaceholder(state.messages, 'streaming_p1_r0');
 
-    expect(p0Placeholder).toBeDefined();
-    expect(p1Placeholder).toBeDefined();
-    expect(getMessageText(p0Placeholder!)).toBe('P0 says: Hello!');
-    expect(getMessageText(p1Placeholder!)).toBe('P1 says: World');
+    expect(getMessageText(p0Placeholder)).toBe('P0 says: Hello!');
+    expect(getMessageText(p1Placeholder)).toBe('P1 says: World');
   });
 });
 
@@ -237,12 +256,11 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
     const updatedState = store.getState();
     expect(updatedState.messages).toHaveLength(1);
 
-    const placeholder = findStreamingPlaceholder(updatedState.messages, 'streaming_moderator_r0');
-    expect(placeholder).toBeDefined();
-    expect(getMessageText(placeholder!)).toBe('Analyzing discussion...');
+    const placeholder = assertPlaceholder(updatedState.messages, 'streaming_moderator_r0');
+    expect(getMessageText(placeholder)).toBe('Analyzing discussion...');
   });
 
-  it('should generate correct ID: streaming_moderator_r${round}', () => {
+  it('should generate correct ID: streaming_moderator_r{round}', () => {
     const testCases = [
       { expectedId: 'streaming_moderator_r0', roundNumber: 0 },
       { expectedId: 'streaming_moderator_r1', roundNumber: 1 },
@@ -255,9 +273,8 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
       store.getState().appendModeratorStreamingText('Test', roundNumber);
 
       const state = store.getState();
-      const placeholder = findStreamingPlaceholder(state.messages, expectedId);
-      expect(placeholder).toBeDefined();
-      expect(placeholder!.id).toBe(expectedId);
+      const placeholder = assertPlaceholder(state.messages, expectedId);
+      expect(placeholder.id).toBe(expectedId);
     }
   });
 
@@ -265,19 +282,22 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
     store.getState().appendModeratorStreamingText('The participants ', 0);
 
     let state = store.getState();
-    expect(getMessageText(state.messages[0]!)).toBe('The participants ');
+    const firstMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(firstMessage)).toBe('The participants ');
 
     store.getState().appendModeratorStreamingText('have reached ', 0);
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('The participants have reached ');
+    const secondMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(secondMessage)).toBe('The participants have reached ');
 
     store.getState().appendModeratorStreamingText('consensus.', 0);
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('The participants have reached consensus.');
+    const thirdMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(thirdMessage)).toBe('The participants have reached consensus.');
   });
 
   it('should skip empty text chunks', () => {
@@ -298,17 +318,16 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe('Summary');
+    const summaryMessage = assertMessage(state.messages, 0);
+    expect(getMessageText(summaryMessage)).toBe('Summary');
   });
 
   it('should set isModerator metadata', () => {
     store.getState().appendModeratorStreamingText('Moderator analysis', 0);
 
     const state = store.getState();
-    const placeholder = state.messages[0];
-
-    expect(placeholder).toBeDefined();
-    const metadata = placeholder!.metadata as Record<string, unknown>;
+    const placeholder = assertMessage(state.messages, 0);
+    const metadata = placeholder.metadata as Record<string, unknown>;
 
     expect(metadata.isStreaming).toBe(true);
     expect(metadata.participantIndex).toBe(MODERATOR_PARTICIPANT_INDEX);
@@ -347,7 +366,8 @@ describe('completeStreaming - Behavior', () => {
 
     let state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('streaming_p0_r0');
+    const streamingMsg = assertMessage(state.messages, 0);
+    expect(streamingMsg.id).toBe('streaming_p0_r0');
 
     // Add server message for same participant/round
     const serverMessage = createTestAssistantMessage({
@@ -358,7 +378,7 @@ describe('completeStreaming - Behavior', () => {
       roundNumber: 0,
     });
 
-    store.getState().setMessages([state.messages[0]!, serverMessage]);
+    store.getState().setMessages([streamingMsg, serverMessage]);
 
     // Complete streaming - does NOT clean up placeholders
     store.getState().completeStreaming();
@@ -374,14 +394,16 @@ describe('completeStreaming - Behavior', () => {
 
     let state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('streaming_p0_r0');
+    const beforeMsg = assertMessage(state.messages, 0);
+    expect(beforeMsg.id).toBe('streaming_p0_r0');
 
     // Complete streaming - placeholders are NOT cleaned up here
     store.getState().completeStreaming();
 
     state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('streaming_p0_r0'); // Placeholder retained
+    const afterMsg = assertMessage(state.messages, 0);
+    expect(afterMsg.id).toBe('streaming_p0_r0'); // Placeholder retained
   });
 
   it('should preserve all messages including placeholders and server messages', () => {
@@ -427,7 +449,8 @@ describe('completeStreaming - Behavior', () => {
 
     let state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('streaming_moderator_r0');
+    const moderatorStreamingMsg = assertMessage(state.messages, 0);
+    expect(moderatorStreamingMsg.id).toBe('streaming_moderator_r0');
 
     // Add server moderator message
     const moderatorServerMessage = createTestModeratorMessage({
@@ -436,7 +459,7 @@ describe('completeStreaming - Behavior', () => {
       roundNumber: 0,
     });
 
-    store.getState().setMessages([state.messages[0]!, moderatorServerMessage]);
+    store.getState().setMessages([moderatorStreamingMsg, moderatorServerMessage]);
 
     // Complete streaming - does NOT clean up placeholders
     store.getState().completeStreaming();
@@ -526,11 +549,10 @@ describe('concurrent Streaming Scenarios', () => {
     expect(state.messages).toHaveLength(3);
 
     const p0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
-    const p1Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p1_r0');
+    const p1Placeholder = assertPlaceholder(state.messages, 'streaming_p1_r0');
 
     expect(p0Placeholder).toBeDefined();
-    expect(p1Placeholder).toBeDefined();
-    expect(getMessageText(p1Placeholder!)).toBe('P1 response here.');
+    expect(getMessageText(p1Placeholder)).toBe('P1 response here.');
   });
 
   it('should handle pre-search blocking participants per Frame 10', () => {
@@ -554,9 +576,8 @@ describe('concurrent Streaming Scenarios', () => {
     const state = store.getState();
     expect(state.messages).toHaveLength(2); // User message + P0 streaming
 
-    const p0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r1');
-    expect(p0Placeholder).toBeDefined();
-    expect(getMessageText(p0Placeholder!)).toBe('Based on research: AI is evolving rapidly.');
+    const p0Placeholder = assertPlaceholder(state.messages, 'streaming_p0_r1');
+    expect(getMessageText(p0Placeholder)).toBe('Based on research: AI is evolving rapidly.');
   });
 
   it('should maintain message ordering with streaming placeholders', () => {
@@ -605,7 +626,8 @@ describe('concurrent Streaming Scenarios', () => {
 
     // Order should be: user -> p0_streaming -> p0_server -> p1_streaming -> p1_server -> moderator_streaming
     expect(state.messages.length).toBeGreaterThanOrEqual(5);
-    expect(state.messages[0]!.id).toBe('user_r0');
+    const firstMsg = assertMessage(state.messages, 0);
+    expect(firstMsg.id).toBe('user_r0');
   });
 });
 
@@ -633,7 +655,8 @@ describe('edge Cases', () => {
     expect(store.getState().messages).toHaveLength(1);
 
     store.getState().appendEntityStreamingText(0, '', 0);
-    expect(getMessageText(store.getState().messages[0]!)).toBe('Initial');
+    const initialMessage = assertMessage(store.getState().messages, 0);
+    expect(getMessageText(initialMessage)).toBe('Initial');
 
     // Same for moderator
     store.getState().appendModeratorStreamingText('', 0);
@@ -665,13 +688,11 @@ describe('edge Cases', () => {
     const state = store.getState();
     expect(state.messages).toHaveLength(2);
 
-    const r0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
-    const r2Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r2');
+    const r0Placeholder = assertPlaceholder(state.messages, 'streaming_p0_r0');
+    const r2Placeholder = assertPlaceholder(state.messages, 'streaming_p0_r2');
 
-    expect(r0Placeholder).toBeDefined();
-    expect(r2Placeholder).toBeDefined();
-    expect(getMessageText(r0Placeholder!)).toBe('Round 0 content');
-    expect(getMessageText(r2Placeholder!)).toBe('Round 2 content');
+    expect(getMessageText(r0Placeholder)).toBe('Round 0 content');
+    expect(getMessageText(r2Placeholder)).toBe('Round 2 content');
   });
 
   it('should handle very large text chunks', () => {
@@ -682,11 +703,13 @@ describe('edge Cases', () => {
 
     const state = store.getState();
     expect(state.messages).toHaveLength(1);
-    expect(getMessageText(state.messages[0]!)).toBe(largeText);
+    const largeMsg = assertMessage(state.messages, 0);
+    expect(getMessageText(largeMsg)).toBe(largeText);
 
     // Append more large text
     store.getState().appendEntityStreamingText(0, largeText, 0);
-    expect(getMessageText(store.getState().messages[0]!)).toBe(largeText + largeText);
+    const appendedLargeMsg = assertMessage(store.getState().messages, 0);
+    expect(getMessageText(appendedLargeMsg)).toBe(largeText + largeText);
   });
 
   it('should handle special characters in text', () => {
@@ -696,7 +719,8 @@ describe('edge Cases', () => {
     store.getState().appendEntityStreamingText(0, specialText, 0);
 
     const state = store.getState();
-    expect(getMessageText(state.messages[0]!)).toBe(specialText);
+    const specialMsg = assertMessage(state.messages, 0);
+    expect(getMessageText(specialMsg)).toBe(specialText);
   });
 
   it('should handle unicode and emoji in text', () => {
@@ -706,7 +730,8 @@ describe('edge Cases', () => {
     store.getState().appendEntityStreamingText(0, unicodeText, 0);
 
     const state = store.getState();
-    expect(getMessageText(state.messages[0]!)).toBe(unicodeText);
+    const unicodeMsg = assertMessage(state.messages, 0);
+    expect(getMessageText(unicodeMsg)).toBe(unicodeText);
   });
 
   it('should correctly set message role as assistant', () => {
@@ -717,8 +742,10 @@ describe('edge Cases', () => {
 
     const state = store.getState();
 
-    expect(state.messages[0]!.role).toBe(UIMessageRoles.ASSISTANT);
-    expect(state.messages[1]!.role).toBe(UIMessageRoles.ASSISTANT);
+    const msg0 = assertMessage(state.messages, 0);
+    const msg1 = assertMessage(state.messages, 1);
+    expect(msg0.role).toBe(UIMessageRoles.ASSISTANT);
+    expect(msg1.role).toBe(UIMessageRoles.ASSISTANT);
   });
 
   it('should correctly set parts with MessagePartTypes.TEXT', () => {
@@ -727,10 +754,10 @@ describe('edge Cases', () => {
     store.getState().appendEntityStreamingText(0, 'Test content', 0);
 
     const state = store.getState();
-    const placeholder = state.messages[0];
+    const placeholder = assertMessage(state.messages, 0);
 
-    expect(placeholder!.parts).toHaveLength(1);
-    expect(placeholder!.parts[0]).toEqual({
+    expect(placeholder.parts).toHaveLength(1);
+    expect(placeholder.parts[0]).toEqual({
       text: 'Test content',
       type: MessagePartTypes.TEXT,
     });
@@ -793,7 +820,8 @@ describe('integration with Store State', () => {
     const state = store.getState();
     expect(state.messages).toHaveLength(1);
 
-    const metadata = state.messages[0]!.metadata as Record<string, unknown>;
+    const roundMsg = assertMessage(state.messages, 0);
+    const metadata = roundMsg.metadata as Record<string, unknown>;
     expect(metadata.roundNumber).toBe(0);
   });
 
@@ -839,8 +867,10 @@ describe('integration with Store State', () => {
 
     const state = store.getState();
     expect(state.messages).toHaveLength(2);
-    expect(state.messages[0]!.id).toBe('user_r0');
-    expect(state.messages[1]!.id).toBe('streaming_p0_r0');
+    const preservedUserMsg = assertMessage(state.messages, 0);
+    const preservedStreamingMsg = assertMessage(state.messages, 1);
+    expect(preservedUserMsg.id).toBe('user_r0');
+    expect(preservedStreamingMsg.id).toBe('streaming_p0_r0');
   });
 
   it('should handle isModeratorStreaming flag with moderator text', () => {
@@ -854,7 +884,8 @@ describe('integration with Store State', () => {
     expect(state.isModeratorStreaming).toBe(true);
     expect(state.messages).toHaveLength(1);
 
-    const metadata = state.messages[0]!.metadata as Record<string, unknown>;
+    const modMsg = assertMessage(state.messages, 0);
+    const metadata = modMsg.metadata as Record<string, unknown>;
     expect(metadata.participantIndex).toBe(MODERATOR_PARTICIPANT_INDEX);
   });
 });

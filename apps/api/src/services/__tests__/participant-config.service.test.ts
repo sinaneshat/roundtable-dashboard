@@ -11,7 +11,7 @@
 import { ModelIds } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfigInput } from '@/lib/schemas';
 import type { ChatParticipant } from '@/routes/chat/schema';
 import { categorizeParticipantChanges } from '@/services/participants';
 

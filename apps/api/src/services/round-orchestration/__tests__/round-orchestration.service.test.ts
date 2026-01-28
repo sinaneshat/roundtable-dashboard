@@ -80,7 +80,11 @@ describe('round orchestration service', () => {
       );
 
       expect(result.attachmentIds).toBeUndefined();
-      expect(mockKV.put).toHaveBeenCalledWith();
+      expect(mockKV.put).toHaveBeenCalledWith(
+        'round:execution:thread-456:r2',
+        expect.any(String),
+        { expirationTtl: 3600 },
+      );
     });
 
     it('handles missing KV gracefully', async () => {
@@ -123,6 +127,7 @@ describe('round orchestration service', () => {
         threadId: 'thread-123',
         totalParticipants: 3,
         triggeredParticipants: [0],
+        version: 0,
       };
 
       mockKV.get.mockResolvedValue(existingState);
@@ -1143,6 +1148,7 @@ describe('round orchestration service', () => {
         threadId: 'thread-123',
         totalParticipants: 3,
         triggeredParticipants: [0],
+        version: 0,
       };
 
       mockKV.get.mockResolvedValue(runningState);

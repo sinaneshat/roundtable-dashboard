@@ -9,7 +9,7 @@ import {
   calculateNextRound,
   DEFAULT_ROUND_NUMBER,
   NO_ROUND_SENTINEL,
-} from '@/lib/schemas/round-schemas';
+} from '@/lib/schemas';
 
 import { getRoundNumber } from './metadata';
 

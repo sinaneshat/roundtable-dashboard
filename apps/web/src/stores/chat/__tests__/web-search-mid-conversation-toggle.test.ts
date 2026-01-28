@@ -27,7 +27,7 @@ import type { EntityStatus } from '../store-schemas';
 
 type TestStore = ReturnType<typeof createChatStore>;
 
-function completeRound(store: TestStore, roundNumber: number, participantCount: number) {
+function completeRound(store: TestStore, _roundNumber: number, participantCount: number) {
   for (let i = 0; i < participantCount; i++) {
     store.getState().updateEntitySubscriptionStatus(i, 'complete' as EntityStatus, 100 + i * 10);
     store.getState().onParticipantComplete(i);

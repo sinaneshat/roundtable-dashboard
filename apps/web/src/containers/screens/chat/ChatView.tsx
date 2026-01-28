@@ -30,8 +30,8 @@ import { getDefaultChatMode } from '@/lib/config/chat-modes';
 import type { ModelPreset } from '@/lib/config/model-presets';
 import { filterPresetParticipants, ToastNamespaces } from '@/lib/config/model-presets';
 import { useTranslations } from '@/lib/i18n';
-import { isFilePart } from '@/lib/schemas/message-schemas';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
+import { isFilePart } from '@/lib/schemas';
 import { toastManager } from '@/lib/toast';
 import {
   getDetailedIncompatibleModelIds,

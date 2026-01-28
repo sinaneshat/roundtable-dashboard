@@ -952,7 +952,13 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockPresearch).toHaveBeenCalledWith();
+      expect(mockPresearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.anything(),
+      );
     });
 
     it('should use subscribeToParticipantStreamService for participant phase', async () => {
@@ -988,7 +994,13 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockModerator).toHaveBeenCalledWith();
+      expect(mockModerator).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.anything(),
+      );
     });
 
     it('should throw error when participantIndex missing for participant phase', async () => {
@@ -1068,7 +1080,13 @@ describe('useEntitySubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockService).toHaveBeenCalledWith();
+      expect(mockService).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.anything(),
+      );
     });
   });
 

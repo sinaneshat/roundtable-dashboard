@@ -92,10 +92,10 @@ function setupStoreWithWebSearch(store: TestStore, participantCount: number) {
 // ============================================================================
 
 describe('scenario 1: Pre-Search Blocking Behavior', () => {
-  let store: TestStore;
+  let _store: TestStore;
 
   beforeEach(() => {
-    store = createChatStore();
+    _store = createChatStore();
   });
 
   it('should block when pre-search is PENDING and web search is enabled', () => {

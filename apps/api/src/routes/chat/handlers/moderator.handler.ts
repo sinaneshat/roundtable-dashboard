@@ -24,8 +24,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { log } from '@/lib/logger';
-import { extractTextFromParts } from '@/lib/schemas/message-schemas';
-import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
+import { extractTextFromParts, NO_PARTICIPANT_SENTINEL } from '@/lib/schemas';
 import { getParticipantIndex } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import {

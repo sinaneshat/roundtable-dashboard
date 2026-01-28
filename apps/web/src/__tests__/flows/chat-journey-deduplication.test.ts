@@ -215,7 +215,7 @@ describe('chat Journey - Render Count Optimization', () => {
   describe('component Update Isolation', () => {
     it('should not re-render ChatView when unrelated store state changes', () => {
       const store = createTestChatStore();
-      let renderCount = 0;
+      let subscriptionCount = 0;
 
       // Simulate ChatView subscription (useShallow pattern)
       const unsubscribe = store.subscribe(
@@ -224,11 +224,11 @@ describe('chat Journey - Render Count Optimization', () => {
           messages: state.messages,
         }),
         () => {
-          renderCount++;
+          subscriptionCount++;
         },
       );
 
-      const before = renderCount;
+      const initialCount = subscriptionCount;
 
       // Change unrelated state (should NOT trigger re-render)
       store.getState().setInputValue('new input');
@@ -241,7 +241,7 @@ describe('chat Journey - Render Count Optimization', () => {
 
       // Only the isStreaming change should trigger update
       // Input changes should NOT trigger ChatView re-render
-      expect(renderCount - before).toBeLessThanOrEqual(3);
+      expect(subscriptionCount - initialCount).toBeLessThanOrEqual(3);
     });
 
     it('documents duplicate selectors that cause over-rendering', () => {

@@ -3,7 +3,7 @@ import { AvatarSizeMetadata, AvatarSizes } from '@roundtable/shared';
 import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import type { ModelReference, ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ModelReference, ParticipantConfig } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon } from '@/lib/utils';
 

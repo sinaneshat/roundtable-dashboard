@@ -4,7 +4,7 @@ import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { useBoolean } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
-import { getDisplayParticipantIndex } from '@/lib/schemas/participant-schemas';
+import { getDisplayParticipantIndex } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 import type { DbMessageMetadata } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';

@@ -29,7 +29,7 @@ import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import { extractSessionToken } from '@/lib/auth';
 import { log } from '@/lib/logger';
-import type { MessagePart } from '@/lib/schemas/message-schemas';
+import type { MessagePart } from '@/lib/schemas';
 import {
   deductCreditsForAction,
   enforceCredits,

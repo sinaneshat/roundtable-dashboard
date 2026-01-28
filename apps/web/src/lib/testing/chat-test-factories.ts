@@ -7,7 +7,7 @@
 import type { MessageStatus, StreamStatus } from '@roundtable/shared';
 import { ChatModes, MessageStatuses, StreamStatuses, ThreadStatuses, UIMessageRoles } from '@roundtable/shared';
 
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 import { createBaseMockParticipant, createBaseMockThread } from './api-mocks';

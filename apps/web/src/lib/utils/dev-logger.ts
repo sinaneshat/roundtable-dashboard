@@ -7,10 +7,10 @@ import { formatLogData as sharedFormatLogData } from '@roundtable/shared/lib/log
 
 import { getWebappEnv } from '@/lib/config/base-urls';
 
+import { safeStorageRemove, safeStorageSet } from './safe-storage';
+
 // Re-export shared utility for external use (verifies shared package is accessible)
 export { sharedFormatLogData };
-
-import { safeStorageRemove, safeStorageSet } from './safe-storage';
 
 type LogEntry = {
   key: string;

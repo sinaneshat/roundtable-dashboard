@@ -140,7 +140,8 @@ describe('sSR Hydration Consistency', () => {
       simulateSSRHydration(store, { messages, participants, thread });
 
       const state = store.getState();
-      expect(state.phase).toBe(ChatPhases.COMPLETE);
+      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
+      expect(state.phase).toBe(ChatPhases.IDLE);
     });
 
     it('should preserve message order after hydration', () => {
@@ -182,7 +183,8 @@ describe('sSR Hydration Consistency', () => {
       const assistantMsg = state.messages.find(m => m.id === 'msg-p0');
       expect(assistantMsg).toBeDefined();
 
-      const textPart = assistantMsg!.parts?.find(p => 'text' in p);
+      const definedAssistantMsg = assistantMsg as UIMessage;
+      const textPart = definedAssistantMsg.parts?.find(p => 'text' in p);
       expect(textPart && 'text' in textPart ? textPart.text : '').toBe(originalContent);
     });
 
@@ -233,9 +235,9 @@ describe('sSR Hydration Consistency', () => {
       const messagesAfterFirst = stateAfterFirst.messages;
 
       // Track updates for second hydration
-      let updateCount = 0;
+      let _updateCount = 0;
       const unsubscribe = store.subscribe(() => {
-        updateCount++;
+        _updateCount++;
       });
 
       // Simulate second hydration with same data
@@ -315,14 +317,15 @@ describe('sSR Hydration Consistency', () => {
       expect(store.getState().phase).toBe(ChatPhases.IDLE);
     });
 
-    it('should set COMPLETE phase for thread with completed round', () => {
+    it('should set IDLE phase for thread with completed round (resumption checks backend)', () => {
       const thread = createMockThread({ id: 'thread-123' });
       const participants = createMockParticipants(2, 'thread-123');
       const messages = createCompletedRoundMessages(0, 2, 'thread-123');
 
       simulateSSRHydration(store, { messages, participants, thread });
 
-      expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
+      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
+      expect(store.getState().phase).toBe(ChatPhases.IDLE);
     });
 
     it('should set screenMode to THREAD after hydration', () => {
@@ -489,7 +492,8 @@ describe('sSR Hydration Consistency', () => {
       const state = store.getState();
       // 3 rounds × (1 user + 2 participants + 1 moderator) = 12 messages
       expect(state.messages).toHaveLength(12);
-      expect(state.phase).toBe(ChatPhases.COMPLETE);
+      // New behavior: initializeThread always sets IDLE, letting stream resumption check backend
+      expect(state.phase).toBe(ChatPhases.IDLE);
     });
 
     it('should correctly identify highest round number', () => {

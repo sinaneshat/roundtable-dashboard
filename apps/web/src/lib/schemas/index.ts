@@ -1,15 +1,16 @@
 /**
  * Schemas Barrel Export
  *
- * Centralized exports for all Zod schemas and type utilities.
+ * Re-exports from @roundtable/shared for shared schemas.
+ * Platform-specific schemas (ChatParticipantSchema) defined locally.
  */
 
-// Data part schema (custom AI message parts)
-export type { DataPart } from './data-part-schema';
-export { DataPartSchema, isDataPart } from './data-part-schema';
+// ============================================================================
+// Re-export shared schemas from @roundtable/shared
+// ============================================================================
 
 // Error schemas
-export type { ErrorMetadata } from './error-schemas';
+export type { ErrorMetadata } from '@roundtable/shared';
 export {
   categorizeErrorMessage,
   createErrorMetadata,
@@ -19,39 +20,7 @@ export {
   getErrorCategoryMessage,
   isErrorCategory,
   isUIMessageErrorType,
-} from './error-schemas';
-
-// Form option schemas
-export type { FormOption, FormOptions, NavItem } from './form-option-schemas';
-export {
-  FormOptionSchema,
-  FormOptionsSchema,
-  isFormOption,
-  isFormOptions,
-  NavItemBaseSchema,
-} from './form-option-schemas';
-
-// Message metadata schemas
-export type {
-  PartialAssistantMetadata,
-  PartialMessageMetadata,
-  PartialUserMetadata,
-  PreSearchQueryMetadata,
-  PreSearchQueryState,
-  PreSearchResult,
-  PreSearchResultItem,
-} from './message-metadata';
-export {
-  messageHasError,
-  PartialAssistantMetadataSchema,
-  PartialMessageMetadataSchema,
-  PartialUserMetadataSchema,
-  PreSearchQueryMetadataSchema,
-  PreSearchQueryStateSchema,
-  PreSearchResultItemSchema,
-  PreSearchResultItemSchemaEnhanced,
-  PreSearchResultSchema,
-} from './message-metadata';
+} from '@roundtable/shared';
 
 // Message schemas
 export type {
@@ -62,7 +31,7 @@ export type {
   StreamingFinishResult,
   StreamingToolCall,
   StreamingUsage,
-} from './message-schemas';
+} from '@roundtable/shared';
 export {
   convertUIMessagesToText,
   createReasoningPart,
@@ -107,57 +76,10 @@ export {
   StreamingFinishResultSchema,
   StreamingToolCallSchema,
   StreamingUsageSchema,
-} from './message-schemas';
-export type {
-  OrderedModel,
-} from './model-schemas';
-export {
-  isOrderedModel,
-  isOrderedModelArray,
-  ModelSchema,
-  OrderedModelSchema,
-} from './model-schemas';
-// Participant schemas
-export type {
-  MinimalParticipant,
-  ModelReference,
-  ParticipantConfig,
-  ParticipantConfigInput,
-  ParticipantContext,
-  ParticipantIndex,
-  ParticipantIndexWithSentinel,
-  ParticipantUpdatePayload,
-} from './participant-schemas';
-export {
-  ChatParticipantSchema,
-  DEFAULT_PARTICIPANT_INDEX,
-  formatParticipantIndex,
-  getDisplayParticipantIndex,
-  isChatParticipant,
-  isChatParticipantArray,
-  isMinimalParticipant,
-  isParticipantConfig,
-  isParticipantConfigArray,
-  isParticipantConfigInput,
-  isParticipantContext,
-  isParticipantUpdatePayload,
-  MinimalParticipantSchema,
-  ModelIdReferenceSchema,
-  ModelReferenceSchema,
-  NO_PARTICIPANT_SENTINEL,
-  NonEmptyParticipantsArraySchema,
-  ParticipantConfigInputSchema,
-  ParticipantConfigSchema,
-  ParticipantContextSchema,
-  ParticipantIdSchema,
-  ParticipantIndexSchema,
-  ParticipantIndexWithSentinelSchema,
-  ParticipantRoleSchema,
-  ParticipantsArraySchema,
-  ParticipantUpdatePayloadSchema,
-} from './participant-schemas';
+} from '@roundtable/shared';
+
 // Round schemas
-export type { RoundNumber, RoundNumberWithSentinel } from './round-schemas';
+export type { RoundNumber, RoundNumberWithSentinel } from '@roundtable/shared';
 export {
   calculateNextRound,
   DEFAULT_ROUND_NUMBER,
@@ -172,4 +94,99 @@ export {
   RoundNumberSchema,
   RoundNumberWithSentinelSchema,
   safeParseRoundNumber,
-} from './round-schemas';
+} from '@roundtable/shared';
+
+// Shared participant schemas from @roundtable/shared
+export type {
+  MinimalParticipant,
+  ModelReference,
+  ParticipantConfig,
+  ParticipantConfigInput,
+  ParticipantContext,
+  ParticipantIndex,
+  ParticipantIndexWithSentinel,
+  ParticipantUpdatePayload,
+} from '@roundtable/shared';
+export {
+  ComparableParticipantSchema,
+  DEFAULT_PARTICIPANT_INDEX,
+  formatParticipantIndex,
+  getDisplayParticipantIndex,
+  isComparableParticipant,
+  isMinimalParticipant,
+  isParticipantConfig,
+  isParticipantConfigArray,
+  isParticipantConfigInput,
+  isParticipantContext,
+  isParticipantUpdatePayload,
+  MinimalParticipantSchema,
+  ModelIdReferenceSchema,
+  ModelReferenceSchema,
+  NO_PARTICIPANT_SENTINEL,
+  ParticipantConfigInputSchema,
+  ParticipantConfigSchema,
+  ParticipantContextSchema,
+  ParticipantIdSchema,
+  ParticipantIndexSchema,
+  ParticipantIndexWithSentinelSchema,
+  ParticipantRoleSchema,
+  ParticipantUpdatePayloadSchema,
+} from '@roundtable/shared';
+
+// ============================================================================
+// Platform-specific schemas (Web only)
+// ============================================================================
+
+// Data part schema (custom AI message parts)
+export type { DataPart } from './data-part-schema';
+export { DataPartSchema, isDataPart } from './data-part-schema';
+
+// Form option schemas
+export type { FormOption, FormOptions, NavItem } from './form-option-schemas';
+export {
+  FormOptionSchema,
+  FormOptionsSchema,
+  isFormOption,
+  isFormOptions,
+  NavItemBaseSchema,
+} from './form-option-schemas';
+
+// Message metadata schemas (web-specific streaming state)
+export type {
+  PartialAssistantMetadata,
+  PartialMessageMetadata,
+  PartialUserMetadata,
+  PreSearchQueryMetadata,
+  PreSearchQueryState,
+  PreSearchResult,
+  PreSearchResultItem,
+} from './message-metadata';
+export {
+  messageHasError,
+  PartialAssistantMetadataSchema,
+  PartialMessageMetadataSchema,
+  PartialUserMetadataSchema,
+  PreSearchQueryMetadataSchema,
+  PreSearchQueryStateSchema,
+  PreSearchResultItemSchema,
+  PreSearchResultItemSchemaEnhanced,
+  PreSearchResultSchema,
+} from './message-metadata';
+
+// Model schemas
+export type { OrderedModel } from './model-schemas';
+export {
+  isOrderedModel,
+  isOrderedModelArray,
+  ModelSchema,
+  OrderedModelSchema,
+} from './model-schemas';
+
+// Participant schemas with RPC types
+export {
+  ChatParticipantSchema,
+  isChatParticipant,
+  isChatParticipantArray,
+  NonEmptyParticipantsArraySchema,
+  ParticipantsArraySchema,
+} from './participant-schemas';

@@ -18,9 +18,9 @@ import { invalidateMessagesCache } from '@/common/cache-utils';
 import { CoreSchemas } from '@/core/schemas';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { DbMessageParts } from '@/db/schemas/chat-metadata';
+import { DbMessagePartsSchema } from '@/db/schemas/chat-metadata';
 import { log } from '@/lib/logger';
-import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
+import type { MessagePart, StreamingFinishResult } from '@/lib/schemas';
 import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { UsageStats } from '@/services/errors';
@@ -35,10 +35,10 @@ import { AvailableSourceSchema } from '@/types/citations';
 /**
  * Safely access a property from a Record<string, unknown> using bracket notation.
  * This helper avoids TS4111 index signature access errors while keeping code readable.
+ * Returns unknown which should be validated by callers.
  */
-function getMetadataProp<T>(obj: Record<string, unknown>, key: string) {
-  const value = obj[key];
-  return value as T | undefined;
+function getMetadataProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
 }
 
 // ============================================================================
@@ -126,13 +126,13 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
 
   const fields = [
     getNested(metadata, ['openai', 'reasoning']),
-    getMetadataProp<unknown>(metadata, 'reasoning'),
-    getMetadataProp<unknown>(metadata, 'thinking'),
-    getMetadataProp<unknown>(metadata, 'thought'),
-    getMetadataProp<unknown>(metadata, 'thoughts'),
-    getMetadataProp<unknown>(metadata, 'chain_of_thought'),
-    getMetadataProp<unknown>(metadata, 'internal_reasoning'),
-    getMetadataProp<unknown>(metadata, 'scratchpad'),
+    getMetadataProp(metadata, 'reasoning'),
+    getMetadataProp(metadata, 'thinking'),
+    getMetadataProp(metadata, 'thought'),
+    getMetadataProp(metadata, 'thoughts'),
+    getMetadataProp(metadata, 'chain_of_thought'),
+    getMetadataProp(metadata, 'internal_reasoning'),
+    getMetadataProp(metadata, 'scratchpad'),
   ];
 
   for (const field of fields) {
@@ -140,11 +140,11 @@ function extractReasoning(reasoningDeltas: string[], finishResult: StreamingFini
       return field.trim();
     }
     if (isObject(field)) {
-      const content = getMetadataProp<unknown>(field, 'content');
+      const content = getMetadataProp(field, 'content');
       if (typeof content === 'string' && content.trim()) {
         return content.trim();
       }
-      const text = getMetadataProp<unknown>(field, 'text');
+      const text = getMetadataProp(field, 'text');
       if (typeof text === 'string' && text.trim()) {
         return text.trim();
       }
@@ -412,9 +412,8 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
         id: messageId,
         metadata: messageMetadata,
         participantId,
-        // TYPE BRIDGE: MessagePart[] and DbMessageParts are structurally identical
-        // Zod schemas. Cast needed because TypeScript treats them as separate types.
-        parts: parts as DbMessageParts,
+        // Validate parts against DbMessageParts schema for type safety
+        parts: DbMessagePartsSchema.parse(parts),
         role: MessageRoles.ASSISTANT,
         roundNumber,
         threadId,
@@ -440,8 +439,8 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
           id: toolMessageId,
           metadata: null,
           participantId,
-          // TYPE BRIDGE: Same as above - MessagePart[] to DbMessageParts
-          parts: toolParts as DbMessageParts,
+          // Validate toolParts against DbMessageParts schema for type safety
+          parts: DbMessagePartsSchema.parse(toolParts),
           role: MessageRoles.TOOL,
           roundNumber,
           threadId,

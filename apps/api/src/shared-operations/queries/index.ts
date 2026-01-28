@@ -1,9 +1,6 @@
 /**
  * Query Operations - Barrel Export
  *
- * Reusable database query operations.
+ * NOTE: This module is kept for future query utilities.
+ * Currently no exports - query operations are implemented inline in handlers.
  */
-
-export * from './message-queries';
-export * from './thread-queries';
-export * from './user-queries';

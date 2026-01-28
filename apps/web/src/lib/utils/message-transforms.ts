@@ -33,9 +33,8 @@ import {
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
-import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
-import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
+import type { ErrorMetadata, ParticipantContext } from '@/lib/schemas';
+import { ErrorMetadataSchema } from '@/lib/schemas';
 import type {
   ApiMessage,
   DbAssistantMessageMetadata,
@@ -322,7 +321,7 @@ export function chatMessagesToUIMessages(
   rlog.moderator('toUI-setup', `participants=${participants?.length ?? 0} mapSize=${participantMap?.size ?? 0} indexMapSize=${participantIndexMap?.size ?? 0}`);
   // DEBUG: Log caller when participants are empty to trace the issue
   if (!participants?.length && messages.length > 1) {
-    rlog.phase('toUI-EMPTY', `msgs=${messages.length} NO PARTICIPANTS - caller: ${new Error().stack?.split('\n')[2]?.trim()}`);
+    rlog.phase('toUI-EMPTY', `msgs=${messages.length} NO PARTICIPANTS - caller: ${new Error('stack trace').stack?.split('\n')[2]?.trim()}`);
   }
   if (participants?.length) {
     participants.forEach((p, i) => rlog.moderator('toUI-p', `[${i}] id=${p.id?.slice(-8)} model=${p.modelId}`));

@@ -39,10 +39,10 @@ import {
   getUploadIdFromFilePart,
   getUrlFromPart,
   isFilePart,
-} from '@/lib/schemas/message-schemas';
-import { filterNonEmptyMessages, getRoundNumber } from '@/lib/utils';
+} from '@/lib/schemas';
+import { filterNonEmptyMessages, getRoundNumber, isPreSearch } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import { getExtractedText } from '@/lib/utils/metadata';
+import { getExtractedText, getPreSearchResultCount } from '@/lib/utils/metadata';
 import { chatMessagesToUIMessages } from '@/routes/chat/handlers/helpers';
 import {
   buildCitableContext,
@@ -1012,12 +1012,11 @@ export async function buildSystemPromptWithContext(
   if (thread.enableWebSearch) {
     // ✅ DEBUG: Log pre-search messages before building context
     const preSearchMsgs = previousDbMessages.filter(
-      msg => msg.metadata && 'isPreSearch' in msg.metadata && (msg.metadata as { isPreSearch?: boolean }).isPreSearch === true,
+      msg => isPreSearch(msg.metadata),
     );
     // ✅ DEBUG: Log detailed pre-search message info
     for (const psMsg of preSearchMsgs) {
-      const meta = psMsg.metadata as { preSearch?: { results?: unknown[] } } | null;
-      const resultCount = meta?.preSearch?.results?.length ?? 0;
+      const resultCount = getPreSearchResultCount(psMsg.metadata);
       rlog.presearch('context-msg-detail', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} msgId=${psMsg.id.slice(-8)} resultCount=${resultCount}`);
     }
     rlog.presearch('context-build', `tid=${thread.id.slice(-8)} r${currentRoundNumber} p${participantIndex} preSearchMsgs=${preSearchMsgs.length} totalMsgs=${previousDbMessages.length}`);
@@ -1148,16 +1147,18 @@ export async function buildSystemPromptWithContext(
 // Message Preparation
 // ============================================================================
 
-function extractUrlFromFilePart(part: unknown): string | null {
-  if (
-    typeof part === 'object'
-    && part !== null
-    && 'type' in part
-    && part.type === 'file'
-    && 'url' in part
-    && typeof part.url === 'string'
-  ) {
-    return part.url;
+/**
+ * Zod schema for extracting URL from file parts
+ */
+const FilePartUrlExtractSchema = z.object({
+  type: z.literal('file'),
+  url: z.string(),
+});
+
+function extractUrlFromFilePart(part: z.infer<typeof FilePartUrlExtractSchema> | { type: string }): string | null {
+  const result = FilePartUrlExtractSchema.safeParse(part);
+  if (result.success) {
+    return result.data.url;
   }
   return null;
 }

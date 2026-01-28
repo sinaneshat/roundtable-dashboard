@@ -64,21 +64,22 @@ export function PricingContent({
     return !!getSubscriptionForPrice(priceId);
   };
 
+  // Filter to products with valid monthly prices
+  // Type guard narrows product.prices to non-nullable array
   const monthlyProducts = products
-    .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } => {
+    .filter((product): product is typeof product & { prices: Price[] } => {
       if (!product.prices || product.prices.length === 0) {
         return false;
       }
-      const pricesArray = product.prices as Price[];
-      return pricesArray.some((price) => {
+      return product.prices.some((price) => {
         return price.interval === 'month'
           && price.unitAmount !== null
           && price.unitAmount !== undefined;
       });
     })
     .map((product) => {
-      const prices = (product.prices ?? []) as Price[];
-      const filteredPrices = prices.filter((price) => {
+      // product.prices is now typed as Price[] after the type guard
+      const filteredPrices = product.prices.filter((price) => {
         return price.interval === 'month'
           && price.unitAmount !== null
           && price.unitAmount !== undefined;
@@ -178,7 +179,8 @@ function ProductGrid({
     <div className="w-full max-w-md mx-auto">
       <div className="grid grid-cols-1 gap-6 w-full">
         {products.map((product, index) => {
-          const price = product.prices?.[0] as Price | undefined;
+          // Get first price - type narrows to Price after the null check below
+          const price = product.prices?.[0];
 
           if (!price || price.unitAmount === undefined || price.unitAmount === null) {
             return null;

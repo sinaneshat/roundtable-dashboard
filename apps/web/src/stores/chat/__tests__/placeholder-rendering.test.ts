@@ -23,6 +23,20 @@ import { createChatStore } from '../store';
 import { ChatPhases } from '../store-schemas';
 
 // ============================================================================
+// Test Assertions
+// ============================================================================
+
+/**
+ * Asserts that a value is defined (not undefined or null).
+ * After calling this, TypeScript knows the value is of type T.
+ */
+function assertDefined<T>(value: T | undefined | null, msg?: string): asserts value is T {
+  if (value === undefined || value === null) {
+    throw new Error(msg ?? 'Expected value to be defined');
+  }
+}
+
+// ============================================================================
 // Test Setup
 // ============================================================================
 
@@ -95,8 +109,10 @@ describe('frame 2: Initial Placeholder Creation on Send', () => {
 
     placeholders.forEach((placeholder) => {
       expect(placeholder.parts).toHaveLength(1);
-      expect(placeholder.parts[0]?.type).toBe(MessagePartTypes.TEXT);
-      expect((placeholder.parts[0] as { text: string }).text).toBe('');
+      const firstPart = placeholder.parts[0];
+      assertDefined(firstPart, 'Placeholder first part should exist');
+      expect(firstPart.type).toBe(MessagePartTypes.TEXT);
+      expect((firstPart as { text: string }).text).toBe('');
     });
   });
 
@@ -252,7 +268,10 @@ describe('text Appending to Placeholders', () => {
     store.getState().appendEntityStreamingText(1, ' World', 0);
 
     const p1Message = store.getState().messages.find(m => m.id === 'streaming_p1_r0');
-    expect((p1Message?.parts[0] as { text: string }).text).toBe('Hello World');
+    assertDefined(p1Message, 'P1 message should exist');
+    const p1FirstPart = p1Message.parts[0];
+    assertDefined(p1FirstPart, 'P1 first part should exist');
+    expect((p1FirstPart as { text: string }).text).toBe('Hello World');
   });
 
   it('should append text to moderator placeholder', () => {
@@ -263,7 +282,10 @@ describe('text Appending to Placeholders', () => {
     store.getState().appendModeratorStreamingText('All agreed.', 0);
 
     const modMessage = store.getState().messages.find(m => m.metadata?.isModerator);
-    expect((modMessage?.parts[0] as { text: string }).text).toBe('Summary: All agreed.');
+    assertDefined(modMessage, 'Moderator message should exist');
+    const modFirstPart = modMessage.parts[0];
+    assertDefined(modFirstPart, 'Moderator first part should exist');
+    expect((modFirstPart as { text: string }).text).toBe('Summary: All agreed.');
   });
 
   it('should create placeholder if not exists when appending', () => {
@@ -274,8 +296,10 @@ describe('text Appending to Placeholders', () => {
     store.getState().appendEntityStreamingText(1, 'Text', 0);
 
     const p1Message = store.getState().messages.find(m => m.id === 'streaming_p1_r0');
-    expect(p1Message).toBeDefined();
-    expect((p1Message?.parts[0] as { text: string }).text).toBe('Text');
+    assertDefined(p1Message, 'P1 message should be created');
+    const p1Part = p1Message.parts[0];
+    assertDefined(p1Part, 'P1 first part should exist');
+    expect((p1Part as { text: string }).text).toBe('Text');
   });
 
   it('should ignore empty text chunks', () => {
@@ -287,7 +311,10 @@ describe('text Appending to Placeholders', () => {
     store.getState().appendEntityStreamingText(1, ' World', 0);
 
     const p1Message = store.getState().messages.find(m => m.id === 'streaming_p1_r0');
-    expect((p1Message?.parts[0] as { text: string }).text).toBe('Hello World');
+    assertDefined(p1Message, 'P1 message should exist after ignoring empty');
+    const p1EmptyPart = p1Message.parts[0];
+    assertDefined(p1EmptyPart, 'P1 first part should exist');
+    expect((p1EmptyPart as { text: string }).text).toBe('Hello World');
   });
 });
 
@@ -419,13 +446,17 @@ describe('multi-Round Placeholder Management', () => {
 
     // Old messages should still exist
     const r0P1 = store.getState().messages.find(m => m.id === 'streaming_p1_r0');
-    expect(r0P1).toBeDefined();
-    expect((r0P1?.parts[0] as { text: string }).text).toBe('R0 P1 content');
+    assertDefined(r0P1, 'R0 P1 message should still exist');
+    const r0P1Part = r0P1.parts[0];
+    assertDefined(r0P1Part, 'R0 P1 first part should exist');
+    expect((r0P1Part as { text: string }).text).toBe('R0 P1 content');
 
     // New placeholders should exist
     const r1P1 = store.getState().messages.find(m => m.id === 'streaming_p1_r1');
-    expect(r1P1).toBeDefined();
-    expect((r1P1?.parts[0] as { text: string }).text).toBe('');
+    assertDefined(r1P1, 'R1 P1 message should exist');
+    const r1P1Part = r1P1.parts[0];
+    assertDefined(r1P1Part, 'R1 P1 first part should exist');
+    expect((r1P1Part as { text: string }).text).toBe('');
 
     // Total messages increased
     expect(store.getState().messages.length).toBeGreaterThan(r0MessageCount);
@@ -467,7 +498,9 @@ describe('placeholder Model Information', () => {
 
   it('should include model ID from participant config', () => {
     const participants = createMockParticipants(2);
-    participants[1]!.modelId = 'anthropic/claude-3-opus';
+    const p1 = participants[1];
+    assertDefined(p1, 'Participant 1 should exist');
+    p1.modelId = 'anthropic/claude-3-opus';
 
     const thread = createMockThread({ id: 'thread-model' });
     store.setState({ participants, thread });
@@ -480,7 +513,9 @@ describe('placeholder Model Information', () => {
 
   it('should include participant ID in metadata', () => {
     const participants = createMockParticipants(2);
-    participants[1]!.id = 'participant-123';
+    const p1ForId = participants[1];
+    assertDefined(p1ForId, 'Participant 1 should exist');
+    p1ForId.id = 'participant-123';
 
     const thread = createMockThread({ id: 'thread-pid' });
     store.setState({ participants, thread });

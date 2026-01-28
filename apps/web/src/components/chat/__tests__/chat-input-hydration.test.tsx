@@ -21,8 +21,8 @@ import type { FormEvent, ReactNode, RefObject } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { PendingAttachment } from '@/hooks/utils';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { render } from '@/lib/testing';
+import type { ParticipantConfig } from '@/lib/schemas';
+import { render, screen } from '@/lib/testing';
 
 /**
  * ChatInput props type definition for type-safe test mocking
@@ -103,7 +103,7 @@ beforeAll(async () => {
 describe('chatInput Hydration Safety', () => {
   describe('file input rendering', () => {
     it('should always render file input element regardless of enableAttachments', () => {
-      const { container } = render(
+      render(
         <ChatInput
           value=""
           onChange={() => {}}
@@ -115,13 +115,13 @@ describe('chatInput Hydration Safety', () => {
       );
 
       // File input should always exist (just disabled when attachments not enabled)
-      const fileInput = container.querySelector('input[type="file"]');
+      const fileInput = screen.getByTestId('file-input');
       expect(fileInput).toBeInTheDocument();
       expect(fileInput).toBeDisabled();
     });
 
     it('should enable file input when attachments are enabled', () => {
-      const { container } = render(
+      render(
         <ChatInput
           value=""
           onChange={() => {}}
@@ -132,7 +132,7 @@ describe('chatInput Hydration Safety', () => {
         />,
       );
 
-      const fileInput = container.querySelector('input[type="file"]');
+      const fileInput = screen.getByTestId('file-input');
       expect(fileInput).toBeInTheDocument();
       expect(fileInput).not.toBeDisabled();
     });

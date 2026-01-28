@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import type { MessagePart } from '@/lib/schemas/message-schemas';
+import type { MessagePart } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 import dynamic from '@/lib/utils/dynamic';
 import { WebSearchResultItemSchema } from '@/services/api';

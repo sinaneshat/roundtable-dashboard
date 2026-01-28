@@ -90,16 +90,20 @@ function deriveTierRecord<T>(
     result[tier] = extractor(config);
   }
   /**
-   * ✅ EXHAUSTIVE ITERATION CAST - TypeScript limitation
+   * ✅ JUSTIFIED AS CAST - TypeScript limitation with const array iteration
    *
    * WHY THIS CAST IS NECESSARY:
    * - TypeScript cannot infer that iterating over SUBSCRIPTION_TIERS fills all keys
    * - SUBSCRIPTION_TIERS is a const array of all SubscriptionTier values
    * - The for-loop assigns every tier, making result complete (not partial)
-   * - Runtime throws Error if any tier is missing config (defensive guard)
+   * - Runtime throws Error if any tier is missing config (defensive guard above)
+   *
+   * RUNTIME SAFETY: The throw statement above ensures this cast is safe.
+   * If any tier is missing from TIER_CONFIG, we throw before reaching this cast.
    *
    * ALTERNATIVE: Use Object.fromEntries with SUBSCRIPTION_TIERS.map but still requires cast
    */
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- see comment above
   return result as Record<SubscriptionTier, T>;
 }
 

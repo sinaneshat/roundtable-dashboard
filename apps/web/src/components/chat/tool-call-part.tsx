@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useTranslations } from '@/lib/i18n';
-import type { MessagePart } from '@/lib/schemas/message-schemas';
+import type { MessagePart } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
 
 type ToolCallPartProps = {

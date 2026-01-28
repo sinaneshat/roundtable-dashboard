@@ -17,7 +17,7 @@ import { useChatStoreApi, useModelPreferencesStore } from '@/components/provider
 // Direct import avoids circular dependency through @/hooks/utils barrel
 import { useAnalyzePromptStream } from '@/hooks/utils/use-analyze-prompt-stream';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 
 type AutoModeAnalysisOptions = {
   prompt: string;
@@ -90,7 +90,6 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
       if (result) {
         const { enableWebSearch: recommendedWebSearch, mode: recommendedMode, participants } = result;
 
-
         // Transform to ParticipantConfig format
         // ✅ NO POST-FILTERING NEEDED: AI already picked from accessible models
         let newParticipants: ParticipantConfig[] = participants.map((p, index) => ({
@@ -107,7 +106,6 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
             p => accessibleModelIds.has(p.modelId),
           );
 
-  
           // If AI returned invalid models (shouldn't happen), pad with accessible ones
           if (validParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
             const usedModelIds = new Set(validParticipants.map(p => p.modelId));

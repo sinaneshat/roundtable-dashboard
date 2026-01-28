@@ -8,7 +8,7 @@ import { normalizeError } from '@/common/error-handling';
 import type { DbType } from '@/db';
 import * as tables from '@/db';
 import { DbChangelogDataSchema } from '@/db/schemas/chat-metadata';
-import type { ParticipantConfigInput } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfigInput } from '@/lib/schemas';
 import type { ChatParticipant } from '@/routes/chat/schema';
 import type { TypedLogger } from '@/types/logger';
 

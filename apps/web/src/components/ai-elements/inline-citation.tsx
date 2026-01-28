@@ -613,7 +613,7 @@ function SourcesFooter({ className, sources }: SourcesFooterProps) {
                     <InlineCitationCarouselItem key={source.id}>
                       <InlineCitationSource
                         title={source.title || source.filename || source.id || 'Unknown'}
-                        sourceType={source.sourceType as CitationSourceType}
+                        sourceType={source.sourceType}
                         url={source.url}
                         downloadUrl={source.downloadUrl}
                         filename={source.filename}

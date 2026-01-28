@@ -7,6 +7,7 @@
 
 import { MessageRoles, ModelIds, UIMessageRoles } from '@roundtable/shared/enums';
 import { desc, eq } from 'drizzle-orm';
+import * as z from 'zod';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -148,17 +149,34 @@ function buildConversationSummary(
 }
 
 /**
- * Extract text content from message parts
+ * Schema for text parts in message extraction
  */
-function extractTextFromParts(parts: unknown): string {
-  if (!Array.isArray(parts)) {
+const TextPartSchema = z.object({
+  text: z.string(),
+  type: z.literal('text'),
+});
+
+/**
+ * Schema for message parts array
+ */
+const MessagePartsSchema = z.array(z.object({
+  text: z.string().optional(),
+  type: z.string(),
+}));
+
+/**
+ * Extract text content from message parts using Zod validation
+ */
+function extractTextFromParts(parts: z.infer<typeof MessagePartsSchema> | null | undefined): string {
+  if (!parts) {
     return '';
   }
 
   return parts
-    .filter((p): p is { type: 'text'; text: string } =>
-      typeof p === 'object' && p !== null && 'type' in p && p.type === 'text' && 'text' in p,
-    )
+    .filter((p): p is z.infer<typeof TextPartSchema> => {
+      const result = TextPartSchema.safeParse(p);
+      return result.success;
+    })
     .map(p => p.text)
     .join(' ');
 }

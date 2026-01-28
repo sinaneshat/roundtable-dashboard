@@ -29,6 +29,20 @@ import {
 import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
+// Test Assertions
+// ============================================================================
+
+/**
+ * Asserts that a value is defined (not undefined or null).
+ * After calling this, TypeScript knows the value is of type T.
+ */
+function assertDefined<T>(value: T | undefined | null, msg?: string): asserts value is T {
+  if (value === undefined || value === null) {
+    throw new Error(msg ?? 'Expected value to be defined');
+  }
+}
+
+// ============================================================================
 // Test Utilities
 // ============================================================================
 
@@ -160,7 +174,8 @@ describe('markdown Hydration', () => {
       hydrateFromSSR(store, thread, participants, messages);
 
       const hydratedMessage = store.getState().messages.find(m => m.id === 'msg-p0');
-      expect(getMessageText(hydratedMessage!)).toBe(originalContent);
+      assertDefined(hydratedMessage, 'Hydrated message should exist');
+      expect(getMessageText(hydratedMessage)).toBe(originalContent);
     });
 
     it('should preserve markdown with special characters', () => {
@@ -183,7 +198,8 @@ describe('markdown Hydration', () => {
       hydrateFromSSR(store, thread, participants, messages);
 
       const hydratedMessage = store.getState().messages.find(m => m.id === 'msg-p0');
-      expect(getMessageText(hydratedMessage!)).toBe(contentWithSpecialChars);
+      assertDefined(hydratedMessage, 'Hydrated message should exist');
+      expect(getMessageText(hydratedMessage)).toBe(contentWithSpecialChars);
     });
 
     it('should preserve unicode and emoji in markdown', () => {
@@ -206,7 +222,8 @@ describe('markdown Hydration', () => {
       hydrateFromSSR(store, thread, participants, messages);
 
       const hydratedMessage = store.getState().messages.find(m => m.id === 'msg-p0');
-      expect(getMessageText(hydratedMessage!)).toBe(unicodeContent);
+      assertDefined(hydratedMessage, 'Hydrated message should exist');
+      expect(getMessageText(hydratedMessage)).toBe(unicodeContent);
     });
   });
 
@@ -244,7 +261,8 @@ describe('markdown Hydration', () => {
 
       // Final content should be correct
       const p0Msg = store.getState().messages.find(m => m.id === 'msg-p0');
-      expect(getMessageText(p0Msg!)).toBe(MARKDOWN_SAMPLES.complex);
+      assertDefined(p0Msg, 'Message p0 should exist');
+      expect(getMessageText(p0Msg)).toBe(MARKDOWN_SAMPLES.complex);
     });
 
     it('should have content populated in single state update', () => {
@@ -294,7 +312,9 @@ describe('markdown Hydration', () => {
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const codeBlockMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(codeBlockMsg, 'Code block message should exist');
+      const content = getMessageText(codeBlockMsg);
 
       // Verify code block structure preserved
       expect(content).toContain('```typescript');
@@ -319,7 +339,9 @@ describe('markdown Hydration', () => {
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const multiCodeBlockMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(multiCodeBlockMsg, 'Multi code block message should exist');
+      const content = getMessageText(multiCodeBlockMsg);
 
       expect(content).toContain('```javascript');
       expect(content).toContain('```python');
@@ -354,7 +376,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const indentedCodeMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(indentedCodeMsg, 'Indented code message should exist');
+      const content = getMessageText(indentedCodeMsg);
 
       // Check indentation is preserved
       expect(content).toContain('    if True:');
@@ -381,7 +405,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const inlineFormattingMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(inlineFormattingMsg, 'Inline formatting message should exist');
+      const content = getMessageText(inlineFormattingMsg);
 
       expect(content).toContain('**bold**');
       expect(content).toContain('*italic*');
@@ -408,7 +434,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const nestedMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(nestedMsg, 'Nested formatting message should exist');
+      const content = getMessageText(nestedMsg);
       expect(content).toBe(nestedFormatting);
     });
   });
@@ -431,7 +459,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const whitespaceMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(whitespaceMsg, 'Whitespace message should exist');
+      const content = getMessageText(whitespaceMsg);
 
       // Double newlines preserved
       expect(content).toContain('\n\n');
@@ -462,7 +492,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const trailingMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(trailingMsg, 'Trailing newline message should exist');
+      const content = getMessageText(trailingMsg);
       expect(content).toBe(contentWithTrailing);
     });
 
@@ -485,7 +517,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const leadingMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(leadingMsg, 'Leading whitespace message should exist');
+      const content = getMessageText(leadingMsg);
       expect(content).toBe(contentWithLeading);
     });
   });
@@ -497,17 +531,25 @@ def foo():
 
       // Simulate streaming chunks of markdown
       store.getState().appendEntityStreamingText(0, '# Heading\n\n', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('# Heading\n\n');
+      const msg1 = store.getState().messages[0];
+      assertDefined(msg1, 'First streaming message should exist');
+      expect(getMessageText(msg1)).toBe('# Heading\n\n');
 
       store.getState().appendEntityStreamingText(0, 'Paragraph with **bold', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('# Heading\n\nParagraph with **bold');
+      const msg2 = store.getState().messages[0];
+      assertDefined(msg2, 'Streaming message should exist after second append');
+      expect(getMessageText(msg2)).toBe('# Heading\n\nParagraph with **bold');
 
       store.getState().appendEntityStreamingText(0, '** text.\n\n', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('# Heading\n\nParagraph with **bold** text.\n\n');
+      const msg3 = store.getState().messages[0];
+      assertDefined(msg3, 'Streaming message should exist after third append');
+      expect(getMessageText(msg3)).toBe('# Heading\n\nParagraph with **bold** text.\n\n');
 
       store.getState().appendEntityStreamingText(0, '```js\ncode()\n```', 0);
 
-      const finalContent = getMessageText(store.getState().messages[0]!);
+      const finalMsg = store.getState().messages[0];
+      assertDefined(finalMsg, 'Final streaming message should exist');
+      const finalContent = getMessageText(finalMsg);
       expect(finalContent).toBe('# Heading\n\nParagraph with **bold** text.\n\n```js\ncode()\n```');
     });
 
@@ -517,16 +559,22 @@ def foo():
 
       // Start code block
       store.getState().appendEntityStreamingText(0, '```typescript\n', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('```typescript\n');
+      const codeMsg1 = store.getState().messages[0];
+      assertDefined(codeMsg1, 'Code block message should exist');
+      expect(getMessageText(codeMsg1)).toBe('```typescript\n');
 
       // Add code content
       store.getState().appendEntityStreamingText(0, 'const x = 1;\n', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('```typescript\nconst x = 1;\n');
+      const codeMsg2 = store.getState().messages[0];
+      assertDefined(codeMsg2, 'Code block message should exist after content');
+      expect(getMessageText(codeMsg2)).toBe('```typescript\nconst x = 1;\n');
 
       // Close code block
       store.getState().appendEntityStreamingText(0, '```', 0);
 
-      const finalContent = getMessageText(store.getState().messages[0]!);
+      const codeMsgFinal = store.getState().messages[0];
+      assertDefined(codeMsgFinal, 'Final code block message should exist');
+      const finalContent = getMessageText(codeMsgFinal);
       expect(finalContent).toBe('```typescript\nconst x = 1;\n```');
     });
 
@@ -536,16 +584,22 @@ def foo():
 
       // Start bold
       store.getState().appendEntityStreamingText(0, 'This is **', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('This is **');
+      const boldMsg1 = store.getState().messages[0];
+      assertDefined(boldMsg1, 'Bold start message should exist');
+      expect(getMessageText(boldMsg1)).toBe('This is **');
 
       // Add bold content
       store.getState().appendEntityStreamingText(0, 'important', 0);
-      expect(getMessageText(store.getState().messages[0]!)).toBe('This is **important');
+      const boldMsg2 = store.getState().messages[0];
+      assertDefined(boldMsg2, 'Bold content message should exist');
+      expect(getMessageText(boldMsg2)).toBe('This is **important');
 
       // Close bold
       store.getState().appendEntityStreamingText(0, '** text.', 0);
 
-      const finalContent = getMessageText(store.getState().messages[0]!);
+      const boldMsgFinal = store.getState().messages[0];
+      assertDefined(boldMsgFinal, 'Final bold message should exist');
+      const finalContent = getMessageText(boldMsgFinal);
       expect(finalContent).toBe('This is **important** text.');
     });
 
@@ -561,7 +615,9 @@ def foo():
         store.getState().appendEntityStreamingText(0, chunk, 0);
       }
 
-      const streamedContent = getMessageText(store.getState().messages[0]!);
+      const streamedMsg = store.getState().messages[0];
+      assertDefined(streamedMsg, 'Streamed message should exist');
+      const streamedContent = getMessageText(streamedMsg);
       expect(streamedContent).toBe(fullContent);
     });
   });
@@ -584,7 +640,9 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const content = getMessageText(store.getState().messages.find(m => m.id === 'msg-p0')!);
+      const nestedListMsg = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(nestedListMsg, 'Nested list message should exist');
+      const content = getMessageText(nestedListMsg);
       expect(content).toBe(MARKDOWN_SAMPLES.nestedStructures);
     });
   });
@@ -607,10 +665,14 @@ def foo():
 
       hydrateFromSSR(store, thread, participants, messages);
 
-      const message = store.getState().messages.find(m => m.id === 'msg-p0')!;
+      const message = store.getState().messages.find(m => m.id === 'msg-p0');
+      assertDefined(message, 'Message should exist');
+      assertDefined(message.parts, 'Message parts should exist');
 
       expect(message.parts).toHaveLength(1);
-      expect(message.parts![0]!.type).toBe(MessagePartTypes.TEXT);
+      const firstPart = message.parts[0];
+      assertDefined(firstPart, 'First part should exist');
+      expect(firstPart.type).toBe(MessagePartTypes.TEXT);
     });
 
     it('should preserve streaming content in TEXT part', () => {
@@ -619,10 +681,14 @@ def foo():
 
       store.getState().appendEntityStreamingText(0, MARKDOWN_SAMPLES.simple, 0);
 
-      const message = store.getState().messages[0]!;
+      const message = store.getState().messages[0];
+      assertDefined(message, 'Streaming message should exist');
+      assertDefined(message.parts, 'Message parts should exist');
 
       expect(message.parts).toHaveLength(1);
-      expect(message.parts![0]).toEqual({
+      const firstPart = message.parts[0];
+      assertDefined(firstPart, 'First part should exist');
+      expect(firstPart).toEqual({
         text: MARKDOWN_SAMPLES.simple,
         type: MessagePartTypes.TEXT,
       });

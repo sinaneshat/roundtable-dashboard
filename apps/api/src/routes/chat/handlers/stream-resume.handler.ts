@@ -9,7 +9,7 @@ import { createHandler, Responses, STREAMING_CONFIG, ThreadIdParamSchema } from 
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { extractSessionToken } from '@/lib/auth';
-import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
+import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas';
 import { rlog } from '@/lib/utils/dev-logger';
 import { clearThreadActiveStream, createLiveParticipantResumeStream, createWaitingParticipantStream, getActiveParticipantStreamId, getActivePreSearchStreamId, getNextParticipantToStream, getParticipantStreamChunks, getParticipantStreamMetadata, getPreSearchStreamChunks, getPreSearchStreamMetadata, getThreadActiveStream, updateParticipantStatus } from '@/services/streaming';
 import type { ApiEnv } from '@/types';

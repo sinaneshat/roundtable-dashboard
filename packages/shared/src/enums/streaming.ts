@@ -704,3 +704,83 @@ export const CheckRoundCompletionReasons = {
   SCHEDULED_CHECK: 'scheduled_check' as const,
   STALE_STREAM: 'stale_stream' as const,
 } as const;
+
+// ============================================================================
+// ENTITY SUBSCRIPTION STATUS (Frontend entity stream subscription state)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ENTITY_SUBSCRIPTION_STATUSES = ['waiting', 'complete', 'error', 'disabled'] as const;
+
+// 2. ZOD SCHEMA
+export const EntitySubscriptionStatusSchema = z.enum(ENTITY_SUBSCRIPTION_STATUSES).openapi({
+  description: 'Status of an entity stream subscription (presearch, participant, or moderator)',
+  example: 'complete',
+});
+
+// 3. TYPESCRIPT TYPE
+export type EntitySubscriptionStatus = z.infer<typeof EntitySubscriptionStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ENTITY_SUBSCRIPTION_STATUS: EntitySubscriptionStatus = 'waiting';
+
+// 5. CONSTANT OBJECT
+export const EntitySubscriptionStatuses = {
+  COMPLETE: 'complete' as const,
+  DISABLED: 'disabled' as const,
+  ERROR: 'error' as const,
+  WAITING: 'waiting' as const,
+} as const;
+
+// ============================================================================
+// STREAM RESUMPTION STATUS (Hook state for stream resumption check)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const STREAM_RESUMPTION_STATUSES = ['idle', 'checking', 'complete', 'error'] as const;
+
+// 2. ZOD SCHEMA
+export const StreamResumptionStatusSchema = z.enum(STREAM_RESUMPTION_STATUSES).openapi({
+  description: 'Status of the stream resumption check hook',
+  example: 'complete',
+});
+
+// 3. TYPESCRIPT TYPE
+export type StreamResumptionStatus = z.infer<typeof StreamResumptionStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_STREAM_RESUMPTION_STATUS: StreamResumptionStatus = 'idle';
+
+// 5. CONSTANT OBJECT
+export const StreamResumptionStatuses = {
+  CHECKING: 'checking' as const,
+  COMPLETE: 'complete' as const,
+  ERROR: 'error' as const,
+  IDLE: 'idle' as const,
+} as const;
+
+// ============================================================================
+// ENTITY PHASE (Frontend entity subscription phase discriminator)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ENTITY_PHASES = ['presearch', 'participant', 'moderator'] as const;
+
+// 2. ZOD SCHEMA
+export const EntityPhaseSchema = z.enum(ENTITY_PHASES).openapi({
+  description: 'Entity phase for frontend subscription (presearch, participant, or moderator)',
+  example: 'participant',
+});
+
+// 3. TYPESCRIPT TYPE
+export type EntityPhase = z.infer<typeof EntityPhaseSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ENTITY_PHASE: EntityPhase = 'participant';
+
+// 5. CONSTANT OBJECT
+export const EntityPhases = {
+  MODERATOR: 'moderator' as const,
+  PARTICIPANT: 'participant' as const,
+  PRESEARCH: 'presearch' as const,
+} as const;

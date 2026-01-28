@@ -33,7 +33,7 @@ import type {
 } from '@/db/validation';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import { log } from '@/lib/logger';
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import type { ExtendedFilePart } from '@/lib/schemas';
 import { sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import {

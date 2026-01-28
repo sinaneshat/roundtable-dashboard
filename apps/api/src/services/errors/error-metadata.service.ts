@@ -20,7 +20,7 @@ import {
 } from '@roundtable/shared/enums';
 import * as z from 'zod';
 
-import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
+import { categorizeErrorMessage } from '@/lib/schemas';
 import { isTransientError } from '@/lib/utils/error-metadata-builders';
 import { isObject } from '@/lib/utils/type-guards';
 
@@ -31,9 +31,12 @@ import { isObject } from '@/lib/utils/type-guards';
 /**
  * Helper to access index signature properties safely
  * Required for noPropertyAccessFromIndexSignature TypeScript option
+ *
+ * Returns the value at the key if it exists. Callers should use
+ * type guards or Zod validation to narrow the type as needed.
  */
-function getObjectProp<T>(obj: Record<string, unknown>, key: string) {
-  return obj[key] as T | undefined;
+function getObjectProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
 }
 
 // ============================================================================
@@ -113,7 +116,7 @@ export function extractProviderError(
   // Check providerMetadata with type guard
   if (isObject(providerMetadata)) {
     // Extract error field (string or object)
-    const providerError = getObjectProp<unknown>(providerMetadata, 'error');
+    const providerError = getObjectProp(providerMetadata, 'error');
     if (providerError) {
       rawError
         = typeof providerError === 'string'
@@ -122,14 +125,14 @@ export function extractProviderError(
     }
 
     // Check errorMessage field as fallback
-    const errorMessage = getObjectProp<unknown>(providerMetadata, 'errorMessage');
+    const errorMessage = getObjectProp(providerMetadata, 'errorMessage');
     if (!rawError && errorMessage) {
       rawError = String(errorMessage);
     }
 
     // Detect content moderation errors
-    const moderation = getObjectProp<unknown>(providerMetadata, 'moderation');
-    const contentFilter = getObjectProp<unknown>(providerMetadata, 'contentFilter');
+    const moderation = getObjectProp(providerMetadata, 'moderation');
+    const contentFilter = getObjectProp(providerMetadata, 'contentFilter');
     if (moderation || contentFilter) {
       category = ErrorCategories.CONTENT_FILTER;
       rawError = rawError || 'Content was filtered by safety systems';
@@ -138,7 +141,7 @@ export function extractProviderError(
 
   // Check response with type guard
   if (!rawError && isObject(response)) {
-    const responseError = getObjectProp<unknown>(response, 'error');
+    const responseError = getObjectProp(response, 'error');
     if (responseError) {
       rawError
         = typeof responseError === 'string'
@@ -270,7 +273,7 @@ function isExtractErrorMetadataParams(
   if (!isObject(value)) {
     return false;
   }
-  const finishReason = getObjectProp<unknown>(value, 'finishReason');
+  const finishReason = getObjectProp(value, 'finishReason');
   return (
     typeof finishReason === 'string'
     && 'providerMetadata' in value

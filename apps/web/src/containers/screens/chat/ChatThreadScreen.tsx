@@ -8,7 +8,7 @@ import { useChatStore, useModelPreferencesStore } from '@/components/providers';
 import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { toastManager } from '@/lib/toast';
 import {
   chatMessagesToUIMessages,

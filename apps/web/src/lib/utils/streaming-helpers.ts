@@ -76,7 +76,36 @@ export function isStreamingMetadata(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== 'object') {
     return false;
   }
-  return 'isStreaming' in metadata && (metadata as { isStreaming: unknown }).isStreaming === true;
+  return 'isStreaming' in metadata && (metadata as { isStreaming: boolean }).isStreaming === true;
+}
+
+/**
+ * Type for mutable streaming metadata
+ * Used when we need to update the isStreaming flag on a message
+ */
+type MutableStreamingMetadata = {
+  isStreaming: boolean;
+};
+
+/**
+ * Safely set the isStreaming flag on a message's metadata
+ *
+ * Validates that metadata exists and is an object before mutation.
+ * Returns true if the mutation was successful, false otherwise.
+ *
+ * @param metadata - Message metadata (unknown type for safety)
+ * @param isStreaming - New value for isStreaming flag
+ * @returns true if mutation succeeded, false if metadata was invalid
+ */
+export function setStreamingStatus(metadata: unknown, isStreaming: boolean): boolean {
+  if (!metadata || typeof metadata !== 'object') {
+    return false;
+  }
+  if (!('isStreaming' in metadata)) {
+    return false;
+  }
+  (metadata as MutableStreamingMetadata).isStreaming = isStreaming;
+  return true;
 }
 
 /**

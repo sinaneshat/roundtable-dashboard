@@ -6,8 +6,7 @@ import type { ChatMode } from '@roundtable/shared';
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ExtendedFilePart, ParticipantConfig } from '@/lib/schemas';
 import type { ChangelogItem, ChatParticipant, StoredPreSearch } from '@/services/api';
 
 // Simple ID generator to avoid nanoid dependency

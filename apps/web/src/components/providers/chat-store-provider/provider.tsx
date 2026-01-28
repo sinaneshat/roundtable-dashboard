@@ -14,14 +14,14 @@
 import { isCompletionFinishReason, MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import type { EntityType } from '@/hooks/utils';
 import { useMultiParticipantChat, useRoundSubscription, useStreamResumption } from '@/hooks/utils';
 import { showApiErrorToast } from '@/lib/toast';
-import { chatMessagesToUIMessages, getCurrentRoundNumber } from '@/lib/utils';
+import { chatMessagesToUIMessages, getAssistantMetadata, getCurrentRoundNumber, getParticipantIndex, getRoundNumber, isModeratorMetadataFast, isStreamingMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import {
   areAllParticipantsComplete,
@@ -276,8 +276,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       if (m.role !== 'assistant') {
         return false;
       }
-      const meta = m.metadata as Record<string, unknown> | undefined;
-      return meta?.isModerator === true && meta?.roundNumber === roundNumber;
+      // Use fast O(1) check for isModerator and type-safe roundNumber extraction
+      return isModeratorMetadataFast(m.metadata) && getRoundNumber(m.metadata) === roundNumber;
     });
 
     // Check if backend reports moderator is complete with a message ID
@@ -303,10 +303,11 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       if (m.role !== 'assistant') {
         return false;
       }
-      const meta = m.metadata as Record<string, unknown> | undefined;
-      const msgRound = meta?.roundNumber;
+      // Use type-safe utilities for metadata access
+      const msgRound = getRoundNumber(m.metadata);
       const hasContent = m.parts?.some(p => p.type === 'text' && p.text && p.text.length > 0);
-      return msgRound === roundNumber && hasContent && !meta?.isStreaming;
+      const isStreaming = isStreamingMetadata(m.metadata);
+      return msgRound === roundNumber && hasContent && !isStreaming;
     });
 
     // Skip if we have responses AND moderator (nothing missing)
@@ -509,10 +510,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     }
   }, [store]);
 
-  // Presearch event accumulator ref for gradual UI updates
+  // Pre-search event accumulator ref for gradual UI updates
+  // DESIGN NOTE: Types are loosely defined here because this is a PROTOCOL BOUNDARY.
+  // SSE events deliver partial data during streaming that doesn't match the complete schema.
+  // Full type validation happens at API response boundaries, not during incremental streaming.
   const preSearchDataRef = useRef<{
     queries: Array<{ index: number; query: string; rationale: string; searchDepth: string; total: number }>;
-    results: Array<{ index: number; query: string; results: unknown[]; responseTime: number; answer: string | null }>;
+    results: Array<{ index: number; query: string; results: Array<{ description: string; favicon: string; snippet: string; title: string; url: string }>; responseTime: number; answer: string | null }>;
     summary: string;
     totalResults: number;
   }>({
@@ -560,6 +564,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // Handle presearch SSE events for gradual UI updates
   // CRITICAL: We must deep clone arrays before passing to Immer to avoid freezing
   // the accumulator ref's arrays, which would cause "object is not extensible" errors
+  //
+  // DESIGN NOTE: `data: unknown` arrives from SSE protocol boundary (see use-round-subscription.ts).
+  // We cast to Record<string, unknown> to access properties based on eventType discriminant.
+  // Full validation schemas exist on API side (PreSearchSSEEventSchema).
   const handlePreSearchEvent = useCallback((eventType: string, data: unknown) => {
     const state = store.getState();
     const roundNumber = state.currentRoundNumber ?? 0;
@@ -633,12 +641,14 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       }
 
       case 'result': {
+        // Type for web search results from SSE event
+        type WebSearchResult = { description: string; favicon: string; snippet: string; title: string; url: string };
         const resultData = {
           answer: (eventData.answer as string | null) || null,
           index: eventData.index as number,
           query: eventData.query as string,
           responseTime: (eventData.responseTime as number) || 0,
-          results: [...((eventData.results as unknown[]) || [])], // Clone the results array
+          results: [...((eventData.results as WebSearchResult[]) || [])], // Clone the results array
         };
         // Update or add result at the given index
         const existingIdx = preSearchDataRef.current.results.findIndex(r => r.index === resultData.index);
@@ -720,7 +730,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const aiSdkP0CompleteKeyRef = useRef<string | null>(null);
 
   // Reset when thread/round changes
-  useEffect(() => {
+  // Using useLayoutEffect to ensure synchronous state reset before render
+  useLayoutEffect(() => {
     const key = `${effectiveThreadId}_r${currentRoundNumber}`;
     if (aiSdkP0CompleteKeyRef.current !== key) {
       setAiSdkP0Complete(false);
@@ -834,10 +845,11 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   //
   // This effect bridges AI SDK P0 completion to subscription state, enabling
   // the stagger to proceed when P0 finishes via AI SDK.
+  // Using useLayoutEffect to ensure synchronous state update for proper stagger coordination.
   // ============================================================================
   const hasMarkedP0CompleteRef = useRef<string | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Only needed when web search is disabled (P0 uses AI SDK path)
     if (enableWebSearch) {
       return;
@@ -848,13 +860,14 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       return;
     }
 
-    // Find P0 message for current round
+    // Find P0 message for current round using type-safe metadata utilities
     const p0Message = chat.messages.find((m) => {
       if (m.role !== 'assistant') {
         return false;
       }
-      const meta = m.metadata as Record<string, unknown> | undefined;
-      return meta?.participantIndex === 0 && meta?.roundNumber === currentRoundNumber;
+      const pIndex = getParticipantIndex(m.metadata);
+      const roundNum = getRoundNumber(m.metadata);
+      return pIndex === 0 && roundNum === currentRoundNumber;
     });
 
     if (!p0Message) {
@@ -865,8 +878,8 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     // NOTE: Backend sets finishReason='unknown' at stream start, then updates to actual value
     // (e.g., 'stop') at stream finish. We must check for a VALID completion reason, not just
     // any truthy value, to avoid triggering the bridge prematurely with 'unknown'.
-    const meta = p0Message.metadata as Record<string, unknown> | undefined;
-    const finishReason = meta?.finishReason as string | undefined;
+    const p0Metadata = getAssistantMetadata(p0Message.metadata);
+    const finishReason = p0Metadata?.finishReason;
 
     // isCompletionFinishReason returns true for: 'stop', 'length', 'tool-calls', 'content-filter'
     // Returns false for: 'unknown', 'error', 'failed', 'other', undefined

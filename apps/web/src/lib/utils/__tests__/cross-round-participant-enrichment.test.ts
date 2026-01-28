@@ -16,7 +16,7 @@
 import { FinishReasons, MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
+import type { ParticipantContext } from '@/lib/schemas';
 import type { ApiMessage } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
 

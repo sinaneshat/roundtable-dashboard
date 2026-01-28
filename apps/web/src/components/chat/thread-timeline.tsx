@@ -5,8 +5,8 @@ import { Actions } from '@/components/ai-elements/actions';
 import { ScrollFadeEntrance, ScrollFromTop } from '@/components/ui/motion';
 import type { TimelineItem } from '@/hooks/utils';
 import { useVirtualizedTimeline } from '@/hooks/utils';
-import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { getModeratorMetadata, isModeratorMessage } from '@/lib/utils';
+import { extractTextFromMessage } from '@/lib/schemas';
+import { getModeratorMetadata, isModeratorMessage, isModeratorMetadataFast } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiParticipant, StoredPreSearch } from '@/services/api';
 
@@ -215,26 +215,23 @@ export function ThreadTimeline({
             </UnifiedErrorBoundary>
 
             {streamingRoundNumber !== item.roundNumber && !isReadOnly && (() => {
-              // ✅ FIX: Use raw metadata check as fallback for finding moderator
+              // Find moderator message using both Zod validation and fast O(1) check as fallback
               // Schema-based isModeratorMessage may fail for streaming placeholders with extra fields
               const moderatorMessage = item.data.find((msg) => {
                 if (isModeratorMessage(msg)) {
                   return true;
                 }
-                // Fallback: check raw metadata for isModerator flag
-                const rawMeta = msg.metadata as Record<string, unknown> | null | undefined;
-                return rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+                // Fallback: fast check for isModerator flag (O(1) without Zod validation)
+                return isModeratorMetadataFast(msg.metadata);
               });
 
               if (!moderatorMessage) {
                 return null;
               }
 
-              // ✅ FIX: Also check raw metadata for finishReason
+              // Get moderator metadata using type-safe utility
               const moderatorMeta = getModeratorMetadata(moderatorMessage.metadata);
-              const rawMeta = moderatorMessage.metadata as Record<string, unknown> | null | undefined;
-              const finishReason = moderatorMeta?.finishReason
-                ?? (rawMeta && 'finishReason' in rawMeta ? (rawMeta.finishReason as string | undefined) : undefined);
+              const finishReason = moderatorMeta?.finishReason;
 
               // ✅ FIX: Skip finishReason check if message has visible content (streaming complete)
               // Streaming placeholders might not have finishReason but are complete once they have content

@@ -17,7 +17,7 @@ import type { ParticipantComparisonMode } from '@roundtable/shared/enums';
 import { ParticipantComparisonModes } from '@roundtable/shared/enums';
 
 import type { ChatParticipant } from '@/db/validation/chat';
-import type { ComparableParticipant, ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ComparableParticipant, ParticipantConfig } from '@/lib/schemas';
 
 // ============================================================================
 // Priority Sorting (SINGLE SOURCE OF TRUTH)

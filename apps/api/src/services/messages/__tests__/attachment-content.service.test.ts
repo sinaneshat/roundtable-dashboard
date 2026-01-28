@@ -637,7 +637,7 @@ describe('attachment Content Service', () => {
       expect(result.fileParts).toHaveLength(0);
       expect(result.stats.skipped).toBe(1);
       expect(getFile).not.toHaveBeenCalled();
-      expect(logger?.warn).toHaveBeenCalledWith();
+      expect(logger.warn).toHaveBeenCalledWith();
     });
 
     it('should process image files within 10MB limit', async () => {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import testMessages from '@/i18n/locales/en/common.json';
 import { I18nProvider } from '@/lib/i18n';
-import { act, render, screen } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
 import type { ChatSidebarItem } from '@/services/api';
 
 const mockPush = vi.fn();
@@ -184,52 +184,50 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
       expect(screen.getByText('New conversation')).toBeInTheDocument();
 
       const initialRenderCount = renderCounts.get('ChatList') || 0;
-      await act(async () => {
-        for (let pollCycle = 0; pollCycle < 10; pollCycle++) {
-          if (pollCycle < 5) {
-            rerender(
-              <TestWrapper>
-                <TrackedChatList
-                  chats={[{ ...initialChat }]}
-                  onListRender={() => listRenderTimestamps.push(Date.now())}
-                />
-              </TestWrapper>,
-            );
-          } else if (pollCycle === 5) {
-            const updatedChat = createMockChat({
-              id: threadId,
-              previousSlug: 'temp-thread-001',
-              slug: 'how-to-implement-react-hooks',
-              title: 'How to implement React hooks effectively',
-            });
+      for (let pollCycle = 0; pollCycle < 10; pollCycle++) {
+        if (pollCycle < 5) {
+          rerender(
+            <TestWrapper>
+              <TrackedChatList
+                chats={[{ ...initialChat }]}
+                onListRender={() => listRenderTimestamps.push(Date.now())}
+              />
+            </TestWrapper>,
+          );
+        } else if (pollCycle === 5) {
+          const updatedChat = createMockChat({
+            id: threadId,
+            previousSlug: 'temp-thread-001',
+            slug: 'how-to-implement-react-hooks',
+            title: 'How to implement React hooks effectively',
+          });
 
-            rerender(
-              <TestWrapper>
-                <TrackedChatList
-                  chats={[updatedChat]}
-                  onListRender={() => listRenderTimestamps.push(Date.now())}
-                />
-              </TestWrapper>,
-            );
-          } else {
-            const stableChat = createMockChat({
-              id: threadId,
-              previousSlug: null,
-              slug: 'how-to-implement-react-hooks',
-              title: 'How to implement React hooks effectively',
-            });
+          rerender(
+            <TestWrapper>
+              <TrackedChatList
+                chats={[updatedChat]}
+                onListRender={() => listRenderTimestamps.push(Date.now())}
+              />
+            </TestWrapper>,
+          );
+        } else {
+          const stableChat = createMockChat({
+            id: threadId,
+            previousSlug: null,
+            slug: 'how-to-implement-react-hooks',
+            title: 'How to implement React hooks effectively',
+          });
 
-            rerender(
-              <TestWrapper>
-                <TrackedChatList
-                  chats={[stableChat]}
-                  onListRender={() => listRenderTimestamps.push(Date.now())}
-                />
-              </TestWrapper>,
-            );
-          }
+          rerender(
+            <TestWrapper>
+              <TrackedChatList
+                chats={[stableChat]}
+                onListRender={() => listRenderTimestamps.push(Date.now())}
+              />
+            </TestWrapper>,
+          );
         }
-      });
+      }
 
       const finalRenderCount = renderCounts.get('ChatList') || 0;
       const totalRenders = finalRenderCount - initialRenderCount;
@@ -263,13 +261,11 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
         title: 'AI Generated Title',
       });
 
-      await act(async () => {
-        rerender(
-          <TestWrapper>
-            <TrackedChatList chats={[updatedChat]} />
-          </TestWrapper>,
-        );
-      });
+      rerender(
+        <TestWrapper>
+          <TrackedChatList chats={[updatedChat]} />
+        </TestWrapper>,
+      );
 
       const buttonAfter = screen.getByTestId(`chat-button-${threadId}`);
       expect(buttonAfter).toBeInTheDocument();
@@ -293,22 +289,20 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
 
       const initialRenderCount = renderCounts.get('ChatList') || 0;
 
-      await act(async () => {
-        for (let i = 0; i < 5; i++) {
-          const updatedThreads = threads.map((t, idx) => ({
-            ...t,
-            previousSlug: i === 3 ? t.slug : null,
-            slug: i >= 3 ? `ai-slug-${idx}` : t.slug,
-            title: i >= 3 ? `AI Title ${idx}` : t.title,
-          }));
+      for (let i = 0; i < 5; i++) {
+        const updatedThreads = threads.map((t, idx) => ({
+          ...t,
+          previousSlug: i === 3 ? t.slug : null,
+          slug: i >= 3 ? `ai-slug-${idx}` : t.slug,
+          title: i >= 3 ? `AI Title ${idx}` : t.title,
+        }));
 
-          rerender(
-            <TestWrapper>
-              <TrackedChatList chats={updatedThreads} />
-            </TestWrapper>,
-          );
-        }
-      });
+        rerender(
+          <TestWrapper>
+            <TrackedChatList chats={updatedThreads} />
+          </TestWrapper>,
+        );
+      }
 
       const finalRenderCount = renderCounts.get('ChatList') || 0;
       const totalRenders = finalRenderCount - initialRenderCount;
@@ -336,21 +330,19 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
       const button = screen.getByTestId(`chat-button-${threadId}`);
       await userEvent.hover(button);
 
-      expect(mockPrefetch).toHaveBeenCalledWith();
-      await act(async () => {
-        const updatedChat = createMockChat({
-          id: threadId,
-          previousSlug: 'temp-dropdown',
-          slug: 'ai-dropdown-test',
-          title: 'AI Generated During Hover',
-        });
-
-        rerender(
-          <TestWrapper>
-            <TrackedChatList chats={[updatedChat]} />
-          </TestWrapper>,
-        );
+      expect(mockPrefetch).toHaveBeenCalledWith('/chat/temp-dropdown');
+      const updatedChat = createMockChat({
+        id: threadId,
+        previousSlug: 'temp-dropdown',
+        slug: 'ai-dropdown-test',
+        title: 'AI Generated During Hover',
       });
+
+      rerender(
+        <TestWrapper>
+          <TrackedChatList chats={[updatedChat]} />
+        </TestWrapper>,
+      );
 
       const chatItemRenders = renderCounts.get(`ChatItem-${threadId}`) || 0;
       expect(chatItemRenders).toBeLessThan(MAX_RENDERS_BEFORE_LOOP_DETECTION);
@@ -372,19 +364,17 @@ describe('dynamic Title Update E2E - Infinite Loop Detection', () => {
       );
 
       for (let i = 0; i < 10; i++) {
-        await act(async () => {
-          rerender(
-            <TestWrapper>
-              <TrackedChatList
-                chats={[{
-                  ...thread,
-                  slug: i >= 5 ? 'ai-slug' : 'temp-baseline',
-                  title: i >= 5 ? 'AI Title' : 'Baseline Test',
-                }]}
-              />
-            </TestWrapper>,
-          );
-        });
+        rerender(
+          <TestWrapper>
+            <TrackedChatList
+              chats={[{
+                ...thread,
+                slug: i >= 5 ? 'ai-slug' : 'temp-baseline',
+                title: i >= 5 ? 'AI Title' : 'Baseline Test',
+              }]}
+            />
+          </TestWrapper>,
+        );
       }
 
       const finalCount = renderCounts.get('ChatList') || 0;

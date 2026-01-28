@@ -31,7 +31,7 @@ import { markParticipantTriggered } from '@/services/round-orchestration';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
-import type { FinalizeRoundQueueMessage, RecoverRoundQueueMessage } from '@/types/queues';
+import type { FinalizeRoundQueueMessage, RecoverRoundQueueMessage, RoundOrchestrationQueueMessage } from '@/types/queues';
 
 // ============================================================================
 // CONFIGURATION
@@ -82,7 +82,7 @@ export const ExecuteRoundParamsSchema = z.object({
   db: z.custom<DbClient>(),
   env: z.custom<ApiEnv['Bindings']>(),
   logger: z.custom<TypedLogger>().optional(),
-  queue: z.custom<Queue<unknown>>(),
+  queue: z.custom<Queue<RoundOrchestrationQueueMessage>>(),
   roundNumber: z.number(),
   sessionToken: z.string(),
   threadId: z.string(),
@@ -95,6 +95,23 @@ export type ExecuteRoundParams = z.infer<typeof ExecuteRoundParamsSchema>;
 // ============================================================================
 // EXECUTION RECORD MANAGEMENT
 // ============================================================================
+
+/**
+ * Parse a Drizzle query result into a validated RoundExecutionRecord
+ * Uses Zod validation to ensure type safety
+ */
+function parseExecutionRecord(
+  result: typeof tables.roundExecution.$inferSelect | undefined,
+): RoundExecutionRecord | undefined {
+  if (!result) {
+    return undefined;
+  }
+  const parsed = RoundExecutionRecordSchema.safeParse(result);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  return undefined;
+}
 
 /**
  * Get or create an execution record for a round
@@ -116,15 +133,16 @@ export async function getOrCreateExecution(
     ),
   });
 
-  if (existing) {
+  const validated = parseExecutionRecord(existing);
+  if (validated) {
     logger?.info('Found existing round execution', LogHelpers.operation({
-      executionId: existing.id,
+      executionId: validated.id,
       operationName: 'getOrCreateExecution',
       roundNumber,
-      status: existing.status,
+      status: validated.status,
       threadId,
     }));
-    return existing as RoundExecutionRecord;
+    return validated;
   }
 
   // Create new execution record
@@ -146,7 +164,11 @@ export async function getOrCreateExecution(
     totalParticipants: participantsTotal,
   }));
 
-  return created as RoundExecutionRecord;
+  const validatedCreated = parseExecutionRecord(created);
+  if (!validatedCreated) {
+    throw new Error(`Failed to validate created execution record: ${executionId}`);
+  }
+  return validatedCreated;
 }
 
 /**
@@ -209,7 +231,7 @@ export async function markExecutionFailed(
  * Queue a RECOVER_ROUND message for retry
  */
 export async function queueRecoverRound(
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   execution: RoundExecutionRecord,
   sessionToken: string,
   logger?: TypedLogger,
@@ -239,7 +261,7 @@ export async function queueRecoverRound(
  * Queue a FINALIZE_ROUND message for cleanup
  */
 export async function queueFinalizeRound(
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   execution: RoundExecutionRecord,
   logger?: TypedLogger,
 ): Promise<void> {
@@ -266,7 +288,7 @@ export async function queueFinalizeRound(
  * Queue a TRIGGER_PARTICIPANT message
  */
 export async function queueTriggerParticipant(
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   threadId: string,
   roundNumber: number,
   participantIndex: number,
@@ -299,7 +321,7 @@ export async function queueTriggerParticipant(
  * Queue a TRIGGER_MODERATOR message
  */
 export async function queueTriggerModerator(
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   threadId: string,
   roundNumber: number,
   userId: string,
@@ -327,7 +349,7 @@ export async function queueTriggerModerator(
  * Queue a TRIGGER_PRE_SEARCH message
  */
 export async function queueTriggerPreSearch(
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   threadId: string,
   roundNumber: number,
   userId: string,
@@ -607,14 +629,16 @@ async function executeModeratorPhase(
 export async function recoverRound(
   db: DbClient,
   executionId: string,
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   sessionToken: string,
+  env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
   // Get execution record
-  const execution = await db.query.roundExecution.findFirst({
+  const executionRaw = await db.query.roundExecution.findFirst({
     where: eq(tables.roundExecution.id, executionId),
-  }) as RoundExecutionRecord | undefined;
+  });
+  const execution = parseExecutionRecord(executionRaw);
 
   if (!execution) {
     logger?.error('Execution not found for recovery', LogHelpers.operation({
@@ -662,7 +686,7 @@ export async function recoverRound(
   // Re-execute based on current state
   await executeRound({
     db,
-    env: {} as ApiEnv['Bindings'], // Will be passed by caller
+    env,
     logger,
     queue,
     roundNumber: execution.roundNumber,
@@ -693,9 +717,10 @@ export async function finalizeRound(
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
-  const execution = await db.query.roundExecution.findFirst({
+  const executionRaw = await db.query.roundExecution.findFirst({
     where: eq(tables.roundExecution.id, executionId),
-  }) as RoundExecutionRecord | undefined;
+  });
+  const execution = parseExecutionRecord(executionRaw);
 
   if (!execution) {
     logger?.error('Execution not found for finalization', LogHelpers.operation({
@@ -748,18 +773,19 @@ export async function markParticipantCompletedInExecution(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   sessionToken: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
 ): Promise<void> {
   // Find execution record
-  const execution = await db.query.roundExecution.findFirst({
+  const executionRaw = await db.query.roundExecution.findFirst({
     where: and(
       eq(tables.roundExecution.threadId, threadId),
       eq(tables.roundExecution.roundNumber, roundNumber),
     ),
-  }) as RoundExecutionRecord | undefined;
+  });
+  const execution = parseExecutionRecord(executionRaw);
 
   if (!execution) {
     logger?.warn('No execution record found for participant completion', LogHelpers.operation({
@@ -820,19 +846,20 @@ export async function markPreSearchCompletedInExecution(
   db: DbClient,
   threadId: string,
   roundNumber: number,
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   sessionToken: string,
   env: ApiEnv['Bindings'],
   attachmentIds?: string[],
   logger?: TypedLogger,
 ): Promise<void> {
   // Find execution record
-  const execution = await db.query.roundExecution.findFirst({
+  const executionRaw = await db.query.roundExecution.findFirst({
     where: and(
       eq(tables.roundExecution.threadId, threadId),
       eq(tables.roundExecution.roundNumber, roundNumber),
     ),
-  }) as RoundExecutionRecord | undefined;
+  });
+  const execution = parseExecutionRecord(executionRaw);
 
   if (!execution) {
     const errorMsg = `No execution record found for pre-search completion: thread=${threadId} round=${roundNumber}. This means participants will NOT be triggered.`;
@@ -871,16 +898,17 @@ export async function markModeratorCompletedInExecution(
   db: DbClient,
   threadId: string,
   roundNumber: number,
-  queue: Queue<unknown>,
+  queue: Queue<RoundOrchestrationQueueMessage>,
   logger?: TypedLogger,
 ): Promise<void> {
   // Find execution record
-  const execution = await db.query.roundExecution.findFirst({
+  const executionRaw = await db.query.roundExecution.findFirst({
     where: and(
       eq(tables.roundExecution.threadId, threadId),
       eq(tables.roundExecution.roundNumber, roundNumber),
     ),
-  }) as RoundExecutionRecord | undefined;
+  });
+  const execution = parseExecutionRecord(executionRaw);
 
   if (!execution) {
     logger?.warn('No execution record found for moderator completion', LogHelpers.operation({
@@ -968,15 +996,21 @@ export async function findStaleExecutions(
     ...moderatorExecutions,
   ];
 
-  const stale = allNonTerminal.filter((exec) => {
-    const record = exec as RoundExecutionRecord;
-    return isExecutionStale(record) && record.attempts < MAX_RETRY_ATTEMPTS;
-  }).slice(0, limit);
+  const stale: RoundExecutionRecord[] = [];
+  for (const exec of allNonTerminal) {
+    const record = parseExecutionRecord(exec);
+    if (record && isExecutionStale(record) && record.attempts < MAX_RETRY_ATTEMPTS) {
+      stale.push(record);
+      if (stale.length >= limit) {
+        break;
+      }
+    }
+  }
 
   logger?.info(`Found ${stale.length} stale executions`, LogHelpers.operation({
     count: stale.length,
     operationName: 'findStaleExecutions',
   }));
 
-  return stale as RoundExecutionRecord[];
+  return stale;
 }

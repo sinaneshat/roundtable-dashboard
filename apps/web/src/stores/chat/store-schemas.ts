@@ -5,7 +5,7 @@
  * Types inferred from Zod schemas (single source of truth).
  */
 
-import type { ChatMode } from '@roundtable/shared';
+import type { ChatMode, MessageStatus } from '@roundtable/shared';
 import { ChatModeSchema, ScreenModeSchema } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
@@ -17,10 +17,8 @@ import { PendingAttachmentSchema } from '@/hooks/utils/attachment-schemas';
 // ============================================================================
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import type { ExtendedFilePart, ParticipantConfig } from '@/lib/schemas';
+import { ChatParticipantSchema, ExtendedFilePartSchema, ParticipantConfigSchema } from '@/lib/schemas';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
 // ============================================================================
@@ -36,14 +34,22 @@ export const ChatPhases = {
   IDLE: 'idle',
   MODERATOR: 'moderator',
   PARTICIPANTS: 'participants',
-} as const;
+} as const satisfies Record<string, ChatPhase>;
 
 // ============================================================================
 // TITLE ANIMATION
 // ============================================================================
 
-export const TitleAnimationPhaseSchema = z.enum(['idle', 'deleting', 'typing', 'complete']);
+export const TitleAnimationPhaseValues = ['idle', 'deleting', 'typing', 'complete'] as const;
+export const TitleAnimationPhaseSchema = z.enum(TitleAnimationPhaseValues);
 export type TitleAnimationPhase = z.infer<typeof TitleAnimationPhaseSchema>;
+
+export const TitleAnimationPhases = {
+  COMPLETE: 'complete',
+  DELETING: 'deleting',
+  IDLE: 'idle',
+  TYPING: 'typing',
+} as const satisfies Record<string, TitleAnimationPhase>;
 
 // ============================================================================
 // CORE STATE SCHEMAS
@@ -143,6 +149,15 @@ export const TrackingStateSchema = z.object({
 export const EntityStatusValues = ['idle', 'waiting', 'streaming', 'complete', 'error', 'disabled'] as const;
 export const EntityStatusSchema = z.enum(EntityStatusValues);
 export type EntityStatus = z.infer<typeof EntityStatusSchema>;
+
+export const EntityStatuses = {
+  COMPLETE: 'complete',
+  DISABLED: 'disabled',
+  ERROR: 'error',
+  IDLE: 'idle',
+  STREAMING: 'streaming',
+  WAITING: 'waiting',
+} as const satisfies Record<string, EntityStatus>;
 
 /** State for a single entity subscription */
 export const EntitySubscriptionStateSchema = z.object({
@@ -271,8 +286,31 @@ export type ChatStoreActions = {
   // === PRE-SEARCH ===
   setPreSearches: (preSearches: StoredPreSearch[]) => void;
   addPreSearch: (preSearch: StoredPreSearch) => void;
-  updatePreSearchStatus: (roundNumber: number, status: string) => void;
+  updatePreSearchStatus: (roundNumber: number, status: MessageStatus) => void;
+  /**
+   * Update complete pre-search data when web search finishes
+   *
+   * DESIGN NOTE: `searchData` parameter accepts `unknown` because this function receives
+   * data from multiple sources with varying shapes:
+   * 1. Complete PreSearchDataPayload from successful search completion
+   * 2. Partial accumulated data from SSE streaming events
+   * 3. null when clearing/resetting
+   *
+   * The StoredPreSearch.searchData field is typed as nullable optional, and the
+   * incoming data may come from accumulated SSE events that don't perfectly match
+   * the complete schema. Full validation is handled at the API boundary.
+   */
   updatePreSearchData: (roundNumber: number, searchData: unknown) => void;
+  /**
+   * Update partial pre-search data during SSE streaming
+   *
+   * DESIGN NOTE: `partialData` accepts `unknown` because this is a PROTOCOL BOUNDARY.
+   * During SSE streaming, events arrive with varying shapes (query events, result events,
+   * complete events) that are accumulated into a partial representation. The accumulated
+   * data shape evolves during streaming and doesn't match the complete PreSearchDataPayload
+   * schema until all events are received. Attempting strict typing here would break
+   * incremental streaming functionality.
+   */
   updatePartialPreSearchData: (roundNumber: number, partialData: unknown) => void;
   updatePreSearchActivity: (roundNumber: number) => void;
   clearPreSearchActivity: (roundNumber: number) => void;

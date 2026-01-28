@@ -29,7 +29,8 @@ import { createError } from '@/common/error-handling';
 import { createHandler, Responses, STREAMING_CONFIG } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
+import { log } from '@/lib/logger';
+import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas';
 import {
   createCompletionStream,
   createLiveParticipantResumeStream,
@@ -43,7 +44,6 @@ import {
   getPreSearchStreamChunks,
   getPreSearchStreamMetadata,
 } from '@/services/streaming';
-import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 import type {

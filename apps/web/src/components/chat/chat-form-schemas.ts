@@ -2,7 +2,7 @@ import type { ChatMode } from '@roundtable/shared';
 import { ChatModeSchema } from '@roundtable/shared';
 import { z } from 'zod';
 
-import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import { ParticipantConfigSchema } from '@/lib/schemas';
 
 const MessageContentSchema = z.string();
 

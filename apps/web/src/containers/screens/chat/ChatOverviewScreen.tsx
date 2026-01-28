@@ -48,7 +48,7 @@ import {
 } from '@/lib/config/model-presets';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { useTranslations } from '@/lib/i18n';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
   getDetailedIncompatibleModelIds,

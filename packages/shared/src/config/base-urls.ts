@@ -12,6 +12,8 @@
  * IMPORTANT: Always fallback to production URLs for safety.
  */
 
+import { z } from '@hono/zod-openapi';
+
 import type { WebAppEnv } from '../enums/common';
 import { WebAppEnvs } from '../enums/common';
 
@@ -19,18 +21,20 @@ import { WebAppEnvs } from '../enums/common';
 // URL Configuration for Each Environment
 // ============================================================================
 
-export type BaseUrlConfig = {
-  /** Web application URL (frontend) */
-  app: string;
+export const BaseUrlConfigSchema = z.object({
   /** API server URL with /api/v1 path */
-  api: string;
+  api: z.string(),
   /** API server origin (without path, for Better Auth) */
-  apiOrigin: string;
+  apiOrigin: z.string(),
+  /** Web application URL (frontend) */
+  app: z.string(),
   /** Cookie domain for cross-subdomain cookies */
-  cookieDomain: string | undefined;
+  cookieDomain: z.string().optional(),
   /** Whether to use secure cookies (HTTPS) */
-  useSecureCookies: boolean;
-};
+  useSecureCookies: z.boolean(),
+}).strict();
+
+export type BaseUrlConfig = z.infer<typeof BaseUrlConfigSchema>;
 
 /**
  * Static URL configuration for each environment

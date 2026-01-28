@@ -22,7 +22,8 @@
  * Simple phase machine: idle → participants → moderator → complete → idle
  */
 
-import { MessagePartTypes, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, ScreenModes, UIMessageRoles } from '@roundtable/shared';
+import type { MessageStatus } from '@roundtable/shared';
+import { MessagePartTypes, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX, ScreenModes, UIMessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { enableMapSet } from 'immer';
 import { devtools } from 'zustand/middleware';
@@ -32,7 +33,7 @@ import { createStore } from 'zustand/vanilla';
 import type { PendingAttachment } from '@/hooks/utils/attachment-schemas';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { rlog } from '@/lib/utils/dev-logger';
 import { isModeratorMetadataFast } from '@/lib/utils/metadata';
 import {
@@ -42,8 +43,10 @@ import {
   getParticipantStreamingId,
   isStreamingMetadata,
   isTerminalStatus,
+  setStreamingStatus,
 } from '@/lib/utils/streaming-helpers';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
+import type { PreSearchDataPayload } from '@/services/api/chat/pre-search';
 
 import {
   FORM_DEFAULTS,
@@ -53,8 +56,8 @@ import {
   SUBSCRIPTION_DEFAULTS,
   THREAD_NAVIGATION_RESET,
 } from './store-defaults';
-import type { ChatPhase, ChatStore, EntityStatus, TitleAnimationPhase } from './store-schemas';
-import { ChatPhases } from './store-schemas';
+import type { ChatPhase, ChatStore, EntityStatus } from './store-schemas';
+import { ChatPhases, EntityStatuses, TitleAnimationPhases } from './store-schemas';
 
 enableMapSet();
 
@@ -91,7 +94,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
 
   // Determine initial phase based on messages
   const hasMessages = initialMessages.length > 0;
-  const initialPhase = hasMessages ? ChatPhases.COMPLETE : ChatPhases.IDLE;
+  const initialPhase: ChatPhase = hasMessages ? ChatPhases.COMPLETE : ChatPhases.IDLE;
 
   return createStore<ChatStore>()(
     devtools(
@@ -104,7 +107,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
               hasInitiallyLoaded: initialHasLoaded,
               messages: initialMessages,
               participants: initialParticipants,
-              phase: initialPhase as ChatPhase,
+              phase: initialPhase,
               preSearches: initialPreSearches,
               screenMode: initialThread ? ScreenModes.THREAD : STORE_DEFAULTS.screenMode,
               showInitialUI: !initialThread,
@@ -232,40 +235,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         },
 
         /**
-         * Mark a participant's streaming placeholder as complete (clear isStreaming flag).
-         * Called when participant subscription completes to allow round completion to proceed.
-         */
-        finalizeParticipantStreaming: (participantIndex: number, roundNumber: number) => {
-          set((draft) => {
-            const streamingMsgId = getParticipantStreamingId(participantIndex, roundNumber);
-            const msg = draft.messages.find(m => m.id === streamingMsgId);
-            if (msg && msg.metadata && typeof msg.metadata === 'object') {
-              (msg.metadata as Record<string, unknown>).isStreaming = false;
-              rlog.stream('end', `P${participantIndex} r${roundNumber} streaming finalized`);
-            }
-          }, false, `streaming/finalize-p${participantIndex}`);
-        },
-
-        /**
-         * Mark the moderator's streaming placeholder as complete (clear isStreaming flag).
-         * Called when moderator subscription completes to allow round completion to proceed.
-         */
-        finalizeModeratorStreaming: (roundNumber: number) => {
-          set((draft) => {
-            const streamingMsgId = getModeratorStreamingId(draft.thread?.id ?? null, roundNumber);
-            const msg = draft.messages.find(m => m.id === streamingMsgId);
-            if (msg && msg.metadata && typeof msg.metadata === 'object') {
-              (msg.metadata as Record<string, unknown>).isStreaming = false;
-              rlog.stream('end', `Moderator r${roundNumber} streaming finalized`);
-            }
-          }, false, 'streaming/finalize-moderator');
-        },
-
-        // ============================================================
-        // THREAD STATE
-        // ============================================================
-
-        /**
          * Append streaming text to the moderator's placeholder message.
          * Creates placeholder if not exists, appends text if exists.
          * Used for gradual moderator streaming in UI.
@@ -337,6 +306,11 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             }
           }, false, `streaming/appendText-moderator`);
         },
+
+        // ============================================================
+        // THREAD STATE
+        // ============================================================
+
         batchUpdatePendingState: (pendingMessage, expectedModelIds) => {
           set({ expectedModelIds, pendingMessage }, false, 'thread/batchUpdatePendingState');
         },
@@ -415,7 +389,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
               ...STREAMING_COMPLETE_RESET,
               messages: cleanedMessages,
               pendingMessage: null,
-              phase: ChatPhases.COMPLETE as ChatPhase,
+              phase: ChatPhases.COMPLETE,
             }, false, 'operations/completeStreaming');
           } else {
             set({
@@ -432,7 +406,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         completeTitleAnimation: () => {
           set({
             animatingThreadId: null,
-            animationPhase: 'idle' as TitleAnimationPhase,
+            animationPhase: TitleAnimationPhases.IDLE,
             displayedTitle: null,
             newTitle: null,
             oldTitle: null,
@@ -517,6 +491,32 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             }
           }, false, 'streaming/createPlaceholders');
         },
+        /**
+         * Mark the moderator's streaming placeholder as complete (clear isStreaming flag).
+         * Called when moderator subscription completes to allow round completion to proceed.
+         */
+        finalizeModeratorStreaming: (roundNumber: number) => {
+          set((draft) => {
+            const streamingMsgId = getModeratorStreamingId(draft.thread?.id ?? null, roundNumber);
+            const msg = draft.messages.find(m => m.id === streamingMsgId);
+            if (msg && setStreamingStatus(msg.metadata, false)) {
+              rlog.stream('end', `Moderator r${roundNumber} streaming finalized`);
+            }
+          }, false, 'streaming/finalize-moderator');
+        },
+        /**
+         * Mark a participant's streaming placeholder as complete (clear isStreaming flag).
+         * Called when participant subscription completes to allow round completion to proceed.
+         */
+        finalizeParticipantStreaming: (participantIndex: number, roundNumber: number) => {
+          set((draft) => {
+            const streamingMsgId = getParticipantStreamingId(participantIndex, roundNumber);
+            const msg = draft.messages.find(m => m.id === streamingMsgId);
+            if (msg && setStreamingStatus(msg.metadata, false)) {
+              rlog.stream('end', `P${participantIndex} r${roundNumber} streaming finalized`);
+            }
+          }, false, `streaming/finalize-p${participantIndex}`);
+        },
         getAttachments: () => get().pendingAttachments,
         hasAttachments: () => get().pendingAttachments.length > 0,
         hasModeratorStreamBeenTriggered: (moderatorId: string, roundNumber: number) => {
@@ -551,13 +551,13 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           set((draft) => {
             draft.subscriptionState = {
               activeRoundNumber: roundNumber,
-              moderator: { errorMessage: undefined, lastSeq: 0, status: 'idle' as EntityStatus },
+              moderator: { errorMessage: undefined, lastSeq: 0, status: EntityStatuses.IDLE },
               participants: Array.from({ length: participantCount }, () => ({
                 errorMessage: undefined,
                 lastSeq: 0,
-                status: 'idle' as EntityStatus,
+                status: EntityStatuses.IDLE,
               })),
-              presearch: { errorMessage: undefined, lastSeq: 0, status: 'idle' as EntityStatus },
+              presearch: { errorMessage: undefined, lastSeq: 0, status: EntityStatuses.IDLE },
             };
           }, false, 'subscription/initialize');
         },
@@ -585,7 +585,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           //
           // This fixes the bug where refreshing mid-round showed only user message
           // because phase was incorrectly set to COMPLETE, preventing subscriptions.
-          const newPhase = isStreamingActive
+          const newPhase: ChatPhase = isStreamingActive
             ? currentState.phase
             : ChatPhases.IDLE;
 
@@ -597,7 +597,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             hasSentPendingMessage: false,
             messages,
             participants,
-            phase: newPhase as ChatPhase,
+            phase: newPhase,
             preSearchActivityTimes: new Map<number, number>(),
             preSearches: [],
             screenMode: ScreenModes.THREAD,
@@ -649,7 +649,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             isModeratorStreaming: false,
             isStreaming: false,
             pendingMessage: null,
-            phase: ChatPhases.COMPLETE as ChatPhase,
+            phase: ChatPhases.COMPLETE,
           }, false, 'phase/complete');
         },
 
@@ -700,7 +700,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
 
             set({
               currentParticipantIndex: enabledCount - 1, // Set to last participant index
-              phase: ChatPhases.MODERATOR as ChatPhase,
+              phase: ChatPhases.MODERATOR,
             }, false, 'phase/toModerator');
           } else {
             // Not all participants complete yet - this callback may have been called for
@@ -713,7 +713,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           set({
             hasSentPendingMessage: false,
             pendingMessage: null,
-            phase: ChatPhases.IDLE as ChatPhase,
+            phase: ChatPhases.IDLE,
           }, false, 'operations/prepareForNewMessage');
         },
         removeAttachment: (id: string) => {
@@ -759,7 +759,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         },
         resetToIdle: () => {
           rlog.phase('resetToIdle', '→IDLE');
-          set({ phase: ChatPhases.IDLE as ChatPhase }, false, 'phase/toIdle');
+          set({ phase: ChatPhases.IDLE }, false, 'phase/toIdle');
         },
 
         resetToNewChat: () => {
@@ -835,7 +835,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           rlog.resume('start', `resumeInProgressRound r${roundNumber} phase=${phase} backendTotal=${totalParticipants} actualCount=${actualCount} curIdx=${currentParticipantIndex}`);
 
           // Map backend phase to frontend ChatPhases
-          const frontendPhase = phase === 'presearch'
+          const frontendPhase: ChatPhase = phase === 'presearch'
             ? ChatPhases.PARTICIPANTS // Frontend doesn't have presearch phase, use participants
             : phase === 'participants'
               ? ChatPhases.PARTICIPANTS
@@ -860,7 +860,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             currentRoundNumber: roundNumber,
             isResumingStream: false, // Clear guard - resumption setup complete
             isStreaming: true,
-            phase: frontendPhase as ChatPhase,
+            phase: frontendPhase,
             waitingToStartStreaming: false,
           }, false, 'operations/resumeInProgressRound');
 
@@ -1051,7 +1051,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
             currentParticipantIndex: 0,
             currentRoundNumber: roundNumber,
             isStreaming: true,
-            phase: ChatPhases.PARTICIPANTS as ChatPhase,
+            phase: ChatPhases.PARTICIPANTS,
             waitingToStartStreaming: false,
           }, false, 'phase/startRound');
         },
@@ -1059,7 +1059,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         startTitleAnimation: (threadId: string, oldTitle: string | null, newTitle: string) => {
           set({
             animatingThreadId: threadId,
-            animationPhase: 'deleting' as TitleAnimationPhase,
+            animationPhase: TitleAnimationPhases.DELETING,
             displayedTitle: oldTitle,
             newTitle,
             oldTitle,
@@ -1151,21 +1151,27 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         // EXTERNAL CALLBACKS
         // ============================================================
 
+        /**
+         * Update partial pre-search data during SSE streaming
+         * DESIGN NOTE: See store-schemas.ts for why `partialData: unknown`
+         */
         updatePartialPreSearchData: (roundNumber: number, partialData: unknown) => {
           set((draft) => {
             const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
             if (ps) {
-              (ps as { searchData: unknown }).searchData = partialData;
+              // Cast to PreSearchDataPayload for storage; incoming shape varies during streaming
+              ps.searchData = partialData as PreSearchDataPayload;
               // ✅ FIX: Update status to STREAMING when data arrives
               // Without this, status stays 'pending' and isStreamingNow=false,
               // causing result skeletons to not render while waiting for results
               if (ps.status === 'pending') {
-                ps.status = 'streaming' as typeof ps.status;
+                ps.status = MessageStatuses.STREAMING;
                 rlog.presearch('status-change', `r${roundNumber} pending→streaming`);
               }
               // Debug: Log query count for gradual streaming visibility
-              const queryCount = (partialData as { queries?: unknown[] } | null)?.queries?.length ?? 0;
-              const resultCount = (partialData as { results?: unknown[] } | null)?.results?.length ?? 0;
+              const data = partialData as { queries?: unknown[]; results?: unknown[] } | null;
+              const queryCount = data?.queries?.length ?? 0;
+              const resultCount = data?.results?.length ?? 0;
               rlog.presearch('partial-update', `r${roundNumber} queries=${queryCount} results=${resultCount} status=${ps.status}`);
             }
           }, false, 'preSearch/updatePartialPreSearchData');
@@ -1196,24 +1202,26 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         /**
          * UPDATE PRE-SEARCH DATA - Frame 11 transition
          * "Web Research Complete → Participants Start"
+         * DESIGN NOTE: See store-schemas.ts for why `searchData: unknown`
          */
         updatePreSearchData: (roundNumber: number, searchData: unknown) => {
           rlog.frame(11, 'pre-search-complete', `r${roundNumber} - Web Research done, participants can start`);
           set((draft) => {
             const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
             if (ps) {
-              (ps as { searchData: unknown }).searchData = searchData;
-              ps.status = 'complete' as typeof ps.status;
+              // Cast to PreSearchDataPayload for storage
+              ps.searchData = searchData as PreSearchDataPayload | null;
+              ps.status = MessageStatuses.COMPLETE;
               ps.completedAt = new Date().toISOString();
             }
           }, false, 'preSearch/updatePreSearchData');
         },
 
-        updatePreSearchStatus: (roundNumber: number, status: string) => {
+        updatePreSearchStatus: (roundNumber: number, status: MessageStatus) => {
           set((draft) => {
             const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
             if (ps) {
-              ps.status = status as typeof ps.status;
+              ps.status = status;
             }
           }, false, 'preSearch/updatePreSearchStatus');
         },

@@ -7,7 +7,7 @@
  * @see https://modelcontextprotocol.io/specification
  */
 
-import type { RouteHandler } from '@hono/zod-openapi';
+import type { RouteHandler, z } from '@hono/zod-openapi';
 import { WebAppEnvs } from '@roundtable/shared';
 import {
   CreditActions,
@@ -32,7 +32,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { chunkForD1Insert } from '@/db/batch-operations';
 import { log } from '@/lib/logger';
-import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
+import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas';
 import { filterNonEmptyMessages, isObject } from '@/lib/utils';
 import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, enforceCredits, finalizeCredits, getSafeMaxOutputTokens } from '@/services/billing';
 import { saveStreamedMessage } from '@/services/messages';
@@ -72,6 +72,7 @@ import type {
   RemoveParticipantInput,
   SendMessageInput,
   ToolArgs,
+  ToolCallArgumentsSchema,
   UpdateParticipantInput,
   UpdateProjectInput,
 } from './schema';
@@ -154,6 +155,19 @@ function getModelForPricing(modelId: string): import('@/common/schemas/model-pri
 // Helper: Build MCP Response
 // ============================================================================
 
+/**
+ * Build MCP tool result with text and optional structured content
+ *
+ * DESIGN NOTE: data parameter uses 'unknown' because:
+ * 1. MCP tool results can be any JSON-serializable value
+ * 2. This is a helper function that formats ANY tool output for MCP protocol
+ * 3. Type safety is enforced at the tool level via Zod schemas
+ *
+ * The caller (each tool implementation) validates its input/output with specific schemas.
+ * This function only handles the generic MCP result envelope format.
+ *
+ * @see https://modelcontextprotocol.io/specification/2025-06-18/server/tools
+ */
 function mcpResult(data: unknown) {
   const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
   const structuredContent = isObject(data) ? data : undefined;
@@ -186,7 +200,16 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
     const request = c.validated.body;
     const requestId = request.id ?? null;
 
-    // Helper to create JSON-RPC response using established response builder
+    /**
+     * Create JSON-RPC response using established response builder
+     *
+     * DESIGN NOTE: result parameter uses 'unknown' because:
+     * 1. JSON-RPC 2.0 spec allows ANY JSON value as result
+     * 2. Each method returns typed data that was validated at the method level
+     * 3. This helper only wraps the response in JSON-RPC envelope format
+     *
+     * @see https://www.jsonrpc.org/specification#response_object
+     */
     const jsonRpcResponse = (result?: unknown, error?: { code: number; message: string }) => {
       return Responses.jsonRpc(c, requestId, result, error);
     };
@@ -281,8 +304,9 @@ export const mcpJsonRpcHandler: RouteHandler<typeof mcpJsonRpcRoute, ApiEnv> = c
             });
           }
 
-          // Use empty object fallback with explicit Record type
-          const toolArgs: Record<string, unknown> = params.data.arguments ?? {};
+          // Tool arguments validated per-tool via safeParse in executeToolInternal
+          // Empty object fallback for tools with no required arguments
+          const toolArgs = params.data.arguments ?? {};
           const result = await executeToolInternal(
             params.data.name,
             toolArgs,
@@ -355,8 +379,8 @@ export const callToolHandler: RouteHandler<typeof callToolRoute, ApiEnv> = creat
     const { arguments: args, name } = c.validated.body;
     const startTime = Date.now();
 
-    // Use empty object fallback with explicit Record type
-    const toolArgs: Record<string, unknown> = args ?? {};
+    // Tool arguments validated per-tool via safeParse in executeToolInternal
+    const toolArgs = args ?? {};
     const result = await executeToolInternal(name, toolArgs, user, c.env);
 
     return Responses.ok(c, {
@@ -381,16 +405,25 @@ export const openAIFunctionsHandler: RouteHandler<typeof openAIFunctionsRoute, A
 /**
  * Execute MCP tool with type-safe argument validation
  *
- * DESIGN PATTERN: MCP/JSON-RPC requires accepting unknown args from clients.
- * Each tool validates its own args via Zod safeParse in the switch statement.
- * The ToolArgs type documents all valid input shapes for documentation.
+ * DESIGN PATTERN: MCP/JSON-RPC requires accepting generic args from clients.
+ * Type safety is enforced at the tool level via Zod safeParse in the switch statement.
+ *
+ * Why rawArgs uses ToolArgs union:
+ * 1. ToolArgs = union of all valid tool input schemas (documentation + type inference)
+ * 2. Record<string, unknown> fallback for backwards compatibility with direct calls
+ * 3. Each tool's safeParse provides runtime validation AND TypeScript narrowing
+ *
+ * The pattern is:
+ * - Transport layer: Accept JSON-RPC params (generic)
+ * - Tool layer: Validate with specific schema (type-safe)
+ * - This function bridges both with proper documentation
  *
  * @param toolName - Tool name from MCP_TOOLS registry
- * @param rawArgs - Raw arguments from JSON-RPC request (validated per-tool)
+ * @param rawArgs - Arguments from JSON-RPC (validated per-tool via safeParse)
  */
 async function executeToolInternal(
   toolName: string,
-  rawArgs: ToolArgs | Record<string, unknown>,
+  rawArgs: ToolArgs | z.infer<typeof ToolCallArgumentsSchema>,
   user: { id: string },
   env: ApiEnv['Bindings'],
 ) {

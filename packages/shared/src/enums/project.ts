@@ -233,11 +233,13 @@ export const ProjectTemplateKeys = {
   WRITING: 'writing' as const,
 } as const;
 
-export type ProjectTemplateConfig = {
-  key: ProjectTemplateKey;
-  icon: ProjectIcon;
-  color: ProjectColor;
-};
+export const ProjectTemplateConfigSchema = z.object({
+  color: ProjectColorSchema,
+  icon: ProjectIconSchema,
+  key: ProjectTemplateKeySchema,
+}).strict();
+
+export type ProjectTemplateConfig = z.infer<typeof ProjectTemplateConfigSchema>;
 
 export const PROJECT_TEMPLATES: readonly ProjectTemplateConfig[] = [
   { color: ProjectColors.AMBER, icon: ProjectIcons.COINS, key: ProjectTemplateKeys.INVESTING },

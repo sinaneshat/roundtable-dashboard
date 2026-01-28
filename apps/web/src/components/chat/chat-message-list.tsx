@@ -15,10 +15,10 @@ import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@
 import { BRAND } from '@/constants';
 import { useModelLookup } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
-import type { FilePart, MessagePart } from '@/lib/schemas/message-schemas';
-import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas/message-schemas';
+import type { FilePart, MessagePart } from '@/lib/schemas';
+import { getUploadIdFromFilePart, isFilePart } from '@/lib/schemas';
 import { cn } from '@/lib/ui/cn';
-import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModeratorMetadata, getParticipantMessageFromMaps, getRoundNumber, getUserMetadata, isModeratorMessage, isPreSearch as isPreSearchMessage, isPreSearchFast, participantHasVisibleContent } from '@/lib/utils';
+import { allParticipantsHaveVisibleContent, buildParticipantMessageMaps, getAvailableSources, getAvatarPropsFromModelId, getEnabledParticipants, getMessageMetadata, getMessageStatus, getModel, getModeratorMetadata, getParticipantIndex, getParticipantMessageFromMaps, getParticipantRole, getRoundNumber, getUserMetadata, isModeratorMessage, isModeratorMetadataFast, isPreSearch as isPreSearchMessage, isPreSearchFast, isStreamingMetadata, participantHasVisibleContent } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiParticipant, AvailableSource, DbMessageMetadata, Model, StoredPreSearch } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
@@ -725,35 +725,29 @@ export const ChatMessageList = memo(
           }
         }
 
-        // Check raw metadata for moderator
-        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
-        const isModeratorRaw = rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+        // Check for moderator using fast check (O(1) without Zod validation)
+        const isModeratorRaw = isModeratorMetadataFast(message.metadata);
 
         if (isModeratorRaw || isModeratorMessage(message)) {
           const moderatorMeta = getModeratorMetadata(message.metadata);
-          const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta
-            ? (moderatorMeta as { finishReason?: string }).finishReason
-            : undefined;
+          const finishReason = moderatorMeta?.finishReason;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
 
           if (hasActuallyFinished) {
             // Completed moderator - cache it
-            const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta
-              ? (moderatorMeta as { model?: string }).model
-              : (rawMeta && 'model' in rawMeta ? String(rawMeta.model) : undefined);
-
+            // Use narrower inline type that matches cache expectations (participantIndex is always defined for moderator)
             const info = {
               isStreaming: false,
-              modelId,
+              modelId: moderatorMeta?.model,
               participantIndex: MODERATOR_PARTICIPANT_INDEX,
-              role: null as string | null,
+              role: null as string | null | undefined,
             };
             cache.set(cacheKey, info);
             results.set(message.id, info);
             continue;
           }
-          // Streaming moderator - mark as needing dynamic calculation
-          results.set(message.id, undefined as unknown as null); // undefined = needs dynamic calc
+          // Streaming moderator - mark as needing dynamic calculation (null value)
+          results.set(message.id, null);
           continue;
         }
 
@@ -776,8 +770,8 @@ export const ChatMessageList = memo(
           continue;
         }
 
-        // Not complete - needs dynamic calculation
-        results.set(message.id, undefined as unknown as null);
+        // Not complete - needs dynamic calculation (null value)
+        results.set(message.id, null);
       }
 
       return results;
@@ -804,25 +798,21 @@ export const ChatMessageList = memo(
         // DYNAMIC CALCULATION - Only for streaming/incomplete messages
         // ============================================================
 
-        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
-        const isModeratorRaw = rawMeta && typeof rawMeta === 'object' && 'isModerator' in rawMeta && rawMeta.isModerator === true;
+        // Fast moderator check (O(1) without Zod validation)
+        const isModeratorRaw = isModeratorMetadataFast(message.metadata);
 
         if (isModeratorRaw || isModeratorMessage(message)) {
           const moderatorMeta = getModeratorMetadata(message.metadata);
-          const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta
-            ? (moderatorMeta as { finishReason?: string }).finishReason
-            : undefined;
+          const finishReason = moderatorMeta?.finishReason;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
-          const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta
-            ? (moderatorMeta as { model?: string }).model
-            : (rawMeta && 'model' in rawMeta ? String(rawMeta.model) : undefined);
+          const modelId = moderatorMeta?.model;
 
           const isStillStreaming = isModeratorStreaming && !hasActuallyFinished;
 
-          // ✅ PERF: Only log once per message ID to avoid spam
+          // Log when raw metadata detection catches a message that Zod validation missed
           if (isModeratorRaw && !isModeratorMessage(message) && !loggedRawDetectRef.current.has(message.id)) {
             loggedRawDetectRef.current.add(message.id);
-            const roundNum = rawMeta && 'roundNumber' in rawMeta ? rawMeta.roundNumber : '?';
+            const roundNum = getRoundNumber(message.metadata) ?? '?';
             rlog.moderator('UI-raw-detect', `r${roundNum} - streaming placeholder detected via raw metadata`);
           }
 
@@ -883,10 +873,9 @@ export const ChatMessageList = memo(
       let currentUserGroup: Extract<MessageGroup, { type: 'user-group' }> | null = null;
 
       // ✅ PERF: Only log once per round change, not on every recalculation
-      const streamingMsgs = messagesWithParticipantInfo.filter((m) => {
-        const raw = m.message.metadata as Record<string, unknown> | null | undefined;
-        return raw && 'isStreaming' in raw && raw.isStreaming === true;
-      });
+      const streamingMsgs = messagesWithParticipantInfo.filter(m =>
+        isStreamingMetadata(m.message.metadata),
+      );
       if (streamingMsgs.length > 0) {
         const shouldLog = loggedGroupCalcRef.current.round !== _streamingRoundNumber
           || loggedGroupCalcRef.current.count < 2; // Log first 2 calcs per round only
@@ -931,26 +920,24 @@ export const ChatMessageList = memo(
           continue;
         }
 
-        // Check for streaming placeholder - use RAW metadata, not parsed
-        // getMessageMetadata uses schema parsing which fails for streaming placeholders
-        // because isStreaming isn't in DbMessageMetadataSchema
-        const rawMeta = message.metadata as Record<string, unknown> | null | undefined;
-        const isStreamingPlaceholder = rawMeta && typeof rawMeta === 'object' && 'isStreaming' in rawMeta && rawMeta.isStreaming === true;
+        // Check for streaming placeholder using utility (O(1) without Zod validation)
+        // isStreamingMetadata returns true when metadata.isStreaming === true
+        const streamingPlaceholder = isStreamingMetadata(message.metadata);
 
-        // ✅ FIX: For streaming placeholders without participantInfo (stale props issue),
-        // create fallback participantInfo from raw message metadata
+        // For streaming placeholders without participantInfo (stale props issue),
+        // create fallback participantInfo from message metadata using type-safe extractors
         let effectiveParticipantInfo = participantInfo;
-        if (!participantInfo && isStreamingPlaceholder && rawMeta) {
-          // Extract participant info from streaming placeholder raw metadata
-          const pIdx = typeof rawMeta.participantIndex === 'number' ? rawMeta.participantIndex : undefined;
-          const modelId = typeof rawMeta.model === 'string' ? rawMeta.model : undefined;
-          const role = typeof rawMeta.participantRole === 'string' ? rawMeta.participantRole : null;
-          const roundNum = typeof rawMeta.roundNumber === 'number' ? rawMeta.roundNumber : undefined;
+        if (!participantInfo && streamingPlaceholder) {
+          // Extract participant info using metadata utilities with fallback
+          const pIdx = getParticipantIndex(message.metadata);
+          const modelId = getModel(message.metadata);
+          const role = getParticipantRole(message.metadata);
+          const roundNum = getRoundNumber(message.metadata);
 
-          if (pIdx !== undefined) {
+          if (pIdx !== null) {
             effectiveParticipantInfo = {
               isStreaming: true,
-              modelId,
+              modelId: modelId ?? undefined,
               participantIndex: pIdx,
               role,
             };
@@ -976,8 +963,8 @@ export const ChatMessageList = memo(
         ) ?? false;
 
         // Don't skip streaming placeholders - they should show with shimmer
-        // isStreamingPlaceholder already computed above
-        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator && !messageHasContent && !isStreamingPlaceholder) {
+        // streamingPlaceholder already computed above
+        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator && !messageHasContent && !streamingPlaceholder) {
           continue;
         }
 

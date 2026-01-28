@@ -54,7 +54,7 @@ import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractSessionToken } from '@/lib/auth';
 import { log } from '@/lib/logger';
-import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
+import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import {
@@ -132,6 +132,7 @@ import type { AvailableSource } from '@/types/citations';
 import type { CheckRoundCompletionQueueMessage, TriggerModeratorQueueMessage, TriggerParticipantQueueMessage } from '@/types/queues';
 
 import type { streamChatRoute } from '../route';
+import type { WebSearchResultItem } from '../schema';
 import { StreamChatRequestSchema } from '../schema';
 import { chatMessagesToUIMessages, validateRequestMessage } from './helpers';
 
@@ -601,6 +602,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // - queries[].total exists in table schema but not message schema
             // - results[].results[].score needs to be clamped to [0, 1]
             // - results[].results[] has extra fields to strip (excerpt, metadata, rawContent)
+            //
+            // Type uses WebSearchResultItem (with optional rawContent extension for DB compat)
+            // instead of Record<string, unknown> for type safety
+            type TableResultItem = WebSearchResultItem & { rawContent?: string };
             type TableData = {
               failureCount: number;
               queries: Array<{ index: number; query: string; rationale: string; searchDepth: string; total?: number }>;
@@ -608,19 +613,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 answer: string | null;
                 query: string;
                 responseTime: number;
-                results: Array<{
-                  content: string;
-                  domain?: string;
-                  excerpt?: string;
-                  fullContent?: string;
-                  keyPoints?: string[];
-                  metadata?: Record<string, unknown>;
-                  publishedDate?: string | null;
-                  rawContent?: string;
-                  score?: number;
-                  title: string;
-                  url: string;
-                }>;
+                results: TableResultItem[];
               }>;
               successCount: number;
               summary: string;
@@ -975,8 +968,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         maxRetries: AI_RETRY_CONFIG.maxAttempts, // AI SDK handles retries
         // ✅ CONDITIONAL RETRY: Don't retry validation errors (400), authentication errors (401, 403)
         // These are permanent errors that won't be fixed by retrying
+        //
+        // DESIGN NOTE: AI SDK's shouldRetry callback signature requires `error: unknown`
+        // because the SDK catches any thrown error. We use type-safe utility functions
+        // (getErrorStatusCode, getErrorName, extractAISdkError) to safely extract error data.
         shouldRetry: ({ error }: { error: unknown }) => {
-          // ✅ TYPE-SAFE ERROR EXTRACTION: Use utility functions instead of unsafe casting
+          // Type-safe error extraction using utility functions (no unsafe casting)
           const statusCode = getErrorStatusCode(error);
           const errorName = getErrorName(error) || '';
           const aiError = extractAISdkError(error);

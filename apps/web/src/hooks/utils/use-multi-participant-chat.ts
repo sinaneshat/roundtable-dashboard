@@ -23,9 +23,8 @@ import { DefaultChatTransport } from 'ai';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
-import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
+import type { ExtendedFilePart } from '@/lib/schemas';
+import { DEFAULT_PARTICIPANT_INDEX, extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas';
 import { deduplicateParticipants, getCurrentRoundNumber, getEnabledParticipants } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant } from '@/services/api';
@@ -188,6 +187,7 @@ export function useMultiParticipantChat(
 
       return { body };
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs are stable refs synced via useSyncedRefs; accessing .current at call time prevents stale closures without causing re-renders
     [],
   );
 
@@ -403,8 +403,8 @@ export function useMultiParticipantChat(
         flushSync(() => setIsExplicitlyStreaming(false));
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.threadId is a stable ref synced via useSyncedRefs; accessing .current at call time prevents stale closures without causing re-renders
   }, [messages, initialMessages, status, isExplicitlyStreaming, aiSendMessage]);
-
 
   /**
    * Send a new user message
@@ -460,7 +460,6 @@ export function useMultiParticipantChat(
     },
     [status, isExplicitlyStreaming, participants, aiSendMessage],
   );
-
 
   // Sync streaming state to callback
   useEffect(() => {
@@ -533,6 +532,3 @@ export function useMultiParticipantChat(
     ],
   );
 }
-
-// Re-export types for backwards compatibility
-export type { ExtendedFilePart } from '@/lib/schemas/message-schemas';

@@ -12,7 +12,7 @@
  */
 
 import type {
-  PreSearchResult as SharedPreSearchResult,
+  PreSearchResult,
   WebSearchResultItem,
 } from '@roundtable/shared';
 import {
@@ -20,8 +20,7 @@ import {
   FinishReasonSchema,
   MessageRoles,
   PreSearchQueryStateStatusSchema,
-  // Re-export shared pre-search schemas
-  PreSearchResultSchema as SharedPreSearchResultSchema,
+  PreSearchResultSchema,
   WebSearchDepthSchema,
   WebSearchResultItemSchema,
 } from '@roundtable/shared';
@@ -30,12 +29,13 @@ import { z } from 'zod';
 import { UsageSchema } from '@/services/api';
 
 // ============================================================================
-// Re-export shared schemas for convenience
+// Re-export shared schemas with canonical names
 // ============================================================================
 
 // Full pre-search result from shared (includes all fields)
-export { SharedPreSearchResultSchema as PreSearchResultSchema };
-export type { SharedPreSearchResult as PreSearchResult };
+export { PreSearchResultSchema };
+export type { PreSearchResult };
+// Alias for backward compatibility - consumers should migrate to WebSearchResultItemSchema
 export { WebSearchResultItemSchema as PreSearchResultItemSchema };
 export type { WebSearchResultItem as PreSearchResultItem };
 

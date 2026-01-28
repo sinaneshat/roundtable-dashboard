@@ -1,16 +1,12 @@
 /**
- * Schemas Barrel Export
+ * Shared Schemas Barrel Export
  *
- * Re-exports from @roundtable/shared for shared schemas.
- * Platform-specific schemas (ChatParticipantSchema) defined locally.
+ * Centralized exports for all Zod schemas and type utilities.
+ * SINGLE SOURCE OF TRUTH for shared validation across API and Web.
  */
 
-// ============================================================================
-// Re-export shared schemas from @roundtable/shared
-// ============================================================================
-
 // Error schemas
-export type { ErrorMetadata } from '@roundtable/shared';
+export type { ErrorMetadata } from './error-schemas';
 export {
   categorizeErrorMessage,
   createErrorMetadata,
@@ -20,7 +16,7 @@ export {
   getErrorCategoryMessage,
   isErrorCategory,
   isUIMessageErrorType,
-} from '@roundtable/shared';
+} from './error-schemas';
 
 // Message schemas
 export type {
@@ -31,7 +27,7 @@ export type {
   StreamingFinishResult,
   StreamingToolCall,
   StreamingUsage,
-} from '@roundtable/shared';
+} from './message-schemas';
 export {
   convertUIMessagesToText,
   createReasoningPart,
@@ -76,27 +72,9 @@ export {
   StreamingFinishResultSchema,
   StreamingToolCallSchema,
   StreamingUsageSchema,
-} from '@roundtable/shared';
+} from './message-schemas';
 
-// Round schemas
-export type { RoundNumber, RoundNumberWithSentinel } from '@roundtable/shared';
-export {
-  calculateNextRound,
-  DEFAULT_ROUND_NUMBER,
-  extractRoundNumber,
-  formatRoundNumber,
-  getDisplayRoundNumber,
-  isValidRoundNumber,
-  NO_ROUND_SENTINEL,
-  NullableRoundNumberSchema,
-  OptionalRoundNumberSchema,
-  parseRoundNumber,
-  RoundNumberSchema,
-  RoundNumberWithSentinelSchema,
-  safeParseRoundNumber,
-} from '@roundtable/shared';
-
-// Shared participant schemas from @roundtable/shared
+// Participant schemas (shared - excludes ChatParticipantSchema which is platform-specific)
 export type {
   ComparableParticipant,
   MinimalParticipant,
@@ -109,7 +87,7 @@ export type {
   ParticipantIndexWithSentinel,
   ParticipantUpdatePayload,
   ValidateModelAccessOptions,
-} from '@roundtable/shared';
+} from './participant-schemas';
 export {
   ComparableParticipantSchema,
   DEFAULT_PARTICIPANT_INDEX,
@@ -138,18 +116,22 @@ export {
   ParticipantRoleSchema,
   ParticipantUpdatePayloadSchema,
   ValidateModelAccessOptionsSchema,
-} from '@roundtable/shared';
-
-// ============================================================================
-// Platform-specific schemas (API only)
-// ============================================================================
-
-// Participant schemas with Drizzle dependencies
-export type { ChatParticipantWithSettings } from './participant-schemas';
-export {
-  ChatParticipantSchema,
-  isChatParticipant,
-  isChatParticipantArray,
-  NonEmptyParticipantsArraySchema,
-  ParticipantsArraySchema,
 } from './participant-schemas';
+
+// Round schemas
+export type { RoundNumber, RoundNumberWithSentinel } from './round-schemas';
+export {
+  calculateNextRound,
+  DEFAULT_ROUND_NUMBER,
+  extractRoundNumber,
+  formatRoundNumber,
+  getDisplayRoundNumber,
+  isValidRoundNumber,
+  NO_ROUND_SENTINEL,
+  NullableRoundNumberSchema,
+  OptionalRoundNumberSchema,
+  parseRoundNumber,
+  RoundNumberSchema,
+  RoundNumberWithSentinelSchema,
+  safeParseRoundNumber,
+} from './round-schemas';

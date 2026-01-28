@@ -26,7 +26,7 @@ import { ErrorCategorySchema, FinishReasonSchema } from '@roundtable/shared/enum
 import type { LanguageModelUsage } from 'ai';
 import { z } from 'zod';
 
-import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
+import { categorizeErrorMessage } from '@/lib/schemas';
 
 // ============================================================================
 // Schemas & Types

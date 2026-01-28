@@ -37,7 +37,7 @@ import type {
 } from '@/common/schemas/project-context';
 import * as tables from '@/db';
 import type { UploadMetadata } from '@/db/validation/upload';
-import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { extractTextFromParts } from '@/lib/schemas';
 import { getExtractedText } from '@/lib/utils/metadata';
 import { PreSearchDataPayloadSchema } from '@/routes/chat/schema';
 import { deductCreditsForAction } from '@/services/billing/credit.service';

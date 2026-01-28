@@ -12,7 +12,7 @@ import { ChatModes, ChatModeSchema, ModelIds, SUBSCRIPTION_TIERS, SubscriptionTi
 import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import type { TranslationFunction } from '@/lib/i18n/use-translations';
-import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
+import { ParticipantConfigSchema } from '@/lib/schemas';
 
 // ============================================================================
 // PRESET MODEL ROLE (5-part enum pattern for preset IDs)

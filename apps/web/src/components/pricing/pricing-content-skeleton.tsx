@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 export function PricingContentSkeleton() {
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-8">
+    <div className="w-full max-w-md mx-auto px-4 py-8" data-testid="pricing-skeleton">
       {/* Outer border wrapper - matches PricingCard */}
       <div className="relative h-full rounded-2xl border-2 border-border/30 p-2 md:rounded-3xl md:p-3 shadow-lg">
         {/* Inner card - matches PricingCard inner container */}

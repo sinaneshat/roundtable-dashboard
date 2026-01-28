@@ -433,6 +433,20 @@ export function isPreSearch(metadata: unknown): boolean {
   return validated !== null;
 }
 
+/**
+ * Get pre-search result count from metadata
+ * Returns the count of web search results in pre-search metadata
+ *
+ * **REPLACES**: `(meta as { preSearch?: { results?: unknown[] } })?.preSearch?.results?.length ?? 0`
+ */
+export function getPreSearchResultCount(metadata: unknown): number {
+  const validated = getPreSearchMetadata(metadata);
+  if (!validated) {
+    return 0;
+  }
+  return validated.preSearch.results?.length ?? 0;
+}
+
 // ============================================================================
 // Upload Metadata Extraction
 // ============================================================================

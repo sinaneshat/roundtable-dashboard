@@ -149,12 +149,14 @@ export const ROLE_NAME_MAPPINGS = {
   'Visionary Thinker': ShortRoleNames.IDEATOR,
 } as const;
 
-export type PredefinedRoleTemplate = {
-  name: string;
-  iconName: RoleIconName;
-  description: string;
-  category: ShortRoleName;
-};
+export const PredefinedRoleTemplateSchema = z.object({
+  category: ShortRoleNameSchema,
+  description: z.string(),
+  iconName: RoleIconNameSchema,
+  name: z.string(),
+}).strict();
+
+export type PredefinedRoleTemplate = z.infer<typeof PredefinedRoleTemplateSchema>;
 
 export const PREDEFINED_ROLE_TEMPLATES: readonly PredefinedRoleTemplate[] = [
   {

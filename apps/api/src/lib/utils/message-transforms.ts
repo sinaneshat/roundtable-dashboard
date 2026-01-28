@@ -40,9 +40,8 @@ import {
   DbPreSearchMessageMetadataSchema,
   UsageSchema,
 } from '@/db/schemas/chat-metadata';
-import type { ErrorMetadata } from '@/lib/schemas/error-schemas';
-import { ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
-import type { ParticipantContext } from '@/lib/schemas/participant-schemas';
+import type { ErrorMetadata, ParticipantContext } from '@/lib/schemas';
+import { ErrorMetadataSchema } from '@/lib/schemas';
 import type { ChatMessage } from '@/routes/chat/schema';
 
 import {
@@ -268,7 +267,7 @@ export function chatMessagesToUIMessages(
                   id: participant.id,
                   index: 0,
                   modelId: participant.modelId,
-                  role: participant.role,
+                  role: participant.role ?? null,
                 },
               ),
             };

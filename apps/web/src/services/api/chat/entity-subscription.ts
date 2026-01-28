@@ -8,11 +8,14 @@
  * that supports resumption via lastSeq parameter.
  */
 
+import type { EntitySubscriptionStatus } from '@roundtable/shared/enums';
+
+// Re-export for backwards compatibility
+export type { EntitySubscriptionStatus } from '@roundtable/shared/enums';
+
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type EntitySubscriptionStatus = 'waiting' | 'complete' | 'error' | 'disabled';
 
 export type EntitySubscriptionResponse = {
   /** Status of the stream */

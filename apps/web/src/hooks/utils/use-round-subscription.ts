@@ -17,7 +17,7 @@
  * Connection efficiency: ~2-3 concurrent SSE connections instead of 7+
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 import { parseParticipantEntityIndex } from '@/lib/utils/streaming-helpers';
@@ -100,7 +100,14 @@ export type UseRoundSubscriptionOptions = {
   onRoundComplete?: () => void;
   /** Called when an entity errors */
   onEntityError?: (entity: EntityType, error: Error) => void;
-  /** Called for presearch-specific events (query, result, start, complete, done) */
+  /**
+   * Called for presearch-specific events (query, result, start, complete, done)
+   *
+   * DESIGN NOTE: `data: unknown` is intentional here - this is a PROTOCOL BOUNDARY
+   * where SSE data arrives from the server as JSON that must be parsed.
+   * The PreSearchSSEEvent schemas are defined on the API side; consumers should
+   * validate the data shape based on eventType before use.
+   */
   onPreSearchEvent?: (eventType: string, data: unknown) => void;
 };
 
@@ -239,7 +246,8 @@ export function useRoundSubscription({
   presearchReadyRef.current = presearchReady;
 
   // Reset stagger state and seq validation when round changes
-  useEffect(() => {
+  // Using useLayoutEffect to ensure state is reset synchronously before render
+  useLayoutEffect(() => {
     hasCalledRoundCompleteRef.current = false;
     // When presearch is enabled, start with -1 (no participants)
     // When presearch is disabled, start with 0 (P0 can start)
@@ -392,7 +400,8 @@ export function useRoundSubscription({
   // ✅ PRESEARCH GATE: Backup effect for enabling participants after presearch completes
   // Primary mechanism is the onStatusChange callback above; this effect serves as backup
   // in case the callback doesn't fire (e.g., if status was already complete on mount)
-  useEffect(() => {
+  // Using useLayoutEffect to ensure synchronous state updates before render
+  useLayoutEffect(() => {
     if (!enabled) {
       return;
     }
@@ -421,7 +430,8 @@ export function useRoundSubscription({
   //
   // ✅ FIX #1: Use participantStatuses (string[]) instead of participantStates (object[])
   // to reduce effect executions. The effect only needs status changes to determine baton passing.
-  useEffect(() => {
+  // Using useLayoutEffect to ensure synchronous state updates before render
+  useLayoutEffect(() => {
     if (!enabled) {
       return;
     }

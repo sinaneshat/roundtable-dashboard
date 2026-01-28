@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi';
+import { STRING_LIMITS } from '@roundtable/shared';
 import {
   ChangelogChangeTypeSchema,
   ChangelogTypeSchema,
@@ -29,7 +30,6 @@ import {
 } from '@roundtable/shared/enums';
 import type { ExecutionContext } from 'hono';
 
-import { STRING_LIMITS } from '@/constants';
 import { CursorPaginationQuerySchema } from '@/core/pagination';
 import { CoreSchemas, createApiResponseSchema, createCursorPaginatedResponseSchema } from '@/core/schemas';
 import {
@@ -53,8 +53,7 @@ import {
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
 import { log } from '@/lib/logger';
-import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
-import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
+import { ChatParticipantSchema, RoundNumberSchema } from '@/lib/schemas';
 import type { ApiEnv } from '@/types';
 import { StreamStateSchema } from '@/types/streaming';
 

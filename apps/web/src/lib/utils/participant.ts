@@ -16,7 +16,7 @@
 import type { ParticipantComparisonMode } from '@roundtable/shared';
 import { ParticipantComparisonModes } from '@roundtable/shared';
 
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import type { ChatParticipant } from '@/services/api';
 
 // ============================================================================

@@ -36,6 +36,8 @@ import {
   isUserMessageMetadata,
 } from '@/services/api';
 
+import { isObject } from './type-guards';
+
 // ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
@@ -213,13 +215,6 @@ export function extractMessageMetadata(
 // ============================================================================
 // Specific Field Extractors (Null-Safe)
 // ============================================================================
-
-/**
- * Type guard: Check if value is a non-null object
- */
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 /**
  * Extract createdAt from a message or its metadata

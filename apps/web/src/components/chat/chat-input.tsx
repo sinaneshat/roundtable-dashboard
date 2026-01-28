@@ -1,5 +1,5 @@
 import type { BorderVariant } from '@roundtable/shared';
-import { AiSdkStatuses, BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@roundtable/shared';
+import { AiSdkStatuses, BorderVariants, ComponentSizes, ComponentVariants, PlanTypes, STRING_LIMITS } from '@roundtable/shared';
 import type { ChatStatus } from 'ai';
 import type { FormEvent, ReactNode, RefObject } from 'react';
 import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react';
@@ -9,7 +9,6 @@ import { ChatInputAttachments } from '@/components/chat/chat-input-attachments-l
 import { VoiceVisualization } from '@/components/chat/voice-visualization-lazy';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
 import {
@@ -21,7 +20,7 @@ import {
   useSpeechRecognition,
 } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
+import type { ParticipantConfig } from '@/lib/schemas';
 import { afterPaint } from '@/lib/ui/browser-timing';
 import { cn } from '@/lib/ui/cn';
 
@@ -244,6 +243,7 @@ export const ChatInput = memo(({
         className="hidden"
         accept="image/*,application/pdf,text/*,.md,.json,.csv,.xml,.html,.css,.js,.ts,.jsx,.tsx,.py,.java,.c,.cpp,.go,.rs,.rb,.php"
         disabled={!enableAttachments || !onAddAttachments}
+        data-testid="file-input"
       />
 
       <div

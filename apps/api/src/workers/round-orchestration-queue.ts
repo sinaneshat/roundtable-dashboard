@@ -493,6 +493,7 @@ async function handleRecoverRound(
     executionId,
     env.ROUND_ORCHESTRATION_QUEUE,
     sessionToken,
+    env,
   );
 }
 

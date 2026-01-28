@@ -418,7 +418,7 @@ describe('navigation Reset Flows', () => {
     });
 
     it('should preserve isStreaming when returning to same thread from overview', () => {
-      const { thread } = setupStreamingThread(store, 'thread-A', 'thread-a', 3, 1);
+      const { thread: _thread } = setupStreamingThread(store, 'thread-A', 'thread-a', 3, 1);
 
       expect(store.getState().isStreaming).toBe(true);
 
@@ -602,7 +602,6 @@ describe('navigation Reset Flows', () => {
       expect(state.messages).toHaveLength(0);
       expect(state.thread).toBeNull();
     });
-
   });
 
   describe('resetToOverview behavior', () => {

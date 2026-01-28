@@ -18,6 +18,10 @@ import { vi } from 'vitest';
 /**
  * Simplified TypedLogger for testing
  * The full version is in @roundtable/api but we only need the interface
+ *
+ * DESIGN NOTE: `Record<string, unknown>` in context parameters is intentional.
+ * Logger context accepts arbitrary structured data for diagnostics - constraining
+ * this would break the extensibility that makes structured logging useful.
  */
 export type TypedLogger = {
   debug: (message: string, context?: Record<string, unknown>) => void;
@@ -29,6 +33,11 @@ export type TypedLogger = {
 /**
  * Simplified ApiEnv for testing
  * The full version is in @roundtable/api but we only need bindings shape
+ *
+ * DESIGN NOTE: `[key: string]: unknown` in Bindings and `Record<string, unknown>` in Variables
+ * are intentional. Cloudflare Worker bindings can contain any arbitrary bindings (custom KV
+ * namespaces, R2 buckets, Durable Objects, etc.) and Hono context Variables are extensible
+ * by design. This matches the Cloudflare Workers runtime type definitions.
  */
 export type ApiEnv = {
   Bindings: {

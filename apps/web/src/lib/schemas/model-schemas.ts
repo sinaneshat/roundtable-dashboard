@@ -10,9 +10,9 @@
  * @module lib/schemas/model-schemas
  */
 
+import { ParticipantConfigSchema } from '@roundtable/shared';
 import { z } from 'zod';
 
-import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import type { Model } from '@/services/api';
 
 /**

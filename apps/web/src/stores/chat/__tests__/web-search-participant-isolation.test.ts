@@ -114,7 +114,7 @@ describe('scenario 1: Web Search Does NOT Create New Participants', () => {
 
   it('should NOT add participants when web search is enabled', () => {
     // Setup 2 participants with web search
-    const { participants } = setupRoundWithWebSearch(store, 2, 0, true);
+    const { participants: _participants } = setupRoundWithWebSearch(store, 2, 0, true);
 
     // Verify initial participant count
     expect(store.getState().participants).toHaveLength(2);
@@ -149,7 +149,7 @@ describe('scenario 1: Web Search Does NOT Create New Participants', () => {
   });
 
   it('should maintain participant count through PRESEARCH → PARTICIPANTS → MODERATOR phases', () => {
-    const { participants } = setupRoundWithWebSearch(store, 3, 0, true);
+    const { participants: _participants } = setupRoundWithWebSearch(store, 3, 0, true);
 
     // Add pre-search
     addPreSearchForRound(store, 0, MessageStatuses.PENDING);
@@ -344,7 +344,7 @@ describe('scenario 4: Multi-Round Web Search Toggle Does NOT Leak Participants',
 
   it('should maintain consistent participant count: Round 1 (no search) → Round 2 (with search)', () => {
     // Round 1: No web search
-    const { participants } = setupRoundWithWebSearch(store, 2, 0, false);
+    const { participants: _participants } = setupRoundWithWebSearch(store, 2, 0, false);
     expect(store.getState().participants).toHaveLength(2);
 
     // Complete Round 1

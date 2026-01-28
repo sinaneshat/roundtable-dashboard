@@ -12,7 +12,9 @@
  * - Support resumption via lastSeq tracking
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { EntityPhase } from '@roundtable/shared/enums';
+import { EntityPhases, EntitySubscriptionStatuses } from '@roundtable/shared/enums';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 import type { EntitySubscriptionResponse } from '@/services/api';
@@ -22,11 +24,12 @@ import {
   subscribeToPreSearchStreamService,
 } from '@/services/api';
 
+// Re-export for backwards compatibility
+export type { EntityPhase } from '@roundtable/shared/enums';
+
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type EntityPhase = 'presearch' | 'participant' | 'moderator';
 
 export type EntitySubscriptionState = {
   /** Current status of the subscription */
@@ -50,7 +53,14 @@ export type EntitySubscriptionCallbacks = {
   onError?: (error: Error) => void;
   /** Called when status changes */
   onStatusChange?: (status: EntitySubscriptionState['status']) => void;
-  /** Called for presearch-specific events (query, result, start, complete, done) */
+  /**
+   * Called for presearch-specific events (query, result, start, complete, done)
+   *
+   * DESIGN NOTE: `data: unknown` is intentional here - this is a PROTOCOL BOUNDARY
+   * where SSE data arrives from the server as JSON that must be parsed.
+   * The PreSearchSSEEvent schemas are defined on the API side; consumers should
+   * validate the data shape based on eventType before use.
+   */
   onPreSearchEvent?: (eventType: string, data: unknown) => void;
 };
 
@@ -112,7 +122,8 @@ export function useEntitySubscription({
   // Reset lastSeq when round number changes to prevent stale sequence numbers
   // This fixes the round 2+ submission failure where subscriptions detect "complete"
   // instantly because they're using stale lastSeq values from the previous round
-  useEffect(() => {
+  // Using useLayoutEffect to ensure state is reset synchronously before render
+  useLayoutEffect(() => {
     if (prevRoundNumberRef.current !== roundNumber) {
       rlog.stream(
         'check',
@@ -257,7 +268,7 @@ export function useEntitySubscription({
 
         rlog.stream('check', `${logPrefix} JSON response status=${result?.status}`);
 
-        if (result?.status === 'complete') {
+        if (result?.status === EntitySubscriptionStatuses.COMPLETE) {
           // Mark complete to prevent any pending retries
           isCompleteRef.current = true;
           setState(prev => ({
@@ -268,7 +279,7 @@ export function useEntitySubscription({
           }));
           callbacksRef.current?.onStatusChange?.('complete');
           callbacksRef.current?.onComplete?.(result.lastSeq ?? lastSeqRef.current);
-        } else if (result?.status === 'disabled') {
+        } else if (result?.status === EntitySubscriptionStatuses.DISABLED) {
           setState(prev => ({
             ...prev,
             errorMessage: result.message,
@@ -276,7 +287,7 @@ export function useEntitySubscription({
             status: 'disabled',
           }));
           callbacksRef.current?.onStatusChange?.('disabled');
-        } else if (result?.status === 'error') {
+        } else if (result?.status === EntitySubscriptionStatuses.ERROR) {
           setState(prev => ({
             ...prev,
             errorMessage: 'Stream encountered an error',
@@ -455,7 +466,7 @@ export function useEntitySubscription({
                   const finishData = JSON.parse(line.slice(2));
                   rlog.stream('check', `${logPrefix} e:/d: event parsed: ${JSON.stringify(finishData).slice(0, 100)}`);
                   if (finishData.finishReason) {
-                    rlog.stream('check', `🏁 ${logPrefix} finish event detected (${line.slice(0, 2)}), reason=${finishData.finishReason}`)
+                    rlog.stream('check', `🏁 ${logPrefix} finish event detected (${line.slice(0, 2)}), reason=${finishData.finishReason}`);
 
                     // Set completion flag BEFORE any async operations to prevent retry race conditions
                     isCompleteRef.current = true;
@@ -668,7 +679,7 @@ type UsePreSearchSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'phase
  * Convenience hook for pre-search stream subscription.
  */
 export function usePreSearchSubscription(options: UsePreSearchSubscriptionOptions) {
-  return useEntitySubscription({ ...options, phase: 'presearch' });
+  return useEntitySubscription({ ...options, phase: EntityPhases.PRESEARCH });
 }
 
 type UseParticipantSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'phase'> & {
@@ -679,7 +690,7 @@ type UseParticipantSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'pha
  * Convenience hook for participant stream subscription.
  */
 export function useParticipantSubscription(options: UseParticipantSubscriptionOptions) {
-  return useEntitySubscription({ ...options, phase: 'participant' });
+  return useEntitySubscription({ ...options, phase: EntityPhases.PARTICIPANT });
 }
 
 type UseModeratorSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'phase' | 'participantIndex'>;
@@ -688,5 +699,5 @@ type UseModeratorSubscriptionOptions = Omit<UseEntitySubscriptionOptions, 'phase
  * Convenience hook for moderator stream subscription.
  */
 export function useModeratorSubscription(options: UseModeratorSubscriptionOptions) {
-  return useEntitySubscription({ ...options, phase: 'moderator' });
+  return useEntitySubscription({ ...options, phase: EntityPhases.MODERATOR });
 }

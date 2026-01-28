@@ -86,6 +86,12 @@ const ErrorContextValueSchema = z.union([z.string(), z.number(), z.boolean(), z.
  */
 const RawContextSchema = z.record(z.string(), z.unknown());
 
+/**
+ * Schema for checking if a value is a plain object (not array or primitive)
+ * Uses z.record() instead of .passthrough() for explicit type safety
+ */
+const PlainObjectSchema = z.record(z.string(), z.unknown());
+
 // ============================================================================
 // ERROR DETAILS EXTRACTION
 // ============================================================================
@@ -201,7 +207,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   if (stringResult.success) {
     try {
       const parsed: unknown = JSON.parse(stringResult.data);
-      const objectCheck = z.object({}).passthrough().safeParse(parsed);
+      const objectCheck = PlainObjectSchema.safeParse(parsed);
       if (objectCheck.success) {
         return getApiErrorDetails(parsed);
       }
@@ -212,7 +218,7 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   }
 
   // Handle non-objects
-  const objectCheck = z.object({}).passthrough().safeParse(error);
+  const objectCheck = PlainObjectSchema.safeParse(error);
   if (!objectCheck.success) {
     return { message: String(error) };
   }

@@ -7,7 +7,7 @@ import type { getDbAsync } from '@/db';
 import type {
   ParticipantForValidation,
   ValidateModelAccessOptions,
-} from '@/lib/schemas/participant-schemas';
+} from '@/lib/schemas';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,

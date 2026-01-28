@@ -10,7 +10,7 @@ import {
   calculateNextRound,
   DEFAULT_ROUND_NUMBER,
   NO_ROUND_SENTINEL,
-} from '@/lib/schemas/round-schemas';
+} from '@/lib/schemas';
 import { isTextPart } from '@/lib/utils';
 
 // ============================================================================

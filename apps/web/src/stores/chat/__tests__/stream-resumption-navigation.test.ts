@@ -621,10 +621,13 @@ describe('stream Resumption Navigation', () => {
   describe('maintain participant order on resume', () => {
     it('should preserve participant priority order from D1', () => {
       const thread = createMockThread({ id: 'thread-123', slug: 'thread-123' });
+      const baseParticipants = createMockParticipants(1, 'thread-123');
+      expect(baseParticipants[0]).toBeDefined();
+      const baseParticipant = baseParticipants[0] as (typeof baseParticipants)[0];
       const participants = [
-        { ...createMockParticipants(1, 'thread-123')[0]!, id: 'p0', modelId: 'gpt-4', priority: 0 },
-        { ...createMockParticipants(1, 'thread-123')[0]!, id: 'p1', modelId: 'claude-3', priority: 1 },
-        { ...createMockParticipants(1, 'thread-123')[0]!, id: 'p2', modelId: 'gemini', priority: 2 },
+        { ...baseParticipant, id: 'p0', modelId: 'gpt-4', priority: 0 },
+        { ...baseParticipant, id: 'p1', modelId: 'claude-3', priority: 1 },
+        { ...baseParticipant, id: 'p2', modelId: 'gemini', priority: 2 },
       ];
 
       const d1Messages = createPartialRoundMessages('thread-123', 0, 2);

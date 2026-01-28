@@ -17,7 +17,7 @@ import type {
   DbCitation,
 } from '@/db/schemas/chat-metadata';
 import { DbAssistantMessageMetadataSchema } from '@/db/schemas/chat-metadata';
-import type { RoundNumber } from '@/lib/schemas/round-schemas';
+import type { RoundNumber } from '@/lib/schemas';
 import type { AvailableSource } from '@/types/citations';
 
 // ============================================================================

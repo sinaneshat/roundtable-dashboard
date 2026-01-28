@@ -1,10 +1,10 @@
 /**
  * Round Number Schemas - SINGLE SOURCE OF TRUTH
  *
- * ✅ 0-BASED INDEXING: First round is 0, second is 1, etc.
- * ✅ CENTRALIZED: All round number validation happens here
- * ✅ TYPE-SAFE: Zod schemas with TypeScript inference
- * ✅ REUSABLE: Import these schemas everywhere
+ * 0-BASED INDEXING: First round is 0, second is 1, etc.
+ * CENTRALIZED: All round number validation happens here
+ * TYPE-SAFE: Zod schemas with TypeScript inference
+ * REUSABLE: Import these schemas everywhere
  *
  * This is the ONLY place where round number defaults and validation are defined.
  * DO NOT create round number schemas or defaults anywhere else.
@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 /**
  * Default round number when none exists
- * ✅ 0-BASED: First round is 0
+ * 0-BASED: First round is 0
  */
 export const DEFAULT_ROUND_NUMBER = 0;
 
@@ -34,9 +34,9 @@ export const NO_ROUND_SENTINEL = -1;
 
 /**
  * Round number schema for data storage and API communication
- * ✅ 0-BASED: Allows 0 (first round)
- * ✅ NON-NEGATIVE: Rejects negative numbers except sentinel
- * ✅ NO .int(): AI SDK providers reject integer type constraints in output_format schemas
+ * 0-BASED: Allows 0 (first round)
+ * NON-NEGATIVE: Rejects negative numbers except sentinel
+ * NO .int(): AI SDK providers reject integer type constraints in output_format schemas
  * IMPORTANT: This schema is used in AI-generated schemas (ModeratorAIContentSchema)
  * so we CANNOT use .int() as it causes "integer type properties maximum, minimum not supported" errors
  */
@@ -45,7 +45,7 @@ export const RoundNumberSchema = z.number().describe('Round number (0-based: fir
 /**
  * Round number schema for internal calculations (allows sentinel value)
  * Used for: maxRoundNumber tracking, round calculation logic
- * ✅ NO .int()/.min(): Even though this is for internal use, keeping consistency
+ * NO .int()/.min(): Even though this is for internal use, keeping consistency
  * with RoundNumberSchema to avoid confusion
  */
 export const RoundNumberWithSentinelSchema = z.number().describe('Round number or sentinel (-1 for calculations, must be integer >= -1)');
@@ -120,7 +120,7 @@ export function isValidRoundNumber(value: unknown): value is RoundNumber {
 
 /**
  * Calculate next round number from maximum existing round
- * ✅ 0-BASED: Returns 0 if no rounds exist
+ * 0-BASED: Returns 0 if no rounds exist
  *
  * @param maxRound - Maximum round number found, or NO_ROUND_SENTINEL if none
  * @returns Next round number (maxRound + 1, or 0 if sentinel)
@@ -143,8 +143,8 @@ export function calculateNextRound(maxRound: RoundNumberWithSentinel): RoundNumb
 
 /**
  * Get display round number (1-based for UI)
- * ✅ DISPLAY ONLY: Use this for user-facing text
- * ✅ 0-BASED → 1-BASED: Adds 1 for display
+ * DISPLAY ONLY: Use this for user-facing text
+ * 0-BASED -> 1-BASED: Adds 1 for display
  *
  * @param roundNumber - 0-based round number
  * @returns 1-based display number (Round 1, Round 2, etc.)
@@ -155,7 +155,7 @@ export function getDisplayRoundNumber(roundNumber: RoundNumber): number {
 
 /**
  * Format round number for display
- * Example: 0 → "Round 1", 1 → "Round 2"
+ * Example: 0 -> "Round 1", 1 -> "Round 2"
  *
  * @param roundNumber - 0-based round number
  * @returns Formatted string for display
@@ -170,8 +170,8 @@ export function formatRoundNumber(roundNumber: RoundNumber): string {
 
 /**
  * Extract round number from message metadata
- * ✅ TYPE-SAFE: Validates and parses
- * ✅ FALLBACK: Returns default if missing or invalid
+ * TYPE-SAFE: Validates and parses
+ * FALLBACK: Returns default if missing or invalid
  *
  * @param metadata - Message metadata (unknown type)
  * @param fallback - Fallback value (default: DEFAULT_ROUND_NUMBER)
@@ -182,7 +182,7 @@ export function extractRoundNumber(metadata: unknown, fallback: number = DEFAULT
     return fallback;
   }
 
-  // ✅ TYPE-SAFE: Check for field existence before access
+  // TYPE-SAFE: Check for field existence before access
   if ('roundNumber' in metadata) {
     return safeParseRoundNumber(metadata.roundNumber, fallback);
   }

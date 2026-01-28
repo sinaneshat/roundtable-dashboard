@@ -58,7 +58,7 @@ type MockParticipant = {
   updatedAt: Date;
 };
 
-function createMockThread(overrides: Partial<MockThread> = {}): MockThread {
+function _createMockThread(overrides: Partial<MockThread> = {}): MockThread {
   return {
     createdAt: new Date(),
     enableWebSearch: false,
@@ -90,7 +90,7 @@ function createMockParticipants(count: number): MockParticipant[] {
   }));
 }
 
-function createSubscriptionState(
+function _createSubscriptionState(
   participantCount: number,
   overrides: Partial<SubscriptionState> = {},
 ): SubscriptionState {
@@ -609,7 +609,7 @@ describe('guard Against Duplicate completeStreaming Calls', () => {
     expect(store.getState().phase).toBe(ChatPhases.COMPLETE);
 
     // Act: Call completeStreaming when already complete
-    const stateBefore = { ...store.getState() };
+    const _stateBefore = { ...store.getState() };
     store.getState().completeStreaming();
     const stateAfter = store.getState();
 

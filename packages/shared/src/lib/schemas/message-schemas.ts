@@ -1,7 +1,7 @@
 /**
  * Message Schemas - Shared between Frontend and Backend
  *
- * ✅ SINGLE SOURCE OF TRUTH: Message structure schemas
+ * SINGLE SOURCE OF TRUTH: Message structure schemas
  *
  * Consolidates message schemas used by:
  * - Backend API (/src/api/routes/chat/schema.ts)
@@ -13,16 +13,17 @@
  * @see /docs/backend-patterns.md - Schema consolidation patterns
  */
 
-import { z } from '@hono/zod-openapi';
-import type { MessageStatus } from '@roundtable/shared/enums';
-import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '@roundtable/shared/enums';
+import { z } from 'zod';
+
+import type { MessageStatus } from '../../enums';
+import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '../../enums';
 
 // ============================================================================
 // FILE PART SCHEMA (extracted for reuse)
 // ============================================================================
 
 /**
- * ✅ FILE PART: For multi-modal messages (images, PDFs, etc.)
+ * FILE PART: For multi-modal messages (images, PDFs, etc.)
  * AI SDK v6 format for file attachments in messages.
  *
  * SINGLE SOURCE OF TRUTH for file parts used by:
@@ -33,44 +34,40 @@ import { MESSAGE_STATUSES, MessagePartTypes, ReasoningPartTypeSchema } from '@ro
  * Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
  */
 export const FilePartSchema = z.object({
-  filename: z.string().optional().openapi({
-    description: 'Original filename for display',
-    example: 'screenshot.png',
-  }),
-  mediaType: z.string().openapi({
-    description: 'MIME type of the file',
-    example: 'image/png',
-  }),
+  filename: z.string().optional(),
+  mediaType: z.string(),
   type: z.literal('file'),
-  url: z.string().openapi({
-    description: 'URL to the file (can be data URL or HTTP URL)',
-    example: 'https://example.com/image.png',
-  }),
+  url: z.string(),
 });
 
 /**
  * File part TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
+ * ZOD INFERENCE: Type automatically derived from schema
  */
 export type FilePart = z.infer<typeof FilePartSchema>;
 
 /**
  * Extended file part schema for internal use (includes uploadId)
  *
- * ✅ SINGLE SOURCE OF TRUTH: Extends FilePartSchema with internal tracking fields
+ * SINGLE SOURCE OF TRUTH: Extends FilePartSchema with internal tracking fields
  * Used when file parts need to reference the original upload for:
  * - Fallback file loading (extract uploadId from URL)
  * - Message-upload junction table lookups
  * - Citation source mapping
  */
 export const ExtendedFilePartSchema = FilePartSchema.extend({
-  uploadId: z.string().optional().openapi({
-    description: 'Internal upload ID for file tracking',
-    example: '01HXYZ123ABC',
-  }),
+  uploadId: z.string().optional(),
 });
 
 export type ExtendedFilePart = z.infer<typeof ExtendedFilePartSchema>;
+
+/**
+ * Schema for ExtendedFilePart with required uploadId (non-optional string)
+ */
+const _ExtendedFilePartWithUploadIdSchema = ExtendedFilePartSchema.extend({
+  uploadId: z.string().min(1),
+});
+type ExtendedFilePartWithUploadId = z.infer<typeof _ExtendedFilePartWithUploadIdSchema>;
 
 // ============================================================================
 // FILE PART TYPE GUARDS
@@ -78,7 +75,7 @@ export type ExtendedFilePart = z.infer<typeof ExtendedFilePartSchema>;
 
 /**
  * Type guard: Check if a message part is a file part
- * ✅ TYPE-SAFE: Uses Zod schema validation, no forced casts
+ * TYPE-SAFE: Uses Zod schema validation, no forced casts
  */
 export function isFilePart(part: unknown): part is FilePart {
   return FilePartSchema.safeParse(part).success;
@@ -86,11 +83,11 @@ export function isFilePart(part: unknown): part is FilePart {
 
 /**
  * Type guard: Check if a file part has uploadId
- * ✅ TYPE-SAFE: Uses Zod schema validation for ExtendedFilePart
+ * TYPE-SAFE: Uses Zod schema validation for ExtendedFilePart
  */
 export function hasUploadId(
   part: FilePart,
-): part is ExtendedFilePart & { uploadId: string } {
+): part is ExtendedFilePartWithUploadId {
   const result = ExtendedFilePartSchema.safeParse(part);
   if (!result.success) {
     return false;
@@ -103,7 +100,7 @@ export function hasUploadId(
 /**
  * Extract uploadId from file part URL if present
  * Pattern: /api/v1/uploads/{uploadId}/download
- * ✅ TYPE-SAFE: Returns string or null, no unsafe casts
+ * TYPE-SAFE: Returns string or null, no unsafe casts
  */
 export function extractUploadIdFromUrl(url: string): string | null {
   const match = url.match(/\/uploads\/([A-Z0-9]+)\//i);
@@ -112,7 +109,7 @@ export function extractUploadIdFromUrl(url: string): string | null {
 
 /**
  * Get uploadId from file part (direct property or extracted from URL)
- * ✅ TYPE-SAFE: Combines both extraction methods
+ * TYPE-SAFE: Combines both extraction methods
  */
 export function getUploadIdFromFilePart(part: FilePart): string | null {
   // First try direct uploadId property
@@ -125,7 +122,7 @@ export function getUploadIdFromFilePart(part: FilePart): string | null {
 
 /**
  * Safely extract filename from a part object
- * ✅ TYPE-SAFE: Uses Zod validation, no force casting
+ * TYPE-SAFE: Uses Zod validation, no force casting
  *
  * @param part - Part object that may have a filename property
  * @returns filename string or undefined
@@ -140,7 +137,7 @@ export function getFilenameFromPart(part: unknown): string | undefined {
 
 /**
  * Safely extract mimeType from a part object
- * ✅ TYPE-SAFE: Uses Zod validation, checks both mimeType and mediaType (AI SDK v6 uses mediaType)
+ * TYPE-SAFE: Uses Zod validation, checks both mimeType and mediaType (AI SDK v6 uses mediaType)
  *
  * @param part - Part object that may have a mimeType or mediaType property
  * @returns mimeType string or default
@@ -155,7 +152,7 @@ export function getMimeTypeFromPart(part: unknown, defaultType = 'application/oc
 
 /**
  * Safely extract URL from a part object
- * ✅ TYPE-SAFE: Uses Zod validation, no force casting
+ * TYPE-SAFE: Uses Zod validation, no force casting
  *
  * @param part - Part object that may have a url property
  * @returns url string or undefined
@@ -170,7 +167,7 @@ export function getUrlFromPart(part: unknown): string | undefined {
 
 /**
  * Zod schema for valid file part for transmission
- * ✅ SINGLE SOURCE OF TRUTH: Schema-based validation for transmission readiness
+ * SINGLE SOURCE OF TRUTH: Schema-based validation for transmission readiness
  */
 const ValidFilePartForTransmissionSchema = z
   .object({
@@ -194,8 +191,8 @@ const ValidFilePartForTransmissionSchema = z
  * - type === 'file' AND
  * - Either a non-empty URL (HTTP/data URL) OR uploadId for backend fallback
  *
- * ✅ TYPE-SAFE: Uses Zod schema validation, no forced casts
- * ✅ SINGLE SOURCE OF TRUTH: Used by all file part extraction logic
+ * TYPE-SAFE: Uses Zod schema validation, no forced casts
+ * SINGLE SOURCE OF TRUTH: Used by all file part extraction logic
  * - use-multi-participant-chat.ts (startRound, sendMessage)
  * - prepareSendMessagesRequest sanitization filter
  */
@@ -208,7 +205,7 @@ export function isValidFilePartForTransmission(
 /**
  * Extract valid file parts from message parts array
  *
- * ✅ SINGLE SOURCE OF TRUTH: Reusable utility for extracting file parts
+ * SINGLE SOURCE OF TRUTH: Reusable utility for extracting file parts
  * Used in multi-participant streaming, retry, and message reconstruction
  *
  * @param parts - Array of message parts (can be any shape)
@@ -228,7 +225,7 @@ export function extractValidFileParts(
 // ============================================================================
 
 /**
- * ✅ SHARED: Message part schema for AI SDK message parts
+ * SHARED: Message part schema for AI SDK message parts
  * Used for rendering different types of content in messages
  *
  * Discriminated union pattern for type-safe message content:
@@ -272,68 +269,42 @@ export function extractValidFileParts(
 export const MessagePartSchema = z
   .discriminatedUnion('type', [
     z.object({
-      text: z.string().openapi({
-        description: 'Regular text content',
-        example: 'This is a response to your question',
-      }),
+      text: z.string(),
       type: z.literal('text'),
     }),
     z.object({
-      text: z.string().openapi({
-        description: 'Model internal reasoning content',
-        example: 'Let me analyze this step by step...',
-      }),
+      text: z.string(),
       type: z.literal('reasoning'),
     }),
-    // ✅ JUSTIFIED z.unknown(): Tool args can be any JSON structure defined by tool schemas
     z.object({
-      args: z.unknown().openapi({
-        description: 'Arguments passed to the tool (structure defined by tool schema)',
-        example: { query: 'AI SDK documentation' },
-      }),
-      toolCallId: z.string().openapi({
-        description: 'Unique identifier for this tool call',
-        example: 'call_abc123',
-      }),
-      toolName: z.string().openapi({
-        description: 'Name of the tool being called',
-        example: 'search_web',
-      }),
+      // NOTE: Tool args intentionally use z.unknown() - AI SDK tool schemas are defined
+      // per-tool at runtime and can be any valid JSON structure
+      args: z.unknown(),
+      toolCallId: z.string(),
+      toolName: z.string(),
       type: z.literal('tool-call'),
     }),
-    // ✅ JUSTIFIED z.unknown(): Tool results can be any JSON structure returned by tool execution
     z.object({
-      isError: z.boolean().optional().openapi({
-        description: 'Whether the tool execution resulted in an error',
-        example: false,
-      }),
-      result: z.unknown().openapi({
-        description: 'Result returned from tool execution (structure defined by tool)',
-        example: { results: [] },
-      }),
-      toolCallId: z.string().openapi({
-        description: 'Unique identifier matching the original tool call',
-        example: 'call_abc123',
-      }),
-      toolName: z.string().openapi({
-        description: 'Name of the tool that was executed',
-        example: 'search_web',
-      }),
+      isError: z.boolean().optional(),
+      // NOTE: Tool results intentionally use z.unknown() - result structure is defined
+      // by each tool's execute function and varies per tool
+      result: z.unknown(),
+      toolCallId: z.string(),
+      toolName: z.string(),
       type: z.literal('tool-result'),
     }),
-    // ✅ AI SDK v6 FILE PART: Reuse extracted FilePartSchema
+    // AI SDK v6 FILE PART: Reuse extracted FilePartSchema
     // Reference: https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#multi-modal-messages
     FilePartSchema,
-    // ✅ AI SDK v6 STEP-START PART: Marks beginning of a step in streaming
+    // AI SDK v6 STEP-START PART: Marks beginning of a step in streaming
     z.object({
       type: z.literal('step-start'),
     }),
-  ])
-  .openapi('MessagePart');
+  ]);
 
 /**
  * Message part TypeScript type
- * ✅ ZOD INFERENCE: Type automatically derived from schema
+ * ZOD INFERENCE: Type automatically derived from schema
  */
 export type MessagePart = z.infer<typeof MessagePartSchema>;
 
@@ -342,7 +313,7 @@ export type MessagePart = z.infer<typeof MessagePartSchema>;
 // ============================================================================
 
 /**
- * ✅ TYPE GUARD: Check if an object is a valid MessagePart
+ * TYPE GUARD: Check if an object is a valid MessagePart
  *
  * @param value - Value to check
  * @returns True if value matches MessagePart schema
@@ -358,7 +329,7 @@ export function isMessagePart(value: unknown): value is MessagePart {
 }
 
 /**
- * ✅ TYPE GUARD: Check if a value is a valid MessageStatus
+ * TYPE GUARD: Check if a value is a valid MessageStatus
  *
  * @param value - Value to check
  * @returns True if value is a valid message status
@@ -376,11 +347,11 @@ export function isMessageStatus(value: unknown): value is MessageStatus {
   if (typeof value !== 'string') {
     return false;
   }
-  return MESSAGE_STATUSES.includes(value as MessageStatus);
+  return (MESSAGE_STATUSES as readonly string[]).includes(value);
 }
 
 /**
- * ✅ UTILITY: Extract text content from message parts (only 'text' type)
+ * UTILITY: Extract text content from message parts (only 'text' type)
  *
  * Filters message parts to only include 'text' type parts, excluding 'reasoning',
  * 'tool-call', and 'tool-result' parts. This is the correct implementation for
@@ -408,7 +379,7 @@ export function extractTextFromParts(parts: MessagePart[]): string {
 }
 
 /**
- * ✅ UTILITY: Extract text content from a UIMessage safely
+ * UTILITY: Extract text content from a UIMessage safely
  *
  * Convenience wrapper around extractTextFromParts for UIMessage objects.
  * Handles undefined/null messages and invalid parts arrays.
@@ -440,7 +411,7 @@ export function extractTextFromMessage(
 }
 
 /**
- * ✅ UTILITY: Extract reasoning content from message parts
+ * UTILITY: Extract reasoning content from message parts
  *
  * Extracts only the reasoning parts from a message. Useful for displaying
  * extended thinking or internal model reasoning separately from visible content.
@@ -470,7 +441,7 @@ export function extractReasoningFromParts(parts: MessagePart[]): string {
 }
 
 /**
- * ✅ UTILITY: Extract all text content including reasoning
+ * UTILITY: Extract all text content including reasoning
  *
  * Unlike `extractTextFromParts()`, this includes reasoning parts in the output.
  * Use this when you need the complete text content including internal reasoning.
@@ -500,7 +471,7 @@ export function extractAllTextFromParts(parts: MessagePart[]): string {
 }
 
 /**
- * ✅ UTILITY: Filter message parts by type (generic type-safe filter)
+ * UTILITY: Filter message parts by type (generic type-safe filter)
  *
  * Generic utility for filtering message parts by their type discriminator.
  * Provides full type safety with TypeScript's discriminated union inference.
@@ -536,7 +507,7 @@ export function filterPartsByType<T extends MessagePart['type']>(
 }
 
 /**
- * ✅ UTILITY: Get message parts by type (alias for filterPartsByType)
+ * UTILITY: Get message parts by type (alias for filterPartsByType)
  *
  * Convenience alias with more intuitive naming for retrieving parts.
  * Functionally identical to `filterPartsByType`.
@@ -560,7 +531,7 @@ export function getPartsByType<T extends MessagePart['type']>(
 }
 
 /**
- * ✅ UTILITY: Check if message parts contain reasoning
+ * UTILITY: Check if message parts contain reasoning
  *
  * Fast boolean check for the presence of reasoning parts.
  * Use before extracting reasoning to avoid unnecessary processing.
@@ -582,7 +553,7 @@ export function hasReasoning(parts: MessagePart[]): boolean {
 }
 
 /**
- * ✅ UTILITY: Check if message parts contain text
+ * UTILITY: Check if message parts contain text
  *
  * Fast boolean check for the presence of text parts.
  *
@@ -600,7 +571,7 @@ export function hasText(parts: MessagePart[]): boolean {
 }
 
 /**
- * ✅ UTILITY: Check if text content is renderable (not placeholder/encrypted)
+ * UTILITY: Check if text content is renderable (not placeholder/encrypted)
  *
  * AI SDK v6 Pattern: Some reasoning models (GPT-5 Nano, o3-mini, etc.) output
  * encrypted reasoning as `[REDACTED]` which should not be considered renderable content.
@@ -625,7 +596,7 @@ export function isRenderableContent(text: string): boolean {
 }
 
 /**
- * ✅ UTILITY: Check if message parts have renderable content
+ * UTILITY: Check if message parts have renderable content
  *
  * Combines hasText/hasReasoning with isRenderableContent check.
  * Returns true only if there's actual content to display (not just [REDACTED]).
@@ -654,7 +625,7 @@ export function hasRenderableContent(parts: MessagePart[]): boolean {
 }
 
 /**
- * ✅ UTILITY: Create a text message part
+ * UTILITY: Create a text message part
  *
  * @param text - Text content
  * @returns Text message part object
@@ -668,7 +639,7 @@ export function createTextPart(text: string): MessagePart {
 }
 
 /**
- * ✅ UTILITY: Create a reasoning message part
+ * UTILITY: Create a reasoning message part
  *
  * @param text - Reasoning content
  * @returns Reasoning message part object
@@ -686,7 +657,7 @@ export function createReasoningPart(text: string): MessagePart {
 // ============================================================================
 
 /**
- * ✅ TYPE GUARD: Check if a message part is a tool-call
+ * TYPE GUARD: Check if a message part is a tool-call
  *
  * @param part - Message part to check
  * @returns True if part is a tool-call part
@@ -703,7 +674,7 @@ export function isToolCallPart(
 }
 
 /**
- * ✅ TYPE GUARD: Check if a message part is a tool-result
+ * TYPE GUARD: Check if a message part is a tool-result
  *
  * @param part - Message part to check
  * @returns True if part is a tool-result part
@@ -720,7 +691,7 @@ export function isToolResultPart(
 }
 
 /**
- * ✅ UTILITY: Extract all tool-call parts from message parts
+ * UTILITY: Extract all tool-call parts from message parts
  *
  * @param parts - Array of message parts
  * @returns Array of tool-call parts only
@@ -738,7 +709,7 @@ export function extractToolCalls(
 }
 
 /**
- * ✅ UTILITY: Extract all tool-result parts from message parts
+ * UTILITY: Extract all tool-result parts from message parts
  *
  * @param parts - Array of message parts
  * @returns Array of tool-result parts only
@@ -754,7 +725,7 @@ export function extractToolResults(
 }
 
 /**
- * ✅ FACTORY: Create a tool-call message part
+ * FACTORY: Create a tool-call message part
  *
  * @param toolCallId - Unique identifier for the tool call
  * @param toolName - Name of the tool being called
@@ -780,7 +751,7 @@ export function createToolCallPart(
 }
 
 /**
- * ✅ FACTORY: Create a tool-result message part
+ * FACTORY: Create a tool-result message part
  *
  * @param toolCallId - Unique identifier matching the original tool call
  * @param toolName - Name of the tool that was executed
@@ -809,7 +780,7 @@ export function createToolResultPart(
 }
 
 /**
- * ✅ UTILITY: Check if message parts contain any tool calls
+ * UTILITY: Check if message parts contain any tool calls
  *
  * @param parts - Array of message parts
  * @returns True if any part is a tool-call
@@ -824,7 +795,7 @@ export function hasToolCalls(parts: MessagePart[]): boolean {
 }
 
 /**
- * ✅ UTILITY: Check if message parts contain any tool results
+ * UTILITY: Check if message parts contain any tool results
  *
  * @param parts - Array of message parts
  * @returns True if any part is a tool-result
@@ -839,7 +810,7 @@ export function hasToolResults(parts: MessagePart[]): boolean {
 }
 
 /**
- * ✅ UTILITY: Find tool result for a specific tool call ID
+ * UTILITY: Find tool result for a specific tool call ID
  *
  * @param parts - Array of message parts
  * @param toolCallId - Tool call ID to find result for
@@ -865,7 +836,7 @@ export function findToolResult(
 // ============================================================================
 
 /**
- * ✅ UTILITY: Convert UIMessage parts to plain text string
+ * UTILITY: Convert UIMessage parts to plain text string
  *
  * Extracts only text parts from UIMessage parts array, excluding reasoning,
  * tool calls, and tool results. This is the standard function for converting
@@ -914,7 +885,7 @@ export function convertUIMessagesToText(parts: TextOrReasoningPart[]): string {
 // ============================================================================
 
 /**
- * ✅ SCHEMA: Token usage from AI SDK streaming
+ * SCHEMA: Token usage from AI SDK streaming
  *
  * Replaces inline `usage?: { inputTokens?: number; outputTokens?: number }`
  * Used by: streaming.handler.ts, message-persistence.service.ts
@@ -930,7 +901,7 @@ export const StreamingUsageSchema = z.object({
 export type StreamingUsage = z.infer<typeof StreamingUsageSchema>;
 
 /**
- * ✅ SCHEMA: AI SDK reasoning part structure
+ * SCHEMA: AI SDK reasoning part structure
  *
  * Claude models with extended thinking return reasoning as array of parts.
  * The AI SDK uses 'reasoning' type, while Claude-specific types include 'thinking' and 'redacted'.
@@ -940,20 +911,19 @@ export type StreamingUsage = z.infer<typeof StreamingUsageSchema>;
 export const ReasoningPartSchema = z.object({
   text: z.string(),
   // AI SDK uses 'reasoning' type; Claude models also use 'thinking' and 'redacted'
-  // ✅ Uses centralized ReasoningPartTypeSchema from @/api/core/enums
+  // Uses centralized ReasoningPartTypeSchema from enums
   type: ReasoningPartTypeSchema.optional(),
 });
 
 export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
 
 /**
- * ✅ SCHEMA: AI SDK tool call structure
+ * SCHEMA: AI SDK tool call structure
  *
  * Matches the AI SDK ToolCallPart structure for streaming results.
  * args is optional because DynamicToolCall may not have it.
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
  */
-// ✅ JUSTIFIED z.unknown(): args structure is tool-defined and varies per tool
 export const StreamingToolCallSchema = z.object({
   args: z.unknown().optional(),
   toolCallId: z.string(),
@@ -964,7 +934,7 @@ export const StreamingToolCallSchema = z.object({
 export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
 
 /**
- * ✅ SCHEMA: AI SDK streamText onFinish result
+ * SCHEMA: AI SDK streamText onFinish result
  *
  * Provides type-safe structure for the finish result from AI SDK streaming.
  * Replaces inline types with `[key: string]: unknown` index signatures.
@@ -975,11 +945,10 @@ export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
  * @see streaming.handler.ts onFinish callback
  * @see message-persistence.service.ts extractReasoning
  */
-// ✅ JUSTIFIED z.unknown(): AI SDK response objects vary by provider and version.
-// We use type guards at runtime to safely access known properties.
 export const StreamingFinishResultSchema = z.object({
   finishReason: z.string(),
-  // Provider-specific metadata - structure varies by AI provider
+  // NOTE: providerMetadata/response intentionally use z.unknown() - structure varies
+  // by AI provider (OpenAI, Anthropic, etc.) and cannot be statically typed
   providerMetadata: z.unknown().optional(),
   // Reasoning can be string or array of parts
   reasoning: z.union([
@@ -988,12 +957,11 @@ export const StreamingFinishResultSchema = z.object({
   ]).optional(),
   // Claude 4 models with interleaved thinking
   reasoningText: z.string().optional(),
-  // AI SDK response object - contains provider-specific fields
   response: z.unknown().optional(),
   text: z.string(),
   // Tool calls from AI SDK
   toolCalls: z.array(StreamingToolCallSchema).optional(),
-  // Tool results - structure varies by tool
+  // NOTE: toolResults intentionally uses z.unknown() - result structure varies per tool
   toolResults: z.unknown().optional(),
   usage: StreamingUsageSchema.optional(),
 });
@@ -1001,7 +969,7 @@ export const StreamingFinishResultSchema = z.object({
 export type StreamingFinishResult = z.infer<typeof StreamingFinishResultSchema>;
 
 /**
- * ✅ TYPE GUARD: Check if value is a ReasoningPart
+ * TYPE GUARD: Check if value is a ReasoningPart
  *
  * @param value - Value to check
  * @returns True if value matches ReasoningPart structure
@@ -1011,7 +979,7 @@ export function isReasoningPart(value: unknown): value is ReasoningPart {
 }
 
 /**
- * ✅ TYPE GUARD: Check if reasoning is an array of parts
+ * TYPE GUARD: Check if reasoning is an array of parts
  *
  * @param reasoning - Reasoning value to check
  * @returns True if reasoning is array of ReasoningPart
@@ -1021,6 +989,53 @@ export function isReasoningPartArray(reasoning: unknown): reasoning is Reasoning
 }
 
 // ============================================================================
-// NOTE: All exports are done inline above where each type is defined
-// This ensures better tree-shaking and clearer code organization
+// STREAMING STATE DETECTION
 // ============================================================================
+
+/**
+ * Schema for validating tool invocation parts with state
+ * AI SDK uses this internally during streaming for partial tool calls
+ */
+const ToolInvocationPartWithStateSchema = z.object({
+  toolInvocation: z.object({
+    state: z.string().optional(),
+  }),
+  type: z.literal('tool-invocation'),
+});
+
+/**
+ * Schema for parts with streaming state
+ * AI SDK sets state='streaming' during active streaming
+ */
+const PartWithStreamingStateSchema = z.object({
+  state: z.string(),
+});
+
+/**
+ * TYPE GUARD: Check if a message part is currently streaming
+ *
+ * Detects streaming parts in two ways:
+ * 1. Parts with state='streaming' (text parts during active stream)
+ * 2. Tool invocation parts with state='partial-call' (tool calls in progress)
+ *
+ * @param part - Unknown message part to check
+ * @returns True if the part indicates active streaming
+ *
+ * @example
+ * const isStreaming = message.parts?.some(isStreamingPart);
+ */
+export function isStreamingPart(part: unknown): boolean {
+  // Check for state='streaming' on any part
+  const partWithStateResult = PartWithStreamingStateSchema.safeParse(part);
+  if (partWithStateResult.success && partWithStateResult.data.state === 'streaming') {
+    return true;
+  }
+
+  // Check for tool-invocation with partial-call state
+  const toolInvocationResult = ToolInvocationPartWithStateSchema.safeParse(part);
+  if (toolInvocationResult.success) {
+    return toolInvocationResult.data.toolInvocation.state === 'partial-call';
+  }
+
+  return false;
+}

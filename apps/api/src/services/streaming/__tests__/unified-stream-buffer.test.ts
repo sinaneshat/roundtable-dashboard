@@ -447,7 +447,7 @@ describe('unified-stream-buffer.service', () => {
       expect(metadataGetCalls).toHaveLength(3);
     });
 
-    it('should give up after 3 retries and log warning', async () => {
+    it('should use pending queue after 8 retries and log warning', async () => {
       // Metadata never becomes available
       vi.spyOn(mockKV, 'get').mockImplementation(async () => null);
 
@@ -457,17 +457,21 @@ describe('unified-stream-buffer.service', () => {
       await appendParticipantStreamChunk(streamId, chunkData, mockEnv, mockLogger);
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Stream metadata not found after retries',
+        'Stream metadata not found after extended retries, using pending queue',
         expect.objectContaining({
-          edgeCase: 'metadata_not_found_after_retries',
+          edgeCase: 'metadata_not_found_using_pending_queue',
           operationName: 'appendParticipantStreamChunk',
-          retryCount: 3,
+          retryCount: 8,
           streamId,
         }),
       );
 
-      // Should not have stored any chunk
-      expect(mockKV.put).not.toHaveBeenCalled();
+      // Should have stored chunk in pending queue (stored as JSON with metadata)
+      expect(mockKV.put).toHaveBeenCalledWith(
+        expect.stringContaining(':pending:'),
+        expect.stringContaining('"data"'),
+        expect.objectContaining({ expirationTtl: expect.any(Number) }),
+      );
     });
 
     it('should retry on KV put error', async () => {

@@ -14,7 +14,7 @@ import {
 } from '@/hooks/mutations';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { isNonProjectListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
+import type { ExtendedFilePart } from '@/lib/schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, createPrefetchMeta, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, toISOString, toISOStringOrNull, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';

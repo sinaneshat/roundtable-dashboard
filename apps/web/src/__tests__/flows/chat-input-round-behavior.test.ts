@@ -759,19 +759,9 @@ describe('chat Input - Edge Cases', () => {
     expect(state.pendingMessage).toBe('Test message');
   });
 
-  it('should block input when showLoader is true', () => {
-    const _store = createChatStore();
+  it.todo('should block input when showLoader is true');
 
-    // showLoader is not a setter in the store, so skip this test
-    // The blocking logic checks for showLoader but it's managed differently
-  });
-
-  it('should block input when isModelsLoading is true', () => {
-    const _store = createChatStore();
-
-    // isModelsLoading is not a setter in the store, so skip this test
-    // The blocking logic checks for it but it's managed via screen state
-  });
+  it.todo('should block input when isModelsLoading is true');
 
   it('should NOT block input when only isSubmitting is true after streaming completes', () => {
     const store = createChatStore();

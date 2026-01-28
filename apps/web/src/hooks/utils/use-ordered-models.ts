@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
+import type { ParticipantConfig } from '@/lib/schemas';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
-import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import type { Model } from '@/services/api';
 
 export type UseOrderedModelsOptions = {

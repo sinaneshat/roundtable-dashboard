@@ -1,15 +1,24 @@
-export * from './animations';
-export * from './application';
-export * from './brand';
-export * from './email';
-export * from './limits';
-export * from './version';
+/**
+ * API Constants Index
+ *
+ * Re-exports shared constants from @roundtable/shared.
+ * Platform-specific constants (version, brand) are defined locally.
+ */
 
-// Re-export validation constants from shared package (single source of truth)
+// Shared constants from @roundtable/shared
+export type { Limits, ProjectLimits } from '@roundtable/shared';
+export { API, LIMITS, PROJECT_LIMITS } from '@roundtable/shared';
 export {
-  API_LIMITS,
-  NUMERIC_LIMITS,
-  REGEX_PATTERNS,
-  STRING_LIMITS,
-  TIME_LIMITS,
+  DISPOSABLE_EMAIL_DOMAINS,
+  EMAIL_EXPIRATION_TIMES,
+  EMAIL_REGEX,
+  EMAIL_SERVICE_CONFIG,
+  FREE_EMAIL_PROVIDERS,
+  MAX_EMAIL_LENGTH,
+  MAX_EMAIL_LOCAL_LENGTH,
+  PROBLEMATIC_EMAIL_CHARS,
 } from '@roundtable/shared';
+
+// Platform-specific exports
+export * from './brand';
+export * from './version';

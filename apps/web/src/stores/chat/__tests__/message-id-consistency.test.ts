@@ -22,6 +22,20 @@ import {
 import { createChatStore } from '../store';
 
 // ============================================================================
+// Test Assertions
+// ============================================================================
+
+/**
+ * Asserts that a value is defined (not undefined or null).
+ * After calling this, TypeScript knows the value is of type T.
+ */
+function assertDefined<T>(value: T | undefined | null, msg?: string): asserts value is T {
+  if (value === undefined || value === null) {
+    throw new Error(msg ?? 'Expected value to be defined');
+  }
+}
+
+// ============================================================================
 // Test Setup
 // ============================================================================
 
@@ -92,7 +106,11 @@ describe('moderator ID Consistency', () => {
     expect(moderatorMessages).toHaveLength(1);
 
     // Text should be merged
-    const text = (moderatorMessages[0]?.parts[0] as { text: string })?.text;
+    const firstModMessage = moderatorMessages[0];
+    assertDefined(firstModMessage, 'Moderator message should exist');
+    const firstPart = firstModMessage.parts[0];
+    assertDefined(firstPart, 'First part should exist');
+    const text = (firstPart as { text: string }).text;
     expect(text).toBe('Initial more text');
   });
 
@@ -116,7 +134,11 @@ describe('moderator ID Consistency', () => {
     );
 
     expect(moderatorMessages).toHaveLength(1);
-    expect((moderatorMessages[0]?.parts[0] as { text: string })?.text).toBe('Chunk 1 Chunk 2 Chunk 3');
+    const modMessage = moderatorMessages[0];
+    assertDefined(modMessage, 'Moderator message should exist');
+    const modFirstPart = modMessage.parts[0];
+    assertDefined(modFirstPart, 'Moderator first part should exist');
+    expect((modFirstPart as { text: string }).text).toBe('Chunk 1 Chunk 2 Chunk 3');
   });
 });
 
@@ -247,9 +269,15 @@ describe('message Metadata Consistency', () => {
   beforeEach(() => {
     store = createChatStore();
     const participants = createMockParticipants(3);
-    participants[0]!.modelId = 'anthropic/claude-3-opus';
-    participants[1]!.modelId = 'openai/gpt-4o';
-    participants[2]!.modelId = 'google/gemini-pro';
+    const p0 = participants[0];
+    const p1 = participants[1];
+    const p2 = participants[2];
+    assertDefined(p0, 'Participant 0 should exist');
+    assertDefined(p1, 'Participant 1 should exist');
+    assertDefined(p2, 'Participant 2 should exist');
+    p0.modelId = 'anthropic/claude-3-opus';
+    p1.modelId = 'openai/gpt-4o';
+    p2.modelId = 'google/gemini-pro';
     const thread = createMockThread({ id: 'thread-meta' });
     store.setState({ participants, thread });
   });

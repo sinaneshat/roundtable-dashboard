@@ -15,18 +15,20 @@
  * - Store creates placeholders and enables subscriptions
  */
 
-import { RoundPhases } from '@roundtable/shared/enums';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import type { StreamResumptionStatus } from '@roundtable/shared/enums';
+import { RoundPhases, StreamResumptionStatuses } from '@roundtable/shared/enums';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ThreadStreamResumptionState } from '@/services/api/chat';
 import { getThreadStreamResumptionStateService } from '@/services/api/chat';
 
+// Re-export for backwards compatibility
+export type { StreamResumptionStatus } from '@roundtable/shared/enums';
+
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type StreamResumptionStatus = 'idle' | 'checking' | 'complete' | 'error';
 
 export type StreamResumptionResult = {
   /** Current status of the resumption check */
@@ -146,7 +148,8 @@ export function useStreamResumption({
       }
 
       // API returns { success: true, data: ThreadStreamResumptionState }
-      const resumptionState = response.data as ThreadStreamResumptionState;
+      // Type is already inferred via Hono RPC - no casting needed
+      const resumptionState = response.data;
       const isInProgress = isInProgressPhase(resumptionState.currentPhase);
 
       rlog.resume('hook-parsed', `tid=${tid.slice(-8)} phase=${resumptionState.currentPhase} inProgress=${isInProgress} round=${resumptionState.roundNumber} hasStream=${resumptionState.hasActiveStream} total=${resumptionState.totalParticipants} nextP=${resumptionState.nextParticipantToTrigger} allComplete=${resumptionState.participants?.allComplete}`);
@@ -213,18 +216,19 @@ export function useStreamResumption({
   }, [threadId, enabled, shouldSkipDueToActivePhase, currentPhase, checkResumption]);
 
   // Reset state when thread changes
-  useEffect(() => {
-    if (threadId !== checkedThreadIdRef.current && status !== 'checking') {
+  // Using useLayoutEffect to ensure synchronous state reset before render
+  useLayoutEffect(() => {
+    if (threadId !== checkedThreadIdRef.current && status !== StreamResumptionStatuses.CHECKING) {
       setState(null);
       setError(null);
-      setStatus('idle');
+      setStatus(StreamResumptionStatuses.IDLE);
     }
   }, [threadId, status]);
 
-  const hasInProgressRound = status === 'complete' && state !== null && isInProgressPhase(state.currentPhase);
+  const hasInProgressRound = status === StreamResumptionStatuses.COMPLETE && state !== null && isInProgressPhase(state.currentPhase);
 
   // Log final computed value when it changes
-  if (status === 'complete') {
+  if (status === StreamResumptionStatuses.COMPLETE) {
     rlog.resume('hook-result', `status=${status} hasState=${!!state} phase=${state?.currentPhase ?? 'null'} → hasInProgressRound=${hasInProgressRound}`);
   }
 

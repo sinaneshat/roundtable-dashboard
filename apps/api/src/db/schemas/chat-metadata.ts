@@ -18,6 +18,7 @@
  * 3. Frontend imports TypeScript types for type-safe access
  */
 
+import { RoundNumberSchema } from '@roundtable/shared';
 import {
   ChangelogChangeTypes,
   ChatModeSchema,
@@ -30,8 +31,6 @@ import {
   WebSearchDepthSchema,
 } from '@roundtable/shared/enums';
 import * as z from 'zod';
-
-import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 
 // ============================================================================
 // SHARED SCHEMAS - Used across message and chat metadata

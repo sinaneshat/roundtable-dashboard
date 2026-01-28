@@ -183,8 +183,11 @@ export class UnifiedErrorBoundary extends Component<
     }
 
     // Dynamically import PostHog to avoid bundling in initial load
-    import('posthog-js')
-      .then((mod) => {
+    // Using void to explicitly mark we don't need the promise result
+    // This is a fire-and-forget operation for error tracking
+    void (async () => {
+      try {
+        const mod = await import('posthog-js');
         mod.default.capture('$exception', {
           $exception_message: error.message,
           $exception_source: 'react_error_boundary',
@@ -193,10 +196,10 @@ export class UnifiedErrorBoundary extends Component<
           componentStack: errorInfo.componentStack,
           context: this.state.context,
         });
-      })
-      .catch(() => {
+      } catch {
         // Silently ignore PostHog import failures - error tracking is non-critical
-      });
+      }
+    })();
   };
 
   handleReset = () => {
