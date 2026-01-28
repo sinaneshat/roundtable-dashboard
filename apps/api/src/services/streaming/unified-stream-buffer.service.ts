@@ -26,6 +26,7 @@
 
 import { FinishReasons, parseSSEEventType, StreamPhases, StreamStatuses } from '@roundtable/shared/enums';
 
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -46,8 +47,8 @@ import {
   StreamChunkSchema,
 } from '@/types/streaming';
 
-import { getThreadActiveStream } from './resumable-stream-kv.service';
 import { getRoundExecutionState, RoundPreSearchStatuses } from '../round-orchestration/round-orchestration.service';
+import { getThreadActiveStream } from './resumable-stream-kv.service';
 
 // ============================================================================
 // HELPERS
@@ -55,7 +56,7 @@ import { getRoundExecutionState, RoundPreSearchStatuses } from '../round-orchest
 
 /**
  * Format participant label for logging - converts sentinel values to readable names
- * -1 (NO_PARTICIPANT_SENTINEL) and -99 (MODERATOR_PARTICIPANT_INDEX) → "Moderator"
+ * -1 (NO_PARTICIPANT_SENTINEL = MODERATOR_PARTICIPANT_INDEX) → "Moderator"
  */
 function formatParticipantLabel(participantIndex: number) {
   if (participantIndex < 0) {
@@ -687,13 +688,28 @@ export function createLiveParticipantResumeStream(
             metadata?.status === StreamStatuses.COMPLETED
             || metadata?.status === StreamStatuses.FAILED
           ) {
+            // AI SDK PATTERN: Send explicit finish events before closing
+            // This ensures frontend detects completion immediately without relying on reader.done
+            // Due to Cloudflare KV eventual consistency, status may not be visible immediately
+            const finishReason = metadata.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
+            const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
+            const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+            safeEnqueue(controller, encoder.encode(finishEvent));
+            safeEnqueue(controller, encoder.encode(finishData));
+
             safeClose(controller);
             return;
           }
 
           const timeSinceLastNewData = Date.now() - lastNewDataTime;
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
-            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.UNKNOWN}","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            // ✅ AI SDK PATTERN: Send explicit error event before synthetic finish
+            // This allows frontend to distinguish timeout from normal completion
+            const timeoutSeconds = Math.round(noNewDataTimeoutMs / 1000);
+            const errorEvent = `data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
+            safeEnqueue(controller, encoder.encode(errorEvent));
+
+            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
             safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;
@@ -790,7 +806,7 @@ export function createWaitingParticipantStream(
 
       // Phase 1: Wait for stream to appear (server-side waiting, not client retry)
       const pLabel = formatParticipantLabel(participantIndex);
-      console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for stream to appear`);
+      log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for stream to appear`);
 
       // ✅ FIX: Send initial SSE comment immediately to establish HTTP response
       // Without this, browser shows "Provisional headers are shown" until actual data arrives
@@ -802,7 +818,7 @@ export function createWaitingParticipantStream(
 
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
-          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout waiting for stream`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout waiting for stream`);
           const errorEvent = `data: {"type":"error","error":"Stream not available after ${waitForStreamTimeoutMs}ms"}\n\n`;
           safeEnqueue(controller, encoder.encode(errorEvent));
           safeClose(controller);
@@ -817,11 +833,11 @@ export function createWaitingParticipantStream(
 
         // ✅ DIAGNOSTIC: Log activeStream state for debugging P1 delays
         if (!activeStream) {
-          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - no activeStream in KV yet`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - no activeStream in KV yet`);
         } else if (activeStream.roundNumber !== roundNumber) {
-          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream is for r${activeStream.roundNumber}`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream is for r${activeStream.roundNumber}`);
         } else if (!activeStream.participantStatuses) {
-          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream has no participantStatuses`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - activeStream has no participantStatuses`);
         }
 
         if (activeStream?.roundNumber === roundNumber && activeStream.participantStatuses) {
@@ -838,18 +854,18 @@ export function createWaitingParticipantStream(
             // Check presearch status from round execution state
             const roundState = await getRoundExecutionState(threadId, roundNumber, env);
             const preSearchStatus = roundState?.preSearchStatus;
-            const preSearchComplete = !preSearchStatus || // null means presearch not enabled
-              preSearchStatus === RoundPreSearchStatuses.COMPLETED ||
-              preSearchStatus === RoundPreSearchStatuses.FAILED ||
-              preSearchStatus === RoundPreSearchStatuses.SKIPPED;
+            const preSearchComplete = !preSearchStatus // null means presearch not enabled
+              || preSearchStatus === RoundPreSearchStatuses.COMPLETED
+              || preSearchStatus === RoundPreSearchStatuses.FAILED
+              || preSearchStatus === RoundPreSearchStatuses.SKIPPED;
 
             if (!allParticipantsComplete || !preSearchComplete) {
               // Participants or presearch not done yet - keep waiting for moderator
-              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - waiting: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
+              log.ai('stream', `[WAITING-STREAM] Moderator r${roundNumber} - waiting: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
               await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
               continue;
             } else {
-              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - all complete: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
+              log.ai('stream', `[WAITING-STREAM] Moderator r${roundNumber} - all complete: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
             }
           } else {
             // Participants (P0, P1, P2, ...): Check presearch completion first (blocks ALL participants)
@@ -858,14 +874,14 @@ export function createWaitingParticipantStream(
             // Check presearch status from round execution state
             const roundState = await getRoundExecutionState(threadId, roundNumber, env);
             const preSearchStatus = roundState?.preSearchStatus;
-            const preSearchComplete = !preSearchStatus || // null means presearch not enabled
-              preSearchStatus === RoundPreSearchStatuses.COMPLETED ||
-              preSearchStatus === RoundPreSearchStatuses.FAILED ||
-              preSearchStatus === RoundPreSearchStatuses.SKIPPED;
+            const preSearchComplete = !preSearchStatus // null means presearch not enabled
+              || preSearchStatus === RoundPreSearchStatuses.COMPLETED
+              || preSearchStatus === RoundPreSearchStatuses.FAILED
+              || preSearchStatus === RoundPreSearchStatuses.SKIPPED;
 
             if (!preSearchComplete) {
               // Presearch not done yet - block ALL participants per FLOW_DOCUMENTATION.md
-              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - blocked by presearch: status=${preSearchStatus}`);
+              log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - blocked by presearch: status=${preSearchStatus}`);
               await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
               continue;
             }
@@ -879,14 +895,14 @@ export function createWaitingParticipantStream(
 
               if (!allPreviousComplete) {
                 // Previous participants not done yet - keep waiting
-                console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
+                log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
                 await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
                 continue;
               } else {
-                console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
+                log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
               }
             } else {
-              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - presearch complete, P0 can start`);
+              log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - presearch complete, P0 can start`);
             }
           }
         }
@@ -921,7 +937,7 @@ export function createWaitingParticipantStream(
         return;
       }
 
-      console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
+      log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
 
       // Phase 2: Stream data (same as createLiveParticipantResumeStream)
       let lastChunkIndex = startFromChunkIndex;
@@ -951,7 +967,7 @@ export function createWaitingParticipantStream(
           initialMetadata?.status === StreamStatuses.COMPLETED
           || initialMetadata?.status === StreamStatuses.FAILED
         ) {
-          console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - already ${initialMetadata.status}`);
+          log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - already ${initialMetadata.status}`);
           safeClose(controller);
           return;
         }
@@ -982,14 +998,31 @@ export function createWaitingParticipantStream(
           }
 
           if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
-            console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
+            log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
+
+            // AI SDK PATTERN: Send explicit finish events before closing
+            // This ensures frontend detects completion immediately without relying on reader.done
+            // Due to Cloudflare KV eventual consistency, status may not be visible immediately
+            const finishReason = metadata.status === StreamStatuses.COMPLETED ? 'stop' : 'error';
+            const finishEvent = `e:{"finishReason":"${finishReason}"}\n`;
+            const finishData = `d:{"finishReason":"${finishReason}","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+            safeEnqueue(controller, encoder.encode(finishEvent));
+            safeEnqueue(controller, encoder.encode(finishData));
+
             safeClose(controller);
             return;
           }
 
           const timeSinceLastNewData = Date.now() - lastNewDataTime;
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
-            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.UNKNOWN}","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            // ✅ AI SDK PATTERN: Send explicit error event before synthetic finish
+            // This allows frontend to distinguish timeout from normal completion
+            const timeoutSeconds = Math.round(noNewDataTimeoutMs / 1000);
+            log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout after ${timeoutSeconds}s, sent ${lastChunkIndex} chunks`);
+            const errorEvent = `data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
+            safeEnqueue(controller, encoder.encode(errorEvent));
+
+            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
             safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;

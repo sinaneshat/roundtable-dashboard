@@ -1,6 +1,7 @@
 import type { Hook } from '@hono/zod-openapi';
 import * as z from 'zod';
 
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 import { validationError } from './responses';
@@ -346,12 +347,12 @@ export function validateErrorContext(context: UnknownInput): ValidationResult<Er
 
 export const customValidationHook: Hook<UnknownInput, ApiEnv, string, UnknownInput> = (result, c) => {
   if (!result.success) {
-    console.error('[VALIDATION-HOOK] Validation failed:', {
-      issues: result.error.issues.slice(0, 5).map(i => ({
+    log.warn('[VALIDATION-HOOK] Validation failed', {
+      issues: JSON.stringify(result.error.issues.slice(0, 5).map(i => ({
         code: i.code,
         message: i.message,
         path: i.path.join('.'),
-      })),
+      }))),
       path: c.req.path,
     });
 

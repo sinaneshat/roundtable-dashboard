@@ -14,7 +14,6 @@ export {
   useUserPresetQuery,
   useUserPresetsQuery,
 } from './chat/custom-roles';
-export { useMemoryEventsPolling, useMemoryEventsQuery } from './chat/memory-events';
 export { useThreadMessagesQuery } from './chat/messages';
 export { useThreadPreSearchesQuery } from './chat/pre-search';
 export { useSidebarThreadsQuery } from './chat/sidebar';

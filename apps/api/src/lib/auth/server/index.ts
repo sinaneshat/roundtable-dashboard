@@ -8,6 +8,7 @@ import { env as workersEnv } from 'cloudflare:workers';
 import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getApiServerOrigin, getAppBaseUrl } from '@/lib/config/base-urls';
+import { log } from '@/lib/logger';
 
 import { isEmailBlockedFromSignup, recordAccountDeletion } from '../account-abuse';
 import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
@@ -251,12 +252,10 @@ function createAuth() {
           validateEmailDomain(ctx);
         } catch (error) {
           // Log validation errors for debugging
-          console.error({
-            error_message: error instanceof Error ? error.message : String(error),
-            error_name: error instanceof Error ? error.name : 'Unknown',
-            log_type: 'auth_hook_error',
+          log.auth('error', 'Auth hook validation failed', {
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorName: error instanceof Error ? error.name : 'Unknown',
             path: ctx.path,
-            timestamp: new Date().toISOString(),
           });
           throw error; // Re-throw to let Better Auth handle it
         }
@@ -271,13 +270,11 @@ function createAuth() {
             await emailService.sendMagicLink(email, url);
           } catch (error) {
             // Log detailed error for Cloudflare Workers Logs
-            console.error({
-              email_domain: email.split('@')[1],
-              error_message: error instanceof Error ? error.message : String(error),
-              error_name: error instanceof Error ? error.name : 'Unknown',
-              error_stack: error instanceof Error ? error.stack : undefined,
-              log_type: 'magic_link_email_error',
-              timestamp: new Date().toISOString(),
+            log.auth('error', 'Magic link email failed', {
+              emailDomain: email.split('@')[1],
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorName: error instanceof Error ? error.name : 'Unknown',
+              errorStack: error instanceof Error ? error.stack : undefined,
             });
             // Better Auth will show this error to the user
             const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';

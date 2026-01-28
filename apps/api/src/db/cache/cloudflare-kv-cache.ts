@@ -15,6 +15,18 @@ import { getTableName, is, Table } from 'drizzle-orm';
 import { Cache } from 'drizzle-orm/cache/core';
 import type { CacheConfig } from 'drizzle-orm/cache/core/types';
 
+import { log } from '@/lib/logger';
+
+/**
+ * Serialize error to string for logging
+ */
+function serializeError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
 export type CloudflareKVCacheOptions = {
   kv: KVNamespace;
   global?: boolean;
@@ -59,7 +71,7 @@ export class CloudflareKVCache extends Cache {
 
       return undefined;
     } catch (error) {
-      console.error('[Cache] Error retrieving from KV:', error);
+      log.cache('error', 'Error retrieving from KV', { error: serializeError(error), key });
       return undefined;
     }
   }
@@ -95,7 +107,7 @@ export class CloudflareKVCache extends Cache {
         }
       }
     } catch (error) {
-      console.error('[Cache] Error storing to KV:', error);
+      log.cache('error', 'Error storing to KV', { error: serializeError(error), key: hashedQuery, tables: tables.join(',') });
     }
   }
 
@@ -137,7 +149,7 @@ export class CloudflareKVCache extends Cache {
         console.info(`[Cache:onMutate] no keys to invalidate for tags=${tagsArray.join(',')} tables=${tablesArray.join(',')}`);
       }
     } catch (error) {
-      console.error('[Cache] Error during invalidation:', error);
+      log.cache('error', 'Error during invalidation', { error: serializeError(error) });
     }
   }
 
@@ -173,7 +185,7 @@ export class CloudflareKVCache extends Cache {
 
       this.tableToKeys = {};
     } catch (error) {
-      console.error('[Cache] Error clearing cache:', error);
+      log.cache('error', 'Error clearing cache', { error: serializeError(error) });
     }
   }
 

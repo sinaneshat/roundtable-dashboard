@@ -12,6 +12,7 @@ import * as z from 'zod';
 
 import type { ErrorContext } from '@/core/schemas';
 import { ErrorContextSchema } from '@/core/schemas';
+import { log } from '@/lib/logger';
 
 import { extractAISdkError, getErrorMessage, getErrorName } from './error-types';
 
@@ -447,7 +448,7 @@ export function structureAIProviderError(
   const errStatus = aiError?.statusCode ?? '-';
   const errBody = aiError?.responseBody ? aiError.responseBody.substring(0, 200) : '-';
 
-  console.error(`[StructErr] model=${participantContext?.modelId ?? '-'} isErr=${isErrorInstance} status=${errStatus} msg=${errMsg} body=${errBody}`);
+  log.error(`[StructErr] model=${participantContext?.modelId ?? '-'} isErr=${isErrorInstance} status=${errStatus} msg=${errMsg} body=${errBody}`);
 
   const errorName = getErrorName(error) ?? 'UnknownError';
   let errorMessage = getErrorMessage(error);

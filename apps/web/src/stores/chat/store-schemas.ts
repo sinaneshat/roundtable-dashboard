@@ -91,6 +91,12 @@ export const UIStateSchema = z.object({
   isAnalyzingPrompt: z.boolean(),
   isCreatingThread: z.boolean(),
   isModeratorStreaming: z.boolean(),
+  /**
+   * Guard flag to prevent race between stream resumption and user action.
+   * Set to true when resumption starts, false when complete.
+   * startRound should check this flag and skip if resumption is in progress.
+   */
+  isResumingStream: z.boolean(),
   screenMode: ScreenModeSchema.nullable(),
   showInitialUI: z.boolean(),
   waitingToStartStreaming: z.boolean(),
@@ -245,6 +251,7 @@ export type ChatStoreActions = {
   setIsCreatingThread: (creating: boolean) => void;
   setIsAnalyzingPrompt: (analyzing: boolean) => void;
   setIsModeratorStreaming: (streaming: boolean) => void;
+  setIsResumingStream: (resuming: boolean) => void;
   setShowInitialUI: (show: boolean) => void;
   setWaitingToStartStreaming: (waiting: boolean) => void;
   setHasInitiallyLoaded: (loaded: boolean) => void;

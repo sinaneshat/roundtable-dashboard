@@ -34,6 +34,7 @@ import {
 } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { log } from '@/lib/logger';
 import {
   backgroundPdfProcessing,
   createUploadTicket,
@@ -483,7 +484,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
             r2Key,
           );
         } catch (error) {
-          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
+          log.upload('error', `[Upload] Failed to schedule cleanup for ${uploadId}`, { error: error instanceof Error ? error.message : String(error) });
         }
       };
 
@@ -513,7 +514,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional
-        console.error(`[Upload] PDF extraction failed for ${uploadId}:`, error);
+        log.upload('error', `[Upload] PDF extraction failed for ${uploadId}`, { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
@@ -722,15 +723,12 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
     }
 
     // Security audit: file download
-    console.error(JSON.stringify({
-      audit: 'file_download',
-      ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+    log.audit('download', {
+      ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for') || 'unknown',
       method: 'session_auth',
-      timestamp: Date.now(),
       uploadId: id,
-      userAgent: c.req.header('user-agent'),
       userId: user.id,
-    }));
+    });
 
     return buildStreamingResponse(result, uploadRecord, 'private, no-store');
   },
@@ -1045,7 +1043,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
             uploadMeta.r2Key,
           );
         } catch (error) {
-          console.error(`[Upload] Failed to schedule cleanup for ${uploadId}:`, error);
+          log.upload('error', `[Upload] Failed to schedule cleanup for ${uploadId}`, { error: error instanceof Error ? error.message : String(error) });
         }
       };
 
@@ -1081,7 +1079,7 @@ export const completeMultipartUploadHandler: RouteHandler<typeof completeMultipa
         });
       } catch (error) {
         // Log but don't fail upload - extraction is optional
-        console.error(`[Multipart Upload] PDF extraction failed for ${uploadId}:`, error);
+        log.upload('error', `[Multipart Upload] PDF extraction failed for ${uploadId}`, { error: error instanceof Error ? error.message : String(error) });
       }
     }
 

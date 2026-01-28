@@ -6,7 +6,6 @@
  */
 
 import type { getDbAsync } from '@/db';
-import { rlog } from '@/lib/utils/dev-logger';
 import {
   CreditCacheTags,
   MessageCacheTags,
@@ -15,6 +14,7 @@ import {
   PublicThreadCacheTags,
   ThreadCacheTags,
 } from '@/db/cache/cache-tags';
+import { rlog } from '@/lib/utils/dev-logger';
 import { deleteOgImageFromCache } from '@/services/og-cache';
 
 // ============================================================================

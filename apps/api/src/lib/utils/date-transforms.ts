@@ -11,6 +11,7 @@
  */
 
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation/chat';
+import { log } from '@/lib/logger';
 import type { StoredPreSearch } from '@/routes/chat/schema';
 import { StoredPreSearchSchema } from '@/routes/chat/schema';
 
@@ -271,7 +272,7 @@ export function transformPreSearch(
   const result = StoredPreSearchSchema.safeParse(preSearch);
 
   if (!result.success) {
-    console.error('Failed to validate pre-search schema:', result.error);
+    log.warn('Failed to validate pre-search schema', { error: result.error.message });
     return null;
   }
 

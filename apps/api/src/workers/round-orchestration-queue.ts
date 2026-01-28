@@ -26,6 +26,7 @@
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 import { MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
 
+import { log } from '@/lib/logger';
 import { rlog } from '@/lib/utils/dev-logger';
 import { buildSessionAuthHeaders, drainStream, getBaseUrl } from '@/lib/utils/internal-api';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
@@ -627,10 +628,11 @@ async function processQueueMessage(
     // threadId exists on most message types except start-automated-job which has jobId
     const identifier = 'threadId' in msg.body ? msg.body.threadId : ('jobId' in msg.body ? msg.body.jobId : 'unknown');
 
-    console.error(
-      `[RoundOrchestration] ❌ Failed ${messageType} for ${identifier}:`,
-      error,
-    );
+    log.queue('error', `Failed ${messageType} for ${identifier}`, {
+      error: error instanceof Error ? error.message : String(error),
+      identifier,
+      messageType,
+    });
 
     // Exponential backoff using shared utility
     const retryDelaySeconds = calculateExponentialBackoff(

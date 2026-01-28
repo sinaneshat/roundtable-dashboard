@@ -7,6 +7,8 @@
  * This eliminates repetitive null-checks and provides consistent error handling.
  */
 
+import { log } from '@/lib/logger';
+
 type ExecutionContext = {
   waitUntil: (promise: Promise<unknown>) => void;
 };
@@ -40,7 +42,7 @@ export function runBackgroundTask(
       if (!swallowErrors) {
         throw error;
       }
-      console.error(`[${operationName}] Background task failed:`, error);
+      log.queue('failed', `[${operationName}] Background task failed`, { error: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -87,7 +89,7 @@ export function runBackgroundTasks(
     }
 
     if (swallowErrors && failures.length > 0) {
-      console.error(`[${operationName}] ${failures.length}/${tasks.length} background tasks failed:`, failures.map(f => f.reason));
+      log.queue('failed', `[${operationName}] ${failures.length}/${tasks.length} background tasks failed`, { failures: JSON.stringify(failures.map(f => f.reason)) });
     }
   };
 

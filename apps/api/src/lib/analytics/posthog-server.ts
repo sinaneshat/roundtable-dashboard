@@ -35,6 +35,8 @@
 import { PostHog } from 'posthog-node';
 import * as z from 'zod';
 
+import { log } from '@/lib/logger';
+
 // ============================================================================
 // Analytics Constants
 // ============================================================================
@@ -138,7 +140,7 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
 
     return result.data.distinct_id;
   } catch (error) {
-    console.error('Failed to get PostHog distinct ID from cookie:', error);
+    log.error('Failed to get PostHog distinct ID from cookie', error instanceof Error ? error : { error: String(error) });
     return ANONYMOUS_USER_ID;
   }
 }

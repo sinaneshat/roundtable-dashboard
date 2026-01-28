@@ -1,5 +1,8 @@
 # Roundtable: Visual Flow & Architecture Documentation
 
+> **Implementation Status**: This document reflects the actual implementation as of January 2026.
+> Uses Cloudflare KV/D1 instead of Redis, following AI SDK resumable stream patterns.
+
 ## Architecture Overview: Backend-First Streaming
 
 ```
@@ -50,50 +53,95 @@ KEY PRINCIPLE: Frontend NEVER decides what happens next.
 ### Stream Chunk Storage (KV - Fast, Eventually Consistent)
 
 ```
-KV Keys for Real-Time Streaming:
+KV Keys for Real-Time Streaming (Actual Implementation):
 
-stream:{threadId}:r{round}:presearch
-stream:{threadId}:r{round}:p0
-stream:{threadId}:r{round}:p1
-stream:{threadId}:r{round}:p2
-stream:{threadId}:r{round}:moderator
+Active Stream Tracking:
+  stream:active:{threadId}:r{roundNumber}:{discriminator}
+  └── discriminator: "presearch" | "p0" | "p1" | "pN" | "moderator"
 
-Each key stores:
+Stream Buffer (per unique streamId - UUID generated):
+  stream:buffer:{streamId}:meta     # Metadata about stream
+  stream:buffer:{streamId}:c:{n}    # Individual chunks (separate keys)
+
+Metadata structure (stream:buffer:{streamId}:meta):
 ┌─────────────────────────────────────────────────────────────────┐
 │  {                                                              │
-│    "status": "streaming" | "complete" | "error",                │
-│    "lastSeq": 42,                                               │
-│    "chunks": [                                                  │
-│      { "seq": 1, "text": "Hello", "ts": 1706000001 },           │
-│      { "seq": 2, "text": " there", "ts": 1706000002 },          │
-│      { "seq": 3, "text": "!", "ts": 1706000003 }                │
-│    ],                                                           │
-│    "metadata": { "model": "gpt-5-nano", "participantIndex": 0 } │
+│    "streamId": "uuid-abc123",                                   │
+│    "threadId": "thread-xyz",                                    │
+│    "roundNumber": 0,                                            │
+│    "participantIndex": 0,                                       │
+│    "status": "active" | "completed" | "failed",                 │
+│    "chunkCount": 42,                                            │
+│    "createdAt": 1706000001,                                     │
+│    "completedAt": 1706000050 | null,                            │
+│    "errorMessage": null | "timeout exceeded"                    │
+│  }                                                              │
+└─────────────────────────────────────────────────────────────────┘
+
+Chunk structure (stream:buffer:{streamId}:c:{index}):
+┌─────────────────────────────────────────────────────────────────┐
+│  {                                                              │
+│    "seq": 1,                                                    │
+│    "data": "0:\"Hello\"",      // AI SDK format (0:, d:, e:)    │
+│    "event": "text-delta",      // Parsed event type             │
+│    "timestamp": 1706000001                                      │
 │  }                                                              │
 └─────────────────────────────────────────────────────────────────┘
 
 Client reads from lastSeq they have → gets new chunks → continues
+TTL: 1 hour (auto-cleanup of expired streams)
 ```
+
+**Why separate chunk keys?** Cloudflare KV has a 25MB value limit. Storing chunks
+as individual keys allows unlimited stream length and enables efficient partial
+reads with batching (100 chunks per batch).
 
 ### Round State Storage (KV - Coordination)
 
 ```
-KV Key: round:execution:{threadId}:r{round}
+KV Key: round:execution:{threadId}:r{roundNumber}
 
-Value:
+Value (RoundExecutionState):
 ┌─────────────────────────────────────────────────────────────────┐
 │  {                                                              │
 │    "threadId": "abc123",                                        │
 │    "roundNumber": 0,                                            │
-│    "phase": "PRESEARCH" | "PARTICIPANTS" | "MODERATOR" | "DONE",│
-│    "preSearchStatus": "complete",                               │
-│    "participantStatuses": { "0": "complete", "1": "streaming" },│
-│    "moderatorStatus": "pending",                                │
-│    "currentEntity": "p1",                                       │
+│    "status": "pending" | "running" | "completed" | "failed",    │
+│                                                                 │
+│    // 3-PHASE STATE MACHINE (not 5)                             │
+│    "phase": "participants" | "moderator" | "complete",          │
+│                                                                 │
+│    // Pre-search tracked as STATUS FIELD (not phase)            │
+│    "preSearchStatus": "pending" | "running" | "completed" | "failed" | null,
+│                                                                 │
+│    // Participant tracking                                      │
+│    "participantStatuses": {                                     │
+│      "0": "pending" | "active" | "completed" | "failed",        │
+│      "1": "pending" | "active" | "completed" | "failed"         │
+│    },                                                           │
+│    "totalParticipants": 2,                                      │
+│    "completedParticipants": 1,                                  │
+│    "failedParticipants": 0,                                     │
+│    "triggeredParticipants": [0],                                │
+│                                                                 │
+│    // Moderator tracking                                        │
+│    "moderatorStatus": "pending" | "active" | "completed" | "failed" | null,
+│                                                                 │
+│    // Metadata                                                  │
+│    "attachmentIds": ["att-1", "att-2"],                         │
 │    "startedAt": "2024-01-23T...",                               │
-│    "lastActivityAt": "2024-01-23T..."                           │
+│    "lastActivityAt": "2024-01-23T...",                          │
+│    "completedAt": "2024-01-23T..." | null,                      │
+│    "error": null | "error message",                             │
+│    "recoveryAttempts": 0                                        │
 │  }                                                              │
 └─────────────────────────────────────────────────────────────────┘
+
+DESIGN DECISION: Why 3 phases instead of 5?
+- Pre-search is OPTIONAL and runs BEFORE the phase machine starts
+- Tracking it as a status field allows cleaner conditional logic
+- Phase only transitions: PARTICIPANTS → MODERATOR → COMPLETE
+- Pre-search completion is checked BEFORE phase machine begins
 ```
 
 ### Final Message Storage (D1 - Durable)
@@ -503,22 +551,42 @@ ROUND 3 (Web Search, No Changelog)
 
 ### Frontend Subscription Hooks
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ENTITY          │  SUBSCRIPTION HOOK      │  KV STREAM KEY     │
-├──────────────────┼─────────────────────────┼────────────────────┤
-│  Web Research    │  usePreSearchStream()   │  stream:*:presearch│
-│  Participant 0   │  useParticipantStream() │  stream:*:p0       │
-│  Participant 1   │  useParticipantStream() │  stream:*:p1       │
-│  Participant N   │  useParticipantStream() │  stream:*:pN       │
-│  Moderator       │  useModeratorStream()   │  stream:*:moderator│
-└─────────────────────────────────────────────────────────────────┘
+**Actual Implementation:**
 
-Each hook:
-1. Subscribes to SSE endpoint
-2. Tracks lastSeq for resumption
-3. Updates UI with received chunks
-4. Handles reconnection automatically
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  ENTITY         │  HOOK / SERVICE                │  KV ACTIVE KEY          │
+├─────────────────┼────────────────────────────────┼─────────────────────────┤
+│  Round Manager  │  useRoundSubscription()        │  (orchestrates below)   │
+│  Entity Base    │  useEntitySubscription()       │  (shared subscription)  │
+│  Web Research   │  subscribeToPreSearchStream()  │  stream:active:*:ps     │
+│  Participant N  │  subscribeToParticipantStream()│  stream:active:*:pN     │
+│  Moderator      │  subscribeToModeratorStream()  │  stream:active:*:mod    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Hook Responsibilities:
+
+useRoundSubscription()
+  - Orchestrates staggered subscriptions (P0 → P1 → ... → MOD)
+  - Enforces sequential ordering: P(n+1) only enabled when P(n) COMPLETES
+  - Handles presearch gate: P0 blocked until presearch completes
+  - Prevents HTTP/1.1 connection exhaustion via staggering
+
+useEntitySubscription()
+  - Base hook for all entity types
+  - Maintains lastSeqRef per entity for resumption
+  - Resets lastSeq to 0 on round change
+  - Handles 202 (waiting) → retry with delay
+  - Handles 200 + SSE → stream chunks
+  - Handles 200 + JSON → complete or error
+
+Subscription Flow:
+1. Subscribe to SSE endpoint with ?lastSeq={n}
+2. Track currentSeq as chunks arrive
+3. Update lastSeqRef for resumption
+4. Call onChunk() for each text delta
+5. Call onComplete() when status:complete received
+6. Handle reconnection automatically on visibility change
 ```
 
 ### Resumption Scenarios
@@ -551,51 +619,178 @@ SCENARIO 3: User returns mid-moderator
 
 ## Backend Phase State Machine
 
-```
-                        ROUND PHASE TRANSITIONS
+**ACTUAL IMPLEMENTATION: 3-Phase + Pre-Search Status**
 
-                    ┌─────────────────────┐
-                    │      PENDING        │
-                    │  (User submitted)   │
-                    └──────────┬──────────┘
-                               │
-            ┌──────────────────┼──────────────────┐
-            │                  │                  │
-            ▼                  │                  │
-   Web Search ON?              │                  │
-            │                  │                  │
-     ┌──────┴──────┐          │                  │
-     │    YES      │          │ NO               │
-     ▼             │          │                  │
-┌─────────────┐    │          │                  │
-│  PRESEARCH  │    │          │                  │
-│             │────┘          │                  │
-└──────┬──────┘               │                  │
-       │                      │                  │
-       │ PreSearch Complete   │                  │
-       │                      │                  │
-       ▼                      ▼                  │
-┌─────────────────────────────────┐             │
-│         PARTICIPANTS            │◄────────────┘
-│                                 │
-│  P0 → P1 → P2 → ... → PN       │
-└────────────────┬────────────────┘
-                 │
-                 │ All Participants Complete
-                 │
-                 ▼
-          ┌─────────────┐
-          │  MODERATOR  │
-          │             │
-          └──────┬──────┘
-                 │
-                 │ Moderator Complete
-                 │
-                 ▼
-          ┌─────────────┐
-          │    DONE     │
-          │             │
-          └─────────────┘
+Pre-search is tracked as a separate status field, not a phase. This allows:
+- Cleaner conditional logic for optional web search
+- Simpler phase transitions
+- Better separation of concerns
+
+```
+                     ACTUAL ROUND EXECUTION FLOW
+
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. ROUND CREATED (status: "pending")                          │
+│     └── Initialize round state in KV                            │
+│                                                                 │
+│  2. PRE-SEARCH CHECK (preSearchStatus field)                   │
+│     ┌──────────────────────────────────────────────┐            │
+│     │  Web Search enabled?                         │            │
+│     │    YES → preSearchStatus: "running"          │            │
+│     │          Stream search results               │            │
+│     │          Wait for completion                 │            │
+│     │          preSearchStatus: "completed"        │            │
+│     │    NO  → preSearchStatus: null (skip)        │            │
+│     └──────────────────────────────────────────────┘            │
+│                         │                                       │
+│                         ▼                                       │
+│  3. PHASE: PARTICIPANTS                                         │
+│     ┌──────────────────────────────────────────────┐            │
+│     │  Sequential execution enforced:              │            │
+│     │                                              │            │
+│     │  P0 starts (participantStatuses["0"]: "active")          │
+│     │      ↓ P0 completes                          │            │
+│     │  P1 starts (only after P0 "completed"|"failed")          │
+│     │      ↓ P1 completes                          │            │
+│     │  P2 starts (only after P1 "completed"|"failed")          │
+│     │      ↓ ...                                   │            │
+│     │  All participants complete                   │            │
+│     └──────────────────────────────────────────────┘            │
+│                         │                                       │
+│                         ▼                                       │
+│  4. PHASE: MODERATOR                                            │
+│     ┌──────────────────────────────────────────────┐            │
+│     │  moderatorStatus: "active"                   │            │
+│     │  Stream moderator response                   │            │
+│     │  moderatorStatus: "completed"                │            │
+│     └──────────────────────────────────────────────┘            │
+│                         │                                       │
+│                         ▼                                       │
+│  5. PHASE: COMPLETE                                             │
+│     └── status: "completed", phase: "complete"                  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+PHASE ENUM VALUES (RoundExecutionPhases):
+  - "participants" → P0...PN executing sequentially
+  - "moderator"    → Moderator streaming
+  - "complete"     → Round finished
+
+STATUS ENUM VALUES (RoundExecutionStatuses):
+  - "pending"   → Round created, not started
+  - "running"   → Active execution
+  - "completed" → Successfully finished
+  - "failed"    → Error occurred
+
+PRE-SEARCH STATUS VALUES (separate from phase):
+  - null        → Web search disabled for this round
+  - "pending"   → Queued but not started
+  - "running"   → Currently searching
+  - "completed" → Search done, results available
+  - "failed"    → Search error (participants proceed anyway)
+```
+
+---
+
+## Race Condition Handling
+
+The implementation includes several guards against race conditions inherent in
+distributed KV-based coordination.
+
+### 1. DB-KV Sync Validation
+
+**Problem:** KV status might show "completed" before D1 write finishes.
+
+**Solution:** `getDbValidatedNextParticipant()` cross-validates:
+```typescript
+// Never go backwards from current streaming index
+// If P1 is streaming, don't return P0 (race condition)
+if (currentStreamingIndex !== undefined && i < currentStreamingIndex) {
+  continue; // Skip - message will appear in D1 soon
+}
+```
+
+### 2. Chunk Initialization Race
+
+**Problem:** Chunks may arrive before metadata initializes in KV.
+
+**Solution:** Retry logic in `appendParticipantStreamChunk()`:
+```typescript
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 50;
+// Waits for metadata to appear before storing chunks
+```
+
+### 3. Stale Stream Detection
+
+**Problem:** Stream may hang without activity.
+
+**Solution:** Timeout detection marks stream as FAILED:
+```typescript
+const streamIsOldWithNoChunks = hasNoChunks
+  && streamCreatedTime > 0
+  && Date.now() - streamCreatedTime > STALE_CHUNK_TIMEOUT_MS; // 30s
+```
+
+### 4. Sequential Ordering Enforcement
+
+**Problem:** P1+ could start before P0 completes.
+
+**Solution:** `createWaitingParticipantStream()` enforces ordering:
+```typescript
+if (participantIndex > 0) {
+  const allPreviousComplete = prevStatuses.every(status =>
+    status === 'completed' || status === 'failed'
+  );
+  if (!allPreviousComplete) {
+    continue; // Keep waiting
+  }
+}
+```
+
+### 5. Pre-Search Gate
+
+**Problem:** Participants could start before pre-search completes.
+
+**Solution:** Pre-search completion check before participant triggers:
+- Queue orchestration delays participant messages until `preSearchStatus === 'completed'`
+- Frontend triple-redundancy: SSE event, callback, effect backup
+
+---
+
+## Error Handling Patterns
+
+### Stream Timeout Error Events
+
+When a stream times out without completing, the backend sends explicit error
+events before the synthetic finish:
+
+```typescript
+// SSE error event format
+event: error
+data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after 90s of no activity"}
+
+event: finish
+data: {"type":"finish","finishReason":"error","error":"STREAM_TIMEOUT"}
+```
+
+### Response Status Codes
+
+| Code | Meaning | Frontend Action |
+|------|---------|-----------------|
+| 200 + SSE | Active stream | Subscribe and display |
+| 200 + JSON | Completed or cursor beyond chunks | Load from response |
+| 202 | Stream not started yet | Retry with `retryAfter` delay |
+| 204 | No active stream (resumption endpoint) | Skip subscription |
+
+### Frontend Error Recovery
+
+```typescript
+// Triple-redundancy for presearch completion detection
+1. SSE 'done' event → handleEntityComplete()
+2. Status change callback → enables P0
+3. Effect-based backup → catches React batching edge cases
 ```
 
 ---
@@ -621,7 +816,7 @@ SCENARIO 3: User returns mid-moderator
 │     - Stream chunks stored with sequence numbers               │
 │     - Fast writes from backend                                 │
 │     - Fast reads for frontend                                  │
-│     - TTL for automatic cleanup                                │
+│     - TTL for automatic cleanup (1 hour)                       │
 │                                                                │
 │  4. D1 FOR DURABILITY                                          │
 │     - Final messages persisted                                 │
@@ -629,10 +824,113 @@ SCENARIO 3: User returns mid-moderator
 │     - Used for resumption of completed entities                │
 │                                                                │
 │  5. EACH ENTITY RESUMABLE                                      │
-│     - PreSearch: stream:*:presearch                            │
-│     - Participants: stream:*:pN                                │
-│     - Moderator: stream:*:moderator                            │
+│     - PreSearch: stream:active:{tid}:r{n}:presearch            │
+│     - Participants: stream:active:{tid}:r{n}:p{i}              │
+│     - Moderator: stream:active:{tid}:r{n}:moderator            │
 │     - Client reconnects with lastSeq to continue               │
+│                                                                │
+│  6. 3-PHASE STATE MACHINE                                      │
+│     - Phases: participants → moderator → complete              │
+│     - Pre-search tracked as STATUS FIELD (not phase)           │
+│     - Simpler conditional logic for optional features          │
+│                                                                │
+│  7. RACE CONDITION GUARDS                                      │
+│     - DB-KV sync validation                                    │
+│     - Chunk initialization retries                             │
+│     - Stale stream detection (30s timeout)                     │
+│     - Sequential ordering enforcement                          │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## AI SDK Resumable Streams Pattern Comparison
+
+This implementation follows the AI SDK resumable streams pattern, adapted for
+Cloudflare KV instead of Redis.
+
+### Pattern Mapping
+
+| AI SDK Pattern | Roundtable Implementation |
+|----------------|---------------------------|
+| `resumable-stream` package | `unified-stream-buffer.service.ts` |
+| Redis pub/sub | Cloudflare KV polling |
+| `activeStreamId` in DB | `stream:active:{tid}:r{n}:{entity}` in KV |
+| `consumeSseStream` callback | `appendParticipantStreamChunk()` imperative calls |
+| GET `/stream` endpoint | `resumeThreadStreamRoute`, `getThreadStreamResumptionStateRoute` |
+| POST creates stream | `streamText()` + KV initialization |
+| `onFinish` clears activeStreamId | `completeParticipantStreamBuffer()` |
+| 204 No Content | Returned when no active stream |
+
+### Key Differences from AI SDK Pattern
+
+1. **Multi-Entity Coordination**: AI SDK pattern assumes single stream per chat.
+   We track multiple concurrent entities (presearch, P0-PN, moderator) with
+   sequential ordering enforcement.
+
+2. **Server-Side Waiting Streams**: Instead of client polling with 204 + retry,
+   we use `createWaitingParticipantStream()` that holds the connection until
+   the previous participant completes.
+
+3. **Queue-Based Orchestration**: Backend queue triggers next participant
+   automatically without frontend POST requests.
+
+4. **Chunk Storage**: Separate KV keys per chunk (not array in single value)
+   to handle unlimited stream length and efficient partial reads.
+
+### Frontend Resume Integration
+
+```typescript
+// AI SDK pattern
+const { messages } = useChat({
+  resume: true,  // Auto-reconnect on mount
+  transport: new DefaultChatTransport({
+    prepareReconnectToStreamRequest: ({ id }) => ({
+      api: `/api/chat/${id}/stream`,
+    }),
+  }),
+});
+
+// Roundtable implementation
+const { hasInProgressRound } = useStreamResumption(threadId);
+// → Calls getThreadStreamResumptionStateService() on mount
+// → Returns phase, participant statuses, next participant to trigger
+// → ChatStoreProvider hydrates store and starts subscriptions
+```
+
+### Resumption Endpoint Signatures
+
+```typescript
+// Resume stream (SSE response)
+GET /api/threads/{threadId}/stream?lastChunkIndex={n}
+→ 204 No Content (no active stream)
+→ 200 + SSE (active stream, resume from lastChunkIndex)
+
+// Get resumption state (JSON response)
+GET /api/threads/{threadId}/stream-status
+→ { phase, participantStatuses, nextParticipantIndex, hasActiveStream }
+```
+
+---
+
+## Implementation Files Reference
+
+### Backend (apps/api/src/)
+
+| File | Purpose |
+|------|---------|
+| `services/streaming/unified-stream-buffer.service.ts` | KV chunk storage, waiting streams |
+| `services/orchestration/round-orchestration.service.ts` | Phase state machine, status updates |
+| `services/orchestration/streaming-orchestration.service.ts` | AI SDK streamText integration |
+| `routes/chat/handlers/entity-subscription.handler.ts` | SSE endpoints per entity |
+| `routes/chat/handlers/stream-resume.handler.ts` | Resumption endpoints |
+
+### Frontend (apps/web/src/)
+
+| File | Purpose |
+|------|---------|
+| `hooks/utils/use-entity-subscription.ts` | Base SSE subscription hook |
+| `hooks/utils/use-round-subscription.ts` | Staggered subscription orchestration |
+| `components/providers/chat-store-provider/provider.tsx` | Round lifecycle management |
+| `stores/chat/actions/form-actions.ts` | Send message triggers |

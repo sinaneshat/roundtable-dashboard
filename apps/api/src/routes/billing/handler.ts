@@ -14,6 +14,7 @@ import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/
 import { revenueTracking } from '@/lib/analytics';
 import { getWebappEnvFromContext } from '@/lib/config/base-urls';
 import { STRIPE_WEBHOOK_EVENT_TYPES, StripeWebhookEventTypes } from '@/lib/enums';
+import { log } from '@/lib/logger';
 import { extractProperty, isObject } from '@/lib/utils';
 import { cacheCustomerId, getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
 import type { ApiEnv } from '@/types';
@@ -317,7 +318,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
       if (error instanceof AppError) {
         throw error;
       }
-      console.error('[Billing] Checkout session error:', error);
+      log.billing('error', '[Billing] Checkout session error', { error: error instanceof Error ? error.message : String(error) });
       throw createError.internal('Failed to create checkout session', ErrorContextBuilders.stripe('create_checkout_session'));
     }
   },
@@ -415,7 +416,7 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
 
       return Responses.collection(c, serializedSubscriptions);
     } catch (error) {
-      console.error('[Billing] listSubscriptions error:', error);
+      log.billing('error', '[Billing] listSubscriptions error', { error: error instanceof Error ? error.message : String(error) });
       throw createError.internal('Failed to retrieve subscriptions', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
   },

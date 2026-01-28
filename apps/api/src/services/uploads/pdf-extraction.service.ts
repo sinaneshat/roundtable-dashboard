@@ -14,6 +14,7 @@ import { definePDFJSModule, extractText, getDocumentProxy } from 'unpdf';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { log } from '@/lib/logger';
 import { getFile } from '@/services/uploads/storage.service';
 
 // ============================================================================
@@ -72,19 +73,12 @@ async function ensurePdfJsInitialized(): Promise<void> {
   }
 
   try {
-    console.error('[PDF Extraction] Initializing PDF.js module...');
+    log.pdf('init', 'Initializing PDF.js module...');
     await definePDFJSModule(async () => await import('unpdf/pdfjs'));
     pdfJsInitialized = true;
-    console.error('[PDF Extraction] PDF.js initialized successfully');
+    log.pdf('done', 'PDF.js initialized successfully');
   } catch (error) {
-    // Log critical initialization failure with full details for debugging Workers issues
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    console.error('[PDF Extraction] Failed to initialize PDF.js:', {
-      errorType: error?.constructor?.name,
-      message: errorMessage,
-      stack: errorStack,
-    });
+    log.error('Failed to initialize PDF.js', error instanceof Error ? error : undefined);
     throw error;
   }
 }
@@ -178,7 +172,7 @@ export async function extractPdfTextWithCloudflareAI(
   ai: Ai,
 ): Promise<PdfExtractionResult> {
   try {
-    console.error('[PDF Extraction] Using Cloudflare AI toMarkdown() for extraction...');
+    log.pdf('start', 'Using Cloudflare AI toMarkdown()');
 
     // Stream directly to AI - no need to buffer in worker memory
     const arrayBuffer = await r2Object.arrayBuffer();
@@ -226,7 +220,7 @@ export async function extractPdfTextWithCloudflareAI(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[PDF Extraction] Cloudflare AI extraction failed:', errorMessage);
+    log.error('Cloudflare AI extraction failed', { message: errorMessage });
     return {
       error: `Cloudflare AI extraction failed: ${errorMessage}`,
       success: false,
@@ -285,7 +279,7 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
 
     // Use Cloudflare AI for larger files (offloads to CF infrastructure)
     if (!canUseInWorker && canUseCloudflareAI) {
-      console.error(`[PDF Extraction] Large file (${(fileSize / 1024 / 1024).toFixed(1)}MB), using Cloudflare AI`);
+      log.pdf('start', 'Large file, using Cloudflare AI', { sizeMB: (fileSize / 1024 / 1024).toFixed(1) });
 
       // Get R2 object directly for streaming to AI
       const r2Object = await r2Bucket.get(r2Key);
@@ -299,7 +293,7 @@ export async function processPdfUpload(params: ProcessPdfUploadParams): Promise<
       result = await extractPdfTextWithCloudflareAI(r2Object, ai);
     } else {
       // Use in-worker PDF.js for small files
-      console.error(`[PDF Extraction] Small file (${(fileSize / 1024 / 1024).toFixed(1)}MB), using in-worker PDF.js`);
+      log.pdf('start', 'Small file, using in-worker PDF.js', { sizeMB: (fileSize / 1024 / 1024).toFixed(1) });
 
       const { data } = await getFile(r2Bucket, r2Key);
       if (!data) {
@@ -375,6 +369,6 @@ export async function backgroundPdfProcessing(params: ProcessPdfUploadParams): P
     await processPdfUpload(params);
   } catch (error) {
     // Log but don't throw - this runs in background
-    console.error('[PDF Extraction] Background processing failed:', error);
+    log.error('PDF background processing failed', error instanceof Error ? error : undefined);
   }
 }

@@ -38,6 +38,11 @@
       "types": "./dist/lib/index.d.ts",
       "import": "./src/lib/index.ts",
       "default": "./src/lib/index.ts"
+    },
+    "./lib/logger": {
+      "types": "./dist/lib/logger/index.d.ts",
+      "import": "./src/lib/logger/index.ts",
+      "default": "./src/lib/logger/index.ts"
     }
   },
   "main": "./src/index.ts",

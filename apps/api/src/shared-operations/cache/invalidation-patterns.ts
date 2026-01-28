@@ -16,6 +16,7 @@ import {
   invalidateThreadCache,
 } from '@/common/cache-utils';
 import type { getDbAsync } from '@/db';
+import { log } from '@/lib/logger';
 
 type DbInstance = Awaited<ReturnType<typeof getDbAsync>>;
 
@@ -155,6 +156,8 @@ export const CachePatterns = {
  */
 export async function deferredCacheInvalidation(fn: () => Promise<void>): Promise<void> {
   return await fn().catch((err) => {
-    console.error('[Cache] Deferred invalidation failed:', err);
+    log.cache('error', 'Deferred invalidation failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
   });
 }

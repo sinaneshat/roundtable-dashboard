@@ -8,6 +8,7 @@ import { createHandler, IdParamSchema, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/tables';
 import { extractSessionToken, requireAdmin } from '@/lib/auth';
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 import type { StartAutomatedJobQueueMessage } from '@/types/queues';
 
@@ -183,7 +184,7 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
       await c.env.ROUND_ORCHESTRATION_QUEUE.send(message);
       queued = true;
     } catch (err) {
-      console.error('[createJob] Failed to queue job:', err);
+      log.queue('error', '[createJob] Failed to queue job', { error: err instanceof Error ? err.message : String(err) });
       // Mark job as failed if we can't queue it
       await db
         .update(tables.automatedJob)
@@ -310,7 +311,7 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
       try {
         await c.env.ROUND_ORCHESTRATION_QUEUE.send(message);
       } catch (err) {
-        console.error('[updateJob] Failed to queue job:', err);
+        log.queue('error', '[updateJob] Failed to queue job', { error: err instanceof Error ? err.message : String(err) });
         await db
           .update(tables.automatedJob)
           .set({

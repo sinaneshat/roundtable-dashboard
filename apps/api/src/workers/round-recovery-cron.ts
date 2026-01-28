@@ -17,6 +17,7 @@
 
 import { RoundOrchestrationMessageTypes } from '@roundtable/shared/enums';
 
+import { log } from '@/lib/logger';
 import type { RecoverRoundQueueMessage } from '@/types/queues';
 
 // ============================================================================
@@ -98,14 +99,19 @@ async function runRecovery(env: CloudflareEnv): Promise<void> {
 
         console.info(`[RoundRecoveryCron] Queued recovery for execution ${execution.id}`);
       } catch (error) {
-        console.error(`[RoundRecoveryCron] Failed to queue recovery for ${execution.id}:`, error);
+        log.cron('error', `Failed to queue recovery for ${execution.id}`, {
+          error: error instanceof Error ? error.message : String(error),
+          executionId: execution.id,
+        });
         // Continue with other executions
       }
     }
 
     console.info(`[RoundRecoveryCron] Completed - queued ${staleExecutions.length} recoveries`);
   } catch (error) {
-    console.error('[RoundRecoveryCron] Recovery process failed:', error);
+    log.cron('error', 'Recovery process failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

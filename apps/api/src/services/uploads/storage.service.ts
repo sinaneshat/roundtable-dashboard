@@ -9,6 +9,7 @@
 
 import { Buffer } from 'node:buffer';
 
+import { log } from '@/lib/logger';
 import type { StorageMetadata, StorageResult } from '@/types/uploads';
 
 // ============================================================================
@@ -477,7 +478,7 @@ export async function createMultipartUpload(
   // Single-file uploads use putFile which has local fallback
   if (!r2Bucket) {
     if (IS_LOCAL_DEV) {
-      console.error('[Storage] Multipart uploads not supported in local dev without R2. Use single-file upload instead.');
+      log.upload('warn', 'Multipart uploads not supported in local dev without R2. Use single-file upload instead.', { key });
     }
     return null;
   }

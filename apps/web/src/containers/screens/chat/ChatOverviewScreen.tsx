@@ -724,9 +724,13 @@ export default function ChatOverviewScreen() {
             isDocumentFile(att.file.type),
           );
 
-          // Pass accessible model IDs to filter server response
-          // This prevents setting participants that would be filtered by incompatible models effect
-          const accessibleSet = new Set<string>(accessibleModelIds);
+          // ✅ FIX: Filter out incompatible models BEFORE passing to analyze
+          // This prevents analyze from picking models that would be immediately
+          // filtered out by the incompatible models effect, causing 0 participants
+          const compatibleAccessibleIds = accessibleModelIds.filter(
+            id => !incompatibleModelIds.has(id),
+          );
+          const accessibleSet = new Set<string>(compatibleAccessibleIds);
 
           // Consolidated auto mode analysis - updates both chat store and preferences
           await analyzeAndApply({
@@ -766,7 +770,7 @@ export default function ChatOverviewScreen() {
         }
       }
     },
-    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, analyzeAndApply, storeApi, accessibleModelIds],
+    [inputValue, selectedParticipants, isInitialUIInputBlocked, isSubmitBlocked, formActions, currentThread?.id, createdThreadId, chatAttachments, autoMode, analyzeAndApply, storeApi, accessibleModelIds, incompatibleModelIds],
   );
 
   const handleToggleModel = useCallback((modelId: string) => {

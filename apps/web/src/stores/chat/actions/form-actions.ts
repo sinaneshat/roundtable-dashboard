@@ -387,9 +387,18 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       rlog.flow('create', `8-FINAL wait=${finalState.waitingToStartStreaming ? 1 : 0} pending=${finalState.pendingMessage ? 1 : 0} created=${finalState.createdThreadId?.slice(-8) ?? '-'}`);
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
-      actions.setShowInitialUI(true);
+      // Defensive: restore UI even if other cleanup fails
+      try {
+        actions.setShowInitialUI(true);
+      } catch {
+        // Ignore cleanup errors
+      }
     } finally {
-      actions.setIsCreatingThread(false);
+      try {
+        actions.setIsCreatingThread(false);
+      } catch {
+        // Ignore cleanup errors - critical flag reset should never crash
+      }
     }
   }, [
     storeApi,
@@ -402,6 +411,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {
     const trimmed = formState.inputValue.trim();
 
+    // Compare selector vs getState to detect staleness
+    const selectorSelectedParticipants = formState.selectedParticipants;
+    const immediateState = storeApi.getState();
+    const stateSelectedParticipants = immediateState.selectedParticipants;
+    const selectorHasMore = selectorSelectedParticipants.length > stateSelectedParticipants.length;
+
     if (!trimmed || formState.selectedParticipants.length === 0 || !formState.selectedMode) {
       return;
     }
@@ -413,6 +428,15 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const freshSelectedMode = freshState.selectedMode;
     const freshEnableWebSearch = freshState.enableWebSearch;
     let freshSelectedParticipants = freshState.selectedParticipants;
+
+    // ✅ FIX: If selector has MORE participants than getState, use selector value
+    // This happens when API response sync from previous round overwrites store
+    // The selector represents what the user saw, so use that.
+    if (selectorHasMore && selectorSelectedParticipants.length >= MIN_PARTICIPANTS_REQUIRED) {
+      freshSelectedParticipants = selectorSelectedParticipants;
+      // Also update the store to keep it in sync
+      actions.setSelectedParticipants(selectorSelectedParticipants);
+    }
 
     // ✅ FIX: Defensive check for stale closure race condition
     // formState.selectedParticipants (from hook) might be stale while freshState is empty
@@ -586,13 +610,22 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
 
       // ✅ RACE CONDITION FIX: Guard against empty array ([] is truthy but wipes store)
+      // Also guard against syncing fewer participants than user configured via auto-mode
       if (responseData?.participants && responseData.participants.length > 0) {
         const participantsWithDates = transformChatParticipants(responseData.participants);
         actions.updateParticipants(participantsWithDates);
         actions.setExpectedModelIds(getEnabledParticipantModelIds(participantsWithDates));
 
         const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
-        actions.setSelectedParticipants(syncedParticipantConfigs);
+
+        // ✅ FIX: Don't overwrite selectedParticipants if user has configured more via auto-mode
+        // This prevents late API responses from clobbering user's next-round config
+        const currentSelectedCount = storeApi.getState().selectedParticipants.length;
+        if (syncedParticipantConfigs.length >= currentSelectedCount) {
+          actions.setSelectedParticipants(syncedParticipantConfigs);
+        } else {
+          rlog.submit('skip-sync-fewer', `r${nextRoundNumber} API returned ${syncedParticipantConfigs.length} but store has ${currentSelectedCount} - preserving user config`);
+        }
       } else if (responseData?.participants?.length === 0) {
         rlog.submit('skip-empty-participants', `r${nextRoundNumber} server returned empty, preserving existing`);
       }
@@ -601,10 +634,19 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         actions.setThread(transformChatThread(responseData.thread));
       }
     } catch (error) {
-      actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
+      // Defensive: each cleanup operation wrapped to prevent cascade failures
+      try {
+        actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
+      } catch {
+        // Ignore - message rollback failure shouldn't crash
+      }
 
-      actions.setWaitingToStartStreaming(false);
-      actions.setStreamingRoundNumber(null);
+      try {
+        actions.setWaitingToStartStreaming(false);
+        actions.setStreamingRoundNumber(null);
+      } catch {
+        // Ignore - streaming state reset failure shouldn't crash
+      }
 
       rlog.submit('patch-error', `r${nextRoundNumber} error updating thread`);
       showApiErrorToast('Error updating thread', error);

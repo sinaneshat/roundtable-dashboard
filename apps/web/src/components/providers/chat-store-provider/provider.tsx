@@ -11,11 +11,10 @@
  * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  */
 
-import { MessageStatuses } from '@roundtable/shared';
+import { isCompletionFinishReason, MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -68,6 +67,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     currentRoundNumber,
     enableWebSearch,
     hasInitiallyLoaded: storeHasInitiallyLoaded,
+    isResumingStream,
     isStreaming,
     participants,
     pendingAttachmentIds,
@@ -80,6 +80,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     currentRoundNumber: s.currentRoundNumber,
     enableWebSearch: s.enableWebSearch,
     hasInitiallyLoaded: s.hasInitiallyLoaded,
+    isResumingStream: s.isResumingStream,
     isStreaming: s.isStreaming,
     participants: s.participants,
     pendingAttachmentIds: s.pendingAttachmentIds,
@@ -113,9 +114,10 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // Track if we've already fetched completed responses for this resumption
   const hasFetchedCompletedResponsesRef = useRef(false);
 
-  // Check backend for in-progress round state on page load/refresh
-  const resumptionEnabled = storeHasInitiallyLoaded && !isStreaming && !waitingToStartStreaming;
-  rlog.resume('provider-hook-call', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} enabled=${resumptionEnabled} phase=${phase} hasLoaded=${storeHasInitiallyLoaded} isStreaming=${isStreaming} waiting=${waitingToStartStreaming}`);
+  // Don't check resumption for newly created threads - they haven't had time to populate KV state
+  // Per FLOW_DOCUMENTATION.md: DB-KV sync has latency, resumption only for returning users
+  const resumptionEnabled = storeHasInitiallyLoaded && !isStreaming && !waitingToStartStreaming && !createdThreadId;
+  rlog.resume('provider-hook-call', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} enabled=${resumptionEnabled} phase=${phase} hasLoaded=${storeHasInitiallyLoaded} isStreaming=${isStreaming} waiting=${waitingToStartStreaming} created=${!!createdThreadId}`);
 
   const { hasInProgressRound, state: resumptionState, status: resumptionStatus } = useStreamResumption({
     currentPhase: phase,
@@ -213,6 +215,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   }, [
     hasInProgressRound,
     resumptionState,
+    resumptionStatus,
     effectiveThreadId,
     waitingToStartStreaming,
     phase,
@@ -340,6 +343,18 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // ROUND SUBSCRIPTION - Backend-First Pattern
   // ============================================================================
 
+  // Track which round the subscription callbacks were set up for
+  // This prevents cross-round message contamination if chunks arrive after round changes
+  const subscriptionRoundRef = useRef<number | null>(null);
+
+  // Update subscription round ref when subscriptions become active
+  useEffect(() => {
+    if (shouldSubscribe && currentRoundNumber !== null) {
+      subscriptionRoundRef.current = currentRoundNumber;
+      rlog.stream('check', `Set subscription round ref to r${currentRoundNumber}`);
+    }
+  }, [shouldSubscribe, currentRoundNumber]);
+
   // Subscription callbacks - track streaming progress
   const handleChunk = useCallback((entity: EntityType, text: string, seq: number) => {
     // Only log first chunk per entity to reduce noise
@@ -352,6 +367,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     // causing streaming placeholders to be created with the wrong round number on round 2+
     const state = store.getState();
     const roundNumber = state.currentRoundNumber ?? 0;
+
+    // FIX: Validate chunk belongs to current subscription round
+    // Prevents cross-round message contamination if chunks arrive after round changes
+    if (subscriptionRoundRef.current !== null && subscriptionRoundRef.current !== roundNumber) {
+      rlog.stream('skip', `${entity} chunk discarded: subscription r${subscriptionRoundRef.current} != store r${roundNumber}`);
+      return;
+    }
 
     // Update subscription status for UI
     if (entity === 'presearch') {
@@ -388,6 +410,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     rlog.stream('end', `${entity} complete lastSeq=${lastSeq}`);
     const state = store.getState();
     const currentRound = state.currentRoundNumber ?? 0;
+
+    // FIX: Validate completion event belongs to current subscription round
+    // Prevents cross-round state corruption if completion arrives after round changes
+    if (subscriptionRoundRef.current !== null && subscriptionRoundRef.current !== currentRound) {
+      rlog.stream('skip', `${entity} complete discarded: subscription r${subscriptionRoundRef.current} != store r${currentRound}`);
+      return;
+    }
 
     if (entity === 'presearch') {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
@@ -493,6 +522,19 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     totalResults: 0,
   });
 
+  // Ref to track pending animation frame for presearch updates
+  // Using requestAnimationFrame instead of flushSync for better performance with rapid SSE events
+  const pendingAnimationFrameRef = useRef<number | null>(null);
+
+  // Cleanup pending animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingAnimationFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAnimationFrameRef.current);
+      }
+    };
+  }, []);
+
   // FIX 3: Reset presearch accumulator when round number changes
   const prevRoundRef = useRef<number | null>(null);
   useEffect(() => {
@@ -575,11 +617,16 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         } else {
           preSearchDataRef.current.queries.push(queryData);
         }
-        // ✅ FIX Phase 5C: Use flushSync to force immediate render for gradual animation
-        // Without this, React 18 batches multiple SSE events into one render cycle,
-        // causing all queries to appear simultaneously instead of one by one
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for gradual streaming animation
-        flushSync(() => {
+        // Schedule update on next animation frame for smooth gradual animation
+        // Using requestAnimationFrame instead of flushSync to:
+        // 1. Avoid bypassing React's batching which can cause performance issues with rapid SSE events
+        // 2. Align updates with browser's natural paint cycle (~60fps)
+        // 3. Cancel pending frames to prevent stale updates when events arrive faster than frame rate
+        if (pendingAnimationFrameRef.current !== null) {
+          cancelAnimationFrame(pendingAnimationFrameRef.current);
+        }
+        pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+          pendingAnimationFrameRef.current = null;
           state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
         });
         break;
@@ -604,11 +651,16 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
           (sum, r) => sum + r.results.length,
           0,
         );
-        // ✅ FIX Phase 5C: Use flushSync to force immediate render for gradual animation
-        // Without this, React 18 batches multiple SSE events into one render cycle,
-        // causing all results to appear simultaneously instead of one by one
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for gradual streaming animation
-        flushSync(() => {
+        // Schedule update on next animation frame for smooth gradual animation
+        // Using requestAnimationFrame instead of flushSync to:
+        // 1. Avoid bypassing React's batching which can cause performance issues with rapid SSE events
+        // 2. Align updates with browser's natural paint cycle (~60fps)
+        // 3. Cancel pending frames to prevent stale updates when events arrive faster than frame rate
+        if (pendingAnimationFrameRef.current !== null) {
+          cancelAnimationFrame(pendingAnimationFrameRef.current);
+        }
+        pendingAnimationFrameRef.current = requestAnimationFrame(() => {
+          pendingAnimationFrameRef.current = null;
           state.updatePartialPreSearchData(roundNumber, cloneAccumulatorForStore());
         });
         break;
@@ -647,10 +699,41 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     }
   }, [store]);
 
+  // ✅ RESUMPTION: Build initialLastSeqs from resumption state for stream resumption
+  // These values tell subscriptions where to resume from after page refresh
+  const initialLastSeqs = useMemo(() => {
+    if (!resumptionState) {
+      return undefined;
+    }
+    return {
+      moderator: resumptionState.moderator?.lastSeq ?? undefined,
+      participants: resumptionState.participants?.lastSeqs ?? undefined,
+      presearch: resumptionState.preSearch?.lastSeq ?? undefined,
+    };
+  }, [resumptionState]);
+
+  // ✅ AI SDK P0 COMPLETION STATE
+  // When enableWebSearch is false, P0 streams via AI SDK (not subscription).
+  // This state is updated when AI SDK P0 completes, signaling the subscription
+  // hook's stagger mechanism to enable P1.
+  const [aiSdkP0Complete, setAiSdkP0Complete] = useState(false);
+  const aiSdkP0CompleteKeyRef = useRef<string | null>(null);
+
+  // Reset when thread/round changes
+  useEffect(() => {
+    const key = `${effectiveThreadId}_r${currentRoundNumber}`;
+    if (aiSdkP0CompleteKeyRef.current !== key) {
+      setAiSdkP0Complete(false);
+      aiSdkP0CompleteKeyRef.current = key;
+    }
+  }, [effectiveThreadId, currentRoundNumber]);
+
   // Round subscription hook
   const { abort: abortSubscriptions } = useRoundSubscription({
+    aiSdkP0Complete: !enableWebSearch && aiSdkP0Complete,
     enabled: shouldSubscribe,
     enablePreSearch: enableWebSearch,
+    initialLastSeqs,
     onChunk: handleChunk,
     onEntityComplete: handleEntityComplete,
     onEntityError: handleEntityError,
@@ -708,8 +791,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       // to the store before AI SDK was updated. Without this, Round 2+ user messages
       // temporarily disappear when AI SDK syncs, causing a flash of empty content.
       const state = store.getState();
+      // FIX: Preserve presearch messages in addition to streaming placeholders and optimistic messages
+      // Presearch results were being lost during AI SDK message sync because they weren't in the filter
       const storeOnlyMessages = state.messages.filter(
-        m => m.id.startsWith('streaming_p') || m.id.includes('_moderator') || m.id.startsWith('optimistic_'),
+        m => m.id.startsWith('streaming_p')
+          || m.id.includes('_moderator')
+          || m.id.startsWith('optimistic_')
+          || m.id.startsWith('presearch_'),
       );
 
       // Clone to prevent Immer from freezing AI SDK's objects
@@ -723,17 +811,111 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
       const mergedMessages = [...aiSdkMessages, ...messagesToPreserve];
 
-      // DEBUG: Log when we preserve optimistic or streaming messages
+      // DEBUG: Log when we preserve optimistic, streaming, or presearch messages
       if (messagesToPreserve.length > 0) {
         const optimisticCount = messagesToPreserve.filter(m => m.id.startsWith('optimistic_')).length;
         const streamingCount = messagesToPreserve.filter(m => m.id.startsWith('streaming_p')).length;
         const moderatorCount = messagesToPreserve.filter(m => m.id.includes('_moderator')).length;
-        rlog.sync('aiSdk→store', `preserved: optimistic=${optimisticCount} streaming=${streamingCount} moderator=${moderatorCount} aiSdk=${aiSdkMessages.length} total=${mergedMessages.length}`);
+        const presearchCount = messagesToPreserve.filter(m => m.id.startsWith('presearch_')).length;
+        rlog.sync('aiSdk→store', `preserved: optimistic=${optimisticCount} streaming=${streamingCount} moderator=${moderatorCount} presearch=${presearchCount} aiSdk=${aiSdkMessages.length} total=${mergedMessages.length}`);
       }
 
       state.setMessages(mergedMessages);
     }
   }, [chat.messages, store]);
+
+  // ============================================================================
+  // AI SDK P0 COMPLETION BRIDGE
+  // ============================================================================
+  // When enableWebSearch is false, P0 streams via AI SDK directly (not through
+  // KV-backed subscription). The subscription status stays 'streaming' forever
+  // because no chunks are written to KV. This breaks the stagger mechanism which
+  // waits for subscription status 'complete' before enabling P1.
+  //
+  // This effect bridges AI SDK P0 completion to subscription state, enabling
+  // the stagger to proceed when P0 finishes via AI SDK.
+  // ============================================================================
+  const hasMarkedP0CompleteRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // Only needed when web search is disabled (P0 uses AI SDK path)
+    if (enableWebSearch) {
+      return;
+    }
+
+    // Need active subscription and round number
+    if (!shouldSubscribe || currentRoundNumber === null) {
+      return;
+    }
+
+    // Find P0 message for current round
+    const p0Message = chat.messages.find((m) => {
+      if (m.role !== 'assistant') {
+        return false;
+      }
+      const meta = m.metadata as Record<string, unknown> | undefined;
+      return meta?.participantIndex === 0 && meta?.roundNumber === currentRoundNumber;
+    });
+
+    if (!p0Message) {
+      return;
+    }
+
+    // Check if P0 has completed (has valid completion finishReason)
+    // NOTE: Backend sets finishReason='unknown' at stream start, then updates to actual value
+    // (e.g., 'stop') at stream finish. We must check for a VALID completion reason, not just
+    // any truthy value, to avoid triggering the bridge prematurely with 'unknown'.
+    const meta = p0Message.metadata as Record<string, unknown> | undefined;
+    const finishReason = meta?.finishReason as string | undefined;
+
+    // isCompletionFinishReason returns true for: 'stop', 'length', 'tool-calls', 'content-filter'
+    // Returns false for: 'unknown', 'error', 'failed', 'other', undefined
+    if (!finishReason || !isCompletionFinishReason(finishReason)) {
+      return;
+    }
+
+    // Prevent double-marking
+    const bridgeKey = `${effectiveThreadId}_r${currentRoundNumber}_p0`;
+    if (hasMarkedP0CompleteRef.current === bridgeKey) {
+      return;
+    }
+
+    // Check current subscription status
+    const subState = store.getState().subscriptionState;
+    if (subState.participants[0]?.status === 'complete') {
+      return;
+    }
+
+    // Bridge: Mark P0 subscription as complete
+    rlog.handoff('ai-sdk-bridge', `r${currentRoundNumber} P0 finishReason=${finishReason} → marking subscription complete`);
+    hasMarkedP0CompleteRef.current = bridgeKey;
+
+    // ✅ Signal subscription hook's stagger mechanism
+    // This is the primary mechanism - tells useRoundSubscription to treat P0 as complete
+    setAiSdkP0Complete(true);
+
+    // Also update store's subscription status for UI consistency
+    store.getState().updateEntitySubscriptionStatus(0, 'complete', 0);
+    store.getState().finalizeParticipantStreaming(0, currentRoundNumber);
+
+    // Trigger participant complete callback
+    store.getState().onParticipantComplete(0);
+  }, [
+    chat.messages,
+    enableWebSearch,
+    shouldSubscribe,
+    currentRoundNumber,
+    effectiveThreadId,
+    store,
+    setAiSdkP0Complete,
+  ]);
+
+  // Reset bridge ref when thread changes
+  useEffect(() => {
+    if (effectiveThreadId) {
+      hasMarkedP0CompleteRef.current = null;
+    }
+  }, [effectiveThreadId]);
 
   // Get store messages for AI SDK hydration
   const { messages: storeMessages } = useStore(
@@ -797,6 +979,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       return;
     }
 
+    // ✅ GUARD: Don't trigger if resumption is in progress
+    // Resumption handles setting up the round state correctly
+    if (isResumingStream) {
+      rlog.trigger('skip-resuming', `blocked - resumption in progress`);
+      return;
+    }
+
     // Guard: Need thread ID and messages
     if (!effectiveThreadId || storeMessages.length === 0) {
       return;
@@ -820,8 +1009,22 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     hasTriggeredRef.current = true;
     lastTriggerKeyRef.current = triggerKey;
 
-    // Start round - different paths for web search vs direct streaming
-    const enabledCount = countEnabledParticipants(participants);
+    // ✅ FIX: Get FRESH participants from store.getState() to avoid stale useShallow data
+    // The useShallow selector `participants` may be stale due to React batched updates.
+    // When auto-mode changes participants, form-actions calls updateParticipants() but
+    // the selector might not have propagated yet when this effect fires.
+    const freshState = store.getState();
+    const freshParticipants = freshState.participants;
+    const selectorEnabledCount = countEnabledParticipants(participants);
+    const freshEnabledCount = countEnabledParticipants(freshParticipants);
+
+    // Log divergence for debugging - this catches the race condition
+    if (selectorEnabledCount !== freshEnabledCount) {
+      rlog.trigger('stale-selector-detected', `r${roundNumber} selector=${selectorEnabledCount} fresh=${freshEnabledCount} - using fresh`);
+    }
+
+    // Use the fresh count, not the potentially stale selector count
+    const enabledCount = freshEnabledCount;
 
     if (enableWebSearch) {
       // ✅ QUEUE-ORCHESTRATED FLOW: Backend handles presearch → P0 → P1 → ... → moderator
@@ -857,9 +1060,12 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
             hasTriggeredRef.current = false;
             lastTriggerKeyRef.current = null;
           } else {
-            rlog.handoff('queue-triggered', `r${roundNumber} START_ROUND queued, now enabling subscriptions`);
+            // ✅ FIX: Get fresh count again at callback time (state may have changed)
+            const callbackState = store.getState();
+            const callbackEnabledCount = countEnabledParticipants(callbackState.participants);
+            rlog.handoff('queue-triggered', `r${roundNumber} START_ROUND queued, enabledCount=${callbackEnabledCount}`);
             // ✅ NOW enable subscriptions - DB has been updated with enableWebSearch=true
-            store.getState().startRound(roundNumber, enabledCount);
+            store.getState().startRound(roundNumber, callbackEnabledCount);
           }
         })
         .catch((error) => {
@@ -874,14 +1080,16 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       rlog.phase('trigger', `START r${roundNumber} pIdx=0 phase→PARTICIPANTS enabledCount=${enabledCount}`);
       store.getState().startRound(roundNumber, enabledCount);
 
-      chat.startRound(participants, storeMessages);
-      rlog.handoff('P0-triggered', `r${roundNumber} AI SDK startRound called`);
+      // ✅ FIX: Use fresh participants for chat.startRound, not stale selector
+      chat.startRound(freshParticipants, storeMessages);
+      rlog.handoff('P0-triggered', `r${roundNumber} AI SDK startRound called with ${freshParticipants.length} participants`);
 
       // Clear the waiting flag
       store.getState().setWaitingToStartStreaming(false);
     }
   }, [
     waitingToStartStreaming,
+    isResumingStream,
     effectiveThreadId,
     storeMessages,
     chat,

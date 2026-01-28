@@ -70,6 +70,7 @@ export const UI_DEFAULTS: UIState = {
   isAnalyzingPrompt: false,
   isCreatingThread: false,
   isModeratorStreaming: false,
+  isResumingStream: false,
   screenMode: ScreenModes.OVERVIEW,
   showInitialUI: true,
   waitingToStartStreaming: false,

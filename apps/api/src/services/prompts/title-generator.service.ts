@@ -16,6 +16,7 @@ import type { ErrorContext } from '@/core';
 import { TITLE_GENERATION_MODEL_ID } from '@/core/ai-models';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { log } from '@/lib/logger';
 import { finalizeCredits, TITLE_GENERATION_CONFIG } from '@/services/billing';
 import {
   extractModelPricing,
@@ -127,14 +128,14 @@ export async function generateTitleFromMessage(
           });
         } catch (billingError) {
           // Don't fail title generation if billing fails - log and continue
-          console.error('[TitleGenerator] Billing failed:', billingError);
+          log.ai('error', 'Title generation billing failed', { error: billingError instanceof Error ? billingError.message : String(billingError) });
         }
       }
     }
 
     return title;
   } catch (error) {
-    console.error('[TitleGenerator] AI generation failed, using fallback:', error);
+    log.ai('error', 'Title generation failed, using fallback', { error: error instanceof Error ? error.message : String(error) });
     const words = firstMessage.trim().split(/\s+/).slice(0, MAX_WORDS).join(' ');
     return words.length > MAX_LENGTH ? words.substring(0, MAX_LENGTH).trim() : words || 'Chat';
   }

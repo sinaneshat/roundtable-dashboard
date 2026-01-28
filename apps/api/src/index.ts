@@ -25,6 +25,7 @@ import notFound from 'stoker/middlewares/not-found';
 
 import { APP_VERSION } from '@/constants/version';
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 import { createOpenApiApp } from './core/app';
@@ -58,7 +59,7 @@ if (process.env['DEBUG_REQUESTS'] === 'true') {
         const contentLength = c.req.header('content-length');
         const contentType = c.req.header('content-type');
 
-        console.error(`[REQUEST-DEBUG] ${method} ${path}:`, {
+        log.http('debug', `${method} ${path}`, {
           bodyLength: bodyText.length,
           bodyPreview: bodyText.slice(0, 300),
           contentLength,
@@ -73,7 +74,7 @@ if (process.env['DEBUG_REQUESTS'] === 'true') {
           })(),
         });
       } catch (err) {
-        console.error(`[REQUEST-DEBUG] Error reading ${method} ${path} body:`, err);
+        log.http('debug', `Error reading ${method} ${path} body`, { error: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -82,7 +83,7 @@ if (process.env['DEBUG_REQUESTS'] === 'true') {
     const status = c.res.status;
     if (status >= 400) {
       const duration = Date.now() - startTime;
-      console.error(`[RESPONSE-DEBUG] ${method} ${path} -> ${status} in ${duration}ms`);
+      log.http('debug', `${method} ${path} -> ${status}`, { duration: `${duration}ms`, status });
     }
   });
 }
@@ -533,12 +534,10 @@ rootApp.all('/api/auth/*', async (c) => {
       const clonedResponse = response.clone();
       try {
         const body = await clonedResponse.text();
-        console.error({
+        log.auth('error', 'Better Auth 500 error', {
           body: body.slice(0, 1000),
-          log_type: 'better_auth_error',
           path: c.req.path,
           status: response.status,
-          timestamp: new Date().toISOString(),
         });
       } catch {
         // Ignore clone errors
@@ -551,13 +550,11 @@ rootApp.all('/api/auth/*', async (c) => {
       statusText: response.statusText,
     });
   } catch (error) {
-    console.error({
+    log.auth('error', 'Better Auth exception', {
       error_message: error instanceof Error ? error.message : String(error),
       error_name: error instanceof Error ? error.name : 'Unknown',
       error_stack: error instanceof Error ? error.stack : undefined,
-      log_type: 'better_auth_exception',
       path: c.req.path,
-      timestamp: new Date().toISOString(),
     });
 
     const headers = new Headers();

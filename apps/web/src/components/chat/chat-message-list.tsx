@@ -4,7 +4,6 @@ import type { UIMessage } from 'ai';
 import { memo, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
 
-import { MemoryCreatedIndicator } from '@/components/ai-elements/memory-created';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
@@ -454,14 +453,6 @@ type ChatMessageListProps = {
    * Read-only mode - skips models API call. Used for public/shared threads.
    */
   isReadOnly?: boolean;
-  /**
-   * Memory events by round for inline display under user messages
-   */
-  memoryEventsByRound?: Map<number, { id: string; summary: string; content: string }[]>;
-  /**
-   * Callback to delete a memory
-   */
-  onDeleteMemory?: (memoryId: string, roundNumber: number) => Promise<void>;
 };
 export const ChatMessageList = memo(
   ({
@@ -476,9 +467,7 @@ export const ChatMessageList = memo(
     isReadOnly = false,
     isStreaming = false,
     maxContentHeight,
-    memoryEventsByRound,
     messages,
-    onDeleteMemory,
     participants = EMPTY_PARTICIPANTS,
     preSearches: _preSearches = EMPTY_PRE_SEARCHES,
     roundNumber: _roundNumber,
@@ -1170,7 +1159,7 @@ export const ChatMessageList = memo(
                           {/* Text content - use ReactMarkdown for SSR/read-only, Streamdown for interactive */}
                           {textParts.map((part) => {
                             if (part.type === MessagePartTypes.TEXT) {
-                              return isReadOnly
+                              return (isReadOnly || skipEntranceAnimations)
                                 ? (
                                     // SSR: Direct import renders synchronously - no hydration flash
                                     <Markdown
@@ -1197,30 +1186,6 @@ export const ChatMessageList = memo(
                     );
                   })}
                 </div>
-
-                {/* Memory events indicator - shows inline under user messages */}
-                {(() => {
-                  const memories = memoryEventsByRound?.get(roundNumber);
-                  if (!memories || memories.length === 0) {
-                    return null;
-                  }
-
-                  return (
-                    <div className="flex justify-end mt-2">
-                      <div className="max-w-[85%]">
-                        <MemoryCreatedIndicator
-                          memories={memories}
-                          onDelete={
-                            onDeleteMemory
-                              ? (memoryId: string) => onDeleteMemory(memoryId, roundNumber)
-                              : undefined
-                          }
-                          defaultOpen
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
                 {/* ✅ mt-14 provides consistent spacing from user message content to PreSearchCard */}
@@ -1478,7 +1443,7 @@ export const ChatMessageList = memo(
                               maxContentHeight={maxContentHeight}
                               hideActions={demoMode || isReadOnly}
                               groupAvailableSources={roundAvailableSources}
-                              skipTransitions={isReadOnly}
+                              skipTransitions={isReadOnly || skipEntranceAnimations}
                             />
                           </ScrollAwareParticipant>
                         );
@@ -1613,7 +1578,7 @@ export const ChatMessageList = memo(
                           displayName={MODERATOR_NAME}
                           hideActions
                           groupAvailableSources={roundAvailableSources}
-                          skipTransitions={isReadOnly}
+                          skipTransitions={isReadOnly || skipEntranceAnimations}
                         />
                       </ScrollAwareParticipant>
                     </div>
@@ -1687,7 +1652,7 @@ export const ChatMessageList = memo(
                   keyForMessage={keyForMessage}
                   maxContentHeight={maxContentHeight}
                   roundAvailableSources={roundSources}
-                  skipTransitions={isReadOnly}
+                  skipTransitions={isReadOnly || skipEntranceAnimations}
                   isReadOnly={isReadOnly}
                 />
               </ScrollAwareParticipant>
@@ -1808,7 +1773,7 @@ export const ChatMessageList = memo(
                   avatarName={MODERATOR_NAME}
                   displayName={MODERATOR_NAME}
                   hideActions
-                  skipTransitions={isReadOnly}
+                  skipTransitions={isReadOnly || skipEntranceAnimations}
                 />
               </ScrollAwareParticipant>
             </div>

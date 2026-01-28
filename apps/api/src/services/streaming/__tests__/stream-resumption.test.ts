@@ -342,11 +342,21 @@ describe('stream resumption', () => {
       expect(maxPollDurationMs).toBe(10 * 60 * 1000);
     });
 
-    it('should send synthetic finish event on noNewDataTimeout', () => {
-      const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.UNKNOWN}","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+    it('should send error event followed by synthetic finish on noNewDataTimeout', () => {
+      const noNewDataTimeoutMs = 90000;
+      const timeoutSeconds = Math.round(noNewDataTimeoutMs / 1000);
 
+      // Error event sent first
+      const errorEvent = `data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
+      expect(errorEvent).toContain('"type":"error"');
+      expect(errorEvent).toContain('"error":"STREAM_TIMEOUT"');
+      expect(errorEvent).toContain(`${timeoutSeconds}s`);
+
+      // Synthetic finish sent after error
+      const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
       expect(syntheticFinish).toContain('"type":"finish"');
-      expect(syntheticFinish).toContain(`"finishReason":"${FinishReasons.UNKNOWN}"`);
+      expect(syntheticFinish).toContain(`"finishReason":"${FinishReasons.ERROR}"`);
+      expect(syntheticFinish).toContain('"error":"STREAM_TIMEOUT"');
       expect(syntheticFinish).toContain('"usage"');
     });
 

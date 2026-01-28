@@ -21,7 +21,6 @@ import {
   getCursorOrderBy,
   IdParamSchema,
   Responses,
-  ThreadIdParamSchema,
   ThreadSlugParamSchema,
 } from '@/core';
 import * as tables from '@/db';
@@ -33,6 +32,7 @@ import type {
   ChatThreadUpdate,
 } from '@/db/validation';
 import { STALE_TIMES } from '@/lib/data/stale-times';
+import { log } from '@/lib/logger';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
@@ -65,7 +65,6 @@ import type {
   deleteThreadRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
-  getThreadMemoryEventsRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
   listPublicThreadSlugsRoute,
@@ -76,7 +75,6 @@ import type {
 import type { MessageAttachment } from '../schema';
 import {
   CreateThreadRequestSchema,
-  MemoryEventQuerySchema,
   ThreadListQuerySchema,
   UpdateThreadRequestSchema,
 } from '../schema';
@@ -289,14 +287,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     const debugEnvKey = 'DEBUG_REQUESTS';
     const debugRequests = process.env[debugEnvKey] === 'true';
     if (debugRequests) {
-      console.error('[CREATE-THREAD-DEBUG] Starting thread creation for user:', user.id, user.email);
+      log.ai('debug', 'Starting thread creation', { email: user.email, userId: user.id });
     }
 
     // ✅ FREE USER THREAD LIMIT: Free users can only create ONE thread total
     // This check runs BEFORE credit enforcement to provide a clearer error message
     const creditBalance = await getUserCreditBalance(user.id);
     if (debugRequests) {
-      console.error('[CREATE-THREAD-DEBUG] Credit balance:', {
+      log.ai('debug', 'Credit balance check', {
         balance: creditBalance.balance,
         planType: creditBalance.planType,
         userId: user.id,
@@ -306,7 +304,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     if (creditBalance.planType === PlanTypes.FREE) {
       const hasExistingThread = await checkFreeUserHasCreatedThread(user.id);
       if (debugRequests) {
-        console.error('[CREATE-THREAD-DEBUG] Free user thread check:', { hasExistingThread });
+        log.ai('debug', 'Free user thread check', { hasExistingThread });
       }
       if (hasExistingThread) {
         throw createError.badRequest(
@@ -325,14 +323,14 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // and should be able to create threads. Credits are the real limiting factor.
     const estimatedCredits = estimateStreamingCredits(1); // Minimum estimate
     if (debugRequests) {
-      console.error('[CREATE-THREAD-DEBUG] Enforcing credits:', { estimatedCredits });
+      log.ai('debug', 'Enforcing credits', { estimatedCredits });
     }
     await enforceCredits(user.id, estimatedCredits);
     const body = c.validated.body;
     const db = batch.db;
     const userTier = await getUserTier(user.id);
     if (debugRequests) {
-      console.error('[CREATE-THREAD-DEBUG] User tier:', { userTier });
+      log.ai('debug', 'User tier check', { userTier });
     }
 
     // ✅ PROJECT THREAD LIMIT: Check thread count if creating thread in a project
@@ -359,13 +357,13 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     // Model pricing restrictions only apply after free round is used.
     const skipPricingCheck = await isFreeUserWithPendingRound(user.id, userTier);
     if (debugRequests) {
-      console.error('[CREATE-THREAD-DEBUG] Free round bypass:', { skipPricingCheck });
+      log.ai('debug', 'Free round bypass check', { skipPricingCheck });
     }
 
     for (const participant of body.participants) {
       const model = getModelById(participant.modelId);
       if (debugRequests) {
-        console.error('[CREATE-THREAD-DEBUG] Model lookup:', {
+        log.ai('debug', 'Model lookup', {
           found: !!model,
           modelId: participant.modelId,
           modelName: model?.name,
@@ -1984,8 +1982,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     const { slug } = c.validated.params;
 
     // ✅ DEBUG: Entry point log to verify handler is running latest code
-    // Using console.error to ensure visibility in all environments
-    console.error(`[BYSLUG-FIX] ENTRY slug=${slug} user=${user.id.slice(0, 8)} - IF YOU SEE THIS, SERVER HAS NEW CODE`);
+    log.ai('debug', 'bySlug entry', { slug, userId: user.id.slice(0, 8) });
     rlog.resume('bySlug-ENTRY', `slug=${slug} user=${user.id.slice(0, 8)}`);
 
     const db = await getDbAsync();
@@ -2248,56 +2245,5 @@ export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatus
       slug: thread.slug,
       title: thread.title,
     });
-  },
-);
-
-/**
- * Get Memory Events Handler
- * ✅ MEMORY EVENTS: Poll for memory creation events after round completes
- */
-export const getThreadMemoryEventsHandler: RouteHandler<typeof getThreadMemoryEventsRoute, ApiEnv> = createHandler(
-  {
-    auth: 'session',
-    operationName: 'getThreadMemoryEvents',
-    validateParams: ThreadIdParamSchema,
-    validateQuery: MemoryEventQuerySchema,
-  },
-  async (c) => {
-    const { user } = c.auth();
-    const { threadId } = c.validated.params;
-    const { roundNumber } = c.validated.query;
-
-    // Verify thread ownership
-    const db = await getDbAsync();
-    const thread = await db.query.chatThread.findFirst({
-      columns: { projectId: true, userId: true },
-      where: eq(tables.chatThread.id, threadId),
-    });
-
-    if (!thread) {
-      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
-    }
-    if (thread.userId !== user.id) {
-      throw createError.unauthorized(
-        'Not authorized to access this thread',
-        ErrorContextBuilders.authorization('thread', threadId),
-      );
-    }
-
-    // Check KV for memory event
-    const memoryEventKey = `memory-event:${threadId}:${roundNumber}`;
-    const eventData = await c.env.KV.get(memoryEventKey);
-
-    if (!eventData) {
-      return Responses.ok(c, null);
-    }
-
-    try {
-      const parsed = JSON.parse(eventData);
-      return Responses.ok(c, parsed);
-    } catch {
-      console.error('[MemoryEvents] Failed to parse KV data', { key: memoryEventKey });
-      return Responses.ok(c, null);
-    }
   },
 );

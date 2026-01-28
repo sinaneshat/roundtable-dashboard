@@ -18,6 +18,7 @@
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 
+import { log } from '@/lib/logger';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type { TitleGenerationQueueMessage } from '@/types/queues';
 
@@ -94,10 +95,10 @@ async function processQueueMessage(
     await processMessage(msg.body, env);
     msg.ack();
   } catch (error) {
-    console.error(
-      `[TitleQueue] ❌ Failed thread ${msg.body.threadId}:`,
-      error,
-    );
+    log.queue('error', `Failed thread ${msg.body.threadId}`, {
+      error: error instanceof Error ? error.message : String(error),
+      threadId: msg.body.threadId,
+    });
 
     // Exponential backoff using shared utility
     const retryDelaySeconds = calculateExponentialBackoff(

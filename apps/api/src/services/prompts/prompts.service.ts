@@ -936,7 +936,13 @@ ${roleNames.map(r => `- ${r}`).join('\n')}
 ${chatModes.map(m => `- ${m}`).join('\n')}
 
 ## CONFIGURATION LIMITS (STRICT - MUST FOLLOW)
-- **Minimum participants: ${minModels}** (ALWAYS select at least ${minModels} models - this is mandatory)
+
+⚠️ **MINIMUM PARTICIPANTS: ${minModels}** - THIS IS MANDATORY AND NON-NEGOTIABLE!
+- You MUST ALWAYS include at least ${minModels} different models in every response
+- Even for the simplest questions, you MUST select ${minModels} models minimum
+- Single-participant configurations are INVALID and will be rejected by the system
+- The multi-AI perspective is the core value proposition - it MUST always be present
+
 - **Maximum participants: ${maxModels}** (DO NOT exceed this limit)
 
 ---
@@ -945,13 +951,14 @@ ${chatModes.map(m => `- ${m}`).join('\n')}
 
 ### STEP 1: Determine Complexity & Participant Count
 
-**CRITICAL RULE: Select between ${minModels} and ${maxModels} participants. Never fewer than ${minModels}, never more than ${maxModels}.**
+**ABSOLUTE RULE: ALWAYS select between ${minModels} and ${maxModels} participants. NEVER fewer than ${minModels}.**
 
-**Use ${minModels} participants when:**
+**Use exactly ${minModels} participants when:**
 - Simple factual questions ("What is X?", "How do I Y?")
 - Straightforward tasks with clear answers
 - Quick lookups or definitions
 - Casual conversation
+- (Note: Even simple queries MUST have ${minModels} participants - this is non-negotiable)
 
 **Use ${freeTierMaxModels} participants when:**
 - Questions that benefit from different angles
@@ -1041,14 +1048,18 @@ ${chatModes.map(m => `- ${m}`).join('\n')}
 
 ## OUTPUT FORMAT
 
-Return valid JSON:
+Return valid JSON with AT LEAST ${minModels} participants (MANDATORY):
 {
   "participants": [
-    { "modelId": "exact-model-id", "role": "Role" | null }
+    { "modelId": "exact-model-id", "role": "Role" | null },
+    { "modelId": "exact-model-id-2", "role": "Role" | null }
+    // MUST have at least ${minModels} entries - this array can NEVER have fewer than ${minModels} items
   ],
   "mode": "mode-name",
   "enableWebSearch": true | false
 }
+
+⚠️ FINAL REMINDER: Your participants array MUST contain at least ${minModels} models. This is a hard system requirement.
 
 Think carefully. Your configuration directly impacts the quality of help the user receives.`;
 }
@@ -1298,144 +1309,4 @@ ${fileEntries.join('\n\n')}
 
 ---
 **Remember: NO citation = INCOMPLETE RESPONSE. Always cite your sources from the uploaded files.**`;
-}
-
-// ============================================================================
-// Memory Extraction Prompts - Auto-extract memories from conversations
-// ============================================================================
-
-/**
- * Build prompt for memory extraction from conversations
- * ✅ SINGLE SOURCE: Used by memory-extraction.service.ts for AI-powered extraction
- *
- * Extracts:
- * - User preferences/instructions (e.g., "always use markdown")
- * - Important facts (names, dates, project details)
- * - Decisions made that affect future conversations
- *
- * @param userQuestion - The user's question from this round
- * @param moderatorSummary - The moderator's synthesis of the discussion
- * @param existingMemories - Summaries of existing memories to avoid duplicates
- * @returns Formatted prompt for memory extraction
- */
-export function buildMemoryExtractionPrompt(
-  userQuestion: string,
-  moderatorSummary: string,
-  existingMemories: string[],
-) {
-  const existingList = existingMemories.length > 0
-    ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
-    : 'None';
-
-  return `Extract important information to remember for future conversations in this project.
-
-## What to Extract:
-1. **User preferences/instructions** - Explicit requests about how to respond (e.g., "always use TypeScript", "prefer concise answers")
-2. **Important facts** - Names, dates, project details, technical constraints mentioned
-3. **Decisions made** - Choices that should persist (e.g., "we decided to use PostgreSQL", "the deadline is March 15")
-4. **Context** - Background information that helps understand future questions
-
-## What NOT to Extract:
-- Generic questions without lasting importance
-- Information already in existing memories (avoid duplicates)
-- Transient details (temporary issues, one-time queries)
-- Anything with importance below 5/10
-
-## User's Question:
-${userQuestion}
-
-## Discussion Summary:
-${moderatorSummary}
-
-## Existing Memories (avoid duplicates):
-${existingList}
-
-## Output Format:
-Return a JSON array. If nothing is worth extracting, return an empty array [].
-
-Each memory object must have:
-- "content": The full memory text (1-3 sentences, max 200 chars)
-- "summary": Ultra-short label for display (max 10 words)
-- "importance": Score 1-10 (only include if >= 5)
-- "category": One of "preference" | "fact" | "decision" | "context"
-
-Example output:
-[
-  {"content": "User prefers TypeScript with strict mode enabled for all code examples.", "summary": "TypeScript strict mode", "importance": 8, "category": "preference"},
-  {"content": "Project deadline is March 15, 2025.", "summary": "March 15 deadline", "importance": 7, "category": "fact"}
-]
-
-Return ONLY valid JSON array, no other text.`;
-}
-
-/**
- * Build prompt for selective memory extraction from conversations (non-moderator threads)
- * ✅ SINGLE SOURCE: Used by memory-extraction.service.ts for direct participant extraction
- *
- * More conservative than moderator-based extraction - only extracts truly memorable info:
- * - User preferences/instructions
- * - Important facts explicitly stated
- * - Requests to remember something
- *
- * @param userQuestion - The user's question from this round
- * @param participantResponses - Array of participant name and response pairs
- * @param existingMemories - Summaries of existing memories to avoid duplicates
- * @returns Formatted prompt for selective memory extraction
- */
-export function buildSelectiveMemoryPrompt(
-  userQuestion: string,
-  participantResponses: { name: string; response: string }[],
-  existingMemories: string[],
-) {
-  const existingList = existingMemories.length > 0
-    ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
-    : 'None';
-
-  const responsesText = participantResponses
-    .map(r => `**${r.name}:**\n${r.response}`)
-    .join('\n\n---\n\n');
-
-  return `Analyze this conversation and extract ONLY information worth remembering long-term.
-
-## User's Question:
-${userQuestion}
-
-## AI Responses:
-${responsesText}
-
-## Existing Memories (avoid duplicates):
-${existingList}
-
-## STRICT Extraction Rules:
-
-**ONLY extract memories for:**
-1. User preferences/instructions - "I prefer...", "Always use...", "Don't..."
-2. Important facts explicitly stated - names, dates, project details, key decisions
-3. Explicit requests to remember - "Remember that...", "Keep in mind..."
-4. Technical constraints - "We're using X framework", "Deadline is Y"
-
-**DO NOT extract:**
-- Generic Q&A responses
-- Explanations or tutorials (these are answerable again)
-- Opinions or suggestions (unless user requested to save them)
-- Temporary information (debugging, one-time issues)
-- Anything already in existing memories
-- Low-importance context (importance < 6)
-
-## Output Format:
-Return a JSON array. If nothing is worth remembering, return [].
-
-Each memory object must have:
-- "content": The full memory text (1-3 sentences, max 200 chars)
-- "summary": Ultra-short label for display (max 8 words)
-- "importance": Score 1-10 (only include if >= 6)
-- "category": One of "preference" | "fact" | "decision" | "context"
-
-Example output:
-[
-  {"content": "User prefers concise code examples without comments.", "summary": "No code comments", "importance": 7, "category": "preference"},
-  {"content": "Project uses Next.js 14 with App Router.", "summary": "Next.js 14 App Router", "importance": 8, "category": "fact"}
-]
-
-Return ONLY valid JSON array, no other text.`;
 }

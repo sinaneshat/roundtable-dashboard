@@ -19,17 +19,6 @@ import type {
 } from './threads';
 
 // ============================================================================
-// TYPE GUARD SCHEMAS - For narrowed changelog data types
-// ============================================================================
-
-/**
- * Memory created changelog data type
- */
-type MemoryCreatedChangelog = DbChangelogData & {
-  type: typeof ChangelogChangeTypes.MEMORY_CREATED;
-};
-
-// ============================================================================
 // Type-Safe Property Access Helper
 // ============================================================================
 
@@ -150,12 +139,4 @@ export function isParticipantReorder(data: DbChangelogData): data is Extract<DbC
  */
 export function isWebSearchChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.WEB_SEARCH }> {
   return data.type === ChangelogChangeTypes.WEB_SEARCH;
-}
-
-/**
- * Check if changelog data is a memory created event
- * Note: Uses type intersection since memory_created may not be in RPC-inferred types
- */
-export function isMemoryCreatedChange(data: DbChangelogData): data is MemoryCreatedChangelog {
-  return data.type === ChangelogChangeTypes.MEMORY_CREATED;
 }

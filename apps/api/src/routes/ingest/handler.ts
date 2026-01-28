@@ -9,6 +9,7 @@
 
 import type { Context } from 'hono';
 
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 const POSTHOG_HOST = 'us.i.posthog.com';
@@ -100,7 +101,7 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
       status: response.status,
     });
   } catch (error) {
-    console.error('PostHog proxy error:', error);
+    log.http('error', 'PostHog proxy error', { error: error instanceof Error ? error.message : String(error) });
     // Return error with CORS headers so browser can read the error
     return new Response(JSON.stringify({ error: 'Proxy request failed' }), {
       headers: {

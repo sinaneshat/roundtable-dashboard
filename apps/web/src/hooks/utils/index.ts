@@ -88,6 +88,7 @@ export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
 export type {
   EntityType,
+  InitialLastSeqs,
   RoundSubscriptionState,
   UseRoundSubscriptionOptions,
   UseRoundSubscriptionReturn,

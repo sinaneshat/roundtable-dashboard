@@ -41,6 +41,7 @@ import {
   getPreSearchStreamChunks,
   getPreSearchStreamMetadata,
 } from '@/services/streaming';
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 import type {
@@ -167,7 +168,7 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
       }
 
       // Frontend needs chunks - stream via SSE (natural pacing from network)
-      console.log(`[ENTITY-SUB] PreSearch r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      log.ai('stream', '[ENTITY-SUB] PreSearch - streaming missed chunks', { roundNumber, chunkCount: chunkCount - startFromChunkIndex });
       const replayStream = createLivePreSearchResumeStream(
         preSearchStreamId,
         c.env,
@@ -278,8 +279,7 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
 
     if (!participantStreamId) {
       // Stream not started yet - create waiting stream that polls for it
-      const pLabel = participantIndex < 0 ? 'Moderator' : `P${participantIndex}`;
-      console.log(`[ENTITY-SUB] ${pLabel} r${roundNumber} - no active stream, creating waiting stream`);
+      log.ai('stream', '[ENTITY-SUB] No active stream, creating waiting stream', { roundNumber, participantIndex });
 
       const waitingStream = createWaitingParticipantStream(
         threadId,
@@ -338,7 +338,7 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
       }
 
       // Frontend needs chunks - stream via SSE (natural pacing from network)
-      console.log(`[ENTITY-SUB] P${participantIndex} r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      log.ai('stream', '[ENTITY-SUB] Participant streaming missed chunks', { roundNumber, participantIndex, chunkCount: chunkCount - startFromChunkIndex });
       const replayStream = createLiveParticipantResumeStream(participantStreamId, c.env, {
         filterReasoningOnReplay: true,
         startFromChunkIndex,
@@ -442,7 +442,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
 
     if (!moderatorStreamId) {
       // Stream not started yet - create waiting stream
-      console.log(`[ENTITY-SUB] Moderator r${roundNumber} - no active stream, creating waiting stream`);
+      log.ai('stream', '[ENTITY-SUB] Moderator no active stream, creating waiting stream', { roundNumber });
 
       const waitingStream = createWaitingParticipantStream(
         threadId,
@@ -498,7 +498,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
       }
 
       // Frontend needs chunks - stream via SSE (natural pacing from network)
-      console.log(`[ENTITY-SUB] Moderator r${roundNumber} - streaming ${chunkCount - startFromChunkIndex} missed chunks`);
+      log.ai('stream', '[ENTITY-SUB] Moderator streaming missed chunks', { roundNumber, chunkCount: chunkCount - startFromChunkIndex });
       const replayStream = createLiveParticipantResumeStream(moderatorStreamId, c.env, {
         filterReasoningOnReplay: true,
         startFromChunkIndex,

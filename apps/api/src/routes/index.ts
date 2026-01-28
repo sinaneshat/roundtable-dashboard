@@ -113,7 +113,6 @@ import {
   getThreadBySlugHandler,
   getThreadChangelogHandler,
   getThreadHandler,
-  getThreadMemoryEventsHandler,
   getThreadMessagesHandler,
   getThreadPreSearchesHandler,
   getThreadRoundChangelogHandler,
@@ -153,7 +152,6 @@ import {
   getRoundStatusRoute,
   getThreadBySlugRoute,
   getThreadChangelogRoute,
-  getThreadMemoryEventsRoute,
   getThreadMessagesRoute,
   getThreadPreSearchesRoute,
   getThreadRoundChangelogRoute,
@@ -346,8 +344,7 @@ const chatThreadRoutes = createOpenApiApp()
   .openapi(updateThreadRoute, updateThreadHandler)
   .openapi(deleteThreadRoute, deleteThreadHandler)
   .openapi(getPublicThreadRoute, getPublicThreadHandler)
-  .openapi(listPublicThreadSlugsRoute, listPublicThreadSlugsHandler)
-  .openapi(getThreadMemoryEventsRoute, getThreadMemoryEventsHandler);
+  .openapi(listPublicThreadSlugsRoute, listPublicThreadSlugsHandler);
 
 /**
  * Group 4: Chat - Messages & Streaming (10 routes)

@@ -18,6 +18,7 @@ import {
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { ChatProjectUpdate, ProjectAttachmentRagMetadata, ProjectMemoryUpdate } from '@/db/validation/project';
+import { log } from '@/lib/logger';
 import { deductCreditsForAction } from '@/services/billing/credit.service';
 import {
   getAggregatedProjectContext,
@@ -260,7 +261,7 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
 
     // Sync custom instructions to project memory if provided
     if (body.customInstructions) {
-      console.error('[Project Create] Syncing instruction memory', {
+      log.db('info', '[Project Create] Syncing instruction memory', {
         instructionLength: body.customInstructions.length,
         projectId,
       });
@@ -270,7 +271,7 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
         projectId,
         userId: user.id,
       });
-      console.error('[Project Create] Instruction memory sync complete', { projectId });
+      log.db('info', '[Project Create] Instruction memory sync complete', { projectId });
     }
 
     return Responses.created(c, {
@@ -330,7 +331,7 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       .returning();
 
     if (body.customInstructions !== undefined) {
-      console.error('[Project Update] Syncing instruction memory', {
+      log.db('info', '[Project Update] Syncing instruction memory', {
         instructionLength: body.customInstructions?.length ?? 0,
         isClearing: !body.customInstructions,
         projectId: id,
@@ -341,7 +342,7 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
         projectId: id,
         userId: user.id,
       });
-      console.error('[Project Update] Instruction memory sync complete', { projectId: id });
+      log.db('info', '[Project Update] Instruction memory sync complete', { projectId: id });
     }
 
     // Fetch counts for response
@@ -681,7 +682,7 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
     );
 
     if (!copyResult.success) {
-      console.error(`[Project] Failed to copy file to project folder: ${copyResult.error}`);
+      log.db('error', '[Project] Failed to copy file to project folder', { error: copyResult.error });
     }
 
     const projectAttachmentId = ulid();
@@ -893,7 +894,7 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
       const deleteTask = deleteFile(c.env.UPLOADS_R2_BUCKET, projectAttachment.ragMetadata.projectR2Key)
         .then((result) => {
           if (!result.success) {
-            console.error(`[Project] Failed to delete project file copy: ${result.error}`);
+            log.db('error', '[Project] Failed to delete project file copy', { error: result.error });
           }
           return result;
         })

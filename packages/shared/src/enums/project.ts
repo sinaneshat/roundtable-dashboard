@@ -63,28 +63,20 @@ export const AiSearchCheckStatuses = {
 // ============================================================================
 
 export const PROJECT_MEMORY_SOURCES = [
-  'chat',
-  'explicit',
-  'moderator',
-  'search',
   'instruction',
 ] as const;
 
-export const DEFAULT_PROJECT_MEMORY_SOURCE: ProjectMemorySource = 'chat';
+export const DEFAULT_PROJECT_MEMORY_SOURCE: ProjectMemorySource = 'instruction';
 
 export const ProjectMemorySourceSchema = z.enum(PROJECT_MEMORY_SOURCES).openapi({
   description: 'Source of the project memory entry',
-  example: 'chat',
+  example: 'instruction',
 });
 
 export type ProjectMemorySource = z.infer<typeof ProjectMemorySourceSchema>;
 
 export const ProjectMemorySources = {
-  CHAT: 'chat' as const,
-  EXPLICIT: 'explicit' as const,
   INSTRUCTION: 'instruction' as const,
-  MODERATOR: 'moderator' as const,
-  SEARCH: 'search' as const,
 } as const;
 
 // ============================================================================

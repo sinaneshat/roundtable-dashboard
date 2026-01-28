@@ -9,6 +9,7 @@ import { eq, inArray } from 'drizzle-orm';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { log } from '@/lib/logger';
 
 import { deductCreditsForAction, ensureUserCreditRecord } from './credit.service';
 
@@ -108,7 +109,7 @@ export async function calculateAndDeductStorageCredits(
       description: `Monthly storage: ${totalMB}MB = ${credits} credits`,
     });
 
-    console.error('[Storage Billing] Deducted storage credits', {
+    log.billing('deduct', 'Deducted storage credits', {
       credits,
       totalBytes,
       totalMB,
@@ -118,7 +119,7 @@ export async function calculateAndDeductStorageCredits(
     return credits;
   } catch (error) {
     // Log but don't throw - storage billing is non-critical
-    console.error('[Storage Billing] Failed to deduct storage credits', {
+    log.billing('error', 'Failed to deduct storage credits', {
       error: error instanceof Error ? error.message : String(error),
       userId,
     });

@@ -197,28 +197,3 @@ export async function logWebSearchToggle(
     threadId,
   });
 }
-
-export async function logMemoriesCreated(
-  threadId: string,
-  roundNumber: number,
-  projectId: string,
-  memories: { id: string; summary: string }[],
-): Promise<string> {
-  const memoryCount = memories.length;
-  const summary = memoryCount === 1
-    ? `Saved 1 memory: ${memories[0]?.summary.slice(0, 50)}...`
-    : `Saved ${memoryCount} memories`;
-
-  return await createChangelogEntry({
-    changeData: {
-      memories: memories.map(m => ({ id: m.id, summary: m.summary })),
-      memoryCount,
-      projectId,
-      type: ChangelogChangeTypes.MEMORY_CREATED,
-    },
-    changeSummary: summary,
-    changeType: ChangelogTypes.ADDED,
-    roundNumber,
-    threadId,
-  });
-}

@@ -1,8 +1,14 @@
 import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@roundtable/shared';
 import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared';
 import { WebAppEnvs } from '@roundtable/shared/enums';
+// Shared logger formatting utilities from the shared package
+// Note: Local formatDebugValue uses 10 char truncation vs 20 chars in shared
+import { formatLogData as sharedFormatLogData } from '@roundtable/shared/lib/logger';
 
 import { getWebappEnv } from '@/lib/config/base-urls';
+
+// Re-export shared utility for external use (verifies shared package is accessible)
+export { sharedFormatLogData };
 
 import { safeStorageRemove, safeStorageSet } from './safe-storage';
 

@@ -666,9 +666,18 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
          */
         onParticipantComplete: (participantIndex: number) => {
           const state = get();
-          const enabledCount = countEnabledParticipants(state.participants);
+          // ✅ FIX: Use captured activeRoundParticipantCount instead of computing from state.participants
+          // state.participants may be stale due to React batched updates, but activeRoundParticipantCount
+          // was captured at round start and is the source of truth for the current streaming round
+          const enabledCount = state.activeRoundParticipantCount;
+          const stateEnabledCount = countEnabledParticipants(state.participants);
           const roundNumber = state.currentRoundNumber ?? 0;
           const isRound1 = roundNumber === 0;
+
+          // ✅ DIAGNOSTIC: Log if activeRoundParticipantCount diverges from state.participants
+          if (enabledCount !== stateEnabledCount) {
+            rlog.trigger('onParticipantComplete-divergence', `r${roundNumber} activeCount=${enabledCount} stateCount=${stateEnabledCount}`);
+          }
 
           // ✅ FIX: Check actual subscription state, not just index
           // This correctly handles out-of-order completion (e.g., P1 finishes before P0)
@@ -800,10 +809,28 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           currentParticipantIndex: number | null;
         }) => {
           const state = get();
-          const enabledCount = countEnabledParticipants(state.participants);
-          const actualCount = Math.min(totalParticipants, enabledCount);
 
-          rlog.resume('start', `resumeInProgressRound r${roundNumber} phase=${phase} total=${totalParticipants} actual=${actualCount} curIdx=${currentParticipantIndex}`);
+          // ✅ GUARD: Set resuming flag to prevent race with user actions
+          // This prevents startRound from being called while we're setting up resumption
+          set({ isResumingStream: true }, false, 'resume/setGuard');
+
+          // ✅ FIX: Trust backend's totalParticipants over potentially stale frontend state
+          // Backend KV is the source of truth during resumption - it knows how many participants
+          // were in the round when it started. Frontend state may be stale or incorrect.
+          const frontendEnabledCount = countEnabledParticipants(state.participants);
+
+          // ✅ DIAGNOSTIC: Log divergence but trust backend count
+          if (totalParticipants !== frontendEnabledCount) {
+            rlog.trigger('resume-divergence', `r${roundNumber} backend=${totalParticipants} frontendEnabled=${frontendEnabledCount} frontendTotal=${state.participants.length} - trusting backend`);
+          }
+
+          // Use backend count as the authoritative source, with sanity check
+          const MAX_REASONABLE_PARTICIPANTS = 10;
+          const actualCount = totalParticipants > 0 && totalParticipants <= MAX_REASONABLE_PARTICIPANTS
+            ? totalParticipants
+            : frontendEnabledCount > 0 ? frontendEnabledCount : 1; // Fallback chain
+
+          rlog.resume('start', `resumeInProgressRound r${roundNumber} phase=${phase} backendTotal=${totalParticipants} actualCount=${actualCount} curIdx=${currentParticipantIndex}`);
 
           // Map backend phase to frontend ChatPhases
           const frontendPhase = phase === 'presearch'
@@ -824,10 +851,12 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           get().initializeSubscriptions(roundNumber, actualCount);
 
           // Set store state to match backend
+          // ✅ GUARD: Clear resuming flag now that setup is complete
           set({
             activeRoundParticipantCount: actualCount,
             currentParticipantIndex: currentParticipantIndex ?? 0,
             currentRoundNumber: roundNumber,
+            isResumingStream: false, // Clear guard - resumption setup complete
             isStreaming: true,
             phase: frontendPhase as ChatPhase,
             waitingToStartStreaming: false,
@@ -868,6 +897,7 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
         setIsCreatingThread: creating => set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
         setIsModeratorStreaming: streaming => set({ isModeratorStreaming: streaming }, false, 'ui/setIsModeratorStreaming'),
         setIsRegenerating: regenerating => set({ isRegenerating: regenerating }, false, 'thread/setIsRegenerating'),
+        setIsResumingStream: resuming => set({ isResumingStream: resuming }, false, 'ui/setIsResumingStream'),
         setIsStreaming: streaming => set({ isStreaming: streaming }, false, 'thread/setIsStreaming'),
         setMessages: (messages) => {
           const prevMessages = get().messages;
@@ -958,14 +988,45 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
          * between subscriptions and placeholders during the streaming phase.
          */
         startRound: (roundNumber: number, participantCount: number) => {
+          // ✅ GUARD: Prevent race between resumption and user action
+          // If resumption is in progress, skip this user-triggered round start
+          // The resumption flow will handle setting up the round correctly
+          if (get().isResumingStream) {
+            rlog.stuck('startRound', `BLOCKED - resumption in progress for r${roundNumber}`);
+            return;
+          }
+
+          const state = get();
           const isRound1 = roundNumber === 0;
 
-          // ✅ CLAMP: Ensure participantCount doesn't exceed actual participants
-          // This prevents creating placeholders for non-existent participants
-          const actualCount = Math.min(participantCount, get().participants.length);
+          // ✅ FIX: Trust the passed participantCount from caller (form-actions has fresh data)
+          // The state.participants array may be stale due to React batched updates.
+          // Log divergence for debugging but use the passed count as source of truth.
+          const stateEnabledCount = countEnabledParticipants(state.participants);
+          const stateParticipantsLength = state.participants.length;
+
+          // ✅ DIAGNOSTIC: Detect stale state (common during auto-mode participant changes)
+          if (participantCount !== stateEnabledCount) {
+            rlog.trigger('startRound-divergence', `r${roundNumber} passed=${participantCount} stateEnabled=${stateEnabledCount} stateLength=${stateParticipantsLength}`);
+          }
+
+          // ✅ FIX: Only block if BOTH passed count AND state count are 0
+          // This prevents blocking when state is stale but caller has valid count
+          if (participantCount === 0 && stateEnabledCount === 0) {
+            rlog.stuck('startRound', `BLOCKED - no enabled participants for r${roundNumber} (passed=0, state=0)`);
+            return;
+          }
+
+          // ✅ FIX: Trust participantCount from caller, don't clamp to potentially stale state
+          // The caller (form-actions) computes this from fresh optimisticParticipants
+          // Only clamp if participantCount is unreasonably high (> 10 is a sanity check)
+          const MAX_REASONABLE_PARTICIPANTS = 10;
+          const actualCount = participantCount > 0 && participantCount <= MAX_REASONABLE_PARTICIPANTS
+            ? participantCount
+            : Math.max(stateEnabledCount, 1); // Fallback to state count if passed count is invalid
 
           if (participantCount !== actualCount) {
-            rlog.stuck('startRound', `Clamping count from ${participantCount} to ${actualCount}`);
+            rlog.stuck('startRound', `Adjusting count from ${participantCount} to ${actualCount} (max=${MAX_REASONABLE_PARTICIPANTS})`);
           }
 
           // Log the appropriate frame

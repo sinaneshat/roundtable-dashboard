@@ -52,6 +52,7 @@ import {
   chatThreadSelectSchema,
   chatThreadUpdateSchema,
 } from '@/db/validation/chat';
+import { log } from '@/lib/logger';
 import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 import type { ApiEnv } from '@/types';
@@ -1319,6 +1320,10 @@ export const PreSearchPhaseStatusSchema = z.object({
     description: 'Whether web search is enabled for this thread',
     example: true,
   }),
+  lastSeq: z.number().int().nonnegative().nullable().openapi({
+    description: 'Last sequence number for resumption (chunk count)',
+    example: 42,
+  }),
   preSearchId: z.string().nullable().openapi({
     description: 'Database pre-search record ID',
     example: 'ps_abc123',
@@ -1348,6 +1353,10 @@ export const ParticipantPhaseStatusSchema = z.object({
     description: 'Whether there is an active participant stream in KV',
     example: true,
   }),
+  lastSeqs: z.record(z.string(), z.number().int().nonnegative()).nullable().openapi({
+    description: 'Last sequence number per participant for resumption (keyed by index)',
+    example: { 0: 150, 1: 42, 2: 0 },
+  }),
   nextParticipantToTrigger: RoundNumberSchema.nullable().openapi({
     description: 'Index of next participant that needs to be triggered',
     example: 2,
@@ -1369,6 +1378,10 @@ export const ParticipantPhaseStatusSchema = z.object({
 export type ParticipantPhaseStatus = z.infer<typeof ParticipantPhaseStatusSchema>;
 
 export const ModeratorPhaseStatusSchema = z.object({
+  lastSeq: z.number().int().nonnegative().nullable().openapi({
+    description: 'Last sequence number for resumption (chunk count)',
+    example: 75,
+  }),
   moderatorMessageId: z.string().nullable().openapi({
     description: 'Database moderator message record ID',
     example: 'summary_abc123',
@@ -1771,12 +1784,12 @@ export function parsePreSearchEvent<T extends PreSearchSSEEvent>(
     const parsed: unknown = JSON.parse(messageEvent.data);
     const result = PreSearchSSEEventSchema.safeParse({ data: parsed, event: expectedType });
     if (!result.success) {
-      console.error(`Failed to validate ${expectedType} event data:`, result.error.message);
+      log.ai('error', `Failed to validate ${expectedType} event data`, { error: result.error.message });
       return null;
     }
     return result.data.data as T['data'];
   } catch {
-    console.error(`Failed to parse ${expectedType} event data`);
+    log.ai('error', `Failed to parse ${expectedType} event data`);
     return null;
   }
 }
@@ -1838,6 +1851,17 @@ export type WebSearchResultItemProps = z.infer<typeof WebSearchResultItemPropsSc
 // ============================================================================
 
 export const AnalyzePromptRequestSchema = z.object({
+  /**
+   * ✅ CLIENT-PROVIDED MODEL LIST: Frontend sends pre-filtered accessible model IDs
+   * This ensures AI only picks from models the user can actually use, considering:
+   * - User's subscription tier
+   * - File capability requirements (vision, document support)
+   * - Client-side model availability
+   */
+  accessibleModelIds: z.array(z.string()).optional().openapi({
+    description: 'Pre-filtered list of model IDs accessible to the user (considering tier and file capabilities). If provided, AI will only select from these models.',
+    example: ['openai/gpt-5-nano', 'google/gemini-2.5-flash', 'anthropic/claude-sonnet-4'],
+  }),
   hasDocumentFiles: z.boolean().optional().default(false).openapi({
     description: 'Whether document files (PDFs, DOC, etc.) are attached - restricts to models with supports_file',
     example: false,
@@ -1956,45 +1980,3 @@ export const PartialAnalysisConfigSchema = z.object({
 }).openapi('PartialAnalysisConfig');
 
 export type PartialAnalysisConfig = z.infer<typeof PartialAnalysisConfigSchema>;
-
-// ============================================================================
-// MEMORY EVENTS SCHEMAS
-// ============================================================================
-
-export const MemoryEventQuerySchema = z.object({
-  roundNumber: z.coerce.number().int().min(1).openapi({
-    description: 'Round number to check for memory events',
-    example: 1,
-  }),
-}).openapi('MemoryEventQuery');
-
-export const MemoryEventItemSchema = z.object({
-  content: z.string().openapi({
-    description: 'Memory content (truncated to 200 chars)',
-  }),
-  id: z.string().openapi({
-    description: 'Memory ID',
-  }),
-  summary: z.string().openapi({
-    description: 'Brief summary of the memory',
-  }),
-}).openapi('MemoryEventItem');
-
-export const MemoryEventResponseSchema = z.object({
-  createdAt: z.number().openapi({
-    description: 'Unix timestamp when memories were created',
-  }),
-  memories: z.array(MemoryEventItemSchema).openapi({
-    description: 'Created memories with summary and content',
-  }),
-  memoryIds: z.array(z.string()).openapi({
-    description: 'IDs of created memories',
-  }),
-  projectId: z.string().openapi({
-    description: 'Project ID the memories belong to',
-  }),
-}).nullable().openapi('MemoryEventResponse');
-
-export type MemoryEventQuery = z.infer<typeof MemoryEventQuerySchema>;
-export type MemoryEventItem = z.infer<typeof MemoryEventItemSchema>;
-export type MemoryEventResponse = z.infer<typeof MemoryEventResponseSchema>;

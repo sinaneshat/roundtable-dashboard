@@ -53,6 +53,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractSessionToken } from '@/lib/auth';
+import { log } from '@/lib/logger';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
@@ -95,7 +96,6 @@ import {
   prepareValidatedMessages,
 } from '@/services/orchestration';
 import { processParticipantChanges } from '@/services/participants';
-import { extractMemoriesFromConversation } from '@/services/projects';
 import { buildParticipantSystemPrompt } from '@/services/prompts';
 import {
   initializeRoundExecution,
@@ -685,7 +685,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const sampleItem = preSearchData.results[0]?.results[0];
             rlog.presearch('inject-success', `tid=${threadId.slice(-8)} r${currentRoundNumber} p${participantIndex} injected synthetic pre-search message with ${preSearchData.results.length} query results, ${totalItems} total items`);
             if (sampleItem) {
-              rlog.presearch('inject-sample', `tid=${threadId.slice(-8)} p${participantIndex} sampleTitle="${sampleItem.title?.slice(0, 30)}" hasRaw=${!!(sampleItem as { rawContent?: string }).rawContent} hasFull=${!!sampleItem.fullContent} hasContent=${!!sampleItem.content} contentLen=${(sampleItem.content || '').length}`)
+              rlog.presearch('inject-sample', `tid=${threadId.slice(-8)} p${participantIndex} sampleTitle="${sampleItem.title?.slice(0, 30)}" hasRaw=${!!(sampleItem as { rawContent?: string }).rawContent} hasFull=${!!sampleItem.fullContent} hasContent=${!!sampleItem.content} contentLen=${(sampleItem.content || '').length}`);
             }
           }
         }
@@ -1322,9 +1322,15 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const errBody = aiError?.responseBody ? aiError.responseBody.substring(0, 300) : '-';
           const errCause = aiError?.cause ? String(aiError.cause).substring(0, 100) : '-';
 
-          console.error(`[Stream:P${participantIndex}] ERROR model=${participant.modelId} isErr=${isErrorInstance} name=${errName} status=${errStatus}`);
-          console.error(`[Stream:P${participantIndex}] ERROR_DETAIL msg=${errMsg}`);
-          console.error(`[Stream:P${participantIndex}] ERROR_EXTRA body=${errBody} cause=${errCause}`);
+          log.ai('error', `Stream P${participantIndex} error`, {
+            body: errBody,
+            cause: errCause,
+            isError: isErrorInstance,
+            message: errMsg,
+            modelId: participant.modelId,
+            name: errName,
+            status: errStatus,
+          });
 
           // ✅ CREDIT RELEASE: Release reserved credits on error
           // We don't know how many credits were reserved, so we pass estimatedCredits
@@ -1407,7 +1413,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
                 rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued after P${currentParticipantIdx} error`);
               } catch (queueError) {
-                console.error('[STREAM] onError: moderator queue send FAILED', queueError);
+                log.queue('error', 'Moderator queue send failed (onError)', {
+                  error: queueError instanceof Error ? queueError.message : String(queueError),
+                  participantIndex: currentParticipantIdx,
+                  roundNumber: currentRoundNumber,
+                  threadId,
+                });
               }
             }
           } catch {
@@ -1716,7 +1727,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // KV state is correct even if consumeSseStream hasn't finished buffering.
             // ✅ DIAGNOSTIC: Log timing of KV updates for P1 delay debugging
             const pIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
-            console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} Starting KV updates...`);
+            log.ai('perf', `[P${pIdx}-COMPLETE] Starting KV updates`, { roundNumber: currentRoundNumber });
             const kvStartTime = Date.now();
 
             await Promise.all([
@@ -1726,7 +1737,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 pIdx,
                 messageId,
                 c.env,
-              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} markStreamCompleted done (${Date.now() - kvStartTime}ms)`)),
+              ).then(() => log.ai('perf', `[P${pIdx}-COMPLETE] markStreamCompleted done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime })),
               // ✅ FIX: Update participant status instead of clearing thread active stream
               // Only clears thread active stream when ALL participants have finished
               // This enables proper multi-participant stream resumption after page reload
@@ -1736,19 +1747,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 pIdx,
                 ParticipantStreamStatuses.COMPLETED,
                 c.env,
-              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} updateParticipantStatus done (${Date.now() - kvStartTime}ms)`)),
+              ).then(() => log.ai('perf', `[P${pIdx}-COMPLETE] updateParticipantStatus done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime })),
               // ✅ FIX: Mark buffer as COMPLETED (same fix as moderator.handler.ts)
               completeParticipantStreamBuffer(streamMessageId, c.env)
-                .then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} completeStreamBuffer done (${Date.now() - kvStartTime}ms)`)),
+                .then(() => log.ai('perf', `[P${pIdx}-COMPLETE] completeStreamBuffer done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime })),
               // ✅ FIX: Clear active key for this participant (same fix as moderator.handler.ts)
               clearActiveParticipantStream(
                 threadId,
                 currentRoundNumber,
                 pIdx,
                 c.env,
-              ).then(() => console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} clearActiveStream done (${Date.now() - kvStartTime}ms)`)),
+              ).then(() => log.ai('perf', `[P${pIdx}-COMPLETE] clearActiveStream done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime })),
             ]);
-            console.log(`[P${pIdx}-COMPLETE] r${currentRoundNumber} All KV updates done (${Date.now() - kvStartTime}ms total)`);
+            log.ai('perf', `[P${pIdx}-COMPLETE] All KV updates done`, { roundNumber: currentRoundNumber, durationMs: Date.now() - kvStartTime });
 
             // =========================================================================
             // ✅ SERVER-SIDE ROUND ORCHESTRATION: Continue round in background
@@ -1830,7 +1841,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 try {
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
                 } catch (error) {
-                  console.error(`[RoundOrchestration] Failed to queue participant ${nextParticipantIndex}:`, error);
+                  log.queue('error', `Failed to queue participant ${nextParticipantIndex}`, {
+                    error: error instanceof Error ? error.message : String(error),
+                    nextParticipantIndex,
+                    roundNumber: currentRoundNumber,
+                    threadId,
+                  });
                   // Mark as failed so status endpoint reflects the issue
                   await markParticipantFailed(
                     threadId,
@@ -1862,84 +1878,14 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
                   rlog.moderator('queue-success', `r${currentRoundNumber} moderator queued`);
                 } catch (error) {
-                  console.error('[RoundOrchestration] Failed to queue moderator:', error);
+                  log.queue('error', 'Failed to queue moderator', {
+                    error: error instanceof Error ? error.message : String(error),
+                    roundNumber: currentRoundNumber,
+                    threadId,
+                  });
                 }
               } else {
                 rlog.stuck('moderator', `r${currentRoundNumber} NO QUEUE - moderator will not trigger!`);
-              }
-            } else if (allParticipantsComplete && thread.projectId) {
-              // =========================================================================
-              // ✅ CONVERSATION MEMORY EXTRACTION: For non-moderator threads
-              // =========================================================================
-              // When there's no moderator (single participant or moderator disabled),
-              // extract memories directly from the conversation. This runs in background
-              // via waitUntil to not block the response.
-              //
-              // For multi-participant threads with moderator, extraction happens in
-              // moderator.handler.ts after synthesis completes.
-              // =========================================================================
-
-              // Extract user question from message parts
-              const userQuestionText = extractUserQuery([
-                ...previousMessages,
-                validatedMessage,
-              ]);
-
-              // Collect participant response from this streaming call
-              // For single-participant threads, this is the only response
-              const participantResponses = [{
-                participantName: participant.role || 'AI',
-                response: finishResult.text,
-              }];
-
-              // Extract memories in background
-              const memoryExtractionPromise = extractMemoriesFromConversation({
-                ai: c.env.AI,
-                db,
-                participantResponses,
-                projectId: thread.projectId,
-                roundNumber: currentRoundNumber,
-                threadId,
-                userId: user.id,
-                userQuestion: userQuestionText,
-              }).then(async (result) => {
-                if (result.extracted.length > 0) {
-                  rlog.phase('memory', `r${currentRoundNumber} extracted ${result.extracted.length} memories for non-moderator thread`);
-
-                  // ✅ Store memory event in KV for frontend to poll
-                  const memoryEventKey = `memory-event:${threadId}:${currentRoundNumber}`;
-                  const memoryEventData = {
-                    createdAt: Date.now(),
-                    memories: result.extracted.map(m => ({
-                      content: m.content.slice(0, 200),
-                      id: result.memoryIds[result.extracted.indexOf(m)],
-                      summary: m.summary,
-                    })),
-                    memoryIds: result.memoryIds,
-                    projectId: thread.projectId,
-                  };
-
-                  try {
-                    await c.env.KV.put(
-                      memoryEventKey,
-                      JSON.stringify(memoryEventData),
-                      { expirationTtl: 300 }, // 5 min TTL
-                    );
-                    rlog.phase('memory', `r${currentRoundNumber} memory event stored in KV count=${result.extracted.length}`);
-                  } catch (kvError) {
-                    console.error('[Streaming] Failed to store memory event in KV:', kvError);
-                  }
-                }
-                return result;
-              }).catch((error) => {
-                console.error('[Streaming] Memory extraction failed:', error);
-                return { extracted: [], memoryIds: [] };
-              });
-
-              if (executionCtx) {
-                executionCtx.waitUntil(memoryExtractionPromise);
-              } else {
-                memoryExtractionPromise.catch(() => {});
               }
             }
           } catch (onFinishError) {
@@ -1948,7 +1894,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             // markStreamCompleted won't run, so KV won't be marked "complete"
             const errorMsg = onFinishError instanceof Error ? onFinishError.message : String(onFinishError);
             rlog.stuck('onFinish-ERROR', `tid=${threadId.slice(-8)} msgId=${streamMessageId.slice(-8)} pIdx=${participantIndex ?? DEFAULT_PARTICIPANT_INDEX} err=${errorMsg}`);
-            console.error('[Streaming] onFinish ERROR:', {
+            log.ai('error', 'Streaming onFinish error', {
               error: errorMsg,
               messageId: streamMessageId,
               participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
@@ -2001,8 +1947,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 const { done, value } = await reader.read();
 
                 if (done) {
-                  // Stream completed - mark buffer as complete
-                  await completeParticipantStreamBuffer(streamMessageId, c.env);
+                  // Stream completed - buffer is done receiving chunks
+                  // NOTE: completeParticipantStreamBuffer() is called in onFinish, NOT here
+                  // Per AI SDK pattern: onFinish is the authoritative completion signal
+                  // consumeSseStream runs in waitUntil (background) and may complete
+                  // after client disconnects, so onFinish handles the cleanup
                   break;
                 }
 
@@ -2105,7 +2054,11 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const errMsg = isErrorInstance
             ? error.message.substring(0, 200)
             : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
-          console.error(`[Stream:P${participantIndex}] CLIENT_ERR model=${participant.modelId} isErr=${isErrorInstance} msg=${errMsg}`);
+          log.ai('error', `Stream P${participantIndex} client error`, {
+            isError: isErrorInstance,
+            message: errMsg,
+            modelId: participant.modelId,
+          });
 
           // ✅ TYPE-SAFE ERROR EXTRACTION: Use error utility for consistent error handling
           const streamErrorMessage = getErrorMessage(error);

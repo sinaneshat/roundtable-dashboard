@@ -33,6 +33,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { DbTextPartSchema } from '@/db/schemas/chat-metadata';
 import type { UserCreditBalance } from '@/db/validation';
+import { log } from '@/lib/logger';
 import { getModelById } from '@/services/models';
 
 import {
@@ -135,7 +136,7 @@ async function withOptimisticLockRetry<T>(
       || errorMessage.includes('INSERT')
       || errorMessage.includes('SELECT')
     ) {
-      console.error(`[CreditService] Database error in ${context.operation}:`, {
+      log.billing('error', `Database error in ${context.operation}`, {
         error: errorMessage,
         retryCount,
         userId: context.userId,

@@ -1,13 +1,12 @@
 import { CitationSourcePrefixes, CitationSourceTypes } from '@roundtable/shared/enums';
 
 import { isPreSearchMessageMetadata } from '@/db/schemas/chat-metadata';
-import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatMessage } from '@/db/validation';
 import { getRoundNumber } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
+import type { SearchContextOptions, ValidatedPreSearchData } from '@/routes/chat/schema';
 import {
   ValidatedPreSearchDataSchema,
-  type SearchContextOptions,
-  type ValidatedPreSearchData,
 } from '@/routes/chat/schema';
 import { filterDbToPreSearchMessages } from '@/services/messages';
 import type { CitableSource, CitationSourceMap } from '@/types/citations';

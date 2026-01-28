@@ -182,7 +182,7 @@ export const CreateProjectMemoryRequestSchema = z.object({
   metadata: ProjectMemoryMetadataSchema.optional().openapi({
     description: 'Optional metadata for categorization and extraction tracking',
   }),
-  source: ProjectMemorySourceSchema.optional().default('explicit').openapi({
+  source: ProjectMemorySourceSchema.optional().default('instruction').openapi({
     description: 'Source of this memory entry',
   }),
   summary: z.string().max(500).optional().openapi({

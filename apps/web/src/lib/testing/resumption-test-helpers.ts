@@ -156,6 +156,7 @@ export function createMockStreamResumptionState(
       allComplete: false,
       currentParticipantIndex: 0,
       hasActiveStream: false,
+      lastSeqs: null,
       nextParticipantToTrigger: 0,
       participantStatuses: null,
       streamId: null,

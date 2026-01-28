@@ -14,6 +14,8 @@
 
 import type { OgImageType } from '@roundtable/shared/enums';
 
+import { log } from '@/lib/logger';
+
 // Cache TTL: 7 days (images rarely change, invalidated on content update)
 const OG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 
@@ -141,7 +143,7 @@ export async function storeOgImageInCache(
     });
     return true;
   } catch (error) {
-    console.error('[OG-CACHE] Failed to store image:', error);
+    log.cache('error', 'Failed to store OG image', { cacheKey, error: error instanceof Error ? error.message : String(error) });
     return false;
   }
 }
@@ -175,7 +177,7 @@ export async function deleteOgImageFromCache(
 
     return true;
   } catch (error) {
-    console.error('[OG-CACHE] Failed to delete cached images:', error);
+    log.cache('error', 'Failed to delete cached OG images', { error: error instanceof Error ? error.message : String(error), identifier, type });
     return false;
   }
 }

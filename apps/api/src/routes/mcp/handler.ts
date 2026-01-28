@@ -31,6 +31,7 @@ import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { chunkForD1Insert } from '@/db/batch-operations';
+import { log } from '@/lib/logger';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { filterNonEmptyMessages, isObject } from '@/lib/utils';
 import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, enforceCredits, finalizeCredits, getSafeMaxOutputTokens } from '@/services/billing';
@@ -985,7 +986,7 @@ async function toolGenerateResponses(
           threadId: input.threadId,
         });
       } catch (billingError) {
-        console.error('[MCP] Billing failed for participant response:', billingError);
+        log.mcp('error', '[MCP] Billing failed for participant response', { error: billingError instanceof Error ? billingError.message : String(billingError) });
       }
     }
 

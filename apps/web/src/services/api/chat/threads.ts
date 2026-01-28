@@ -74,14 +74,10 @@ export type GetThreadRoundChangelogResponse = InferResponseType<GetThreadRoundCh
 
 type GetThreadStreamResumptionStateEndpoint = ApiClientType['chatMessage']['chat']['threads'][':threadId']['stream-status']['$get'];
 type AnalyzePromptEndpoint = ApiClientType['chatMessage']['chat']['analyze']['$post'];
-type GetThreadMemoryEventsEndpoint = ApiClientType['chatThread']['chat']['threads'][':threadId']['memory-events']['$get'];
-
 export type GetThreadStreamResumptionStateRequest = InferRequestType<GetThreadStreamResumptionStateEndpoint>;
 export type GetThreadStreamResumptionStateResponse = InferResponseType<GetThreadStreamResumptionStateEndpoint, 200>;
 export type AnalyzePromptRequest = InferRequestType<AnalyzePromptEndpoint>;
 export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint, 200>;
-export type GetThreadMemoryEventsRequest = InferRequestType<GetThreadMemoryEventsEndpoint>;
-export type GetThreadMemoryEventsResponse = InferResponseType<GetThreadMemoryEventsEndpoint, 200>;
 
 // ============================================================================
 // Service Functions - Thread CRUD
@@ -180,19 +176,6 @@ export async function getThreadStreamResumptionStateService(
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chatMessage.chat.threads[':threadId']['stream-status'].$get(data));
-}
-
-// ============================================================================
-// Service Functions - Memory Events
-// ============================================================================
-
-/**
- * Get memory events for a specific round
- * Used to poll for memory creation after round completes
- */
-export async function getThreadMemoryEventsService(data: GetThreadMemoryEventsRequest) {
-  const client = createApiClient();
-  return parseResponse(client.chatThread.chat.threads[':threadId']['memory-events'].$get(data));
 }
 
 // ============================================================================
@@ -373,7 +356,6 @@ export type AvailableSource = NonNullable<DbAssistantMessageMetadata['availableS
 
 export {
   isAssistantMessageMetadata,
-  isMemoryCreatedChange,
   isModeChange,
   isModeratorMessageMetadata,
   isParticipantChange,

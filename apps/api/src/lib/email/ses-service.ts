@@ -6,6 +6,7 @@ import { renderToString } from 'react-dom/server';
 
 import { BRAND } from '@/constants';
 import { MagicLink } from '@/emails/templates';
+import { log } from '@/lib/logger';
 
 /**
  * Get SES credentials from Cloudflare Workers bindings
@@ -57,11 +58,9 @@ class EmailService {
     const { accessKeyId, secretAccessKey } = await getSesCredentials();
 
     if (!accessKeyId || !secretAccessKey) {
-      console.error({
-        has_access_key: Boolean(accessKeyId),
-        has_secret_key: Boolean(secretAccessKey),
-        log_type: 'ses_credentials_missing',
-        timestamp: new Date().toISOString(),
+      log.error('SES credentials missing', {
+        hasAccessKey: Boolean(accessKeyId),
+        hasSecretKey: Boolean(secretAccessKey),
       });
       throw new Error(
         'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
@@ -139,13 +138,11 @@ class EmailService {
       // Check if the request was successful
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error({
-          error_body: errorBody.slice(0, 500),
-          log_type: 'ses_api_error',
+        log.error('SES API error', {
+          errorBody: errorBody.slice(0, 500),
           region: config.region,
           status: response.status,
           statusText: response.statusText,
-          timestamp: new Date().toISOString(),
         });
         throw new Error(
           `Failed to send email via SES: ${response.status} ${response.statusText}. ${errorBody}`,
@@ -156,7 +153,7 @@ class EmailService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Email sending failed:', error);
+      log.error('Email sending failed', error instanceof Error ? error : { error: String(error) });
       // Re-throw with more context
       if (error instanceof Error) {
         throw new TypeError(`Email sending failed: ${error.message}`);

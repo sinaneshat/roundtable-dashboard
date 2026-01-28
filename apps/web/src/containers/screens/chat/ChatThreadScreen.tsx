@@ -1,11 +1,10 @@
-import { isCompletionFinishReason, UploadStatuses } from '@roundtable/shared';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UploadStatuses } from '@roundtable/shared';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
 import { useChatStore, useModelPreferencesStore } from '@/components/providers';
-import { useDeleteProjectMemoryMutation } from '@/hooks/mutations';
 import { useModelsQuery } from '@/hooks/queries';
 import { useBoolean, useChatAttachments } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
@@ -15,7 +14,6 @@ import {
   chatMessagesToUIMessages,
   getCurrentRoundNumber,
   getDetailedIncompatibleModelIds,
-  getModeratorMetadata,
   isDocumentFile,
   isImageFile,
   threadHasDocumentFiles,
@@ -23,8 +21,7 @@ import {
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, StoredPreSearch, ThreadDetailData } from '@/services/api';
-import { getThreadMemoryEventsService } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, Model, StoredPreSearch, ThreadDetailData } from '@/services/api';
 import {
   getModeratorMessageForRound,
   useChatFormActions,
@@ -32,17 +29,6 @@ import {
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
-
-/**
- * Memory event data for inline display under user messages
- */
-export type MemoryEvent = {
-  id: string;
-  summary: string;
-  content: string;
-};
-
-export type MemoryEventsByRound = Map<number, MemoryEvent[]>;
 
 const ChatDeleteDialog = dynamic(
   () => import('@/components/chat/chat-delete-dialog').then(m => ({ default: m.ChatDeleteDialog })),
@@ -103,8 +89,6 @@ export default function ChatThreadScreen({
   const chatAttachments = useChatAttachments();
   // Track initial mount to skip showing "models deselected" toast on page load
   const hasCompletedInitialMountRef = useRef(false);
-  // Memory events by round for inline display under user messages
-  const [memoryEventsByRound, setMemoryEventsByRound] = useState<MemoryEventsByRound>(() => new Map());
 
   // ✅ SSR HYDRATION: Compute uiMessages early for sync hydration
   const uiMessages = useMemo(
@@ -311,80 +295,6 @@ export default function ChatThreadScreen({
     return !moderatorExists;
   }, [messages, participants]);
 
-  // ✅ MEMORY EVENTS: Poll for memory creation after moderator completes
-  // Memory extraction runs in moderator.handler.ts after moderator stream finishes
-  const previousModeratorCompleteRef = useRef<{ round: number; complete: boolean } | null>(null);
-
-  useEffect(() => {
-    // Only poll for project threads
-    if (!thread.projectId) {
-      return;
-    }
-
-    const currentRound = getCurrentRoundNumber(messages);
-    if (currentRound === 0) {
-      return;
-    }
-
-    // Check if moderator message exists and is complete for this round
-    const moderatorMessage = getModeratorMessageForRound(messages, currentRound);
-    const moderatorMeta = moderatorMessage ? getModeratorMetadata(moderatorMessage.metadata) : null;
-    const hasFinishReason = moderatorMeta && isCompletionFinishReason(moderatorMeta.finishReason);
-    const hasContent = moderatorMessage?.parts?.some(
-      (p: { type: string; text?: string }) => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-    ) ?? false;
-    const moderatorComplete = Boolean(hasFinishReason || hasContent);
-
-    // Check if moderator just completed (transition from incomplete to complete)
-    const prevState = previousModeratorCompleteRef.current;
-    const moderatorJustCompleted = moderatorComplete
-      && prevState
-      && prevState.round === currentRound
-      && !prevState.complete;
-
-    // Update ref for next check
-    previousModeratorCompleteRef.current = { complete: moderatorComplete, round: currentRound };
-
-    if (!moderatorJustCompleted) {
-      return;
-    }
-
-    rlog.resume('memory-poll', `r${currentRound} moderator complete, polling for memory events`);
-
-    // Poll for memory events after 3 seconds (allow extraction to complete in background)
-    const timeout = setTimeout(async () => {
-      try {
-        const response = await getThreadMemoryEventsService({
-          param: { threadId: thread.id },
-          query: { roundNumber: currentRound },
-        });
-
-        if (response?.memories?.length) {
-          // Store memory events for inline display under user messages
-          type MemoryItem = NonNullable<GetThreadMemoryEventsResponse>['memories'][number];
-          const memoryEvents: MemoryEvent[] = response.memories.map((m: MemoryItem) => ({
-            content: m.content ?? m.summary,
-            id: m.id,
-            summary: m.summary,
-          }));
-
-          setMemoryEventsByRound((prev) => {
-            const next = new Map(prev);
-            next.set(currentRound, memoryEvents);
-            return next;
-          });
-
-          rlog.resume('memory-poll', `r${currentRound} found ${response.memories.length} memories`);
-        }
-      } catch (error) {
-        // Silent fail - memory events are non-critical
-        console.error('[MemoryEvents] Failed to poll:', error);
-      }
-    }, 3000);
-
-    return () => clearTimeout(timeout);
-  }, [messages, thread.id, thread.projectId]);
-
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator || waitingToStartStreaming;
 
   const handlePromptSubmit = useCallback(
@@ -419,45 +329,6 @@ export default function ChatThreadScreen({
     [inputValue, selectedParticipants, formActions, thread.id, isSubmitBlocked, chatAttachments],
   );
 
-  // Memory delete mutation
-  const deleteMemoryMutation = useDeleteProjectMemoryMutation();
-
-  // Handler to delete a memory and remove from local state
-  const handleDeleteMemory = useCallback(
-    async (memoryId: string, roundNumber: number) => {
-      if (!thread.projectId) {
-        return;
-      }
-
-      try {
-        await deleteMemoryMutation.mutateAsync({
-          param: { id: thread.projectId, memoryId },
-        });
-
-        // Remove from local state
-        setMemoryEventsByRound((prev) => {
-          const next = new Map(prev);
-          const roundMemories = next.get(roundNumber);
-          if (roundMemories) {
-            const filtered = roundMemories.filter(m => m.id !== memoryId);
-            if (filtered.length === 0) {
-              next.delete(roundNumber);
-            } else {
-              next.set(roundNumber, filtered);
-            }
-          }
-          return next;
-        });
-
-        rlog.resume('memory-delete', `deleted memory ${memoryId} from round ${roundNumber}`);
-      } catch (error) {
-        console.error('[MemoryDelete] Failed:', error);
-        toastManager.error(t('chat.memory.deleteFailed'));
-      }
-    },
-    [thread.projectId, deleteMemoryMutation, t],
-  );
-
   return (
     <>
       <h1 className="sr-only">{thread.title || t('chat.thread.conversationTitle')}</h1>
@@ -472,8 +343,6 @@ export default function ChatThreadScreen({
         initialParticipants={participants}
         initialPreSearches={initialPreSearches}
         initialChangelog={initialChangelog}
-        memoryEventsByRound={memoryEventsByRound}
-        onDeleteMemory={handleDeleteMemory}
         skipEntranceAnimations={uiMessages.length > 0}
       />
 

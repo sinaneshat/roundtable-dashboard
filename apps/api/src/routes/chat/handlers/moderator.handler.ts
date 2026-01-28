@@ -23,6 +23,7 @@ import { AIModels, createHandler, Responses, ThreadRoundParamSchema } from '@/co
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
+import { log } from '@/lib/logger';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { getParticipantIndex } from '@/lib/utils';
@@ -44,7 +45,6 @@ import {
 } from '@/services/errors';
 import { filterDbToParticipantMessages } from '@/services/messages';
 import { extractModeratorModelName, getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
-import { extractMemoriesFromRound } from '@/services/projects';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/services/prompts';
@@ -59,7 +59,6 @@ import {
   markStreamActive,
   setThreadActiveStream,
 } from '@/services/streaming';
-import { logMemoriesCreated } from '@/services/threads/thread-changelog.service';
 import type { ApiEnv } from '@/types';
 
 import type { councilModeratorRoundRoute } from '../route';
@@ -113,7 +112,7 @@ async function generateCouncilModerator(
   // ✅ LAZY LOAD AI SDK: Load at invocation, not module startup
   const { streamText } = await getAiSdk();
 
-  const { env, executionCtx, messageId, mode, participantResponses, projectContext, projectId, roundNumber, sessionId, threadId, userId, userQuestion } = config;
+  const { env, executionCtx, messageId, mode, participantResponses, projectContext, roundNumber, sessionId, threadId, userId, userQuestion } = config;
 
   const llmTraceId = generateTraceId();
   const llmStartTime = performance.now();
@@ -331,91 +330,11 @@ async function generateCouncilModerator(
         } else {
           trackAnalytics().catch(() => {});
         }
-
-        // =========================================================================
-        // ✅ MEMORY EXTRACTION: Auto-extract memories from project conversations
-        // Runs in background after moderator completes successfully
-        // =========================================================================
-        if (projectId && finishResult.text) {
-          const extractMemoriesTask = async () => {
-            try {
-              console.error('[Memory Extraction] Starting extraction:', {
-                projectId,
-                roundNumber,
-                summaryLength: finishResult.text.length,
-                threadId,
-              });
-              const extractionResult = await extractMemoriesFromRound({
-                ai: env.AI,
-                db: await getDbAsync(),
-                moderatorSummary: finishResult.text,
-                projectId,
-                roundNumber,
-                threadId,
-                userId,
-                userQuestion,
-              });
-              console.error('[Memory Extraction] Completed:', extractionResult);
-
-              // ✅ Store memory event in KV for frontend to poll
-              if (extractionResult.extracted.length > 0) {
-                const memoriesForKV = extractionResult.extracted.map((m, idx) => ({
-                  content: m.content.slice(0, 200),
-                  id: extractionResult.memoryIds[idx] ?? '',
-                  summary: m.summary,
-                }));
-
-                const memoryEventKey = `memory-event:${threadId}:${roundNumber}`;
-                const memoryEventData = {
-                  createdAt: Date.now(),
-                  memories: memoriesForKV,
-                  memoryIds: extractionResult.memoryIds,
-                  projectId,
-                };
-
-                try {
-                  await env.KV.put(
-                    memoryEventKey,
-                    JSON.stringify(memoryEventData),
-                    { expirationTtl: 300 }, // 5 min TTL
-                  );
-                  console.error('[Memory Extraction] Memory event stored in KV', {
-                    key: memoryEventKey,
-                    memoryCount: extractionResult.extracted.length,
-                  });
-                } catch (kvError) {
-                  console.error('[Memory Extraction] Failed to store memory event in KV:', kvError);
-                }
-
-                // ✅ Log memory creation to changelog for project threads
-                try {
-                  await logMemoriesCreated(
-                    threadId,
-                    roundNumber,
-                    projectId,
-                    memoriesForKV.map(m => ({ id: m.id, summary: m.summary })),
-                  );
-                  console.error('[Memory Extraction] Changelog entry created');
-                } catch (changelogError) {
-                  console.error('[Memory Extraction] Failed to create changelog entry:', changelogError);
-                }
-              }
-            } catch (error) {
-              console.error('[Memory Extraction] Failed:', error);
-            }
-          };
-
-          if (executionCtx) {
-            executionCtx.waitUntil(extractMemoriesTask());
-          } else {
-            extractMemoriesTask().catch(() => {});
-          }
-        }
       } catch (error) {
         // Stream already completed successfully - log persistence error
         const errorMsg = error instanceof Error ? error.message : String(error);
         const errorStack = error instanceof Error ? error.stack : undefined;
-        console.error('[Moderator] PERSISTENCE FAILED:', {
+        log.ai('error', 'Moderator persistence failed', {
           error: errorMsg,
           messageId,
           roundNumber,
@@ -545,7 +464,7 @@ async function generateCouncilModerator(
       const streamErrorMessage = getErrorMessage(error);
       const errorName = getErrorName(error);
 
-      console.error('[Council Moderator Error]', {
+      log.ai('error', 'Council moderator stream error', {
         errorMessage: streamErrorMessage,
         errorName,
         roundNumber,

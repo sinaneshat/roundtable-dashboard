@@ -506,6 +506,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         allComplete: true,
         currentParticipantIndex: null,
         hasActiveStream: false,
+        lastSeqs: null,
         nextParticipantToTrigger: null,
         participantStatuses: null,
         streamId: null,
@@ -544,6 +545,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
       let preSearchStreamId: string | null = null;
       let preSearchKVStatus: MessageStatus | null = null;
+      // ✅ RESUMPTION: Track lastSeq (chunk count) for stream resumption
+      let preSearchChunkCount: number | null = null;
 
       if (hasKV) {
         preSearchStreamId = await getActivePreSearchStreamId(threadId, currentRoundNumber, c.env);
@@ -551,6 +554,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         if (preSearchStreamId) {
           const metadata = await getPreSearchStreamMetadata(preSearchStreamId, c.env);
           const chunks = await getPreSearchStreamChunks(preSearchStreamId, c.env);
+          // ✅ RESUMPTION: Store chunk count for frontend resumption
+          preSearchChunkCount = chunks?.length ?? 0;
           const lastChunkTime = chunks && chunks.length > 0
             ? Math.max(...chunks.map(chunk => chunk.timestamp))
             : 0;
@@ -565,6 +570,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
           if (stale) {
             preSearchStreamId = null;
             preSearchKVStatus = MessageStatuses.FAILED;
+            preSearchChunkCount = null; // Reset on stale
           } else if (metadata?.status === StreamStatuses.ACTIVE || metadata?.status === StreamStatuses.STREAMING) {
             preSearchKVStatus = MessageStatuses.STREAMING;
           } else if (metadata?.status === StreamStatuses.COMPLETED) {
@@ -578,6 +584,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
       preSearchStatus = {
         enabled: true,
+        lastSeq: preSearchChunkCount,
         preSearchId: preSearchRecord?.id ?? null,
         status: effectiveStatus,
         streamId: preSearchStreamId,
@@ -588,6 +595,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       allComplete: true,
       currentParticipantIndex: null,
       hasActiveStream: false,
+      lastSeqs: null,
       nextParticipantToTrigger: null,
       participantStatuses: null,
       streamId: null,
@@ -695,17 +703,26 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
               )
             : null;
 
+          // ✅ RESUMPTION: Build lastSeqs for each participant's chunk count
+          // Frontend uses this to resume from correct position after reconnect
+          const lastSeqs: Record<string, number> = {};
+          // Current streaming participant - use chunks already fetched above
+          if (!stale && chunks) {
+            lastSeqs[String(activeStream.participantIndex)] = chunks.length;
+          }
+
           participantStatus = {
             allComplete,
             currentParticipantIndex: activeStream.participantIndex,
             hasActiveStream: !stale,
+            lastSeqs: Object.keys(lastSeqs).length > 0 ? lastSeqs : null,
             nextParticipantToTrigger: nextParticipant?.participantIndex ?? null,
             participantStatuses: participantStatusesStringKeyed,
             streamId: stale ? null : activeStream.streamId,
             totalParticipants: activeStream.totalParticipants,
           };
 
-          rlog.resume('state-handler', `tid=${threadId.slice(-8)} KV: activeP=${activeStream.participantIndex} total=${activeStream.totalParticipants} stale=${stale} allComplete=${allComplete} nextP=${nextParticipant?.participantIndex ?? 'null'}`);
+          rlog.resume('state-handler', `tid=${threadId.slice(-8)} KV: activeP=${activeStream.participantIndex} total=${activeStream.totalParticipants} stale=${stale} allComplete=${allComplete} nextP=${nextParticipant?.participantIndex ?? 'null'} lastSeqs=${JSON.stringify(lastSeqs)}`);
         }
       }
     }
@@ -790,6 +807,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     let moderatorStreamId: string | null = null;
     let moderatorKVStatus: MessageStatus | null = null;
+    // ✅ RESUMPTION: Track lastSeq (chunk count) for stream resumption
+    let moderatorChunkCount: number | null = null;
 
     if (hasKV) {
       moderatorStreamId = await getActiveParticipantStreamId(threadId, currentRoundNumber, NO_PARTICIPANT_SENTINEL, c.env);
@@ -797,6 +816,8 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
       if (moderatorStreamId) {
         const metadata = await getParticipantStreamMetadata(moderatorStreamId, c.env);
         const chunks = await getParticipantStreamChunks(moderatorStreamId, c.env);
+        // ✅ RESUMPTION: Store chunk count for frontend resumption
+        moderatorChunkCount = chunks?.length ?? 0;
         const lastChunkTime = chunks && chunks.length > 0
           ? Math.max(...chunks.map((chunk: { timestamp: number }) => chunk.timestamp))
           : 0;
@@ -811,6 +832,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
         if (stale) {
           moderatorStreamId = null;
           moderatorKVStatus = MessageStatuses.FAILED;
+          moderatorChunkCount = null; // Reset on stale
         } else if (metadata?.status === StreamStatuses.ACTIVE || metadata?.status === StreamStatuses.STREAMING) {
           moderatorKVStatus = MessageStatuses.STREAMING;
         } else if (metadata?.status === StreamStatuses.COMPLETED) {
@@ -824,6 +846,7 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
     if (moderatorRecordData || moderatorStreamId) {
       moderatorStatus = {
+        lastSeq: moderatorChunkCount,
         moderatorMessageId: moderatorRecordData?.id ?? null,
         status: effectiveMessageStatus,
         streamId: moderatorStreamId,

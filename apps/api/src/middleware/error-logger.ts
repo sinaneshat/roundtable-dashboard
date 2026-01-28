@@ -21,6 +21,7 @@ import type { ErrorHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import onError from 'stoker/middlewares/on-error';
 
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 // ============================================================================
@@ -130,8 +131,8 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   // Build structured error log (Cloudflare auto-indexes JSON fields)
   // Always log the ORIGINAL error message for debugging (never sanitized)
   const errorLog = {
-    cf_colo: cf?.colo,
-    cf_country: cf?.country,
+    cf_colo: cf?.colo as string | undefined,
+    cf_country: cf?.country as string | undefined,
     error_message: err.message, // Original message for debugging
     error_name: err.name,
     error_stack: err.stack,
@@ -139,18 +140,16 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
     log_type: 'api_error',
     method: c.req.method,
     path: c.req.path,
-    query: c.req.query(),
     // Cloudflare context
     request_id: cfRay,
     status,
-    timestamp: new Date().toISOString(),
     // URL details for debugging
     url: c.req.url,
   };
 
   // Log as structured JSON for Cloudflare Workers Logs
   // Cloudflare automatically indexes all JSON fields for filtering
-  console.error(errorLog);
+  log.error('API error', errorLog);
 
   // Sanitize database errors before sending to client
   // This prevents SQL queries and table names from leaking
@@ -158,12 +157,10 @@ export const errorLogger: ErrorHandler<ApiEnv> = async (err, c) => {
   if (err instanceof Error && isDatabaseError(err.message)) {
     errorToReturn = createSanitizedDatabaseError(err);
     // Log that we sanitized this error for debugging
-    console.error({
-      log_type: 'error_sanitized',
+    log.warn('Error sanitized for client response', {
       original_message: err.message,
       request_id: cfRay,
       sanitized_message: errorToReturn.message,
-      timestamp: new Date().toISOString(),
     });
   }
 

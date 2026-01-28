@@ -14,6 +14,7 @@ import { getDbAsync } from '@/db';
 // PERF FIX: Lazy load auth module to avoid loading Better Auth + Drizzle for public routes
 // import { auth } from '@/lib/auth/server';
 import type { Session, User } from '@/lib/auth/types';
+import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 
 import { HTTPExceptionFactory } from './http-exceptions';
@@ -368,7 +369,7 @@ async function validateRequest<
 
       if (!result.success) {
         // 🔍 DEBUG: Log validation errors
-        console.error('[HANDLER-VALIDATE] Validation failed:', result.errors.slice(0, 5));
+        log.warn('[HANDLER-VALIDATE] Validation failed', { errors: JSON.stringify(result.errors.slice(0, 5)) });
         throw HTTPExceptionFactory.unprocessableEntity({
           details: { detailType: 'validation', validationErrors: result.errors },
           message: 'Request body validation failed',

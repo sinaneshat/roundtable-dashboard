@@ -711,20 +711,6 @@ const DbWebSearchChangeDataSchema = z.object({
 });
 
 /**
- * Memory Created Metadata
- * For memories created from conversation context (project threads only)
- */
-const DbMemoryCreatedDataSchema = z.object({
-  memories: z.array(z.object({
-    id: z.string(),
-    summary: z.string(),
-  })),
-  memoryCount: z.number().int().nonnegative(),
-  projectId: z.string(),
-  type: z.literal(ChangelogChangeTypes.MEMORY_CREATED),
-});
-
-/**
  * Complete Changelog Data Schema - Discriminated Union
  *
  * ✅ TYPE-SAFE DISCRIMINATION: Use 'type' field to determine change type
@@ -735,7 +721,6 @@ export const DbChangelogDataSchema = z.discriminatedUnion('type', [
   DbModeChangeDataSchema,
   DbParticipantReorderDataSchema,
   DbWebSearchChangeDataSchema,
-  DbMemoryCreatedDataSchema,
 ]);
 
 export type DbChangelogData = z.infer<typeof DbChangelogDataSchema>;
@@ -834,15 +819,6 @@ export function isWebSearchChange(
   data: DbChangelogData,
 ): data is Extract<DbChangelogData, { type: 'web_search' }> {
   return data.type === ChangelogChangeTypes.WEB_SEARCH;
-}
-
-/**
- * Type guard: Check if changelog data is memory created event
- */
-export function isMemoryCreatedChange(
-  data: DbChangelogData,
-): data is Extract<DbChangelogData, { type: 'memory_created' }> {
-  return data.type === ChangelogChangeTypes.MEMORY_CREATED;
 }
 
 // ============================================================================

@@ -13,9 +13,10 @@
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { useChatStore, useModelPreferencesStore } from '@/components/providers';
+import { useChatStoreApi, useModelPreferencesStore } from '@/components/providers';
 // Direct import avoids circular dependency through @/hooks/utils barrel
 import { useAnalyzePromptStream } from '@/hooks/utils/use-analyze-prompt-stream';
+import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 type AutoModeAnalysisOptions = {
@@ -54,13 +55,10 @@ export type UseAutoModeAnalysisReturn = {
 export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalysisReturn {
   const { abort, isStreaming, partialConfig, streamConfig } = useAnalyzePromptStream();
 
-  const chatStoreActions = useChatStore(useShallow(s => ({
-    setEnableWebSearch: s.setEnableWebSearch,
-    setIsAnalyzingPrompt: s.setIsAnalyzingPrompt,
-    setModelOrder: s.setModelOrder,
-    setSelectedMode: s.setSelectedMode,
-    setSelectedParticipants: s.setSelectedParticipants,
-  })));
+  // ✅ FIX: Use storeApi.getState() at invocation time instead of memoized selectors
+  // The useShallow pattern captures actions at hook creation, which can become stale
+  // when the callback is invoked later. Using getState() ensures fresh state/actions.
+  const chatStoreApi = useChatStoreApi();
 
   // Preferences store actions for persistence sync
   const preferencesActions = useModelPreferencesStore(useShallow(s => ({
@@ -73,15 +71,28 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
   const analyzeAndApply = useCallback(async (options: AutoModeAnalysisOptions): Promise<boolean> => {
     const { accessibleModelIds, hasDocumentFiles = false, hasImageFiles = false, prompt } = options;
 
-    chatStoreActions.setIsAnalyzingPrompt(true);
+    // ✅ Get fresh store state at invocation time
+    const chatStore = chatStoreApi.getState();
+    chatStore.setIsAnalyzingPrompt(true);
 
     try {
-      const result = await streamConfig({ hasDocumentFiles, hasImageFiles, prompt });
+      // ✅ PASS CLIENT MODEL LIST: Send pre-filtered accessible model IDs to backend
+      // Backend AI will ONLY pick from these models, ensuring consistency
+      const accessibleModelIdsArray = accessibleModelIds ? Array.from(accessibleModelIds) : undefined;
+
+      const result = await streamConfig({
+        accessibleModelIds: accessibleModelIdsArray,
+        hasDocumentFiles,
+        hasImageFiles,
+        prompt,
+      });
 
       if (result) {
         const { enableWebSearch: recommendedWebSearch, mode: recommendedMode, participants } = result;
 
+
         // Transform to ParticipantConfig format
+        // ✅ NO POST-FILTERING NEEDED: AI already picked from accessible models
         let newParticipants: ParticipantConfig[] = participants.map((p, index) => ({
           id: p.modelId,
           modelId: p.modelId,
@@ -89,17 +100,34 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
           role: p.role || '',
         }));
 
-        // Filter by client-accessible models if provided
-        // This prevents setting participants that would immediately be filtered
-        // out by the incompatible models effect due to tier mismatch
+        // ✅ SAFETY CHECK: Validate returned models are in accessible list (defense in depth)
+        // This shouldn't filter anything since AI was given the list, but protects against bugs
         if (accessibleModelIds && accessibleModelIds.size > 0) {
-          const filteredParticipants = newParticipants.filter(
+          const validParticipants = newParticipants.filter(
             p => accessibleModelIds.has(p.modelId),
           );
-          // Only apply filter if it leaves at least 1 participant
-          // If all filtered out, keep original (server says they're accessible)
-          if (filteredParticipants.length > 0) {
-            newParticipants = filteredParticipants.map((p, index) => ({
+
+  
+          // If AI returned invalid models (shouldn't happen), pad with accessible ones
+          if (validParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
+            const usedModelIds = new Set(validParticipants.map(p => p.modelId));
+            const availableFallbacks = Array.from(accessibleModelIds).filter(id => !usedModelIds.has(id));
+
+            for (const modelId of availableFallbacks) {
+              if (validParticipants.length >= MIN_PARTICIPANTS_REQUIRED) {
+                break;
+              }
+              validParticipants.push({
+                id: modelId,
+                modelId,
+                priority: validParticipants.length,
+                role: '',
+              });
+            }
+          }
+
+          if (validParticipants.length > 0) {
+            newParticipants = validParticipants.map((p, index) => ({
               ...p,
               priority: index,
             }));
@@ -108,11 +136,13 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
 
         const modelIds = newParticipants.map(p => p.modelId);
 
-        // Update chat store
-        chatStoreActions.setSelectedParticipants(newParticipants);
-        chatStoreActions.setModelOrder(modelIds);
-        chatStoreActions.setSelectedMode(recommendedMode);
-        chatStoreActions.setEnableWebSearch(recommendedWebSearch);
+        // Update chat store - use fresh getState() to ensure latest actions
+        const storeState = chatStoreApi.getState();
+
+        storeState.setSelectedParticipants(newParticipants);
+        storeState.setModelOrder(modelIds);
+        storeState.setSelectedMode(recommendedMode);
+        storeState.setEnableWebSearch(recommendedWebSearch);
 
         // Sync to preferences for persistence
         if (syncToPreferences) {
@@ -130,9 +160,9 @@ export function useAutoModeAnalysis(syncToPreferences = true): UseAutoModeAnalys
       console.error('[useAutoModeAnalysis] Analysis failed:', error);
       return false;
     } finally {
-      chatStoreActions.setIsAnalyzingPrompt(false);
+      chatStoreApi.getState().setIsAnalyzingPrompt(false);
     }
-  }, [streamConfig, chatStoreActions, syncToPreferences, preferencesActions]);
+  }, [streamConfig, chatStoreApi, syncToPreferences, preferencesActions]);
 
   return {
     abort,

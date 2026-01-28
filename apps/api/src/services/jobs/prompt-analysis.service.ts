@@ -15,7 +15,7 @@ import { ChatModes, ChatModeSchema, DEFAULT_CHAT_MODE, SHORT_ROLE_NAMES, ShortRo
 import { z } from 'zod';
 
 import { PROMPT_ANALYSIS_MODEL_ID } from '@/core/ai-models';
-import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
+import { MAX_JOB_PARTICIPANTS, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 import { AI_TIMEOUT_CONFIG, MAX_MODELS_BY_TIER } from '@/services/billing';
 import type { AnalyzeModelInfo } from '@/services/prompts';
 import { buildAnalyzeSystemPrompt } from '@/services/prompts';
@@ -33,14 +33,17 @@ async function getAiSdk() {
   return aiSdkModule;
 }
 
-// Schema for AI structured output
+// Schema for AI structured output - same structure as analyze.handler.ts but with job-specific limits
+// Uses MAX_JOB_PARTICIPANTS (5) instead of MAX_PARTICIPANTS_LIMIT (12) for cost control
 const AIAnalysisOutputSchema = z.object({
   enableWebSearch: z.boolean(),
   mode: z.string(),
   participants: z.array(z.object({
     modelId: z.string(),
     role: z.string().nullable(),
-  }).strict()).min(MIN_PARTICIPANTS_REQUIRED).max(5),
+  }).strict()).min(MIN_PARTICIPANTS_REQUIRED, {
+    message: `INVALID: Must include at least ${MIN_PARTICIPANTS_REQUIRED} participants. Multi-AI perspective is mandatory.`,
+  }).max(MAX_JOB_PARTICIPANTS),
 }).strict();
 
 // Default/fallback config
@@ -117,11 +120,10 @@ export async function analyzePromptForJob(
     const models = getAvailableModelInfo();
     const accessibleModelIds = models.map(m => m.id);
 
-    // Build system prompt - use pro tier limits for automated jobs
-    const maxModels = 4;
+    // Build system prompt - use job-specific limits for automated jobs
     const systemPrompt = buildAnalyzeSystemPrompt(
       models,
-      maxModels,
+      MAX_JOB_PARTICIPANTS,
       MIN_PARTICIPANTS_REQUIRED,
       SHORT_ROLE_NAMES,
       Object.values(ChatModes),
@@ -142,6 +144,8 @@ export async function analyzePromptForJob(
 
     // Validate participants
     const validParticipants: { modelId: string; role: string | null }[] = [];
+    const usedModelIds = new Set<string>();
+
     for (const p of output.participants) {
       if (!p?.modelId) {
         continue;
@@ -149,7 +153,10 @@ export async function analyzePromptForJob(
       if (!accessibleModelIds.includes(p.modelId)) {
         continue;
       }
-      if (validParticipants.length >= maxModels) {
+      if (usedModelIds.has(p.modelId)) {
+        continue; // Skip duplicates
+      }
+      if (validParticipants.length >= MAX_JOB_PARTICIPANTS) {
         break;
       }
 
@@ -157,9 +164,31 @@ export async function analyzePromptForJob(
         modelId: p.modelId,
         role: isValidShortRoleName(p.role) ? p.role : null,
       });
+      usedModelIds.add(p.modelId);
     }
 
-    // Ensure minimum participants
+    // ✅ ENFORCE MINIMUM: Pad with accessible fallback models if below minimum
+    // This ensures we ALWAYS have at least MIN_PARTICIPANTS_REQUIRED participants
+    if (validParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
+      const availableFallbacks = accessibleModelIds.filter(id => !usedModelIds.has(id));
+
+      for (const modelId of availableFallbacks) {
+        if (validParticipants.length >= MIN_PARTICIPANTS_REQUIRED) {
+          break;
+        }
+        if (validParticipants.length >= MAX_JOB_PARTICIPANTS) {
+          break;
+        }
+
+        validParticipants.push({
+          modelId,
+          role: null,
+        });
+        usedModelIds.add(modelId);
+      }
+    }
+
+    // Final fallback if still below minimum (shouldn't happen with valid models)
     if (validParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
       return DEFAULT_JOB_CONFIG;
     }

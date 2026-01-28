@@ -19,6 +19,7 @@ import { CoreSchemas } from '@/core/schemas';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { DbMessageParts } from '@/db/schemas/chat-metadata';
+import { log } from '@/lib/logger';
 import type { MessagePart, StreamingFinishResult } from '@/lib/schemas/message-schemas';
 import { cleanCitationExcerpt, createParticipantMetadata, hasCitations, isObject, parseCitations, toDbCitations } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
@@ -456,7 +457,7 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
     const errorMsg = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
     rlog.stuck('PERSIST-FAILED', `tid=${threadId.slice(-8)} msgId=${messageId.slice(-8)} pIdx=${participantIndex} err=${errorMsg}`);
-    console.error('[PERSIST] FAILED to save message:', {
+    log.db('error', 'Failed to save message', {
       error: errorMsg,
       messageId,
       participantId,

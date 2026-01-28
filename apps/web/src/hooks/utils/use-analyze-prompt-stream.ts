@@ -41,6 +41,12 @@ type AnalyzePromptStreamState = z.infer<typeof AnalyzePromptStreamStateSchema>;
  * Stream config options schema
  */
 const _StreamConfigOptionsSchema = z.object({
+  /**
+   * ✅ CLIENT-PROVIDED MODEL LIST: Pre-filtered accessible model IDs
+   * Frontend filters by: user tier + vision capability + document capability
+   * This ensures AI only picks from models the user can actually use
+   */
+  accessibleModelIds: z.array(z.string()).optional(),
   /** Whether document files (PDFs, DOC, etc.) are attached - requires supports_file */
   hasDocumentFiles: z.boolean().optional(),
   /** Whether image files are attached - requires supports_vision */
@@ -85,7 +91,7 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
   }, [abort]);
 
   const streamConfig = useCallback(async (options: StreamConfigOptions): Promise<AnalyzePromptPayload | null> => {
-    const { hasDocumentFiles = false, hasImageFiles = false, prompt } = options;
+    const { accessibleModelIds, hasDocumentFiles = false, hasImageFiles = false, prompt } = options;
 
     // Abort any existing stream
     abort();
@@ -101,7 +107,12 @@ export function useAnalyzePromptStream(): AnalyzePromptStreamResult {
 
     try {
       const response = await analyzePromptStreamService({
-        json: { hasDocumentFiles, hasImageFiles, prompt },
+        json: {
+          accessibleModelIds,
+          hasDocumentFiles,
+          hasImageFiles,
+          prompt,
+        },
       });
 
       if (!response.ok) {

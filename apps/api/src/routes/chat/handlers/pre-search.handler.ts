@@ -28,6 +28,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import { extractSessionToken } from '@/lib/auth';
+import { log } from '@/lib/logger';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import {
   deductCreditsForAction,
@@ -247,7 +248,7 @@ async function analyzeImagesForSearchContext(
     return '';
   } catch (error) {
     // Log error but don't fail the pre-search - continue without image context
-    console.error('[Pre-search] Image analysis failed:', error);
+    log.ai('warn', 'Pre-search image analysis failed', { error: error instanceof Error ? error.message : String(error) });
     return '';
   }
 }
@@ -537,7 +538,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               }
             } catch (error) {
               // Log but don't fail - continue without image context
-              console.error('[Pre-search] Failed to load/analyze attachments:', error);
+              log.ai('warn', 'Pre-search failed to load/analyze attachments', { error: error instanceof Error ? error.message : String(error) });
             }
           }
 
@@ -629,7 +630,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 }
               }
             } catch (streamErr) {
-              console.error('[Pre-search] Query streaming error:', streamErr);
+              log.ai('error', 'Pre-search query streaming error', { error: streamErr instanceof Error ? streamErr.message : String(streamErr) });
             }
 
             // ✅ GRACEFUL OBJECT RETRIEVAL: Try to get final object, fall back to partial
@@ -735,7 +736,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 }
               }
             } catch (billingError) {
-              console.error('[Pre-search] Query generation billing failed:', billingError);
+              log.billing('error', 'Pre-search query generation billing failed', { error: billingError instanceof Error ? billingError.message : String(billingError) });
             }
           } catch {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
@@ -1270,7 +1271,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           // Extract session token for queue authentication
           const sessionToken = extractSessionToken(c.req.header('cookie'));
           if (!sessionToken) {
-            console.error('[PreSearch] No session token found - cannot trigger participant streaming. Cookie header:', c.req.header('cookie')?.slice(0, 50) ?? 'none');
+            log.auth('warn', 'PreSearch no session token found', { cookieHeader: c.req.header('cookie')?.slice(0, 50) ?? 'none' });
           }
           if (sessionToken) {
             c.executionCtx.waitUntil(

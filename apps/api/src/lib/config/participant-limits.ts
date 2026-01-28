@@ -29,6 +29,12 @@ export const MIN_PARTICIPANTS_REQUIRED = 2;
 export const MAX_PARTICIPANTS_LIMIT = 12;
 
 /**
+ * Maximum participants for automated jobs (cost control)
+ * Lower than user-initiated analysis to control API costs for background jobs
+ */
+export const MAX_JOB_PARTICIPANTS = 5;
+
+/**
  * Example participant counts by subscription tier
  * Used by quick-start suggestions to demonstrate roundtable value
  */

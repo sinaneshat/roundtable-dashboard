@@ -23,6 +23,8 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
+
+import { log } from '@/lib/logger';
 // IMPORTANT: No static imports of @/api/services or Zod here!
 // Use dynamic imports in methods to lazy-load heavy dependencies
 
@@ -260,7 +262,7 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
     for (const row of dueUploads) {
       if (!isValidDueUploadRow(row)) {
-        console.error({ log_type: 'invalid_row', row });
+        log.cron('error', 'Invalid cleanup_state row format', { row: JSON.stringify(row) });
         continue;
       }
       const uploadId = row.upload_id;
@@ -305,16 +307,12 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         // Remove from cleanup state only on successful check
         this.sql.exec('DELETE FROM cleanup_state WHERE upload_id = ?', uploadId);
       } catch (error) {
-        // Structured logging for Cloudflare Workers Logs indexing
-        console.error({
-          durable_object: 'UploadCleanupScheduler',
-          error_message: error instanceof Error ? error.message : String(error),
-          error_stack: error instanceof Error ? error.stack : undefined,
-          log_type: 'alarm_error',
+        log.cron('error', 'Alarm error during processCleanups', {
+          durableObject: 'UploadCleanupScheduler',
+          error: error instanceof Error ? error.message : String(error),
           operation: 'processCleanups',
-          r2_key: r2Key,
-          timestamp: new Date().toISOString(),
-          upload_id: uploadId,
+          r2Key,
+          uploadId,
         });
         // Don't remove from state - will be retried on next alarm
       }
@@ -349,15 +347,13 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
         const result = await checkUploadOrphaned(uploadId, db);
         return result.isOrphaned;
       } catch (error) {
-        console.error({
+        log.cron('error', 'Alarm retry during checkIfOrphanedWithRetry', {
           attempt: attempt + 1,
-          durable_object: 'UploadCleanupScheduler',
-          error_message: error instanceof Error ? error.message : String(error),
-          log_type: 'alarm_retry',
-          max_attempts: MAX_D1_RETRIES + 1,
+          durableObject: 'UploadCleanupScheduler',
+          error: error instanceof Error ? error.message : String(error),
+          maxAttempts: MAX_D1_RETRIES + 1,
           operation: 'checkIfOrphanedWithRetry',
-          timestamp: new Date().toISOString(),
-          upload_id: uploadId,
+          uploadId,
         });
         if (attempt < MAX_D1_RETRIES) {
           // Exponential backoff: 100ms, 200ms, 400ms...
@@ -427,15 +423,12 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
 
       return new Response('Not Found', { status: 404 });
     } catch (error) {
-      console.error({
-        durable_object: 'UploadCleanupScheduler',
-        error_message: error instanceof Error ? error.message : String(error),
-        error_stack: error instanceof Error ? error.stack : undefined,
-        log_type: 'do_fetch_error',
+      log.cron('error', 'Durable Object fetch error', {
+        durableObject: 'UploadCleanupScheduler',
+        error: error instanceof Error ? error.message : String(error),
         method: request.method,
         operation: 'fetch',
         path,
-        timestamp: new Date().toISOString(),
       });
       return new Response(
         JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),

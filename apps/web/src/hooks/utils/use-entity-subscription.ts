@@ -367,10 +367,15 @@ export function useEntitySubscription({
                   callbacks?.onComplete?.(currentSeq);
 
                   // Small delay before cancel to ensure all state updates flush
-                  // Check abort signal before waiting to avoid stale cleanup
+                  // Abort-aware wait: clears timeout and resolves early if signal aborts
                   if (!controller.signal.aborted) {
                     await new Promise<void>((resolve) => {
-                      setTimeout(resolve, 50);
+                      const timeoutId = setTimeout(resolve, 50);
+                      const abortHandler = () => {
+                        clearTimeout(timeoutId);
+                        resolve();
+                      };
+                      controller.signal.addEventListener('abort', abortHandler, { once: true });
                     });
                   }
                   // Cancel reader with catch to prevent unhandled rejection on abort
@@ -416,6 +421,52 @@ export function useEntitySubscription({
             if (isAiSdkEvent) {
               currentSeq++;
               lastSeqRef.current = currentSeq;
+
+              // Detect AI SDK finish events and mark subscription as complete immediately
+              // e: events contain finishReason (e.g., e:{"finishReason":"stop"})
+              // d: events are finish data (e.g., d:{"finishReason":"stop","usage":{...}})
+              if (line.startsWith('e:') || line.startsWith('d:')) {
+                try {
+                  const finishData = JSON.parse(line.slice(2));
+                  if (finishData.finishReason) {
+                    rlog.stream('check', `${logPrefix} finish event detected (${line.slice(0, 2)}), marking complete`);
+
+                    // Set completion flag BEFORE any async operations to prevent retry race conditions
+                    isCompleteRef.current = true;
+
+                    setState(prev => ({
+                      ...prev,
+                      isStreaming: false,
+                      lastSeq: currentSeq,
+                      status: 'complete',
+                    }));
+                    callbacks?.onStatusChange?.('complete');
+                    callbacks?.onComplete?.(currentSeq);
+
+                    // Small delay before cancel to ensure all state updates flush
+                    // Abort-aware wait: clears timeout and resolves early if signal aborts
+                    if (!controller.signal.aborted) {
+                      await new Promise<void>((resolve) => {
+                        const timeoutId = setTimeout(resolve, 50);
+                        const abortHandler = () => {
+                          clearTimeout(timeoutId);
+                          resolve();
+                        };
+                        controller.signal.addEventListener('abort', abortHandler, { once: true });
+                      });
+                    }
+                    // Cancel reader with catch to prevent unhandled rejection on abort
+                    if (!controller.signal.aborted) {
+                      reader.cancel().catch(() => {
+                        // Ignore cancel errors - expected during abort
+                      });
+                    }
+                    return; // Exit read loop
+                  }
+                } catch {
+                  // Ignore parse errors - not all e:/d: events are finish events
+                }
+              }
             }
 
             // Handle AI SDK data stream format (0:) - call onTextChunk for actual text
@@ -437,10 +488,31 @@ export function useEntitySubscription({
                 const event = JSON.parse(line);
                 const textContent = event.delta ?? event.textDelta;
                 if (event.type === 'text-delta' && typeof textContent === 'string') {
+                  // Increment sequence for JSON format text deltas (same as AI SDK events)
+                  currentSeq++;
+                  lastSeqRef.current = currentSeq;
                   textDeltaCount++;
                   callbacks?.onTextChunk?.(textContent, currentSeq);
                   // Natural pacing: SSE chunk arrival provides gradual delivery
                   // No artificial delays - React handles state batching naturally
+                }
+
+                // Handle finish signals in JSON format
+                if (event.type === 'finish' || event.finishReason) {
+                  isCompleteRef.current = true;
+                  rlog.stream('check', `${logPrefix} JSON finish event detected, marking complete`);
+                  setState(prev => ({
+                    ...prev,
+                    isStreaming: false,
+                    lastSeq: currentSeq,
+                    status: 'complete',
+                  }));
+                  callbacks?.onStatusChange?.('complete');
+                  callbacks?.onComplete?.(currentSeq);
+                  reader.cancel().catch(() => {
+                    // Ignore cancel errors - expected during abort
+                  });
+                  return; // Exit read loop
                 }
               } catch {
                 // Ignore parse errors
@@ -489,6 +561,16 @@ export function useEntitySubscription({
 
   // Auto-subscribe when enabled and parameters are valid
   useEffect(() => {
+    // ✅ FIX: Skip subscription if round reset hasn't happened yet
+    // When roundNumber changes, both this effect and the reset effect run.
+    // If prevRoundNumberRef doesn't match current roundNumber, the reset effect
+    // hasn't run yet (or will run in a different order). Skipping prevents
+    // stale state (isCompleteRef, lastSeqRef) from causing P1 to be marked
+    // complete without streaming in non-initial rounds.
+    if (prevRoundNumberRef.current !== roundNumber) {
+      return; // Reset effect will update prevRoundNumberRef, then this effect re-runs
+    }
+
     if (enabled && threadId && roundNumber >= 0) {
       // FIX: Catch any promise rejections from subscribe to prevent uncaught errors
       // when the component unmounts mid-stream. The subscribe() catch block handles

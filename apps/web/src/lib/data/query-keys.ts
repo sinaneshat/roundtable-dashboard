@@ -138,8 +138,6 @@ export const queryKeys = {
       search
         ? [...queryKeys.threads.all, 'list', 'search', search] as const
         : [...queryKeys.threads.all, 'list'] as const,
-    memoryEvents: (threadId: string, roundNumber: number) =>
-      QueryKeyFactory.action('threads', 'memory-events', threadId, String(roundNumber)),
     messages: (id: string) => QueryKeyFactory.action('threads', 'messages', id),
     preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     public: (slug: string) => QueryKeyFactory.action('threads', 'public', slug),
