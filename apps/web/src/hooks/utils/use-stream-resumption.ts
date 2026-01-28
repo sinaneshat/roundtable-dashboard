@@ -109,6 +109,9 @@ export function useStreamResumption({
   const checkedThreadIdRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
 
+  // Track previous enabled state to log only on changes
+  const prevEnabledRef = useRef<boolean | null>(null);
+
   const checkResumption = useCallback(async (tid: string) => {
     if (!isMountedRef.current) {
       return;
@@ -173,6 +176,15 @@ export function useStreamResumption({
   useEffect(() => {
     isMountedRef.current = true;
 
+    // Log only when enabled state changes (not on every render)
+    if (prevEnabledRef.current !== enabled && threadId) {
+      if (enabled && prevEnabledRef.current === false) {
+        // Only log when transitioning from disabled to enabled
+        rlog.resume('hook-enabled', `tid=${threadId.slice(-8)} resumption check now enabled`);
+      }
+      prevEnabledRef.current = enabled;
+    }
+
     // Early exits - no logging needed for normal guard behavior
     if (!threadId) {
       return;
@@ -212,9 +224,14 @@ export function useStreamResumption({
 
   const hasInProgressRound = status === StreamResumptionStatuses.COMPLETE && state !== null && isInProgressPhase(state.currentPhase);
 
-  // Only log when we actually found an in-progress round
-  if (hasInProgressRound) {
+  // Track if we've already logged finding an in-progress round for this thread
+  // This prevents spamming the log on every render
+  const hasLoggedInProgressRef = useRef<string | null>(null);
+  const logKey = threadId ? `${threadId}_${state?.currentPhase}` : null;
+
+  if (hasInProgressRound && logKey && hasLoggedInProgressRef.current !== logKey) {
     rlog.resume('hook-result', `Found in-progress round: phase=${state?.currentPhase}`);
+    hasLoggedInProgressRef.current = logKey;
   }
 
   return {

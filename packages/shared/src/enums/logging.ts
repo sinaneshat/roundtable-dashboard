@@ -364,8 +364,8 @@ export function isValidRequestLogLevel(value: unknown): value is RequestLogLevel
 
 // 7. ENVIRONMENT MAPPING
 export const REQUEST_LOG_LEVEL_BY_ENV: Record<string, RequestLogLevel> = {
-  development: RequestLogLevels.NONE,
-  local: RequestLogLevels.NONE,
+  development: RequestLogLevels.STANDARD,
+  local: RequestLogLevels.STANDARD,
   preview: RequestLogLevels.STANDARD,
   prod: RequestLogLevels.MINIMAL,
   production: RequestLogLevels.MINIMAL,

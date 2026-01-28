@@ -7,13 +7,93 @@
 import { createMiddleware, createStart } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 
+import { serverLog } from '@/lib/utils/dev-logger';
+
+// Skip logging for static assets and internal routes
+const SKIP_LOG_PATTERNS = [
+  '/_build/',
+  '/_stream/',
+  '/_server/', // Server functions logged separately
+  '/favicon',
+  '.js',
+  '.css',
+  '.map',
+  '.woff',
+  '.png',
+  '.jpg',
+  '.svg',
+];
+
+function shouldSkipLog(path: string): boolean {
+  return SKIP_LOG_PATTERNS.some(pattern => path.includes(pattern));
+}
+
 /**
  * Request middleware - runs for ALL server requests (routes, SSR, server functions)
- * Placeholder for request-level middleware (logging, observability, CSP, etc.)
+ * Logs SSR requests with timing for observability.
  */
 const requestMiddleware = createMiddleware().server(async ({ next }) => {
-  return next();
+  const request = getRequest();
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  // Skip static assets and internal routes
+  if (shouldSkipLog(path)) {
+    return next();
+  }
+
+  const startTime = Date.now();
+
+  try {
+    const result = await next();
+    const duration = Date.now() - startTime;
+
+    // Log SSR renders (non-API page requests)
+    serverLog.ssr('render', path, { durationMs: duration });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    serverLog.error(`SSR error: ${path}`, {
+      durationMs: duration,
+      errorMsg: error instanceof Error ? error.message.slice(0, 50) : 'unknown',
+    });
+    throw error;
+  }
 });
+
+/**
+ * Server function logging middleware.
+ * Logs server function calls with timing for observability.
+ */
+const serverFnLoggingMiddleware = createMiddleware({ type: 'function' }).server(
+  async ({ next }) => {
+    const request = getRequest();
+    const url = new URL(request.url);
+
+    // Extract function name from URL if available (/_server/functionName)
+    const pathParts = url.pathname.split('/');
+    const fnName = pathParts[pathParts.length - 1] || 'unknown';
+
+    const startTime = Date.now();
+
+    try {
+      const result = await next();
+      const duration = Date.now() - startTime;
+
+      serverLog.serverFn('call', fnName, { durationMs: duration });
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      serverLog.serverFn('error', fnName, {
+        durationMs: duration,
+        errorMsg: error instanceof Error ? error.message.slice(0, 50) : 'unknown',
+      });
+      throw error;
+    }
+  },
+);
 
 /**
  * Cookie extraction middleware for server functions.
@@ -54,6 +134,6 @@ export const cookieMiddleware = createMiddleware({ type: 'function' }).server(
  * Auth is handled client-side after hydration.
  */
 export const startInstance = createStart(() => ({
-  functionMiddleware: [cookieMiddleware],
+  functionMiddleware: [serverFnLoggingMiddleware, cookieMiddleware],
   requestMiddleware: [requestMiddleware],
 }));

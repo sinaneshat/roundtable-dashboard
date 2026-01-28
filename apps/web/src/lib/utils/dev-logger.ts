@@ -88,6 +88,34 @@ const CRITICAL_CATEGORIES = new Set([
   'race',
 ]);
 
+// ============================================================================
+// VERBOSE FLAGS - Enable for deep debugging specific subsystems
+// ============================================================================
+
+/**
+ * When true, logs ALL resume-related events including expected disabled states.
+ * Default false - only logs state changes, actual resumptions, and errors.
+ * Enable via: rlog.setVerboseResume(true) or localStorage.set('rlog_verbose_resume', '1')
+ */
+let VERBOSE_RESUME = typeof localStorage !== 'undefined'
+  ? localStorage.getItem('rlog_verbose_resume') === '1'
+  : false;
+
+export function setVerboseResume(enabled: boolean): void {
+  VERBOSE_RESUME = enabled;
+  if (typeof localStorage !== 'undefined') {
+    if (enabled) {
+      localStorage.setItem('rlog_verbose_resume', '1');
+    } else {
+      localStorage.removeItem('rlog_verbose_resume');
+    }
+  }
+}
+
+export function isVerboseResumeEnabled(): boolean {
+  return VERBOSE_RESUME;
+}
+
 // Categories that should only log on value changes
 const VALUE_CHANGE_CATEGORIES = new Set([
   'init',
@@ -435,6 +463,12 @@ export const rlog = {
     rlogNow(RlogCategories.FRAME, msg);
   },
   gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),
+  /**
+   * Get/set verbose resume logging.
+   * When false (default): only logs state changes, actual resumptions, and errors.
+   * When true: logs all resume events including expected disabled states.
+   */
+  getVerboseResume: isVerboseResumeEnabled,
   // ✅ Participant handoff logging (P0 → P1 → P2 transitions)
   handoff: (action: string, detail: string): void => rlogNow(RlogCategories.HANDOFF, `${action}: ${detail}`),
   // ✅ DEBOUNCE FIX: Changed init from rlogNow to rlogLog
@@ -477,7 +511,42 @@ export const rlog = {
   },
   // ✅ Race condition detection logging
   race: (action: string, detail: string): void => rlogNow(RlogCategories.RACE, `${action}: ${detail}`),
-  resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
+  /**
+   * Resume logging with verbose flag support.
+   * Critical resume events (trigger, in-progress-detected, error) always log.
+   * Verbose events (enabled-check, skip, guard) only log when VERBOSE_RESUME=true.
+   */
+  resume: (key: string, detail: string): void => {
+    // Always log critical resume events
+    const criticalKeys = new Set([
+      'trigger',
+      'in-progress-detected',
+      'hook-result', // Found in-progress round
+      'hook-fetch', // Actually fetching
+      'hook-parsed', // Parsed response with in-progress
+      'skip-stale', // Important: prevented stale resumption
+      'fill-completed', // Fetching completed messages
+      'reset', // Thread changed
+    ]);
+
+    if (criticalKeys.has(key)) {
+      rlogLog(RlogCategories.RESUME, key, detail);
+      return;
+    }
+
+    // Skip verbose logs unless VERBOSE_RESUME is enabled
+    if (!VERBOSE_RESUME) {
+      return;
+    }
+
+    rlogLog(RlogCategories.RESUME, key, detail);
+  },
+  /**
+   * Resume logging that always logs (for state changes, errors).
+   * Use this for events that should always be visible regardless of VERBOSE_RESUME.
+   */
+  resumeAlways: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
+  setVerboseResume,
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
   // ✅ DEBOUNCE FIX: All stream logs now debounced - fires frequently during streaming
   // Skip APPEND logs entirely - they add no debugging value
@@ -514,5 +583,87 @@ export const devLog = {
       .join(' ');
 
     debouncedLog(key, DevLogLevels.DEBUG, pairs);
+  },
+};
+
+// ============================================================================
+// SERVER-SIDE LOGGING (SSR / Server Functions)
+// ============================================================================
+
+/**
+ * Server-side log styles for SSR categories
+ */
+const SERVER_LOG_STYLES = {
+  ERROR: 'color: #D32F2F; font-weight: bold',
+  LOADER: 'color: #4ECDC4; font-weight: bold', // Teal - route loaders
+  SERVERFN: 'color: #45B7D1; font-weight: bold', // Sky blue - server functions
+  SESSION: 'color: #96CEB4; font-weight: bold', // Sage - session/auth
+  SSR: 'color: #FF6B6B; font-weight: bold', // Coral - server rendering
+} as const;
+
+type ServerLogCategory = keyof typeof SERVER_LOG_STYLES;
+
+/**
+ * Format data for server logging (key=value pairs)
+ */
+function formatServerData(data?: Record<string, string | number | boolean | null | undefined>): string {
+  if (!data) {
+    return '';
+  }
+  return Object.entries(data)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => formatDebugValue(k, v))
+    .join(' ');
+}
+
+/**
+ * Server-side immediate log (no debouncing, works in SSR context)
+ * Uses direct console.log - shows in terminal during wrangler dev
+ */
+function serverLogNow(
+  category: ServerLogCategory,
+  action: string,
+  message: string,
+  data?: Record<string, string | number | boolean | null | undefined>,
+): void {
+  if (!isDev) {
+    return;
+  }
+  const dataStr = formatServerData(data);
+  const fullMessage = dataStr ? `${message} ${dataStr}` : message;
+  const style = SERVER_LOG_STYLES[category];
+  // eslint-disable-next-line no-console
+  console.log(`%c[${category}:${action}] ${fullMessage}`, style);
+}
+
+/**
+ * Server-side logger for SSR and server functions.
+ * Uses direct console.log without browser-specific deduplication.
+ *
+ * @example
+ * import { serverLog } from '@/lib/utils/dev-logger';
+ *
+ * serverLog.ssr('render', '/chat/123', { durationMs: 45 });
+ * serverLog.serverFn('call', 'getSession', { durationMs: 12 });
+ */
+export const serverLog = {
+  error: (message: string, data?: Record<string, string | number | boolean | null | undefined>): void => {
+    serverLogNow('ERROR', 'error', message, data);
+  },
+
+  loader: (action: string, message: string, data?: Record<string, string | number | boolean | null | undefined>): void => {
+    serverLogNow('LOADER', action, message, data);
+  },
+
+  serverFn: (action: string, message: string, data?: Record<string, string | number | boolean | null | undefined>): void => {
+    serverLogNow('SERVERFN', action, message, data);
+  },
+
+  session: (action: string, message: string, data?: Record<string, string | number | boolean | null | undefined>): void => {
+    serverLogNow('SESSION', action, message, data);
+  },
+
+  ssr: (action: string, message: string, data?: Record<string, string | number | boolean | null | undefined>): void => {
+    serverLogNow('SSR', action, message, data);
   },
 };

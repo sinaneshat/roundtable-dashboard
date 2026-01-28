@@ -22,6 +22,7 @@ import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation';
 import { rlog } from '@/lib/utils/dev-logger';
+import { slog } from '@/lib/utils/stream-logger';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -196,6 +197,9 @@ export async function initializeRoundExecution(
       JSON.stringify(state),
       { expirationTtl: ROUND_STATE_TTL },
     );
+
+    // Backend slog for correlation with frontend
+    slog.phase('init', `r${roundNumber} pCount=${totalParticipants} tid=${threadId.slice(-8)}`);
 
     // ✅ FRAME 2/8: Round initialized - all placeholders appear
     const isRound1 = roundNumber === 0;
@@ -467,6 +471,10 @@ export async function markParticipantStarted(
 
   // ✅ FRAME 3: First participant starts streaming
   const isRound1 = roundNumber === 0;
+
+  // Backend slog for correlation
+  slog.stream('P-start', `r${roundNumber} P${participantIndex} ACTIVE`);
+
   if (participantIndex === 0) {
     if (isRound1) {
       rlog.frame(3, 'P0-start', `r${roundNumber} P0 streaming begins, others waiting`);
@@ -524,8 +532,12 @@ export async function markParticipantCompleted(
   const isLastParticipant = allParticipantsComplete;
   const nextIndex = participantIndex + 1;
 
+  // Backend slog for correlation
+  slog.handoff('P-done', `r${roundNumber} P${participantIndex} COMPLETED (${completedParticipants}/${state.totalParticipants})`);
+
   if (isLastParticipant) {
     // Frame 5: All participants complete → moderator starts
+    slog.phase('participants→moderator', `r${roundNumber} all participants done`);
     rlog.frame(5, 'all-participants-complete', `r${roundNumber} P${participantIndex} was LAST → phase→MODERATOR`);
   } else {
     // Frame 4: Participant handoff (baton pass)
@@ -615,6 +627,10 @@ export async function markModeratorCompleted(
     phase: RoundExecutionPhases.COMPLETE,
     status: RoundExecutionStatuses.COMPLETED,
   }, env, logger);
+
+  // Backend slog for correlation
+  slog.moderator('complete', `r${roundNumber} MOD done → COMPLETE`);
+  slog.phase('complete', `r${roundNumber} round finished`);
 
   // ✅ FRAME 6/12: Round complete
   const isRound1 = roundNumber === 0;
@@ -1008,10 +1024,13 @@ export async function updatePreSearchStatus(
 
   // ✅ FRAME 10/11: Pre-search (web research) tracking
   if (status === RoundPreSearchStatuses.RUNNING) {
+    slog.presearch('start', `r${roundNumber} web research running`);
     rlog.frame(10, 'presearch-start', `r${roundNumber} Web research streaming (blocks participants)`);
   } else if (status === RoundPreSearchStatuses.COMPLETED) {
+    slog.presearch('done', `r${roundNumber} web research completed`);
     rlog.frame(11, 'presearch-complete', `r${roundNumber} Web research done → participants can start`);
   } else if (status === RoundPreSearchStatuses.FAILED) {
+    slog.race('presearch-fail', `r${roundNumber} web research failed`);
     rlog.stuck('presearch-failed', `r${roundNumber} Web research failed`);
   }
 

@@ -27,6 +27,7 @@ import * as z from 'zod';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { slog } from '@/lib/utils/stream-logger';
 import { markParticipantTriggered } from '@/services/round-orchestration';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
@@ -297,6 +298,8 @@ export async function queueTriggerParticipant(
   attachmentIds?: string[],
   logger?: TypedLogger,
 ): Promise<void> {
+  slog.stream('queue-P', `r${roundNumber} P${participantIndex} queued`);
+
   await queue.send({
     attachmentIds,
     messageId: `trigger-${threadId}-r${roundNumber}-p${participantIndex}-${Date.now()}`,
@@ -328,6 +331,8 @@ export async function queueTriggerModerator(
   sessionToken: string,
   logger?: TypedLogger,
 ): Promise<void> {
+  slog.moderator('queue', `r${roundNumber} MOD queued`);
+
   await queue.send({
     messageId: `trigger-${threadId}-r${roundNumber}-moderator-${Date.now()}`,
     queuedAt: new Date().toISOString(),

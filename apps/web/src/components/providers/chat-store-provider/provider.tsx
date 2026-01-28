@@ -61,7 +61,16 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef(queryClient);
-  const lastMessageFetchTimeRef = useRef<number>(0);
+
+  // ============================================================================
+  // ROUND-SPECIFIC FETCH TRACKING - Prevents duplicate message fetches
+  // ============================================================================
+  // Problem: Multiple code paths can trigger message fetches for the same round:
+  // - handleRoundComplete callback when subscriptions report round complete
+  // - fill-completed effect when resumption detects missing moderator messages
+  // This caused 4 API calls for 3 rounds. Solution: Track fetched rounds explicitly.
+  const fetchedRoundsRef = useRef<Set<string>>(new Set());
+  const prevFetchThreadIdRef = useRef<string | null>(null);
 
   // Get store state for hooks
   const {
@@ -95,6 +104,48 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const effectiveThreadId = thread?.id || createdThreadId || '';
   const enabledParticipantCount = countEnabledParticipants(participants);
 
+  /**
+   * Check if messages should be fetched for a specific thread+round combination.
+   * Returns true (and marks as fetched) if this is the first request.
+   * Returns false if already fetched.
+   */
+  const shouldFetchMessages = useCallback((threadId: string, roundNumber: number, source: string) => {
+    const key = `${threadId}:r${roundNumber}`;
+    if (fetchedRoundsRef.current.has(key)) {
+      rlog.phase('fetch-skip', `${source} - already fetched ${key}`);
+      return false;
+    }
+    fetchedRoundsRef.current.add(key);
+    rlog.phase('fetch-allowed', `${source} - fetching ${key}`);
+    return true;
+  }, []);
+
+  // Reset fetched rounds when thread changes
+  useEffect(() => {
+    if (effectiveThreadId !== prevFetchThreadIdRef.current) {
+      if (prevFetchThreadIdRef.current !== null && fetchedRoundsRef.current.size > 0) {
+        rlog.phase('fetch-reset', `thread changed ${prevFetchThreadIdRef.current?.slice(-8) ?? 'null'} → ${effectiveThreadId?.slice(-8) ?? 'null'}, clearing ${fetchedRoundsRef.current.size} cached rounds`);
+        fetchedRoundsRef.current.clear();
+      }
+      prevFetchThreadIdRef.current = effectiveThreadId;
+    }
+  }, [effectiveThreadId]);
+
+  // ✅ FIX: Helper to get fresh participant count for critical operations
+  // The selector-based `enabledParticipantCount` can be stale due to React batching.
+  // This function always reads directly from store.getState() and logs divergence.
+  const getFreshParticipantCount = useCallback((context: string) => {
+    const freshParticipants = store.getState().participants;
+    const freshCount = countEnabledParticipants(freshParticipants);
+
+    // Log divergence for debugging - this catches the race condition
+    if (enabledParticipantCount !== freshCount) {
+      rlog.race('selector-stale', `${context} pCount=${freshCount}(store)/${enabledParticipantCount}(props) - using fresh`);
+    }
+
+    return freshCount;
+  }, [enabledParticipantCount, store]);
+
   // Determine if subscriptions should be active
   // Active when we have a thread, a round number, and are in a streaming phase
   const shouldSubscribe = useMemo(() => {
@@ -119,7 +170,16 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // Don't check resumption for newly created threads - they haven't had time to populate KV state
   // Per FLOW_DOCUMENTATION.md: DB-KV sync has latency, resumption only for returning users
   const resumptionEnabled = storeHasInitiallyLoaded && !isStreaming && !waitingToStartStreaming && !createdThreadId;
-  rlog.resume('provider-hook-call', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} enabled=${resumptionEnabled} phase=${phase} hasLoaded=${storeHasInitiallyLoaded} isStreaming=${isStreaming} waiting=${waitingToStartStreaming} created=${!!createdThreadId}`);
+
+  // Track previous resumptionEnabled to only log on state changes (not every render)
+  const prevResumptionEnabledRef = useRef<boolean | null>(null);
+  if (prevResumptionEnabledRef.current !== resumptionEnabled) {
+    // Only log when state changes to enabled
+    if (resumptionEnabled && !prevResumptionEnabledRef.current) {
+      rlog.resume('provider-enabled', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} resumption check enabled`);
+    }
+    prevResumptionEnabledRef.current = resumptionEnabled;
+  }
 
   const { hasInProgressRound, state: resumptionState, status: resumptionStatus } = useStreamResumption({
     currentPhase: phase,
@@ -132,23 +192,19 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
   // Resume in-progress round when detected by backend state
   useEffect(() => {
-    rlog.resume('provider-effect', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} hasInProgress=${hasInProgressRound} status=${resumptionStatus} statePhase=${resumptionState?.currentPhase ?? 'null'} storePhase=${phase}`);
-
+    // Skip verbose logging - the hook itself logs when in-progress is found
     // Guard: Need an in-progress round
     if (!hasInProgressRound || !resumptionState) {
-      rlog.resume('provider-guard', `tid=${effectiveThreadId?.slice(-8) ?? 'null'} SKIP: hasInProgress=${hasInProgressRound} hasState=${!!resumptionState}`);
       return;
     }
 
     // Guard: Need thread ID
     if (!effectiveThreadId) {
-      rlog.resume('provider-guard', 'SKIP: no threadId');
       return;
     }
 
-    // Guard: Already resumed this thread
+    // Guard: Already resumed this thread (no need to log - expected behavior)
     if (resumedThreadIdRef.current === effectiveThreadId) {
-      rlog.resume('skip-duplicate', `tid=${effectiveThreadId.slice(-8)} already resumed`);
       return;
     }
 
@@ -168,6 +224,9 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     // Note: Backend returns lowercase phases: 'pre_search', 'participants', 'moderator'
     // But there's no currentParticipantIndex in the schema - use nextParticipantToTrigger instead
     const { currentPhase, nextParticipantToTrigger, roundNumber, totalParticipants } = resumptionState;
+
+    // ✅ FIX: Get FRESH participant count to avoid stale selector data
+    const freshEnabledCount = getFreshParticipantCount('resumption');
 
     // Guard: Don't resume if round is already complete
     // This can happen if the round finishes between the hook checking backend state
@@ -208,11 +267,12 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
     // Resume the round with proper state
     // Use nextParticipantToTrigger as the current index (it's the next one to stream)
+    // ✅ FIX: Use fresh count, not the potentially stale selector count
     store.getState().resumeInProgressRound({
       currentParticipantIndex: nextParticipantToTrigger ?? 0,
       phase: mappedPhase,
       roundNumber,
-      totalParticipants: totalParticipants ?? enabledParticipantCount,
+      totalParticipants: totalParticipants ?? freshEnabledCount,
     });
   }, [
     hasInProgressRound,
@@ -221,7 +281,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     effectiveThreadId,
     waitingToStartStreaming,
     phase,
-    enabledParticipantCount,
+    getFreshParticipantCount,
     store,
   ]);
 
@@ -238,10 +298,17 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     }
   }, [effectiveThreadId]);
 
-  // Log resumption status for debugging
+  // Track if we've logged the "no-active" message to prevent repeated logs
+  const hasLoggedNoActiveRef = useRef<string | null>(null);
+
+  // Log resumption status for debugging - only once per thread
   useEffect(() => {
     if (resumptionStatus === 'complete' && !hasInProgressRound && effectiveThreadId) {
-      rlog.resume('no-active', `tid=${effectiveThreadId.slice(-8)} no in-progress round detected`);
+      // Only log once per thread to avoid spam
+      if (hasLoggedNoActiveRef.current !== effectiveThreadId) {
+        rlog.resume('no-active', `tid=${effectiveThreadId.slice(-8)} no in-progress round detected`);
+        hasLoggedNoActiveRef.current = effectiveThreadId;
+      }
     }
   }, [resumptionStatus, hasInProgressRound, effectiveThreadId]);
 
@@ -319,6 +386,13 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       return;
     }
 
+    // ✅ FIX: Use round-specific fetch tracking to prevent duplicate API calls
+    // This is the coordination point with handleRoundComplete - both paths check here
+    if (!shouldFetchMessages(effectiveThreadId, roundNumber, 'fill-completed')) {
+      hasFetchedCompletedResponsesRef.current = true;
+      return;
+    }
+
     const reason = missingModeratorMessage ? 'missing moderator' : 'resumed round completed';
     rlog.resume('fill-completed', `tid=${effectiveThreadId.slice(-8)} r${roundNumber} ${reason} - fetching messages`);
     hasFetchedCompletedResponsesRef.current = true;
@@ -345,7 +419,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
         rlog.stuck('fill-completed', `error: ${error instanceof Error ? error.message : 'unknown'}`);
       }
     })();
-  }, [resumptionStatus, resumptionState, effectiveThreadId, store]);
+  }, [resumptionStatus, resumptionState, effectiveThreadId, shouldFetchMessages, store]);
 
   // ============================================================================
   // ROUND SUBSCRIPTION - Backend-First Pattern
@@ -470,63 +544,60 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     rlog.phase('handleRoundComplete', `hasPlaceholders=${hasPlaceholders} msgCount=${state.messages.length}`);
 
     if (hasPlaceholders) {
-      // ✅ SKIP if recently fetched (prevents redundant API calls)
-      // Capture fetch time at start to avoid race conditions with concurrent callbacks
-      const fetchStartTime = Date.now();
-      const timeSinceLastFetch = fetchStartTime - lastMessageFetchTimeRef.current;
-      if (timeSinceLastFetch < 5000) {
-        rlog.phase('handleRoundComplete', `📡 SKIP fetch - recently fetched ${timeSinceLastFetch}ms ago`);
+      // ✅ FIX: Use round-specific fetch tracking instead of time-based dedupe
+      // This coordinates with fill-completed effect to prevent duplicate API calls
+      // for the same thread+round combination across different code paths
+      if (!threadId) {
+        rlog.moderator('round-complete', `skipping completeStreaming - no threadId for fetch`);
+        return;
+      }
+
+      if (!shouldFetchMessages(threadId, roundNumber, 'handleRoundComplete')) {
+        // Already fetched this round - just complete streaming
         state.completeStreaming();
         return;
       }
 
-      // Mark fetch start time immediately to prevent concurrent fetches
-      lastMessageFetchTimeRef.current = fetchStartTime;
-
       // ✅ FIX: When resuming an already-complete round, placeholders exist but no streaming
       // content will arrive. Fetch completed messages from server to fill the placeholders.
       // This handles the race condition where page refresh happens right as round completes.
-      if (threadId) {
-        rlog.moderator('round-complete', `streaming placeholders exist - fetching completed messages from server`);
-        try {
-          rlog.phase('handleRoundComplete', `Fetching messages for ${threadId.slice(-8)}`);
-          const result = await getThreadMessagesService({ param: { id: threadId } });
-          rlog.phase('handleRoundComplete', `Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
-          if (result.success && result.data?.items) {
-            const currentState = store.getState();
-            const participants = currentState.participants;
-            const currentMessages = currentState.messages;
-            const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
+      rlog.moderator('round-complete', `streaming placeholders exist - fetching completed messages from server`);
+      try {
+        rlog.phase('handleRoundComplete', `Fetching messages for ${threadId.slice(-8)}`);
+        const result = await getThreadMessagesService({ param: { id: threadId } });
+        rlog.phase('handleRoundComplete', `Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
+        if (result.success && result.data?.items) {
+          const currentState = store.getState();
+          const participants = currentState.participants;
+          const currentMessages = currentState.messages;
+          const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
 
-            // ✅ OPTIMIZATION: Use incremental merge instead of full replacement
-            // This keeps existing messages with real IDs, only replacing placeholders
-            const mergedMessages = mergeServerMessages(currentMessages, serverMessages);
+          // ✅ OPTIMIZATION: Use incremental merge instead of full replacement
+          // This keeps existing messages with real IDs, only replacing placeholders
+          const mergedMessages = mergeServerMessages(currentMessages, serverMessages);
 
-            // Log efficiency metrics
-            const currentCount = currentMessages.length;
-            const serverCount = serverMessages.length;
-            const mergedCount = mergedMessages.length;
-            const replacedCount = currentMessages.filter(m => m.id.startsWith('streaming_')).length;
-            rlog.moderator('fetch-efficiency', `current=${currentCount} server=${serverCount} merged=${mergedCount} placeholders_replaced=${replacedCount}`);
+          // Log efficiency metrics
+          const currentCount = currentMessages.length;
+          const serverCount = serverMessages.length;
+          const mergedCount = mergedMessages.length;
+          const replacedCount = currentMessages.filter(m => m.id.startsWith('streaming_')).length;
+          rlog.moderator('fetch-efficiency', `current=${currentCount} server=${serverCount} merged=${mergedCount} placeholders_replaced=${replacedCount}`);
 
-            rlog.phase('handleRoundComplete', `Setting ${mergedMessages.length} merged messages and calling completeStreaming`);
-            store.getState().setMessages(mergedMessages);
-            store.getState().completeStreaming();
-            rlog.phase('handleRoundComplete', `completeStreaming called - phase should now be COMPLETE`);
-          } else {
-            rlog.stuck('round-complete', `failed to fetch messages: ${result.success ? 'no items' : 'request failed'}`);
-          }
-        } catch (error) {
-          rlog.stuck('round-complete', `error fetching messages: ${error instanceof Error ? error.message : 'unknown'}`);
+          rlog.phase('handleRoundComplete', `Setting ${mergedMessages.length} merged messages and calling completeStreaming`);
+          store.getState().setMessages(mergedMessages);
+          store.getState().completeStreaming();
+          rlog.phase('handleRoundComplete', `completeStreaming called - phase should now be COMPLETE`);
+        } else {
+          rlog.stuck('round-complete', `failed to fetch messages: ${result.success ? 'no items' : 'request failed'}`);
         }
-      } else {
-        rlog.moderator('round-complete', `skipping completeStreaming - no threadId for fetch`);
+      } catch (error) {
+        rlog.stuck('round-complete', `error fetching messages: ${error instanceof Error ? error.message : 'unknown'}`);
       }
     } else {
       rlog.phase('handleRoundComplete', `✅ No placeholders - calling completeStreaming directly`);
       state.completeStreaming();
     }
-  }, [store]);
+  }, [shouldFetchMessages, store]);
 
   const handleEntityError = useCallback((entity: EntityType, error: Error) => {
     rlog.stuck('sub', `${entity} error: ${error.message}`);
@@ -848,9 +919,11 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   // Initialize subscription state when round starts
   useEffect(() => {
     if (shouldSubscribe && currentRoundNumber !== null) {
-      store.getState().initializeSubscriptions(currentRoundNumber, enabledParticipantCount);
+      // ✅ FIX: Get FRESH participant count to avoid stale selector data
+      const freshEnabledCount = getFreshParticipantCount('initSubs');
+      store.getState().initializeSubscriptions(currentRoundNumber, freshEnabledCount);
     }
-  }, [shouldSubscribe, currentRoundNumber, enabledParticipantCount, store]);
+  }, [shouldSubscribe, currentRoundNumber, enabledParticipantCount, getFreshParticipantCount, store]);
 
   // ============================================================================
   // AI SDK HOOK (for P0 message sending)
@@ -1123,7 +1196,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
     // Log divergence for debugging - this catches the race condition
     if (selectorEnabledCount !== freshEnabledCount) {
-      rlog.trigger('stale-selector-detected', `r${roundNumber} selector=${selectorEnabledCount} fresh=${freshEnabledCount} - using fresh`);
+      rlog.race('selector-stale', `trigger pCount=${freshEnabledCount}(store)/${selectorEnabledCount}(props) - using fresh`);
     }
 
     // Use the fresh count, not the potentially stale selector count

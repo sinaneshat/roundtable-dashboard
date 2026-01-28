@@ -177,6 +177,13 @@ export function useEntitySubscription({
   // This prevents unnecessary subscription restarts when enabled toggles
   const hasSubscribedKeyRef = useRef<string | null>(null);
 
+  // FIX: Track dispatched presearch events to prevent re-dispatch at SSE parsing level
+  // When incomplete JSON is buffered and completed, the event could be processed twice.
+  // Key format: `${roundNumber}:${eventType}:${index}` (e.g., "0:query:0", "0:result:1")
+  // Events without index (start, complete, done) use just `${roundNumber}:${eventType}` as key
+  // This ref persists across 202 retries but is reset when round number changes
+  const dispatchedPresearchEventsRef = useRef<Set<string>>(new Set());
+
   // Reset lastSeq when round number changes to prevent stale sequence numbers
   // This fixes the round 2+ submission failure where subscriptions detect "complete"
   // instantly because they're using stale lastSeq values from the previous round
@@ -191,6 +198,7 @@ export function useEntitySubscription({
       retryCountRef.current = 0;
       isCompleteRef.current = false; // BUG FIX: Reset completion flag for new round
       hasSubscribedKeyRef.current = null; // ✅ FIX P6: Reset subscription key for new round
+      dispatchedPresearchEventsRef.current.clear(); // FIX: Reset dispatched events for new round
       setState(prev => ({
         ...prev,
         lastSeq: 0,
@@ -473,6 +481,23 @@ export function useEntitySubscription({
               // Try to parse the accumulated buffer
               try {
                 const eventData = JSON.parse(jsonBuffer);
+
+                // FIX: Deduplicate presearch events at SSE parsing level
+                // Generate unique key based on eventType and index (if present)
+                // This prevents re-dispatch when buffered JSON completes
+                const eventIndex = typeof eventData.index === 'number' ? eventData.index : null;
+                const eventKey = eventIndex !== null
+                  ? `${roundNumber}:${currentEventType}:${eventIndex}`
+                  : `${roundNumber}:${currentEventType}`;
+
+                if (dispatchedPresearchEventsRef.current.has(eventKey)) {
+                  rlog.race('sse-dupe-skip', `${logPrefix} ${eventKey} already dispatched - skipping`);
+                  // Clear buffer and event type, but don't dispatch again
+                  currentEventType = null;
+                  jsonBuffer = '';
+                  continue;
+                }
+                dispatchedPresearchEventsRef.current.add(eventKey);
 
                 // Success - process the complete JSON
                 currentSeq++;
