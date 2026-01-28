@@ -31,9 +31,11 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import {
+  createCompletionStream,
   createLiveParticipantResumeStream,
   createLivePreSearchResumeStream,
   createWaitingParticipantStream,
+  createWaitingPreSearchStream,
   getActiveParticipantStreamId,
   getActivePreSearchStreamId,
   getParticipantStreamChunks,
@@ -130,8 +132,26 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
     const preSearchStreamId = await getActivePreSearchStreamId(threadId, roundNumber, c.env);
 
     if (!preSearchStreamId) {
-      // Stream not started yet - return retry-after
-      return Responses.accepted(c, { retryAfter: RETRY_AFTER_MS, status: 'waiting' });
+      // ✅ FIX #2: Stream not started yet - create waiting stream that polls for it
+      // Previously returned 202 which forced client-side polling. Now follows same
+      // pattern as participant/moderator handlers with server-side waiting.
+      log.ai('stream', '[ENTITY-SUB] PreSearch - no active stream, creating waiting stream', { roundNumber });
+
+      const waitingStream = createWaitingPreSearchStream(
+        threadId,
+        roundNumber,
+        c.env,
+        {
+          waitForStreamTimeoutMs: 60 * 1000, // 60 seconds to wait
+        },
+      );
+
+      return Responses.sse(waitingStream, {
+        isActive: false,
+        phase: 'presearch',
+        resumedFromBuffer: startFromChunkIndex > 0,
+        roundNumber,
+      });
     }
 
     const metadata = await getPreSearchStreamMetadata(preSearchStreamId, c.env);
@@ -154,16 +174,26 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
       });
     }
 
-    // If completed AND frontend has all chunks, return JSON status
-    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
+    // ✅ FIX #4: Unified response contract - always return SSE, never JSON
+    // If completed AND frontend has all chunks, return SSE with immediate completion
+    // If completed BUT frontend needs chunks, stream them via SSE
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
       const chunkCount = chunks?.length ?? 0;
 
-      // Frontend already has all chunks - return JSON status
+      // Frontend already has all chunks - return SSE completion stream (not JSON)
       if (startFromChunkIndex >= chunkCount) {
-        return Responses.ok(c, {
+        const completionStream = createCompletionStream({
           lastSeq: chunkCount,
-          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+          phase: 'presearch',
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' : 'error',
+        });
+
+        return Responses.sse(completionStream, {
+          isActive: false,
+          phase: 'presearch',
+          resumedFromBuffer: false,
+          roundNumber,
+          streamId: preSearchStreamId,
         });
       }
 
@@ -323,17 +353,28 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
       });
     }
 
-    // If completed AND frontend has all chunks, return JSON status
-    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
+    // ✅ FIX #4: Unified response contract - always return SSE, never JSON
+    // If completed AND frontend has all chunks, return SSE with immediate completion
+    // If completed BUT frontend needs chunks, stream them via SSE
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
       const chunkCount = chunks?.length ?? 0;
 
-      // Frontend already has all chunks - return JSON status
+      // Frontend already has all chunks - return SSE completion stream (not JSON)
       if (startFromChunkIndex >= chunkCount) {
-        return Responses.ok(c, {
+        const completionStream = createCompletionStream({
           lastSeq: chunkCount,
           participantIndex,
-          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+          phase: 'participant',
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' : 'error',
+        });
+
+        return Responses.sse(completionStream, {
+          isActive: false,
+          participantIndex,
+          phase: 'participant',
+          resumedFromBuffer: false,
+          roundNumber,
+          streamId: participantStreamId,
         });
       }
 
@@ -484,16 +525,26 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
       });
     }
 
-    // If completed AND frontend has all chunks, return JSON status
-    // If completed BUT frontend needs chunks, stream them via SSE (no artificial delays)
+    // ✅ FIX #4: Unified response contract - always return SSE, never JSON
+    // If completed AND frontend has all chunks, return SSE with immediate completion
+    // If completed BUT frontend needs chunks, stream them via SSE
     if (metadata.status === StreamStatuses.COMPLETED || metadata.status === StreamStatuses.FAILED) {
       const chunkCount = chunks?.length ?? 0;
 
-      // Frontend already has all chunks - return JSON status
+      // Frontend already has all chunks - return SSE completion stream (not JSON)
       if (startFromChunkIndex >= chunkCount) {
-        return Responses.ok(c, {
+        const completionStream = createCompletionStream({
           lastSeq: chunkCount,
-          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' as const : 'error' as const,
+          phase: 'moderator',
+          status: metadata.status === StreamStatuses.COMPLETED ? 'complete' : 'error',
+        });
+
+        return Responses.sse(completionStream, {
+          isActive: false,
+          phase: 'moderator',
+          resumedFromBuffer: false,
+          roundNumber,
+          streamId: moderatorStreamId,
         });
       }
 

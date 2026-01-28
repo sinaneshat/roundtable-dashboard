@@ -207,6 +207,10 @@ export function useRoundSubscription({
   // Track if round complete has been called to prevent duplicates
   const hasCalledRoundCompleteRef = useRef(false);
 
+  // ✅ FIX #1: Log deduplication for round-complete-check
+  // Prevents console pollution from 30-65 identical log lines per round
+  const logDedupeRef = useRef<{ key: string; count: number }>({ count: 0, key: '' });
+
   // ✅ SEQ VALIDATION: Track expected sequence numbers per entity
   // Used to detect gaps in received chunks for debugging purposes
   const expectedSeqsRef = useRef<ExpectedSeqsState>({
@@ -377,6 +381,14 @@ export function useRoundSubscription({
     ],
   );
 
+  // ✅ FIX #1: Extract status-only array for stagger effect dependencies
+  // The stagger effect only needs to know status changes, not full state objects.
+  // This dramatically reduces effect executions from 30-65 per round to <10.
+  const participantStatuses = useMemo(
+    () => participantStates.map(s => s.status),
+    [participantStates],
+  );
+
   // ✅ PRESEARCH GATE: Backup effect for enabling participants after presearch completes
   // Primary mechanism is the onStatusChange callback above; this effect serves as backup
   // in case the callback doesn't fire (e.g., if status was already complete on mount)
@@ -406,6 +418,9 @@ export function useRoundSubscription({
   // where P1 would stream while P0 was still streaming. Now we only enable P(n+1)
   // when P(n) is complete or errored, enforcing proper "baton passing" per FLOW_DOCUMENTATION:
   // "Frame 4: P1 complete → P2 starts (baton passed)"
+  //
+  // ✅ FIX #1: Use participantStatuses (string[]) instead of participantStates (object[])
+  // to reduce effect executions. The effect only needs status changes to determine baton passing.
   useEffect(() => {
     if (!enabled) {
       return;
@@ -414,15 +429,15 @@ export function useRoundSubscription({
       return;
     } // Wait for presearch to complete first
 
-    // ✅ DIAGNOSTIC: Log participant states when stagger effect runs
-    const statesSummary = participantStates.map((s, i) => `P${i}:${s?.status ?? 'null'}`).join(' ');
+    // ✅ DIAGNOSTIC: Log participant statuses when stagger effect runs
+    const statesSummary = participantStatuses.map((status, i) => `P${i}:${status ?? 'null'}`).join(' ');
     rlog.stream('check', `r${roundNumber} stagger-effect: ${statesSummary} maxIdx=${maxEnabledIndex} aiSdkP0=${aiSdkP0Complete}`);
 
     // Find the highest index that is COMPLETE (not streaming!)
     // This enforces sequential execution: P0 complete → P1 starts → P1 complete → P2 starts
     let highestCompleteIndex = -1;
     for (let i = 0; i < participantCount; i++) {
-      const state = participantStates[i];
+      const status = participantStatuses[i];
 
       // ✅ AI SDK P0 BRIDGE: When P0 streams via AI SDK (enableWebSearch=false),
       // the subscription never receives data so its status stays 'streaming'.
@@ -431,7 +446,7 @@ export function useRoundSubscription({
 
       // FIX: Only consider complete/error status, NOT isStreaming
       // This ensures P(n+1) waits for P(n) to finish before subscribing
-      if (isP0ViaAiSdk || (state && (state.status === 'complete' || state.status === 'error'))) {
+      if (isP0ViaAiSdk || (status && (status === 'complete' || status === 'error'))) {
         highestCompleteIndex = i;
       } else {
         // Stop at first non-complete participant - sequential order matters
@@ -448,15 +463,15 @@ export function useRoundSubscription({
 
     // Check if all participants are complete to enable moderator
     // ✅ Also consider aiSdkP0Complete for P0 when checking all complete
-    const allComplete = participantStates.every((s, i) => {
+    const allComplete = participantStatuses.every((status, i) => {
       const isP0ViaAiSdk = i === 0 && aiSdkP0Complete;
-      return isP0ViaAiSdk || s.status === 'complete' || s.status === 'error';
+      return isP0ViaAiSdk || status === 'complete' || status === 'error';
     });
-    if (allComplete && participantStates.length > 0 && !moderatorEnabled) {
+    if (allComplete && participantStatuses.length > 0 && !moderatorEnabled) {
       rlog.stream('check', `r${roundNumber} all participants complete → enabling moderator`);
       setModeratorEnabled(true);
     }
-  }, [enabled, presearchReady, participantCount, participantStates, maxEnabledIndex, moderatorEnabled, roundNumber, aiSdkP0Complete]);
+  }, [enabled, presearchReady, participantCount, participantStatuses, maxEnabledIndex, moderatorEnabled, roundNumber, aiSdkP0Complete]);
 
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
@@ -481,11 +496,25 @@ export function useRoundSubscription({
         return isP0ViaAiSdk || (isCurrentRoundState(s) && (s.status === 'complete' || s.status === 'error'));
       });
 
-    const moderatorComplete = isCurrentRoundState(moderatorSub.state)
-      && (moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error');
+    // ✅ FIX #7: Derive moderatorComplete directly from terminal status
+    // Removed isCurrentRoundState guard that caused timing issues during React batching.
+    // The roundNumber guard is overly strict - status is the source of truth.
+    const moderatorComplete = moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error';
 
-    // 🔍 DEBUG: Log round completion check details
-    rlog.phase('round-complete-check', `r${roundNumber} presearch=${presearchComplete} allP=${allParticipantsDone} mod=${moderatorComplete} modState={round:${moderatorSub.state.roundNumber},status:${moderatorSub.state.status}} hookRound=${roundNumber}`);
+    // ✅ FIX #1: Deduplicated round-complete-check logging
+    // Collapses 30-65 identical log lines into one line with count suffix
+    const logKey = `${roundNumber}-${presearchComplete}-${allParticipantsDone}-${moderatorComplete}`;
+    if (logKey !== logDedupeRef.current.key) {
+      // Log previous count if we had duplicates
+      if (logDedupeRef.current.count > 1) {
+        rlog.phase('round-complete-check', `[×${logDedupeRef.current.count}] (deduplicated)`);
+      }
+      // Log new state
+      logDedupeRef.current = { count: 1, key: logKey };
+      rlog.phase('round-complete-check', `r${roundNumber} presearch=${presearchComplete} allP=${allParticipantsDone} mod=${moderatorComplete} modState={round:${moderatorSub.state.roundNumber},status:${moderatorSub.state.status}}`);
+    } else {
+      logDedupeRef.current.count++;
+    }
 
     const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
 

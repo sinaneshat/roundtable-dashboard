@@ -133,10 +133,11 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
     // ✅ SESSION TOKEN: Extract for queue-based round orchestration
     const sessionToken = extractSessionToken(c.req.header('cookie'));
 
-    // Get lastChunkIndex from query params to avoid re-sending chunks client already has
-    const lastChunkIndexParam = c.req.query('lastChunkIndex');
-    const lastChunkIndex = lastChunkIndexParam ? Number.parseInt(lastChunkIndexParam, 10) : 0;
-    const startFromChunkIndex = Number.isNaN(lastChunkIndex) ? 0 : lastChunkIndex;
+    // Get lastSeq from query params to avoid re-sending chunks client already has
+    // ✅ FIX #5: Standardized from lastChunkIndex to lastSeq for consistency with entity endpoints
+    const lastSeqParam = c.req.query('lastSeq');
+    const lastSeq = lastSeqParam ? Number.parseInt(lastSeqParam, 10) : 0;
+    const startFromChunkIndex = Number.isNaN(lastSeq) ? 0 : lastSeq;
 
     if (!c.env?.KV) {
       return Responses.noContentWithHeaders();

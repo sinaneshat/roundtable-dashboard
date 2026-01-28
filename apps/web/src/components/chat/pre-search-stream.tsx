@@ -334,7 +334,9 @@ function PreSearchStreamComponent({
         }
 
         const searchResult = validResults.find((r: PreSearchResult) => r?.index === query?.index) || validResults.find((r: PreSearchResult) => r?.query === query?.query);
-        const hasResult = !!searchResult;
+        // ✅ FIX #8: Only consider having a result when data actually exists
+        // Previously hasResult was true when object existed but data was empty, causing skeleton flash
+        const hasResult = !!searchResult && searchResult.results && searchResult.results.length > 0;
 
         // FIX 2: Track if this result is new for gradual animation
         const isNewResult = hasResult && !renderedResultsRef.current.has(query.index);
