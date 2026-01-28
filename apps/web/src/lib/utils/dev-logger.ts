@@ -36,7 +36,7 @@ const EXCESSIVE_UPDATE_THRESHOLD = 10;
 
 const LOG_DEDUPE_WINDOW_MS = 2000; // Collapse logs within 2 second window
 const LOG_DEDUPE_REPORT_THRESHOLD = 5; // Report count after N duplicates
-const LOG_THROTTLE_HIGH_FREQ_MS = 500; // Throttle high-frequency logs
+const LOG_THROTTLE_HIGH_FREQ_MS = 1000; // Throttle high-frequency logs to 1/second
 
 type DedupeEntry = {
   count: number;
@@ -50,13 +50,37 @@ const dedupeMap = new Map<string, DedupeEntry>();
 const throttleMap = new Map<string, number>(); // category -> lastLogTime
 
 // Categories that should be throttled (high frequency, low value)
-const HIGH_FREQ_CATEGORIES = new Set(['stream-append', 'chunk', 'render-state', 'query-render', 'stream', 'moderator']);
+const HIGH_FREQ_CATEGORIES = new Set([
+  'stream-append',
+  'chunk',
+  'render-state',
+  'query-render',
+  'stream',
+  'moderator',
+  'init', // Fires on every render
+  'resume', // Fires repeatedly during streaming
+  'msg', // Fires on every message count change
+  'sync', // Fires on every sync operation
+  'trigger', // Fires on every trigger check
+]);
 
 // Categories that should NEVER be deduplicated (critical for debugging)
 const CRITICAL_CATEGORIES = new Set([
-  'phase-transition', 'round-complete', 'pcount-mismatch', 'race-detected',
-  'stuck', 'error', 'start', 'end', 'complete', 'trigger', 'handoff',
-  'submit', 'changelog', 'frame', 'race',
+  'phase-transition',
+  'round-complete',
+  'pcount-mismatch',
+  'race-detected',
+  'stuck',
+  'error',
+  'start',
+  'end',
+  'complete',
+  'trigger',
+  'handoff',
+  'submit',
+  'changelog',
+  'frame',
+  'race',
 ]);
 
 function shouldLogWithDedupe(category: string, message: string): { shouldLog: boolean; suffix?: string } {
@@ -83,7 +107,7 @@ function shouldLogWithDedupe(category: string, message: string): { shouldLog: bo
         entry.count++;
         entry.lastTime = now;
       } else {
-        dedupeMap.set(key, { count: 1, firstTime: now, lastTime: now, lastArgs: message, reported: false });
+        dedupeMap.set(key, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
       }
       return { shouldLog: false };
     }
@@ -101,7 +125,7 @@ function shouldLogWithDedupe(category: string, message: string): { shouldLog: bo
     }
 
     // Start new window
-    dedupeMap.set(key, { count: 1, firstTime: now, lastTime: now, lastArgs: message, reported: false });
+    dedupeMap.set(key, { count: 1, firstTime: now, lastArgs: message, lastTime: now, reported: false });
     return { shouldLog: true, suffix };
   }
 
@@ -272,6 +296,16 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
     return;
   }
 
+  // Skip "SKIP" messages - they add no debugging value
+  if (message.includes('SKIP:')) {
+    return;
+  }
+
+  // Skip empty threadId resume logs
+  if (key === 'resume' && message.includes('tid= ')) {
+    return;
+  }
+
   // Use enhanced deduplication system
   const dedupeCategory = `${category}-${key}`;
   const { shouldLog, suffix } = shouldLogWithDedupe(dedupeCategory, message);
@@ -381,6 +415,20 @@ export const rlog = {
   // timeline-render fires on every re-render, causing excessive console spam
   init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
   isEnabled: (): boolean => rlogEnabled,
+  // Summary of deduplicated log counts (call at end of rounds for debugging)
+  logDedupeStats: (): void => {
+    if (!rlogEnabled) {
+      return;
+    }
+    const stats = Array.from(dedupeMap.entries())
+      .filter(([, e]) => e.count > 1)
+      .map(([k, e]) => `${k.split(':')[0]}:×${e.count}`)
+      .join(', ');
+    if (stats) {
+      // eslint-disable-next-line no-console
+      console.log(`%c[DEDUPE-STATS] ${stats}`, 'color: #9E9E9E; font-style: italic');
+    }
+  },
   // ✅ DEBOUNCE FIX: Changed from rlogNow to rlogLog - fires frequently during streaming
   moderator: (action: string, detail: string): void => rlogLog(RlogCategories.MOD, 'moderator', `${action}: ${detail}`),
   msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
@@ -420,20 +468,6 @@ export const rlog = {
   // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog
   // These fire frequently during renders and participant checks, causing console spam
   trigger: (action: string, detail: string): void => rlogLog(RlogCategories.TRIGGER, action, detail),
-  // Summary of deduplicated log counts (call at end of rounds for debugging)
-  logDedupeStats: (): void => {
-    if (!rlogEnabled) {
-      return;
-    }
-    const stats = Array.from(dedupeMap.entries())
-      .filter(([, e]) => e.count > 1)
-      .map(([k, e]) => `${k.split(':')[0]}:×${e.count}`)
-      .join(', ');
-    if (stats) {
-      // eslint-disable-next-line no-console
-      console.log(`%c[DEDUPE-STATS] ${stats}`, 'color: #9E9E9E; font-style: italic');
-    }
-  },
 };
 
 export const devLog = {

@@ -228,9 +228,8 @@ export function useRoundSubscription({
 
     // Detect mid-round participant count changes
     if (enabled && initialParticipantCountRef.current !== null
-        && initialParticipantCountRef.current !== participantCount) {
-      rlog.stuck('pcount-mismatch',
-        `r${roundNumber} participantCount changed mid-round: ${initialParticipantCountRef.current} → ${participantCount} (using initial count)`
+      && initialParticipantCountRef.current !== participantCount) {
+      rlog.stuck('pcount-mismatch', `r${roundNumber} participantCount changed mid-round: ${initialParticipantCountRef.current} → ${participantCount} (using initial count)`,
       );
       // Note: We continue using initialParticipantCountRef.current, not the new value
     }
@@ -434,6 +433,50 @@ export function useRoundSubscription({
     [participantStates],
   );
 
+  // ✅ P0 Completion Timeout Warning
+  // Detects if P0 via AI SDK fails to set aiSdkP0Complete flag
+  const p0TimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Only applies when P0 streams via AI SDK (not subscription)
+    // This is typically when enablePreSearch is false for the first round
+    if (!enabled || roundNumber === 0) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (p0TimeoutRef.current) {
+      clearTimeout(p0TimeoutRef.current);
+      p0TimeoutRef.current = null;
+    }
+
+    // If P0 already complete via AI SDK, no need for timeout
+    if (aiSdkP0Complete) {
+      return;
+    }
+
+    // Check if P0 is using subscription (not AI SDK)
+    const p0Status = participantStatuses[0];
+    if (p0Status === 'streaming' || p0Status === 'complete' || p0Status === 'error') {
+      // P0 is using subscription, not AI SDK - no timeout needed
+      return;
+    }
+
+    // Start timeout - P0 should complete within 60s
+    p0TimeoutRef.current = setTimeout(() => {
+      if (!aiSdkP0Complete) {
+        rlog.stuck('p0-timeout', `r${roundNumber} P0 not completed after 60s - check aiSdkP0Complete flag`);
+      }
+    }, 60_000);
+
+    return () => {
+      if (p0TimeoutRef.current) {
+        clearTimeout(p0TimeoutRef.current);
+        p0TimeoutRef.current = null;
+      }
+    };
+  }, [enabled, roundNumber, aiSdkP0Complete, participantStatuses]);
+
   // ✅ PRESEARCH GATE: Backup effect for enabling participants after presearch completes
   // Primary mechanism is the onStatusChange callback above; this effect serves as backup
   // in case the callback doesn't fire (e.g., if status was already complete on mount)
@@ -580,11 +623,11 @@ export function useRoundSubscription({
     // - If state is from wrong round, treat as not blocking (previous round's presearch)
     // - Otherwise check actual completion status
     const presearchIsCurrentRound = presearchSub.state.roundNumber === roundNumber;
-    const presearchComplete = !enablePreSearch  // Prop says disabled for this round
-      || presearchSub.state.status === 'disabled'  // Subscription explicitly disabled
-      || !presearchIsCurrentRound  // State is stale from previous round, don't block
-      || presearchSub.state.status === 'complete'  // Actually complete
-      || presearchSub.state.status === 'error';  // Failed but unblocks participants
+    const presearchComplete = !enablePreSearch // Prop says disabled for this round
+      || presearchSub.state.status === 'disabled' // Subscription explicitly disabled
+      || !presearchIsCurrentRound // State is stale from previous round, don't block
+      || presearchSub.state.status === 'complete' // Actually complete
+      || presearchSub.state.status === 'error'; // Failed but unblocks participants
 
     // Guard against empty array: areAllParticipantsComplete returns false for empty array
     // Also verify each participant's state is for the current round

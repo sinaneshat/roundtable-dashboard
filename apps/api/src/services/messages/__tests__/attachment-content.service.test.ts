@@ -386,7 +386,7 @@ describe('attachment Content Service', () => {
       // Files within limit should be processed successfully
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
-      expect(getFile).toHaveBeenCalledWith();
+      expect(getFile).toHaveBeenCalled();
     });
 
     it('should skip files exceeding memory-safe limit', async () => {
@@ -575,7 +575,7 @@ describe('attachment Content Service', () => {
       expect(result.fileParts).toHaveLength(1);
       expect(result.errors).toHaveLength(0);
       expect(result.fileParts[0]?.mimeType).toBe('application/pdf');
-      expect(getFile).toHaveBeenCalledWith();
+      expect(getFile).toHaveBeenCalled();
     });
 
     it('should process PDF files at exactly 10MB', async () => {
@@ -637,7 +637,10 @@ describe('attachment Content Service', () => {
       expect(result.fileParts).toHaveLength(0);
       expect(result.stats.skipped).toBe(1);
       expect(getFile).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith();
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('too large'),
+        expect.anything(),
+      );
     });
 
     it('should process image files within 10MB limit', async () => {

@@ -112,6 +112,21 @@ export const StandardApiResponses = {
   },
 
   /**
+   * 410 Gone - Resource no longer available
+   * Used when: Resource has been permanently removed (e.g., archived/deleted thread)
+   */
+  GONE: {
+    [HttpStatusCodes.GONE]: {
+      content: {
+        'application/json': {
+          schema: ApiErrorResponseSchema,
+        },
+      },
+      description: HttpStatusPhrases.GONE,
+    },
+  },
+
+  /**
    * 500 Internal Server Error - Unexpected server error
    * Used when: Unhandled exceptions, database errors, or other internal failures
    */
@@ -183,21 +198,6 @@ export const StandardApiResponses = {
         },
       },
       description: HttpStatusPhrases.UNAUTHORIZED,
-    },
-  },
-
-  /**
-   * 410 Gone - Resource no longer available
-   * Used when: Resource has been permanently removed (e.g., archived/deleted thread)
-   */
-  GONE: {
-    [HttpStatusCodes.GONE]: {
-      content: {
-        'application/json': {
-          schema: ApiErrorResponseSchema,
-        },
-      },
-      description: HttpStatusPhrases.GONE,
     },
   },
 } as const;

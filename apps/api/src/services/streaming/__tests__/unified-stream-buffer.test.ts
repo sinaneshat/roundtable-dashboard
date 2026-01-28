@@ -487,7 +487,7 @@ describe('unified-stream-buffer.service', () => {
       let putCallCount = 0;
       // Store the original put function BEFORE creating the spy
       // The mockKV.put is a bound function, so we need to capture the underlying storage
-      const originalStorage = new Map(mockKV._storage as Map<string, string>);
+      const _originalStorage = new Map(mockKV._storage as Map<string, string>);
       vi.spyOn(mockKV, 'put').mockImplementation(async (key: string, value: string) => {
         putCallCount++;
         if (key.includes(':c:') && putCallCount < 3) {
@@ -1519,7 +1519,7 @@ describe('unified-stream-buffer.service', () => {
       expect(results[1]).toContain('data: {"url":"https://example1.com"}');
     });
 
-    it('should send synthetic done event on timeout', async () => {
+    it('should send synthetic finish event on timeout', async () => {
       await initializePreSearchStreamBuffer(
         streamId,
         threadId,
@@ -1536,8 +1536,8 @@ describe('unified-stream-buffer.service', () => {
       const results = await streamToArray(stream);
 
       const lastResult = results[results.length - 1];
-      expect(lastResult).toContain('event: done');
-      expect(lastResult).toContain('stream_timeout');
+      expect(lastResult).toContain('event: finish');
+      expect(lastResult).toContain('PRESEARCH_TIMEOUT');
     });
   });
 });

@@ -97,7 +97,6 @@ async function consumeStream(stream: ReadableStream<Uint8Array>): Promise<string
   const chunks: string[] = [];
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
@@ -115,7 +114,7 @@ async function consumeStream(stream: ReadableStream<Uint8Array>): Promise<string
 /**
  * Helper to consume stream with timeout
  */
-async function consumeStreamWithTimeout(
+async function _consumeStreamWithTimeout(
   stream: ReadableStream<Uint8Array>,
   timeoutMs: number,
 ): Promise<{ chunks: string[]; timedOut: boolean }> {
@@ -432,14 +431,13 @@ describe('stream resumption', () => {
       ];
 
       // Verify chunks have sequential timestamps (simulating 5ms delay)
-      for (let i = 1; i < initialChunks.length; i++) {
-        const prevChunk = initialChunks[i - 1];
-        const currChunk = initialChunks[i];
-        if (prevChunk && currChunk) {
-          const timeDiff = currChunk.timestamp - prevChunk.timestamp;
-          expect(timeDiff).toBeGreaterThanOrEqual(5);
-        }
-      }
+      // Verify gradual streaming delay between consecutive chunks
+      const timeDiffs = initialChunks
+        .slice(1)
+        .map((chunk, i) => chunk.timestamp - (initialChunks[i]?.timestamp ?? 0));
+      timeDiffs.forEach((diff) => {
+        expect(diff).toBeGreaterThanOrEqual(5);
+      });
     });
 
     it('should apply gradual streaming to polling loop chunks', () => {
@@ -450,14 +448,12 @@ describe('stream resumption', () => {
       ];
 
       // Same 5ms delay applies in polling loop
-      for (let i = 1; i < polledChunks.length; i++) {
-        const prevChunk = polledChunks[i - 1];
-        const currChunk = polledChunks[i];
-        if (prevChunk && currChunk) {
-          const timeDiff = currChunk.timestamp - prevChunk.timestamp;
-          expect(timeDiff).toBeGreaterThanOrEqual(5);
-        }
-      }
+      const timeDiffs = polledChunks
+        .slice(1)
+        .map((chunk, i) => chunk.timestamp - (polledChunks[i]?.timestamp ?? 0));
+      timeDiffs.forEach((diff) => {
+        expect(diff).toBeGreaterThanOrEqual(5);
+      });
     });
   });
 
@@ -948,14 +944,13 @@ describe('stream resumption', () => {
       const reconnectionTimestamps = [1000, 1100, 1200, 1300];
       const minReconnectInterval = 50;
 
-      for (let i = 1; i < reconnectionTimestamps.length; i++) {
-        const prev = reconnectionTimestamps[i - 1];
-        const curr = reconnectionTimestamps[i];
-        if (prev !== undefined && curr !== undefined) {
-          const interval = curr - prev;
-          expect(interval).toBeGreaterThanOrEqual(minReconnectInterval);
-        }
-      }
+      // Verify minimum interval between reconnections
+      const intervals = reconnectionTimestamps
+        .slice(1)
+        .map((curr, i) => curr - (reconnectionTimestamps[i] ?? 0));
+      intervals.forEach((interval) => {
+        expect(interval).toBeGreaterThanOrEqual(minReconnectInterval);
+      });
     });
   });
 });

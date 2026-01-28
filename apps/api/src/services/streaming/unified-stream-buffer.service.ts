@@ -598,6 +598,7 @@ export async function getParticipantStreamChunks(
   streamId: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  startFromSeq = 0,
 ): Promise<StreamChunk[] | null> {
   if (!env?.KV) {
     return null;
@@ -617,7 +618,7 @@ export async function getParticipantStreamChunks(
     const BATCH_SIZE = 100;
     const chunks: StreamChunk[] = [];
 
-    for (let batchStart = 0; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
+    for (let batchStart = startFromSeq; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, metadata.chunkCount);
       const batchPromises: Promise<string | null>[] = [];
 
@@ -794,11 +795,17 @@ export function createLiveParticipantResumeStream(
     filterReasoningOnReplay = false,
     maxPollDurationMs = 10 * 60 * 1000, // 10 minutes - generous for long AI streams
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds - just under Cloudflare's 100s idle timeout
-    pollIntervalMs = 30, // 30ms for smoother streaming UX (was 100ms)
+    pollIntervalMs = 50, // 50ms base (was 30ms - too aggressive for KV's 100-250ms eventual consistency)
     startFromChunkIndex = 0,
   } = options;
   const encoder = new TextEncoder();
   let isClosed = false;
+
+  // Adaptive backoff for KV polling - reduces wasted requests during eventual consistency window
+  const INITIAL_POLL_MS = pollIntervalMs;
+  const MAX_POLL_MS = 150;
+  const BACKOFF_FACTOR = 1.5;
+  let currentPollMs = INITIAL_POLL_MS;
 
   const safeClose = (
     controller: ReadableStreamDefaultController<Uint8Array>,
@@ -925,6 +932,11 @@ export function createLiveParticipantResumeStream(
             }
             lastChunkIndex = chunks.length;
             lastNewDataTime = Date.now();
+            // Reset adaptive backoff on data found
+            currentPollMs = INITIAL_POLL_MS;
+          } else {
+            // No new data - increase poll interval with backoff (up to MAX_POLL_MS)
+            currentPollMs = Math.min(currentPollMs * BACKOFF_FACTOR, MAX_POLL_MS);
           }
 
           // ✅ FIX: Close stream if we found finish events in chunks OR metadata says complete
@@ -970,8 +982,9 @@ export function createLiveParticipantResumeStream(
             return;
           }
 
+          // Use adaptive poll interval
           await new Promise((resolve) => {
-            setTimeout(resolve, pollIntervalMs);
+            setTimeout(resolve, currentPollMs);
           });
         }
       } catch {
@@ -1008,7 +1021,7 @@ export function createWaitingParticipantStream(
     filterReasoningOnReplay = false,
     maxPollDurationMs = 10 * 60 * 1000, // 10 minutes
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds
-    pollIntervalMs = 30, // 30ms for smoother streaming UX (was 100ms)
+    pollIntervalMs = 50, // 50ms base (was 30ms - too aggressive for KV's 100-250ms eventual consistency)
     startFromChunkIndex = 0,
     waitForStreamTimeoutMs = STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
   } = options;
@@ -1071,6 +1084,7 @@ export function createWaitingParticipantStream(
         return;
       }
 
+      // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
           log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout waiting for stream`);
@@ -1117,7 +1131,9 @@ export function createWaitingParticipantStream(
             if (!allParticipantsComplete || !preSearchComplete) {
               // Participants or presearch not done yet - keep waiting for moderator
               log.ai('stream', `[WAITING-STREAM] Moderator r${roundNumber} - waiting: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
-              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+              await new Promise<void>((resolve) => {
+                setTimeout(resolve, pollIntervalMs);
+              });
               continue;
             } else {
               log.ai('stream', `[WAITING-STREAM] Moderator r${roundNumber} - all complete: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
@@ -1137,7 +1153,9 @@ export function createWaitingParticipantStream(
             if (!preSearchComplete) {
               // Presearch not done yet - block ALL participants per FLOW_DOCUMENTATION.md
               log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - blocked by presearch: status=${preSearchStatus}`);
-              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+              await new Promise<void>((resolve) => {
+                setTimeout(resolve, pollIntervalMs);
+              });
               continue;
             }
 
@@ -1151,7 +1169,9 @@ export function createWaitingParticipantStream(
               if (!allPreviousComplete) {
                 // Previous participants not done yet - keep waiting
                 log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
-                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+                await new Promise<void>((resolve) => {
+                  setTimeout(resolve, pollIntervalMs);
+                });
                 continue;
               } else {
                 log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
@@ -1183,7 +1203,9 @@ export function createWaitingParticipantStream(
             }
             lastKeepaliveTime = Date.now();
           }
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          });
         }
       }
 
@@ -1195,8 +1217,14 @@ export function createWaitingParticipantStream(
       log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
 
       // Phase 2: Stream data (same as createLiveParticipantResumeStream)
+      // Adaptive backoff for KV polling - reduces wasted requests during eventual consistency window
+      const INITIAL_POLL_MS = pollIntervalMs;
+      const MAX_POLL_MS = 150;
+      const BACKOFF_FACTOR = 1.5;
+
       let lastChunkIndex = startFromChunkIndex;
       let lastNewDataTime = Date.now();
+      let currentPollMs = INITIAL_POLL_MS; // Adaptive backoff for Phase 2 polling
 
       try {
         // Track if initial chunks contain finish event
@@ -1240,6 +1268,7 @@ export function createWaitingParticipantStream(
         }
 
         // Continue polling for new chunks
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {
             safeClose(controller);
@@ -1270,6 +1299,11 @@ export function createWaitingParticipantStream(
             }
             lastChunkIndex = chunks.length;
             lastNewDataTime = Date.now();
+            // Reset adaptive backoff on data found
+            currentPollMs = INITIAL_POLL_MS;
+          } else {
+            // No new data - increase poll interval with backoff (up to MAX_POLL_MS)
+            currentPollMs = Math.min(currentPollMs * BACKOFF_FACTOR, MAX_POLL_MS);
           }
 
           // ✅ FIX: Close stream if we found finish events in chunks OR metadata says complete
@@ -1309,7 +1343,10 @@ export function createWaitingParticipantStream(
             return;
           }
 
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          // Use adaptive poll interval
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, currentPollMs);
+          });
         }
       } catch {
         safeClose(controller);
@@ -1571,6 +1608,7 @@ export async function getPreSearchStreamMetadata(
 export async function getPreSearchStreamChunks(
   streamId: string,
   env: ApiEnv['Bindings'],
+  startFromSeq = 0,
 ): Promise<PreSearchStreamChunk[] | null> {
   if (!env?.KV) {
     return null;
@@ -1590,7 +1628,7 @@ export async function getPreSearchStreamChunks(
     const BATCH_SIZE = 50;
     const chunks: PreSearchStreamChunk[] = [];
 
-    for (let batchStart = 0; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
+    for (let batchStart = startFromSeq; batchStart < metadata.chunkCount; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, metadata.chunkCount);
       const batchPromises: Promise<string | null>[] = [];
 
@@ -1660,6 +1698,10 @@ export async function isPreSearchBufferStale(
  * @param roundNumber - Round number to stream
  * @param env - Cloudflare environment bindings
  * @param options - Stream options
+ * @param options.pollIntervalMs - Interval between polls in ms (default: 100)
+ * @param options.maxPollDurationMs - Maximum total poll duration in ms (default: 10 minutes)
+ * @param options.noNewDataTimeoutMs - Timeout when no new data received in ms (default: 90s)
+ * @param options.waitForStreamTimeoutMs - Timeout waiting for stream to appear in ms (default: 60s)
  */
 export function createWaitingPreSearchStream(
   threadId: string,
@@ -1729,6 +1771,7 @@ export function createWaitingPreSearchStream(
       }
 
       // Phase 2: Poll for stream to appear (server-side waiting, not client retry)
+      // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
           log.ai('stream', `[WAITING-PRESEARCH] r${roundNumber} - timeout waiting for stream`);
@@ -1752,7 +1795,9 @@ export function createWaitingPreSearchStream(
             }
             lastKeepaliveTime = Date.now();
           }
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          });
         }
       }
 
@@ -1780,7 +1825,9 @@ export function createWaitingPreSearchStream(
               }
               // Add delay between chunks (except after last) for gradual replay
               if (i < initialChunks.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 30));
+                await new Promise<void>((resolve) => {
+                  setTimeout(resolve, 30);
+                });
               }
             }
           }
@@ -1800,6 +1847,7 @@ export function createWaitingPreSearchStream(
         }
 
         // Continue polling for new chunks
+        // eslint-disable-next-line no-unmodified-loop-condition -- isClosed is modified in cancel() callback
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {
             safeClose(controller);
@@ -1842,7 +1890,9 @@ export function createWaitingPreSearchStream(
             return;
           }
 
-          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, pollIntervalMs);
+          });
         }
       } catch {
         safeClose(controller);
@@ -1861,6 +1911,10 @@ export function createWaitingPreSearchStream(
  * Frontend no longer needs to handle both JSON and SSE response types.
  *
  * @param data - Completion data to send
+ * @param data.lastSeq - Last sequence number
+ * @param data.participantIndex - Optional participant index
+ * @param data.phase - Stream phase: 'presearch', 'participant', or 'moderator'
+ * @param data.status - Completion status: 'complete' or 'error'
  */
 export function createCompletionStream(data: {
   lastSeq: number;
@@ -1969,7 +2023,9 @@ export function createLivePreSearchResumeStream(
               }
               // Add delay between chunks (except after last) for gradual replay
               if (i < initialChunks.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 30));
+                await new Promise<void>((resolve) => {
+                  setTimeout(resolve, 30);
+                });
               }
             }
           }

@@ -103,7 +103,7 @@ function deriveTierRecord<T>(
    *
    * ALTERNATIVE: Use Object.fromEntries with SUBSCRIPTION_TIERS.map but still requires cast
    */
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- see comment above
+  // Type assertion needed: TypeScript cannot infer loop completion fills all keys
   return result as Record<SubscriptionTier, T>;
 }
 

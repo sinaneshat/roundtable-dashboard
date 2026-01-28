@@ -368,7 +368,9 @@ export async function updateRoundExecutionState(
       if (attempt < MAX_OCC_RETRIES - 1) {
         // Exponential backoff with jitter
         const delay = OCC_BASE_DELAY_MS * 2 ** attempt + Math.random() * OCC_BASE_DELAY_MS;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, delay);
+        });
 
         logger?.info(`OCC retry ${attempt + 1}/${MAX_OCC_RETRIES} for round state (expected v${expectedVersion}, found v${verification?.version})`, LogHelpers.operation({
           operationName: 'updateRoundExecutionState',
@@ -390,7 +392,9 @@ export async function updateRoundExecutionState(
 
       // Retry on error
       const delay = OCC_BASE_DELAY_MS * 2 ** attempt;
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay);
+      });
     }
   }
 

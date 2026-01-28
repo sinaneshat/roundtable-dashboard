@@ -95,7 +95,7 @@ function createMockActiveStream(
 /**
  * Set mock stream ID for a specific participant
  */
-function setMockStreamId(
+function _setMockStreamId(
   threadId: string,
   roundNumber: number,
   participantIndex: number,
@@ -272,7 +272,7 @@ describe('sequential Participant Ordering', () => {
   describe('createWaitingParticipantStream sequential guard', () => {
     it('should check activeStream round number matches before applying guard', () => {
       const targetRound = 2;
-      const participantIndex = 1;
+      const _participantIndex = 1;
 
       // Given: Active stream is for round 1, but we want round 2
       mockThreadActiveStream = createMockActiveStream(1, {
@@ -288,7 +288,7 @@ describe('sequential Participant Ordering', () => {
     });
 
     it('should filter only non-negative indices when checking participant statuses', () => {
-      const roundNumber = 1;
+      const _roundNumber = 1;
 
       // Given: Statuses include moderator (negative index) for some reason
       const statuses: Record<number, string> = {
@@ -332,7 +332,7 @@ describe('sequential Participant Ordering', () => {
 
     it('should handle null activeStream by allowing participant to proceed to stream check', () => {
       const roundNumber = 1;
-      const participantIndex = 1;
+      const _participantIndex = 1;
 
       // Given: No active stream exists
       mockThreadActiveStream = null;
@@ -471,7 +471,7 @@ describe('sequential Participant Ordering', () => {
   describe('round boundary ordering', () => {
     it('round 2 should not be affected by Round 1 participant statuses', () => {
       const targetRound = 2;
-      const participantIndex = 0; // P0 of round 2
+      const _participantIndex = 0; // P0 of round 2
 
       // Given: Active stream is tracking Round 1
       mockThreadActiveStream = createMockActiveStream(1, {
@@ -506,7 +506,7 @@ describe('sequential Participant Ordering', () => {
 
     it('should handle transition between rounds (Round 1 moderator complete -> Round 2 start)', () => {
       // Given: Round 1 fully complete including moderator
-      const round1Complete = createMockActiveStream(1, {
+      const _round1Complete = createMockActiveStream(1, {
         0: ParticipantStreamStatuses.COMPLETED,
         1: ParticipantStreamStatuses.COMPLETED,
         2: ParticipantStreamStatuses.COMPLETED,
@@ -528,7 +528,7 @@ describe('sequential Participant Ordering', () => {
   describe('error handling in ordering', () => {
     it('failed participant should count as complete for ordering purposes', () => {
       const roundNumber = 1;
-      const participantIndex = 1;
+      const _participantIndex = 1;
 
       // Given: P0 failed (error during generation)
       mockThreadActiveStream = createMockActiveStream(roundNumber, {
@@ -545,7 +545,7 @@ describe('sequential Participant Ordering', () => {
 
     it('moderator should proceed when all participants have completed or failed', () => {
       const roundNumber = 1;
-      const participantIndex = -1;
+      const _participantIndex = -1;
 
       // Given: Mixed completion states (some completed, some failed)
       mockThreadActiveStream = createMockActiveStream(roundNumber, {
@@ -568,7 +568,7 @@ describe('sequential Participant Ordering', () => {
 
     it('should handle unknown/unexpected status values defensively', () => {
       const roundNumber = 1;
-      const participantIndex = 1;
+      const _participantIndex = 1;
 
       // Given: P0 has an unexpected status value
       mockThreadActiveStream = createMockActiveStream(roundNumber, {
@@ -585,7 +585,7 @@ describe('sequential Participant Ordering', () => {
 
     it('moderator should wait when no participants have any status yet', () => {
       const roundNumber = 1;
-      const participantIndex = -1;
+      const _participantIndex = -1;
 
       // Given: Empty participant statuses (round just started)
       mockThreadActiveStream = createMockActiveStream(roundNumber, {}, 3);

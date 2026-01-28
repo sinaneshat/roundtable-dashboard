@@ -60,6 +60,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
 
   const prevPathnameRef = useRef<string | null>(null);
   const queryClientRef = useRef(queryClient);
+  const lastMessageFetchTimeRef = useRef<number>(0);
 
   // Get store state for hooks
   const {
@@ -451,8 +452,9 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const handleRoundComplete = useCallback(async () => {
     const state = store.getState();
     const threadId = state.thread?.id;
-    rlog.phase('handleRoundComplete', `🎯 CALLED! r${state.currentRoundNumber ?? 0} phase=${state.phase} isStreaming=${state.isStreaming}`);
-    rlog.phase('subscription', `Round ${state.currentRoundNumber ?? 0} COMPLETE`);
+    const roundNumber = state.currentRoundNumber ?? 0;
+    rlog.phase('handleRoundComplete', `🎯 CALLED! r${roundNumber} phase=${state.phase} isStreaming=${state.isStreaming}`);
+    rlog.phase('subscription', `Round ${roundNumber} COMPLETE`);
 
     // ✅ FIX: Check if messages still have streaming placeholders before calling completeStreaming
     // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
@@ -462,6 +464,19 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
     rlog.phase('handleRoundComplete', `hasPlaceholders=${hasPlaceholders} msgCount=${state.messages.length}`);
 
     if (hasPlaceholders) {
+      // ✅ SKIP if recently fetched (prevents redundant API calls)
+      // Capture fetch time at start to avoid race conditions with concurrent callbacks
+      const fetchStartTime = Date.now();
+      const timeSinceLastFetch = fetchStartTime - lastMessageFetchTimeRef.current;
+      if (timeSinceLastFetch < 5000) {
+        rlog.phase('handleRoundComplete', `📡 SKIP fetch - recently fetched ${timeSinceLastFetch}ms ago`);
+        state.completeStreaming();
+        return;
+      }
+
+      // Mark fetch start time immediately to prevent concurrent fetches
+      lastMessageFetchTimeRef.current = fetchStartTime;
+
       // ✅ FIX: When resuming an already-complete round, placeholders exist but no streaming
       // content will arrive. Fetch completed messages from server to fill the placeholders.
       // This handles the race condition where page refresh happens right as round completes.
@@ -471,7 +486,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
           rlog.phase('handleRoundComplete', `📡 Fetching messages for ${threadId.slice(-8)}`);
           const result = await getThreadMessagesService({ param: { id: threadId } });
           rlog.phase('handleRoundComplete', `📡 Fetch result: success=${result.success} hasItems=${!!result.data?.items} itemCount=${result.data?.items?.length ?? 0}`);
-          if (result.success && result.data.items) {
+          if (result.success && result.data?.items) {
             const participants = store.getState().participants;
             const serverMessages = chatMessagesToUIMessages(result.data.items, participants);
             rlog.moderator('round-complete', `fetched ${serverMessages.length} messages, replacing placeholders`);

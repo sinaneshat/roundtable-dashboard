@@ -361,6 +361,10 @@ export function useEntitySubscription({
 
         if (result?.status === EntitySubscriptionStatuses.COMPLETE) {
           // Mark complete to prevent any pending retries
+          // Guard against concurrent completion from another execution
+          if (isCompleteRef.current) {
+            return;
+          }
           isCompleteRef.current = true;
           setState(prev => ({
             ...prev,
@@ -666,6 +670,12 @@ export function useEntitySubscription({
 
         // Stream ended - mark complete to prevent any pending retries
         rlog.stream('check', `🏁 ${logPrefix} SSE reader done (natural end) seq=${currentSeq}`);
+
+        // Guard against concurrent completion from another execution
+        if (isCompleteRef.current) {
+          cleanupConnection();
+          return;
+        }
         isCompleteRef.current = true;
         setState(prev => ({
           ...prev,
@@ -809,12 +819,17 @@ export function useEntitySubscription({
       // 1. Tab is now visible
       // 2. Stream is not already complete
       // 3. Stream is not currently in a terminal state
+      // 4. Not already subscribed for these params (NEW)
+      // 5. No active request in flight (NEW)
+      const requestKey = getRequestKey(threadId, roundNumber, phase, participantIndex);
+
       if (
         document.visibilityState === 'visible'
         && !isCompleteRef.current
         && stateRef.current.status !== 'complete'
         && stateRef.current.status !== 'error'
         && stateRef.current.status !== 'disabled'
+        && !activeRequestsMap.has(requestKey)
       ) {
         rlog.stream('resume', `Tab visible - reconnecting ${entity} r${roundNumber}`);
 
@@ -839,7 +854,7 @@ export function useEntitySubscription({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [enabled, entity, roundNumber, subscribe]);
+  }, [enabled, entity, participantIndex, phase, roundNumber, subscribe, threadId]);
 
   const abort = useCallback(() => {
     if (abortControllerRef.current) {

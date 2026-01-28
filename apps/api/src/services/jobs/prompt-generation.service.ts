@@ -167,12 +167,13 @@ const MessagePartsSchema = z.array(z.object({
 /**
  * Extract text content from message parts using Zod validation
  */
-function extractTextFromParts(parts: z.infer<typeof MessagePartsSchema> | null | undefined): string {
-  if (!parts) {
+function extractTextFromParts(rawParts: unknown): string {
+  const parsed = MessagePartsSchema.safeParse(rawParts);
+  if (!parsed.success) {
     return '';
   }
 
-  return parts
+  return parsed.data
     .filter((p): p is z.infer<typeof TextPartSchema> => {
       const result = TextPartSchema.safeParse(p);
       return result.success;

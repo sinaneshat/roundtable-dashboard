@@ -206,7 +206,18 @@ function PreSearchStreamComponent({
             }
           }
         }
-      } catch {
+      } catch (error) {
+        // Log polling errors for debugging but don't crash UI
+        // Network errors during polling shouldn't block the user
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        // Only log non-abort errors (abort is expected during cleanup)
+        const isAbortError = error instanceof Error && (
+          error.name === 'AbortError'
+          || errorMessage.toLowerCase().includes('abort')
+        );
+        if (!isAbortError) {
+          rlog.presearch('poll-error', `${preSearch.id.slice(-8)} polling error: ${errorMessage.slice(0, 100)}`);
+        }
       }
 
       if (isMounted) {
