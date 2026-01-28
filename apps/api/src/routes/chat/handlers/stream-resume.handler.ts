@@ -391,7 +391,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
         {
           filterReasoningOnReplay: true,
           startFromChunkIndex,
-          waitForStreamTimeoutMs: 30 * 1000, // 30 seconds to wait for stream to start
+          waitForStreamTimeoutMs: STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
         },
       );
 

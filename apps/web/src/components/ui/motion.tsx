@@ -1,6 +1,6 @@
 import type { HTMLMotionProps, Variants } from 'motion/react';
 import { LayoutGroup, motion } from 'motion/react';
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 
 import { cn } from '@/lib/ui/cn';
@@ -213,8 +213,9 @@ type AnimatedStreamingItemProps = {
 /**
  * Individual streaming item - fade in only, no height animations
  * SSR-safe: renders visible content on server, animates on client
+ * Memoized to prevent unnecessary re-renders during streaming
  */
-export function AnimatedStreamingItem({
+export const AnimatedStreamingItem = memo(function AnimatedStreamingItem({
   children,
   className,
   index = 0,
@@ -243,7 +244,7 @@ export function AnimatedStreamingItem({
       {children}
     </motion.div>
   );
-}
+});
 
 // =============================================================================
 // STREAMING MESSAGE CONTENT - Smooth height transitions during text streaming

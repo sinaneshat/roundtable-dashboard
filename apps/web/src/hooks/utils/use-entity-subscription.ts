@@ -656,6 +656,57 @@ export function useEntitySubscription({
     };
   }, [enabled, threadId, roundNumber, phase, participantIndex, subscribe]);
 
+  // Store state in ref for visibility change handler to access current values
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Build entity identifier for logging
+  const entity = `${phase}${participantIndex !== undefined ? ` p${participantIndex}` : ''}`;
+
+  // ✅ VISIBILITY CHANGE: Reconnect when tab becomes visible
+  // Per FLOW_DOCUMENTATION.md: "Handle reconnection automatically on visibility change"
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      // Only reconnect if:
+      // 1. Tab is now visible
+      // 2. Stream is not already complete
+      // 3. Stream is not currently in a terminal state
+      if (
+        document.visibilityState === 'visible'
+        && !isCompleteRef.current
+        && stateRef.current.status !== 'complete'
+        && stateRef.current.status !== 'error'
+        && stateRef.current.status !== 'disabled'
+      ) {
+        rlog.stream('resume', `Tab visible - reconnecting ${entity} r${roundNumber}`);
+
+        // Trigger reconnection by calling subscribe again
+        // The subscribe function handles deduplication internally
+        subscribe().catch((error) => {
+          // Silently ignore AbortError - expected if component unmounts
+          const isAbortError = error instanceof Error && (
+            error.name === 'AbortError'
+            || error.message.toLowerCase().includes('abort')
+            || error.message.includes('BodyStreamBuffer')
+          );
+          if (!isAbortError) {
+            rlog.stuck('sub', `visibility reconnect error: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [enabled, entity, roundNumber, subscribe]);
+
   const abort = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();

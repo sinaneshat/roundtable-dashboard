@@ -26,6 +26,7 @@
 
 import { FinishReasons, parseSSEEventType, StreamPhases, StreamStatuses } from '@roundtable/shared/enums';
 
+import { STREAMING_CONFIG } from '@/core/config';
 import { log } from '@/lib/logger';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
@@ -958,11 +959,12 @@ export function createLiveParticipantResumeStream(
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
             // ✅ AI SDK PATTERN: Send explicit error event before synthetic finish
             // This allows frontend to distinguish timeout from normal completion
+            // NOTE: SSE spec requires "event:" prefix on its own line, followed by "data:" on the next line
             const timeoutSeconds = Math.round(noNewDataTimeoutMs / 1000);
-            const errorEvent = `data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
+            const errorEvent = `event: error\ndata: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
             safeEnqueue(controller, encoder.encode(errorEvent));
 
-            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            const syntheticFinish = `event: finish\ndata: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
             safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;
@@ -1008,7 +1010,7 @@ export function createWaitingParticipantStream(
     noNewDataTimeoutMs = 90 * 1000, // 90 seconds
     pollIntervalMs = 30, // 30ms for smoother streaming UX (was 100ms)
     startFromChunkIndex = 0,
-    waitForStreamTimeoutMs = 30 * 1000, // 30 seconds to wait for stream to appear
+    waitForStreamTimeoutMs = STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
   } = options;
 
   const encoder = new TextEncoder();
@@ -1295,12 +1297,13 @@ export function createWaitingParticipantStream(
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
             // ✅ AI SDK PATTERN: Send explicit error event before synthetic finish
             // This allows frontend to distinguish timeout from normal completion
+            // NOTE: SSE spec requires "event:" prefix on its own line, followed by "data:" on the next line
             const timeoutSeconds = Math.round(noNewDataTimeoutMs / 1000);
             log.ai('stream', `[WAITING-STREAM] ${pLabel} r${roundNumber} - timeout after ${timeoutSeconds}s, sent ${lastChunkIndex} chunks`);
-            const errorEvent = `data: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
+            const errorEvent = `event: error\ndata: {"type":"error","error":"STREAM_TIMEOUT","message":"Stream timed out after ${timeoutSeconds}s of no activity"}\n\n`;
             safeEnqueue(controller, encoder.encode(errorEvent));
 
-            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            const syntheticFinish = `event: finish\ndata: {"type":"finish","finishReason":"${FinishReasons.ERROR}","error":"STREAM_TIMEOUT","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
             safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;
@@ -1729,8 +1732,10 @@ export function createWaitingPreSearchStream(
       while (!isClosed && !streamId) {
         if (Date.now() - startTime > waitForStreamTimeoutMs) {
           log.ai('stream', `[WAITING-PRESEARCH] r${roundNumber} - timeout waiting for stream`);
-          const errorEvent = `event: error\ndata: {"error":"Pre-search stream not available after ${waitForStreamTimeoutMs}ms"}\n\n`;
+          const errorEvent = `event: error\ndata: {"type":"error","error":"PRESEARCH_TIMEOUT","message":"Pre-search stream not available after ${waitForStreamTimeoutMs}ms"}\n\n`;
+          const syntheticFinish = `event: finish\ndata: {"type":"finish","finishReason":"error","error":"PRESEARCH_TIMEOUT"}\n\n`;
           safeEnqueue(controller, encoder.encode(errorEvent));
+          safeEnqueue(controller, encoder.encode(syntheticFinish));
           safeClose(controller);
           return;
         }
@@ -1829,8 +1834,10 @@ export function createWaitingPreSearchStream(
 
           const timeSinceLastNewData = Date.now() - lastNewDataTime;
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
-            const syntheticDone = `event: done\ndata: {"interrupted":true,"reason":"stream_timeout"}\n\n`;
-            safeEnqueue(controller, encoder.encode(syntheticDone));
+            const errorEvent = `event: error\ndata: {"type":"error","error":"PRESEARCH_TIMEOUT","message":"Pre-search stream timed out after ${noNewDataTimeoutMs}ms of no activity"}\n\n`;
+            const syntheticFinish = `event: finish\ndata: {"type":"finish","finishReason":"error","error":"PRESEARCH_TIMEOUT"}\n\n`;
+            safeEnqueue(controller, encoder.encode(errorEvent));
+            safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;
           }
@@ -2007,8 +2014,10 @@ export function createLivePreSearchResumeStream(
 
           const timeSinceLastNewData = Date.now() - lastNewDataTime;
           if (timeSinceLastNewData > noNewDataTimeoutMs) {
-            const syntheticDone = `event: done\ndata: {"interrupted":true,"reason":"stream_timeout"}\n\n`;
-            safeEnqueue(controller, encoder.encode(syntheticDone));
+            const errorEvent = `event: error\ndata: {"type":"error","error":"PRESEARCH_TIMEOUT","message":"Pre-search stream timed out after ${noNewDataTimeoutMs}ms of no activity"}\n\n`;
+            const syntheticFinish = `event: finish\ndata: {"type":"finish","finishReason":"error","error":"PRESEARCH_TIMEOUT"}\n\n`;
+            safeEnqueue(controller, encoder.encode(errorEvent));
+            safeEnqueue(controller, encoder.encode(syntheticFinish));
             safeClose(controller);
             return;
           }

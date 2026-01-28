@@ -1,5 +1,5 @@
 import { MessageStatuses, WebSearchDepths } from '@roundtable/shared';
-import { memo, use, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, use, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -237,10 +237,54 @@ function PreSearchStreamComponent({
     }
   }, [store, preSearch.roundNumber, preSearch.status, markPreSearchTriggered]);
 
-  const isAbortError = error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'));
-  const shouldShowError = error && !is409Conflict.value && !isAbortError;
+  // Use deferred value for rapidly updating streaming state to allow React to batch updates
+  const deferredSearchData = useDeferredValue(partialSearchData);
 
-  if (shouldShowError) {
+  // Memoize error detection
+  const errorFlags = useMemo(() => {
+    const isAbortError = error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'));
+    const shouldShowError = error && !is409Conflict.value && !isAbortError;
+    return { isAbortError, shouldShowError };
+  }, [error, is409Conflict.value]);
+
+  // Memoize display data derivation
+  const displayData = useMemo(() => deferredSearchData || preSearch.searchData, [deferredSearchData, preSearch.searchData]);
+
+  // Memoize status flags to prevent recalculation on every render
+  const statusFlags = useMemo(() => {
+    const hasQueries = displayData?.queries && displayData.queries.length > 0;
+    const hasResults = displayData?.results && displayData.results.length > 0;
+    const hasData = hasQueries || hasResults;
+    const isPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
+    const isPendingWithNoData = isPending && !hasData;
+    const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
+    const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
+
+    return {
+      hasData,
+      hasQueries,
+      hasResults,
+      isEffectivelyComplete,
+      isPending,
+      isPendingWithNoData,
+      isStreamingNow,
+    };
+  }, [displayData?.queries, displayData?.results, preSearch.status, isStreamComplete]);
+
+  // Memoize filtered arrays to prevent recalculation
+  const { summary, totalResults, totalTime, validQueries, validResults } = useMemo(() => {
+    const queries = displayData?.queries ?? [];
+    const results = displayData?.results ?? [];
+    return {
+      summary: displayData?.summary,
+      totalResults: displayData?.totalResults,
+      totalTime: displayData?.totalTime,
+      validQueries: queries.filter((q: PreSearchQuery | null | undefined): q is PreSearchQuery => q !== null && q !== undefined),
+      validResults: results.filter((r: PreSearchResult | null | undefined): r is PreSearchResult => r !== null && r !== undefined),
+    };
+  }, [displayData?.queries, displayData?.results, displayData?.summary, displayData?.totalResults, displayData?.totalTime]);
+
+  if (errorFlags.shouldShowError) {
     return (
       <div className="flex flex-col gap-2 py-2">
         <div className="flex items-center gap-2 text-sm text-destructive">
@@ -249,42 +293,25 @@ function PreSearchStreamComponent({
             {tErrors('streamFailed')}
             :
             {' '}
-            {error.message || tErrors('unknownError')}
+            {error?.message || tErrors('unknownError')}
           </span>
         </div>
       </div>
     );
   }
 
-  const displayData = partialSearchData || preSearch.searchData;
-  const hasQueries = displayData?.queries && displayData.queries.length > 0;
-  const hasResults = displayData?.results && displayData.results.length > 0;
-  const hasData = hasQueries || hasResults;
-  const isPending = preSearch.status === MessageStatuses.PENDING || preSearch.status === MessageStatuses.STREAMING;
-  const isPendingWithNoData = isPending && !hasData;
-
-  if (preSearch.status === MessageStatuses.COMPLETE && !hasResults) {
+  if (preSearch.status === MessageStatuses.COMPLETE && !statusFlags.hasResults) {
     return null;
   }
 
-  if (!hasData && !isPendingWithNoData) {
+  if (!statusFlags.hasData && !statusFlags.isPendingWithNoData) {
     return null;
   }
-
-  const queries = displayData?.queries ?? [];
-  const results = displayData?.results ?? [];
-  const summary = displayData?.summary;
-  const totalResults = displayData?.totalResults;
-  const totalTime = displayData?.totalTime;
-  const validQueries = queries.filter((q: PreSearchQuery | null | undefined): q is PreSearchQuery => q !== null && q !== undefined);
-  const validResults = results.filter((r: PreSearchResult | null | undefined): r is PreSearchResult => r !== null && r !== undefined);
-  const isStreamingNow = preSearch.status === MessageStatuses.STREAMING;
-  const isEffectivelyComplete = isStreamComplete || preSearch.status === MessageStatuses.COMPLETE;
 
   // Debug: Log skeleton visibility conditions
-  rlog.presearch('render-state', `status=${preSearch.status} isStreamingNow=${isStreamingNow} isComplete=${isEffectivelyComplete} hasQueries=${hasQueries} hasResults=${hasResults} queries=${validQueries.length} results=${validResults.length}`);
+  rlog.presearch('render-state', `status=${preSearch.status} isStreamingNow=${statusFlags.isStreamingNow} isComplete=${statusFlags.isEffectivelyComplete} hasQueries=${statusFlags.hasQueries} hasResults=${statusFlags.hasResults} queries=${validQueries.length} results=${validResults.length}`);
 
-  if (isPendingWithNoData || isAutoRetrying.value) {
+  if (statusFlags.isPendingWithNoData || isAutoRetrying.value) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -313,7 +340,7 @@ function PreSearchStreamComponent({
             }))}
             results={validResults.flatMap((r: PreSearchResult) => r.results || [])}
             searchPlan={summary}
-            isStreamingPlan={isStreamingNow && !summary}
+            isStreamingPlan={statusFlags.isStreamingNow && !summary}
             {...(totalResults !== undefined ? { totalResults } : {})}
             {...(totalTime !== undefined ? { totalTime } : {})}
           />
@@ -347,12 +374,12 @@ function PreSearchStreamComponent({
         const uniqueKey = `query-${query?.query || queryIndex}`;
         const hasResultsData = hasResult && searchResult.results && searchResult.results.length > 0;
         const isLastQuery = queryIndex === validQueries.length - 1;
-        const remainingQueriesCount = !isEffectivelyComplete && expectedQueryCount ? Math.max(0, expectedQueryCount - validQueries.length) : 0;
+        const remainingQueriesCount = !statusFlags.isEffectivelyComplete && expectedQueryCount ? Math.max(0, expectedQueryCount - validQueries.length) : 0;
         const showSeparator = !isLastQuery || remainingQueriesCount > 0;
 
         // Debug: Log per-query skeleton visibility
-        const showResultSkeleton = !hasResultsData && !isEffectivelyComplete && isStreamingNow;
-        rlog.presearch('query-render', `q${query.index} hasResult=${hasResult} hasResultsData=${hasResultsData} showSkeleton=${showResultSkeleton} isStreamingNow=${isStreamingNow}`);
+        const showResultSkeleton = !hasResultsData && !statusFlags.isEffectivelyComplete && statusFlags.isStreamingNow;
+        rlog.presearch('query-render', `q${query.index} hasResult=${hasResult} hasResultsData=${hasResultsData} showSkeleton=${showResultSkeleton} isStreamingNow=${statusFlags.isStreamingNow}`);
 
         return (
           <AnimatedStreamingItem
@@ -417,7 +444,7 @@ function PreSearchStreamComponent({
               )}
 
               {/* Results skeleton - show when query arrived but results haven't yet (during streaming) */}
-              {!hasResultsData && !isEffectivelyComplete && isStreamingNow && (
+              {!hasResultsData && !statusFlags.isEffectivelyComplete && statusFlags.isStreamingNow && (
                 <PreSearchResultsSkeleton count={3} />
               )}
 
@@ -431,7 +458,7 @@ function PreSearchStreamComponent({
       })}
 
       {/* Remaining query skeletons - show for expected queries that haven't arrived yet */}
-      {!isEffectivelyComplete && expectedQueryCount && validQueries.length < expectedQueryCount && (
+      {!statusFlags.isEffectivelyComplete && expectedQueryCount && validQueries.length < expectedQueryCount && (
         Array.from({ length: expectedQueryCount - validQueries.length }, (_, idx) => {
           const skeletonIndex = validQueries.length + idx;
           const isLastSkeleton = skeletonIndex === expectedQueryCount - 1;
@@ -451,7 +478,7 @@ function PreSearchStreamComponent({
       )}
 
       {/* Fallback skeleton - show when streaming but no expected count yet (before first QUERY with total) */}
-      {!isEffectivelyComplete && !expectedQueryCount && isStreamingNow && validQueries.length === 0 && (
+      {!statusFlags.isEffectivelyComplete && !expectedQueryCount && statusFlags.isStreamingNow && validQueries.length === 0 && (
         <AnimatedStreamingItem
           key="skeleton-fallback"
           itemKey="skeleton-fallback"

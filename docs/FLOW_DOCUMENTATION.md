@@ -711,16 +711,30 @@ if (currentStreamingIndex !== undefined && i < currentStreamingIndex) {
 }
 ```
 
-### 2. Chunk Initialization Race
+### 2. Chunk Initialization Race (FIX #6 - Enhanced)
 
 **Problem:** Chunks may arrive before metadata initializes in KV.
 
-**Solution:** Retry logic in `appendParticipantStreamChunk()`:
+**Solution:** Three-phase approach in `appendParticipantStreamChunk()`:
+
 ```typescript
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 50;
-// Waits for metadata to appear before storing chunks
+// Phase 1: Exponential backoff retry (total ~3.5s)
+const MAX_RETRIES = 8;
+const BASE_DELAY_MS = 50;
+const MAX_DELAY_MS = 1000;
+// Delays: 50ms, 100ms, 200ms, 400ms, 800ms, 1000ms, 1000ms
+
+// Phase 2: Pending queue fallback
+// If metadata still missing after retries, store chunk in pending queue
+await storePendingChunk(streamId, data, env, logger);
+
+// Phase 3: Process pending when metadata available
+// When metadata appears, flush pending queue in order
+await processPendingChunks(streamId, metadata, env, logger);
 ```
+
+**Trade-off:** Longer timeout (~3.5s vs 150ms) in exchange for zero chunk loss.
+This is intentional - chunk data loss is worse than brief latency.
 
 ### 3. Stale Stream Detection
 

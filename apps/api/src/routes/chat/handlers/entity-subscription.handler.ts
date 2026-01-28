@@ -142,7 +142,7 @@ export const subscribeToPreSearchStreamHandler: RouteHandler<
         roundNumber,
         c.env,
         {
-          waitForStreamTimeoutMs: 60 * 1000, // 60 seconds to wait
+          waitForStreamTimeoutMs: STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
         },
       );
 
@@ -319,7 +319,7 @@ export const subscribeToParticipantStreamHandler: RouteHandler<
         {
           filterReasoningOnReplay: true,
           startFromChunkIndex,
-          waitForStreamTimeoutMs: 60 * 1000, // 60 seconds to wait
+          waitForStreamTimeoutMs: STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
         },
       );
 
@@ -493,7 +493,7 @@ export const subscribeToModeratorStreamHandler: RouteHandler<
         {
           filterReasoningOnReplay: true,
           startFromChunkIndex,
-          waitForStreamTimeoutMs: 60 * 1000, // 60 seconds to wait
+          waitForStreamTimeoutMs: STREAMING_CONFIG.WAIT_FOR_STREAM_TIMEOUT_MS,
         },
       );
 

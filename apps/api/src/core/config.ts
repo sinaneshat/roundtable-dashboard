@@ -387,14 +387,14 @@ export const STREAMING_CONFIG = {
   ORPHAN_CLEANUP_TIMEOUT_MS: 30 * 60 * 1000,
 
   /**
-   * Stale chunk timeout in milliseconds (90 seconds)
-   * Applied to: stream resumption handlers
+   * Stale chunk timeout in milliseconds (30 seconds)
+   * Applied to: stream resumption handlers, stale stream detection
    *
-   * Rationale: If no chunks received for 90s, consider stream stale.
-   * Set under Cloudflare's 100s idle timeout to detect stale streams
-   * before HTTP 524. Accounts for AI models that may "think" before streaming.
+   * Rationale: Per FLOW_DOCUMENTATION.md, single source of truth for stale detection.
+   * 30s is aggressive enough to detect stuck streams quickly while allowing
+   * for normal AI "thinking" pauses. Used by entity-subscription and stream-resume handlers.
    */
-  STALE_CHUNK_TIMEOUT_MS: 90_000,
+  STALE_CHUNK_TIMEOUT_MS: 30_000,
 
   /**
    * Stream timeout in milliseconds (90 seconds)
@@ -407,6 +407,15 @@ export const STREAMING_CONFIG = {
    * Note: Active streams sending data are NOT affected by idle timeout.
    */
   STREAM_TIMEOUT_MS: 90_000,
+
+  /**
+   * Wait for stream timeout in milliseconds (30 seconds)
+   * Applied to: waiting streams (pre-search, participant, moderator subscription endpoints)
+   *
+   * Rationale: Per FLOW_DOCUMENTATION.md, single source of truth for how long
+   * to wait for a stream to appear before timing out. Consistent with STALE_CHUNK_TIMEOUT_MS.
+   */
+  WAIT_FOR_STREAM_TIMEOUT_MS: 30_000,
 } as const;
 
 // ============================================================================
