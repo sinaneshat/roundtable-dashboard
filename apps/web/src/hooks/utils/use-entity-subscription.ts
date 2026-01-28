@@ -37,6 +37,8 @@ export type EntitySubscriptionState = {
   errorMessage?: string;
   /** Whether currently streaming */
   isStreaming: boolean;
+  /** Round number this state belongs to - used to detect stale completions */
+  roundNumber: number;
 };
 
 export type EntitySubscriptionCallbacks = {
@@ -95,6 +97,7 @@ export function useEntitySubscription({
     errorMessage: undefined,
     isStreaming: false,
     lastSeq: initialLastSeq,
+    roundNumber,
     status: 'idle',
   });
 
@@ -121,6 +124,7 @@ export function useEntitySubscription({
       setState(prev => ({
         ...prev,
         lastSeq: 0,
+        roundNumber, // Track which round this state belongs to
         status: 'idle',
       }));
       prevRoundNumberRef.current = roundNumber;

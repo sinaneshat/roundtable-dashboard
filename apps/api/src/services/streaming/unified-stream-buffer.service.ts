@@ -47,6 +47,7 @@ import {
 } from '@/types/streaming';
 
 import { getThreadActiveStream } from './resumable-stream-kv.service';
+import { getRoundExecutionState, RoundPreSearchStatuses } from '../round-orchestration/round-orchestration.service';
 
 // ============================================================================
 // HELPERS
@@ -828,36 +829,64 @@ export function createWaitingParticipantStream(
           const participantIndices = Object.keys(statuses).map(Number).filter(i => i >= 0);
 
           if (participantIndex < 0) {
-            // Moderator: ALL participants must be complete
+            // Moderator: ALL participants must be complete AND presearch must be complete (if enabled)
             const allStatuses = participantIndices.map(i => statuses[i]);
             const allParticipantsComplete = participantIndices.length > 0 && allStatuses.every((status) => {
               return status === 'completed' || status === 'failed';
             });
 
-            if (!allParticipantsComplete) {
-              // Participants not done yet - keep waiting for moderator
-              // ✅ DIAGNOSTIC: Log what statuses we see while waiting
-              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - waiting: statuses=[${allStatuses.join(',')}]`);
-              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-              continue;
-            } else {
-              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - all complete: statuses=[${allStatuses.join(',')}]`);
-            }
-          } else if (participantIndex > 0) {
-            // P1+: Previous participants must be complete
-            const prevStatuses = Array.from({ length: participantIndex }).map((_, i) => statuses[i]);
-            const allPreviousComplete = prevStatuses.every((status) => {
-              return status === 'completed' || status === 'failed';
-            });
+            // Check presearch status from round execution state
+            const roundState = await getRoundExecutionState(threadId, roundNumber, env);
+            const preSearchStatus = roundState?.preSearchStatus;
+            const preSearchComplete = !preSearchStatus || // null means presearch not enabled
+              preSearchStatus === RoundPreSearchStatuses.COMPLETED ||
+              preSearchStatus === RoundPreSearchStatuses.FAILED ||
+              preSearchStatus === RoundPreSearchStatuses.SKIPPED;
 
-            if (!allPreviousComplete) {
-              // Previous participants not done yet - keep waiting
-              // ✅ DIAGNOSTIC: Log what statuses we see while waiting
-              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
+            if (!allParticipantsComplete || !preSearchComplete) {
+              // Participants or presearch not done yet - keep waiting for moderator
+              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - waiting: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
               await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
               continue;
             } else {
-              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
+              console.log(`[WAITING-STREAM] Moderator r${roundNumber} - all complete: participants=[${allStatuses.join(',')}] presearch=${preSearchStatus ?? 'null'}`);
+            }
+          } else {
+            // Participants (P0, P1, P2, ...): Check presearch completion first (blocks ALL participants)
+            // Then P1+ must also wait for previous participants to complete
+
+            // Check presearch status from round execution state
+            const roundState = await getRoundExecutionState(threadId, roundNumber, env);
+            const preSearchStatus = roundState?.preSearchStatus;
+            const preSearchComplete = !preSearchStatus || // null means presearch not enabled
+              preSearchStatus === RoundPreSearchStatuses.COMPLETED ||
+              preSearchStatus === RoundPreSearchStatuses.FAILED ||
+              preSearchStatus === RoundPreSearchStatuses.SKIPPED;
+
+            if (!preSearchComplete) {
+              // Presearch not done yet - block ALL participants per FLOW_DOCUMENTATION.md
+              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - blocked by presearch: status=${preSearchStatus}`);
+              await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+              continue;
+            }
+
+            // P1+: Previous participants must also be complete
+            if (participantIndex > 0) {
+              const prevStatuses = Array.from({ length: participantIndex }).map((_, i) => statuses[i]);
+              const allPreviousComplete = prevStatuses.every((status) => {
+                return status === 'completed' || status === 'failed';
+              });
+
+              if (!allPreviousComplete) {
+                // Previous participants not done yet - keep waiting
+                console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - waiting for previous: statuses=[${prevStatuses.join(',')}]`);
+                await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+                continue;
+              } else {
+                console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - previous complete: statuses=[${prevStatuses.join(',')}]`);
+              }
+            } else {
+              console.log(`[WAITING-STREAM] ${pLabel} r${roundNumber} - presearch complete, P0 can start`);
             }
           }
         }

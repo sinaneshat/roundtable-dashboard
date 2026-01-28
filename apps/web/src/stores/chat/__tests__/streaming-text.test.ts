@@ -326,7 +326,7 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
 describe('completeStreaming - Behavior', () => {
   /**
    * NOTE: completeStreaming does NOT clean up streaming placeholders.
-   * Placeholders are cleaned up by setMessages when server data arrives via useModeratorStream.
+   * Placeholders are cleaned up by setMessages when server data arrives via subscription callbacks.
    * This prevents UI flash where placeholder text disappears then reappears.
    */
   let store: ReturnType<typeof createChatStore>;
@@ -364,7 +364,7 @@ describe('completeStreaming - Behavior', () => {
     store.getState().completeStreaming();
 
     state = store.getState();
-    // Both messages remain - placeholder cleanup happens via setMessages from useModeratorStream
+    // Both messages remain - placeholder cleanup happens via setMessages from subscription callbacks
     expect(state.messages).toHaveLength(2);
   });
 
@@ -442,7 +442,7 @@ describe('completeStreaming - Behavior', () => {
     store.getState().completeStreaming();
 
     state = store.getState();
-    // Both remain - actual cleanup happens via setMessages from useModeratorStream
+    // Both remain - actual cleanup happens via setMessages from subscription callbacks
     expect(state.messages).toHaveLength(2);
   });
 

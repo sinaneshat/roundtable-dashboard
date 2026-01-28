@@ -72,8 +72,6 @@ export type { UseIsMobileReturn } from './use-mobile';
 export { useIsMobile } from './use-mobile';
 export type { UseModelLookupReturn } from './use-model-lookup';
 export { useModelLookup } from './use-model-lookup';
-export type { ModeratorStreamState } from './use-moderator-stream';
-export { useModeratorStream } from './use-moderator-stream';
 export { useMultiParticipantChat } from './use-multi-participant-chat';
 export type { UseOrderedModelsOptions } from './use-ordered-models';
 export { useOrderedModels } from './use-ordered-models';
@@ -85,7 +83,7 @@ export {
   usePostHog,
 } from './use-posthog';
 export { usePostHogIdentify } from './use-posthog-identify';
-export { useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
+export { useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
 export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
 export type {

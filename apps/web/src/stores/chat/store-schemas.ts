@@ -330,6 +330,21 @@ export type ChatStoreActions = {
     roundNumber: number,
   ) => void;
 
+  /**
+   * Mark a participant's streaming placeholder as complete (clear isStreaming flag).
+   * Called when participant subscription completes to allow round completion to proceed.
+   */
+  finalizeParticipantStreaming: (
+    participantIndex: number,
+    roundNumber: number,
+  ) => void;
+
+  /**
+   * Mark the moderator's streaming placeholder as complete (clear isStreaming flag).
+   * Called when moderator subscription completes to allow round completion to proceed.
+   */
+  finalizeModeratorStreaming: (roundNumber: number) => void;
+
   // === RESUMPTION (Backend-First Architecture) ===
   /**
    * Resume an in-progress round detected on page refresh.

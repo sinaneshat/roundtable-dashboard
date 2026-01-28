@@ -159,7 +159,6 @@ export {
   type EntitySubscriptionResponse,
   type EntitySubscriptionServiceOptions,
   type EntitySubscriptionStatus,
-  executePreSearchStreamService,
   // Pre-search data types
   type GeneratedSearchQuery,
   type GetCustomRoleRequest,
@@ -228,9 +227,6 @@ export {
   type StreamChatRequest,
   type StreamChatResponse,
   streamChatService,
-  type StreamModeratorRequest,
-  type StreamModeratorResponse,
-  streamModeratorService,
   type SubscribeToModeratorStreamParams,
   subscribeToModeratorStreamService,
   type SubscribeToParticipantStreamParams,

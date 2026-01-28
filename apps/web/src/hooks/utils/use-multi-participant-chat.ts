@@ -74,12 +74,6 @@ export type UseMultiParticipantChatReturn = {
   sendMessage: (content: string, filePartsOverride?: ExtendedFilePart[]) => Promise<void>;
   /** Start P0 streaming for a round */
   startRound: (participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
-  /** Continue from participant (legacy - backend handles via subscriptions) */
-  continueFromParticipant: (
-    fromIndexOrTarget: number | { index: number; participantId: string },
-    participantsOverride?: ChatParticipant[],
-    messagesOverride?: UIMessage[],
-  ) => void;
   /** Whether streaming is active */
   isStreaming: boolean;
   /** Ref to check streaming state synchronously */
@@ -90,8 +84,6 @@ export type UseMultiParticipantChatReturn = {
   currentParticipantIndex: number;
   /** Error from chat */
   error: Error | null;
-  /** Retry function (legacy) */
-  retry: () => void;
   /** Set messages in AI SDK */
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
   /** Whether AI SDK is ready */
@@ -413,18 +405,6 @@ export function useMultiParticipantChat(
     });
   }, [messages, initialMessages, status, isExplicitlyStreaming, aiSendMessage]);
 
-  /**
-   * Continue from participant - legacy function
-   * Backend handles resumption via subscriptions now
-   */
-  const continueFromParticipant = useCallback((
-    _fromIndexOrTarget: number | { index: number; participantId: string },
-    _participantsOverride?: ChatParticipant[],
-    _messagesOverride?: UIMessage[],
-  ) => {
-    // No-op - backend handles resumption via useRoundSubscription
-    rlog.stream('resume', 'continueFromParticipant called but backend handles resumption');
-  }, []);
 
   /**
    * Send a new user message
@@ -481,12 +461,6 @@ export function useMultiParticipantChat(
     [status, isExplicitlyStreaming, participants, aiSendMessage],
   );
 
-  /**
-   * Retry - legacy function
-   */
-  const retry = useCallback(() => {
-    rlog.resume('retry', 'retry called - no-op in backend-first architecture');
-  }, []);
 
   // Sync streaming state to callback
   useEffect(() => {
@@ -534,7 +508,6 @@ export function useMultiParticipantChat(
 
   return useMemo(
     () => ({
-      continueFromParticipant,
       currentParticipantIndex,
       error: chatError || null,
       isReady,
@@ -542,20 +515,17 @@ export function useMultiParticipantChat(
       isStreamingRef,
       isTriggeringRef,
       messages,
-      retry,
       sendMessage,
       setMessages,
       startRound,
       stop: stopAiSdk,
     }),
     [
-      continueFromParticipant,
       currentParticipantIndex,
       chatError,
       isReady,
       isActuallyStreaming,
       messages,
-      retry,
       sendMessage,
       setMessages,
       startRound,

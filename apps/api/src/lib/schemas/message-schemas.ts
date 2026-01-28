@@ -196,7 +196,7 @@ const ValidFilePartForTransmissionSchema = z
  *
  * ✅ TYPE-SAFE: Uses Zod schema validation, no forced casts
  * ✅ SINGLE SOURCE OF TRUTH: Used by all file part extraction logic
- * - use-multi-participant-chat.ts (triggerNextParticipantWithRefs, startRound, retry)
+ * - use-multi-participant-chat.ts (startRound, sendMessage)
  * - prepareSendMessagesRequest sanitization filter
  */
 export function isValidFilePartForTransmission(

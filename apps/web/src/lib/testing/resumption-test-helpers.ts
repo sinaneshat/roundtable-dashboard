@@ -65,7 +65,6 @@ export type MockChatStoreState = {
 
 export type MockChatHook = {
   isReady: boolean;
-  continueFromParticipant: ReturnType<typeof vi.fn>;
   startRound: ReturnType<typeof vi.fn>;
   messages: UIMessage[];
   setMessages: ReturnType<typeof vi.fn>;
@@ -131,7 +130,6 @@ export function createMockChatStore(
 
 export function createMockChatHook(overrides?: Partial<MockChatHook>): MockChatHook {
   return {
-    continueFromParticipant: vi.fn(),
     isReady: false,
     isStreamingRef: { current: false },
     isTriggeringRef: { current: false },

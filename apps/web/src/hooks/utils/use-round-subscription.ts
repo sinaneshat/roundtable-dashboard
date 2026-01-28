@@ -318,10 +318,27 @@ export function useRoundSubscription({
 
   // Build combined state
   const state = useMemo((): RoundSubscriptionState => {
-    const presearchComplete = !enablePreSearch || presearchSub.state.status === 'complete' || presearchSub.state.status === 'disabled';
+    // ✅ FIX: Guard against stale completions from previous rounds
+    // When roundNumber changes, entity states may still show 'complete' from the previous round
+    // until their reset effects run. Check that status is for the CURRENT round before
+    // considering it complete. This prevents the race condition where isRoundComplete
+    // becomes true prematurely due to stale state during the render before effects run.
+    const isCurrentRoundState = (entityState: { roundNumber: number; status: string }) =>
+      entityState.roundNumber === roundNumber;
+
+    const presearchComplete = !enablePreSearch
+      || presearchSub.state.status === 'disabled'
+      || (isCurrentRoundState(presearchSub.state) && presearchSub.state.status === 'complete');
+
     // Guard against empty array: areAllParticipantsComplete returns false for empty array
-    const allParticipantsDone = areAllParticipantsComplete(participantStates);
-    const moderatorComplete = moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error';
+    // Also verify each participant's state is for the current round
+    const allParticipantsDone = participantStates.length > 0
+      && participantStates.every(s =>
+        isCurrentRoundState(s) && (s.status === 'complete' || s.status === 'error'),
+      );
+
+    const moderatorComplete = isCurrentRoundState(moderatorSub.state)
+      && (moderatorSub.state.status === 'complete' || moderatorSub.state.status === 'error');
 
     const isRoundComplete = presearchComplete && allParticipantsDone && moderatorComplete;
 
@@ -337,7 +354,7 @@ export function useRoundSubscription({
       participants: participantStates,
       presearch: presearchSub.state,
     };
-  }, [enablePreSearch, presearchSub.state, participantStates, moderatorSub.state]);
+  }, [enablePreSearch, presearchSub.state, participantStates, moderatorSub.state, roundNumber]);
 
   // Check for round completion and call callback
   useEffect(() => {

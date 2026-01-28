@@ -58,7 +58,7 @@ export const RoundExecutionStateSchema = z.object({
   error: z.string().nullable(),
   failedParticipants: z.number().int().nonnegative(),
   // =========================================================================
-  // NEW: Activity tracking for staleness detection
+  // Activity tracking for staleness detection
   // =========================================================================
   /** ISO timestamp of last meaningful activity (chunk received, status update, etc.) */
   lastActivityAt: z.string().optional(),
@@ -70,7 +70,7 @@ export const RoundExecutionStateSchema = z.object({
   /** Pre-search database record ID (if created) */
   preSearchId: z.string().nullable().optional(),
   // =========================================================================
-  // NEW: Pre-search tracking for web search enabled threads
+  // Pre-search tracking for web search enabled threads
   // =========================================================================
   /** Pre-search status: pending, running, completed, failed, skipped, or null if not applicable */
   preSearchStatus: z.enum([
@@ -81,7 +81,7 @@ export const RoundExecutionStateSchema = z.object({
     RoundPreSearchStatuses.SKIPPED,
   ]).nullable().optional(),
   // =========================================================================
-  // NEW: Recovery tracking to prevent infinite loops
+  // Recovery tracking to prevent infinite loops
   // =========================================================================
   /** Number of recovery attempts made for this round */
   recoveryAttempts: z.number().int().nonnegative().default(0),
@@ -95,7 +95,17 @@ export const RoundExecutionStateSchema = z.object({
   totalParticipants: z.number().int().nonnegative(),
   // Track which participants have been triggered (for resumption)
   triggeredParticipants: z.array(z.number()),
+  // =========================================================================
+  // Optimistic concurrency control version for race condition prevention
+  // =========================================================================
+  /** Version counter for optimistic concurrency control */
+  version: z.number().int().nonnegative().default(0),
 }).strict();
+
+/** Max retries for optimistic concurrency control */
+const MAX_OCC_RETRIES = 5;
+/** Base delay between retries in ms (exponential backoff) */
+const OCC_BASE_DELAY_MS = 10;
 
 export type RoundExecutionState = z.infer<typeof RoundExecutionStateSchema>;
 
@@ -163,16 +173,13 @@ export async function initializeRoundExecution(
     completedParticipants: 0,
     error: null,
     failedParticipants: 0,
-    // NEW: Activity tracking
     lastActivityAt: now,
     maxRecoveryAttempts: DEFAULT_MAX_RECOVERY_ATTEMPTS,
     moderatorStatus: null,
     participantStatuses: {},
     phase: RoundExecutionPhases.PARTICIPANTS,
     preSearchId: options?.preSearchId ?? null,
-    // NEW: Pre-search tracking
     preSearchStatus: options?.enableWebSearch ? RoundPreSearchStatuses.PENDING : null,
-    // NEW: Recovery tracking
     recoveryAttempts: 0,
     roundNumber,
     startedAt: now,
@@ -180,6 +187,7 @@ export async function initializeRoundExecution(
     threadId,
     totalParticipants,
     triggeredParticipants: [],
+    version: 0, // Initialize version for optimistic concurrency control
   };
 
   if (env?.KV) {
@@ -251,7 +259,67 @@ export async function getRoundExecutionState(
 }
 
 /**
- * Update round execution state in KV
+ * Apply updates to existing state, merging participant statuses and recomputing derived values.
+ * Pure function that doesn't touch KV - used by updateRoundExecutionState.
+ */
+function applyStateUpdates(
+  existing: RoundExecutionState,
+  updates: Partial<RoundExecutionState>,
+): RoundExecutionState {
+  // Merge participantStatuses instead of replacing to preserve all statuses
+  const mergedParticipantStatuses = {
+    ...existing.participantStatuses,
+    ...(updates.participantStatuses || {}),
+  };
+
+  // Merge triggeredParticipants arrays
+  const mergedTriggeredParticipants = [...new Set([
+    ...existing.triggeredParticipants,
+    ...(updates.triggeredParticipants || []),
+  ])];
+
+  // Recompute counts from merged statuses
+  const completedParticipants = Object.values(mergedParticipantStatuses).filter(
+    s => s === ParticipantStreamStatuses.COMPLETED,
+  ).length;
+
+  const failedParticipants = Object.values(mergedParticipantStatuses).filter(
+    s => s === ParticipantStreamStatuses.FAILED,
+  ).length;
+
+  // Recompute phase based on merged state
+  const allParticipantsComplete = (completedParticipants + failedParticipants) >= existing.totalParticipants;
+  const computedPhase = allParticipantsComplete
+    ? RoundExecutionPhases.MODERATOR
+    : RoundExecutionPhases.PARTICIPANTS;
+
+  // Determine final phase: explicit COMPLETE wins, then computed if updating participants, else keep existing
+  const phase = updates.phase === RoundExecutionPhases.COMPLETE
+    ? updates.phase
+    : (updates.participantStatuses ? computedPhase : (updates.phase ?? existing.phase));
+
+  return {
+    ...existing,
+    ...updates,
+    completedParticipants,
+    failedParticipants,
+    participantStatuses: mergedParticipantStatuses,
+    phase,
+    triggeredParticipants: mergedTriggeredParticipants,
+    version: (existing.version ?? 0) + 1, // Increment version for OCC
+  };
+}
+
+/**
+ * Update round execution state in KV with optimistic concurrency control.
+ *
+ * Uses version-based OCC with retry logic to prevent race conditions:
+ * 1. Read current state (includes version)
+ * 2. Apply updates and increment version
+ * 3. Write back - if version changed between read/write, retry from step 1
+ *
+ * This prevents the classic lost-update problem where concurrent writes
+ * overwrite each other's changes.
  */
 export async function updateRoundExecutionState(
   threadId: string,
@@ -264,73 +332,75 @@ export async function updateRoundExecutionState(
     return null;
   }
 
-  try {
-    const existing = await getRoundExecutionState(threadId, roundNumber, env);
-    if (!existing) {
-      logger?.warn('No existing round execution state to update', LogHelpers.operation({
+  const key = getRoundExecutionKey(threadId, roundNumber);
+
+  for (let attempt = 0; attempt < MAX_OCC_RETRIES; attempt++) {
+    try {
+      // Step 1: Read current state
+      const existing = await getRoundExecutionState(threadId, roundNumber, env);
+      if (!existing) {
+        logger?.warn('No existing round execution state to update', LogHelpers.operation({
+          operationName: 'updateRoundExecutionState',
+          roundNumber,
+          threadId,
+        }));
+        return null;
+      }
+
+      const expectedVersion = existing.version ?? 0;
+
+      // Step 2: Apply updates (pure function, increments version)
+      const updated = applyStateUpdates(existing, updates);
+
+      // Step 3: Write back
+      await env.KV.put(key, JSON.stringify(updated), { expirationTtl: ROUND_STATE_TTL });
+
+      // Step 4: Verify write succeeded with expected version
+      // Re-read immediately to check if our write won the race
+      const verification = await getRoundExecutionState(threadId, roundNumber, env);
+
+      if (verification && verification.version === updated.version) {
+        // Success - our write persisted
+        return updated;
+      }
+
+      // Version mismatch - another writer got there first, retry
+      if (attempt < MAX_OCC_RETRIES - 1) {
+        // Exponential backoff with jitter
+        const delay = OCC_BASE_DELAY_MS * 2 ** attempt + Math.random() * OCC_BASE_DELAY_MS;
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        logger?.info(`OCC retry ${attempt + 1}/${MAX_OCC_RETRIES} for round state (expected v${expectedVersion}, found v${verification?.version})`, LogHelpers.operation({
+          operationName: 'updateRoundExecutionState',
+          roundNumber,
+          threadId,
+        }));
+      }
+    } catch (error) {
+      logger?.error(`Failed to update round execution state (attempt ${attempt + 1}/${MAX_OCC_RETRIES})`, LogHelpers.operation({
+        error: error instanceof Error ? error.message : 'Unknown error',
         operationName: 'updateRoundExecutionState',
         roundNumber,
         threadId,
       }));
-      return null;
+
+      if (attempt === MAX_OCC_RETRIES - 1) {
+        return null;
+      }
+
+      // Retry on error
+      const delay = OCC_BASE_DELAY_MS * 2 ** attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-
-    // ✅ FIX: Merge participantStatuses instead of replacing to prevent race conditions
-    // When multiple participants complete simultaneously, each reads the old state and
-    // updates their own status. Without merging, the last writer wins and loses other
-    // participants' statuses. By merging, all statuses are preserved.
-    const mergedParticipantStatuses = {
-      ...existing.participantStatuses,
-      ...(updates.participantStatuses || {}),
-    };
-
-    // ✅ FIX: Recompute counts from merged statuses to ensure accuracy
-    // This prevents race conditions where two participants both compute count=1
-    // and both write count=1, when the actual count should be 2.
-    const completedParticipants = Object.values(mergedParticipantStatuses).filter(
-      s => s === ParticipantStreamStatuses.COMPLETED,
-    ).length;
-
-    const failedParticipants = Object.values(mergedParticipantStatuses).filter(
-      s => s === ParticipantStreamStatuses.FAILED,
-    ).length;
-
-    // ✅ FIX: Recompute phase based on actual merged state
-    const allParticipantsComplete = (completedParticipants + failedParticipants) >= existing.totalParticipants;
-    const computedPhase = allParticipantsComplete
-      ? RoundExecutionPhases.MODERATOR
-      : RoundExecutionPhases.PARTICIPANTS;
-
-    // Build updated state with merged and recomputed values
-    const updated: RoundExecutionState = {
-      ...existing,
-      ...updates,
-      completedParticipants,
-      failedParticipants,
-      participantStatuses: mergedParticipantStatuses,
-      // Use computed phase if we're in PARTICIPANTS phase and updating participant statuses
-      // Otherwise respect the explicit phase update (e.g., COMPLETE from moderator)
-      phase: updates.phase === RoundExecutionPhases.COMPLETE
-        ? updates.phase
-        : (updates.participantStatuses ? computedPhase : (updates.phase ?? existing.phase)),
-    };
-
-    await env.KV.put(
-      getRoundExecutionKey(threadId, roundNumber),
-      JSON.stringify(updated),
-      { expirationTtl: ROUND_STATE_TTL },
-    );
-
-    return updated;
-  } catch (error) {
-    logger?.error('Failed to update round execution state', LogHelpers.operation({
-      error: error instanceof Error ? error.message : 'Unknown error',
-      operationName: 'updateRoundExecutionState',
-      roundNumber,
-      threadId,
-    }));
-    return null;
   }
+
+  logger?.error(`Max OCC retries (${MAX_OCC_RETRIES}) exceeded for round state update`, LogHelpers.operation({
+    operationName: 'updateRoundExecutionState',
+    roundNumber,
+    threadId,
+  }));
+
+  return null;
 }
 
 /**

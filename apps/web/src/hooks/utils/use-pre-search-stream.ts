@@ -1,24 +1,13 @@
 /**
  * Pre-Search Stream Utilities
  *
- * Utility hooks for SSE streaming and polling in pre-search components.
- * These wrap direct service calls that require special handling (SSE, polling).
+ * Utility hooks for polling pre-search results.
+ * SSE streaming is handled by useEntitySubscription via subscribeToPreSearchStreamService.
  */
 
 import { useCallback } from 'react';
 
-import { executePreSearchStreamService, getThreadPreSearchesService } from '@/services/api';
-import type { PreSearchRequest } from '@/services/api/chat/pre-search';
-
-/**
- * Hook for executing pre-search SSE stream
- * Wraps the raw service call for SSE handling
- */
-export function useExecutePreSearchStream() {
-  return useCallback(async (data: PreSearchRequest) => {
-    return executePreSearchStreamService(data);
-  }, []);
-}
+import { getThreadPreSearchesService } from '@/services/api';
 
 /**
  * Hook for polling pre-search results

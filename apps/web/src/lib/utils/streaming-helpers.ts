@@ -80,25 +80,52 @@ export function isStreamingMetadata(metadata: unknown): boolean {
 }
 
 /**
- * Check if a UIMessage is a streaming placeholder
+ * Check if a message ID is a streaming placeholder ID
  *
- * Streaming placeholders have:
- * - metadata.isStreaming === true
- * - ID starting with 'streaming_p' or ending with '_moderator'
+ * Streaming placeholder IDs start with 'streaming_' prefix:
+ * - Participant: `streaming_p{index}_r{roundNumber}` (e.g., 'streaming_p1_r0')
+ * - Moderator: `streaming_moderator_r{roundNumber}` (rare, when threadId is null)
+ *
+ * Real DB message IDs use different patterns:
+ * - Participant: `{threadId}_r{roundNumber}_p{index}` (e.g., '01KG..._r0_p1')
+ * - Moderator: `{threadId}_r{roundNumber}_moderator` (e.g., '01KG..._r0_moderator')
+ *
+ * @param id - Message ID to check
+ */
+export function isPlaceholderId(id: string): boolean {
+  return id.startsWith('streaming_');
+}
+
+/**
+ * Check if a UIMessage is an ACTIVELY streaming placeholder
+ *
+ * Returns true when BOTH conditions are met:
+ * - metadata.isStreaming === true (entity is currently streaming)
+ * - ID is a placeholder ID (starts with 'streaming_')
+ *
+ * This is different from hasStreamingPlaceholders which also catches
+ * unreplaced placeholders where streaming has finished but the real
+ * message hasn't been fetched yet.
  *
  * @param message - UIMessage to check
  */
 export function isStreamingPlaceholder(message: UIMessage): boolean {
-  // Fast path: check ID pattern first (avoids metadata access)
-  if (message.id.startsWith('streaming_p') || message.id.includes('_moderator')) {
-    // Verify with metadata
-    return isStreamingMetadata(message.metadata);
-  }
-  return false;
+  // Both conditions required: placeholder ID AND actively streaming
+  return isPlaceholderId(message.id) && isStreamingMetadata(message.metadata);
 }
 
 /**
  * Check if messages array has any streaming placeholders
+ *
+ * Checks BOTH:
+ * 1. Active streaming (metadata.isStreaming === true)
+ * 2. Unreplaced placeholder IDs (ID starts with 'streaming_')
+ *
+ * The second check is critical for the round completion flow:
+ * When an entity completes, finalizeParticipantStreaming sets isStreaming=false,
+ * but the placeholder ID remains until the real message is fetched from the server.
+ * Without this check, handleRoundComplete would skip fetching real messages,
+ * leaving placeholder IDs like 'streaming_p1_r0' in the messages array forever.
  *
  * REPLACES: Inline checks in:
  * - provider.tsx lines 159-162, 201-204
@@ -107,7 +134,7 @@ export function isStreamingPlaceholder(message: UIMessage): boolean {
  * @param messages - Array of UIMessages
  */
 export function hasStreamingPlaceholders(messages: UIMessage[]): boolean {
-  return messages.some(m => isStreamingMetadata(m.metadata));
+  return messages.some(m => isStreamingMetadata(m.metadata) || isPlaceholderId(m.id));
 }
 
 // ============================================================================

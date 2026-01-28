@@ -21,8 +21,6 @@ import { useShallow } from 'zustand/react/shallow';
 
 import type { EntityType } from '@/hooks/utils';
 import { useMultiParticipantChat, useRoundSubscription, useStreamResumption } from '@/hooks/utils';
-// NOTE: useModeratorStream removed - moderator streaming handled by useRoundSubscription's
-// SSE subscription. Per FLOW_DOCUMENTATION.md, frontend only subscribes, never triggers.
 import { showApiErrorToast } from '@/lib/toast';
 import { chatMessagesToUIMessages, getCurrentRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
@@ -389,6 +387,7 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
   const handleEntityComplete = useCallback(async (entity: EntityType, lastSeq: number) => {
     rlog.stream('end', `${entity} complete lastSeq=${lastSeq}`);
     const state = store.getState();
+    const currentRound = state.currentRoundNumber ?? 0;
 
     if (entity === 'presearch') {
       state.updateEntitySubscriptionStatus('presearch', 'complete', lastSeq);
@@ -396,32 +395,27 @@ export function ChatStoreProvider({ children, initialState }: ChatStoreProviderP
       // ✅ FIX: Bridge presearch subscription status to preSearches array
       // Without this, preSearches[roundNumber].status stays 'pending' even though
       // subscriptionState.presearch.status is 'complete', causing UI stuck in loading
-      const currentRound = state.currentRoundNumber ?? 0;
       state.updatePreSearchStatus(currentRound, MessageStatuses.COMPLETE);
       rlog.presearch('sub-complete', `r${currentRound} - bridged subscription complete to preSearches array`);
     } else if (entity === 'moderator') {
       state.updateEntitySubscriptionStatus('moderator', 'complete', lastSeq);
 
-      // ✅ FIX: Check if messages still have streaming placeholders before calling onModeratorComplete
-      // In the 204 polling case, the polling will replace messages AND update streaming state atomically.
-      // If we call onModeratorComplete here while streaming placeholders exist, we get an intermediate
-      // render with isStreaming=false but streaming placeholders still in messages = visual jump.
-      if (hasStreamingPlaceholders(state.messages)) {
-        rlog.moderator('sub-complete', `skipping onModeratorComplete - streaming placeholders still exist, polling will handle`);
-      } else {
-        // Moderator complete means round is done
-        state.onModeratorComplete();
-      }
+      // ✅ FIX: Clear isStreaming flag on moderator placeholder so hasStreamingPlaceholders returns false
+      // This allows the round completion flow (handleRoundComplete) to call completeStreaming directly
+      state.finalizeModeratorStreaming(currentRound);
+
+      // Note: We don't call onModeratorComplete() here - the round completion is handled by
+      // handleRoundComplete callback when isRoundComplete becomes true in useRoundSubscription.
+      // This ensures all entities are properly marked complete before phase transition.
     } else {
       const index = parseParticipantEntityIndex(entity);
       if (index !== null) {
         state.updateEntitySubscriptionStatus(index, 'complete', lastSeq);
 
-        // NOTE: We no longer fetch messages from server on participant completion.
-        // Previously, this fetch would overwrite the gradually-streamed text,
-        // causing responses to appear "all at once" instead of streaming smoothly.
-        // The streamed text accumulated via appendEntityStreamingText is now preserved.
-        // Server messages are synced separately after the round completes.
+        // ✅ FIX: Clear isStreaming flag on participant placeholder
+        // This allows hasStreamingPlaceholders to return false once all entities complete,
+        // enabling the round completion flow to proceed normally
+        state.finalizeParticipantStreaming(index, currentRound);
 
         // Check if this was the last participant
         const subState = store.getState().subscriptionState;

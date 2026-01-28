@@ -231,6 +231,36 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           }, false, `streaming/appendText-p${participantIndex}`);
         },
 
+        /**
+         * Mark a participant's streaming placeholder as complete (clear isStreaming flag).
+         * Called when participant subscription completes to allow round completion to proceed.
+         */
+        finalizeParticipantStreaming: (participantIndex: number, roundNumber: number) => {
+          set((draft) => {
+            const streamingMsgId = getParticipantStreamingId(participantIndex, roundNumber);
+            const msg = draft.messages.find(m => m.id === streamingMsgId);
+            if (msg && msg.metadata && typeof msg.metadata === 'object') {
+              (msg.metadata as Record<string, unknown>).isStreaming = false;
+              rlog.stream('end', `P${participantIndex} r${roundNumber} streaming finalized`);
+            }
+          }, false, `streaming/finalize-p${participantIndex}`);
+        },
+
+        /**
+         * Mark the moderator's streaming placeholder as complete (clear isStreaming flag).
+         * Called when moderator subscription completes to allow round completion to proceed.
+         */
+        finalizeModeratorStreaming: (roundNumber: number) => {
+          set((draft) => {
+            const streamingMsgId = getModeratorStreamingId(draft.thread?.id ?? null, roundNumber);
+            const msg = draft.messages.find(m => m.id === streamingMsgId);
+            if (msg && msg.metadata && typeof msg.metadata === 'object') {
+              (msg.metadata as Record<string, unknown>).isStreaming = false;
+              rlog.stream('end', `Moderator r${roundNumber} streaming finalized`);
+            }
+          }, false, 'streaming/finalize-moderator');
+        },
+
         // ============================================================
         // THREAD STATE
         // ============================================================
@@ -247,7 +277,6 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
 
           set((draft) => {
             // Generate moderator streaming ID using shared utility
-            // This ensures consistency with useModeratorStream to avoid duplicate placeholders
             const streamingMsgId = getModeratorStreamingId(draft.thread?.id ?? null, roundNumber);
 
             // Primary lookup: by ID
@@ -363,10 +392,9 @@ export function createChatStore(initialState?: ChatStoreInitialState) {
           rlog.stream('end', `completeStreaming r${roundNumber} phase=${state.phase}`);
 
           // NOTE: We intentionally do NOT clean up streaming placeholders here.
-          // The setMessages call in useModeratorStream (both 200 and 204 paths) will
-          // replace ALL messages with server data, which naturally removes placeholders.
-          // Cleaning up here would cause a flash where placeholder text disappears
-          // then reappears when server messages arrive.
+          // The subscription callbacks will replace ALL messages with server data,
+          // which naturally removes placeholders. Cleaning up here would cause a
+          // flash where placeholder text disappears then reappears.
           const cleanedMessages = state.messages;
 
           if (state.phase === ChatPhases.MODERATOR) {

@@ -40,18 +40,6 @@ export async function getThreadPreSearchesService(
   return parseResponse(client.chatFeature.chat.threads[':id']['pre-searches'].$get(data));
 }
 
-/**
- * Execute pre-search SSE stream
- * Protected endpoint - requires authentication
- *
- * EXCEPTION: Does NOT parse response because SSE streams must return raw Response
- * object for EventSource/ReadableStream processing.
- */
-export async function executePreSearchStreamService(data: PreSearchRequest) {
-  const client = createApiClient();
-  return client.chatFeature.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(data);
-}
-
 // ============================================================================
 // Derived Types - RPC INFERENCE (SINGLE SOURCE OF TRUTH)
 // ============================================================================

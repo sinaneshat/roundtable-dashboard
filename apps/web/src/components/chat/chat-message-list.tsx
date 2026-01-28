@@ -1071,10 +1071,6 @@ export const ChatMessageList = memo(
       return groups;
     }, [messagesWithParticipantInfo, findModel, demoMode, userInfo, userAvatarSrc, userAvatarName, allStreamingRoundParticipantsHaveContent, _streamingRoundNumber, isStreaming]);
 
-    // ✅ UNIFIED RENDERING: Moderator now renders through normal messageGroups path
-    // No special placeholder needed - useModeratorStream adds message to messages array during streaming
-    // and it flows through the same rendering path as participant messages
-
     // Group messages by round for pre-search injection
     const messageGroupsByRound = new Map<number, MessageGroup[]>();
     messageGroups.forEach((group) => {

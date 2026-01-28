@@ -25,13 +25,6 @@ export {
   streamChatService,
 } from './messages';
 
-// Moderator (Streaming)
-export {
-  type StreamModeratorRequest,
-  type StreamModeratorResponse,
-  streamModeratorService,
-} from './moderator';
-
 // Participants
 export {
   type AddParticipantRequest,
@@ -55,7 +48,6 @@ export {
 
 // Pre-Search
 export {
-  executePreSearchStreamService,
   type GeneratedSearchQuery,
   type GetThreadPreSearchesRequest,
   type GetThreadPreSearchesResponse,
