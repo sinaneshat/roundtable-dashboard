@@ -192,20 +192,36 @@ describe('useRoundSubscription', () => {
       renderHook(() =>
         useRoundSubscription(createDefaultOptions({ participantCount: 3 })));
 
+      // Run timers multiple times to allow stagger logic to enable P1 after P0 completes, etc.
+      await vi.runAllTimersAsync();
+      await vi.runAllTimersAsync();
       await vi.runAllTimersAsync();
 
-      // Should be called for each participant (3)
+      // Should be called for each participant (3) with params object and options
+      // Due to stagger logic, participants are enabled sequentially as previous ones complete
       expect(mockParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({ participantIndex: 0 }),
-        expect.anything(),
+        expect.objectContaining({
+          participantIndex: 0,
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(mockParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({ participantIndex: 1 }),
-        expect.anything(),
+        expect.objectContaining({
+          participantIndex: 1,
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
       expect(mockParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({ participantIndex: 2 }),
-        expect.anything(),
+        expect.objectContaining({
+          participantIndex: 2,
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
       );
     });
 
@@ -223,7 +239,14 @@ describe('useRoundSubscription', () => {
 
       await vi.runAllTimersAsync();
 
-      expect(mockPresearch).toHaveBeenCalledWith();
+      // Presearch service is called with params and options
+      expect(mockPresearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          roundNumber: 0,
+          threadId: 'test-thread-id',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     });
 
     it('should not call presearch service when disabled', async () => {

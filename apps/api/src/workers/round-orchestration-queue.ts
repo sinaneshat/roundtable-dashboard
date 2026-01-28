@@ -185,16 +185,14 @@ async function triggerParticipantStream(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to trigger participant ${participantIndex}: ${response.status} ${response.statusText}`);
+    const errorText = await response.text().catch(() => 'unknown');
+    throw new Error(`Failed to trigger participant ${participantIndex}: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // Drain the stream response to allow completion
-  // Wrapped in try-catch as stream may already be consumed or connection closed
-  try {
-    await drainStream(response);
-  } catch {
-    // Stream already consumed or connection closed - this is expected
-  }
+  // ✅ FIRE-AND-FORGET: Don't drain the stream - streaming handler queues
+  // the next participant/moderator when it completes via its own logic.
+  // This prevents queue consumer timeout for long-running AI generations.
+  rlog.phase('queue-participant', `r${roundNumber} P${participantIndex} triggered, returning immediately`);
 }
 
 /**
@@ -263,6 +261,11 @@ async function triggerModeratorStream(
 
 /**
  * Trigger pre-search via internal API call
+ *
+ * IMPORTANT: We do NOT wait for the stream to complete (no drainStream).
+ * Pre-search can take 30+ seconds for complex queries, which would timeout
+ * the queue consumer. Instead, the pre-search endpoint handles its own
+ * completion via waitUntil and queues TRIGGER_PARTICIPANT when done.
  */
 async function triggerPreSearch(
   message: TriggerPreSearchQueueMessage,
@@ -287,16 +290,14 @@ async function triggerPreSearch(
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to trigger pre-search: ${response.status} ${response.statusText}`);
+    const errorText = await response.text().catch(() => 'unknown');
+    throw new Error(`Failed to trigger pre-search: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  // Drain the stream response to allow completion
-  // Wrapped in try-catch as stream may already be consumed or connection closed
-  try {
-    await drainStream(response);
-  } catch {
-    // Stream already consumed or connection closed - this is expected
-  }
+  // ✅ FIRE-AND-FORGET: Don't drain the stream - pre-search endpoint handles
+  // its own completion via waitUntil(markPreSearchCompletedInExecution).
+  // This prevents queue consumer timeout for long-running searches.
+  rlog.phase('queue-presearch', `r${roundNumber} pre-search triggered, returning immediately`);
 }
 
 // ============================================================================
