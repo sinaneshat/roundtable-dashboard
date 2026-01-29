@@ -1,13 +1,28 @@
 import { createFileRoute } from '@tanstack/react-router';
 
+import { StructuredData } from '@/components/seo';
 import PrivacyScreen from '@/containers/screens/legal/PrivacyScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 const pageTitle = 'Privacy Policy - Roundtable';
 const pageDescription = 'Privacy Policy for Roundtable - Learn how we collect, use, and protect your data.';
 
+function PrivacyPage() {
+  return (
+    <>
+      <PrivacyScreen />
+      <StructuredData
+        type="WebPage"
+        name={pageTitle}
+        description={pageDescription}
+        path="/legal/privacy"
+      />
+    </>
+  );
+}
+
 export const Route = createFileRoute('/legal/privacy')({
-  component: PrivacyScreen,
+  component: PrivacyPage,
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {

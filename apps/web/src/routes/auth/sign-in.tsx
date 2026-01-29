@@ -3,6 +3,7 @@ import z from 'zod';
 
 import { AuthForm } from '@/components/auth/auth-form';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
+import { StructuredData } from '@/components/seo';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 const pageTitle = 'Sign In - Roundtable';
@@ -73,8 +74,11 @@ function SignInPage() {
   // Session is guaranteed NOT to exist by beforeLoad
   // If user logs in, they'll be redirected on next navigation
   return (
-    <AuthShowcaseLayout>
-      <AuthForm />
-    </AuthShowcaseLayout>
+    <>
+      <AuthShowcaseLayout>
+        <AuthForm />
+      </AuthShowcaseLayout>
+      <StructuredData type="Organization" />
+    </>
   );
 }

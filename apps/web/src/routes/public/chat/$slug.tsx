@@ -2,6 +2,7 @@ import { MessageRoles } from '@roundtable/shared';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { PublicChatSkeleton } from '@/components/loading';
+import { StructuredData } from '@/components/seo';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { queryKeys } from '@/lib/data/query-keys';
@@ -159,7 +160,34 @@ function PublicChatThread() {
   const loaderData = Route.useLoaderData() as PublicChatLoaderData;
   const { initialData, errorState } = loaderData;
 
+  const thread = initialData?.thread;
+  const participants = initialData?.participants || [];
+  const messages = initialData?.messages || [];
+
+  const title = thread?.title || 'Shared AI Conversation';
+  const modelCount = participants.length;
+  const messageCount = messages.length;
+
+  // Rich description with stats
+  const description = thread?.title
+    ? `"${thread.title}" - AI discussion with ${modelCount} model${modelCount !== 1 ? 's' : ''} and ${messageCount} message${messageCount !== 1 ? 's' : ''} on Roundtable`
+    : 'View this collaborative AI brainstorming session on Roundtable';
+
   // Direct render - no Suspense/lazy that would cause skeleton flash during hydration
   // pendingComponent handles navigation skeleton, loader ensures data is ready for SSR
-  return <PublicChatThreadScreen slug={slug} initialData={initialData} errorState={errorState} />;
+  return (
+    <>
+      <PublicChatThreadScreen slug={slug} initialData={initialData} errorState={errorState} />
+      {!errorState && (
+        <StructuredData
+          type="Article"
+          headline={title}
+          description={description}
+          path={`/public/chat/${slug}`}
+          datePublished={thread?.createdAt}
+          dateModified={thread?.updatedAt}
+        />
+      )}
+    </>
+  );
 }

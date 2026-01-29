@@ -1,3 +1,4 @@
+import { BRAND } from '@roundtable/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
@@ -5,6 +6,7 @@ import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { SidebarLoadingFallback } from '@/components/loading';
 import { PricingContentSkeleton } from '@/components/pricing';
 import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
+import { StructuredData } from '@/components/seo';
 import { HeaderSkeleton } from '@/components/skeletons';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
@@ -96,12 +98,22 @@ function PricingPage() {
   const activeSession = session ?? routeContext.session ?? null;
 
   return (
-    <PreferencesStoreProvider>
-      <ChatLayoutProviders>
-        <ChatLayoutShell session={activeSession}>
-          <PublicPricingScreen />
-        </ChatLayoutShell>
-      </ChatLayoutProviders>
-    </PreferencesStoreProvider>
+    <>
+      <PreferencesStoreProvider>
+        <ChatLayoutProviders>
+          <ChatLayoutShell session={activeSession}>
+            <PublicPricingScreen />
+          </ChatLayoutShell>
+        </ChatLayoutProviders>
+      </PreferencesStoreProvider>
+      <StructuredData
+        type="Product"
+        name={`${BRAND.name} Pro`}
+        description="Chat with multiple AI models simultaneously. Unlimited conversations, priority support, and advanced features."
+        price={20}
+        currency="USD"
+        path="/chat/pricing"
+      />
+    </>
   );
 }

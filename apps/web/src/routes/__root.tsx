@@ -101,8 +101,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         // Performance: DNS prefetch and preconnect for external resources
         { rel: 'dns-prefetch', href: 'https://challenges.cloudflare.com' },
         { rel: 'dns-prefetch', href: 'https://us.posthog.com' },
+        { rel: 'dns-prefetch', href: 'https://fonts.googleapis.com' },
+        { rel: 'dns-prefetch', href: 'https://fonts.gstatic.com' },
         { rel: 'preconnect', href: 'https://challenges.cloudflare.com', crossOrigin: 'anonymous' },
         { rel: 'preconnect', href: 'https://us.posthog.com', crossOrigin: 'anonymous' },
+        // Google Fonts for Noto Sans - preconnect to both domains for faster font loading
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
         // PWA Manifest
         { rel: 'manifest', href: '/manifest.webmanifest' },
         // Favicon - default for all browsers (without sizes for maximum compatibility)

@@ -6,6 +6,7 @@ import {
   createOrganizationJsonLd,
   createProductJsonLd,
   createSoftwareAppJsonLd,
+  createWebPageJsonLd,
   serializeJsonLd,
 } from '@/lib/seo';
 
@@ -15,7 +16,7 @@ import {
  */
 const BasePropsSchema = z.object({
   /** Schema.org type for the structured data */
-  type: z.enum(['WebApplication', 'Organization', 'Product', 'Article']).optional(),
+  type: z.enum(['WebApplication', 'Organization', 'Product', 'Article', 'WebPage']).optional(),
 });
 
 /**
@@ -57,6 +58,19 @@ const ProductPropsSchema = BasePropsSchema.extend({
 });
 
 /**
+ * Schema for WebPage structured data props
+ */
+const WebPagePropsSchema = BasePropsSchema.extend({
+  /** Description of the page */
+  description: z.string(),
+  /** Page name/title */
+  name: z.string(),
+  /** Path to the page */
+  path: z.string(),
+  type: z.literal('WebPage'),
+});
+
+/**
  * Discriminated union schema for StructuredData props
  */
 const _StructuredDataPropsSchema = z.union([
@@ -64,6 +78,7 @@ const _StructuredDataPropsSchema = z.union([
   z.object({ type: z.literal('Organization') }),
   ArticlePropsSchema,
   ProductPropsSchema,
+  WebPagePropsSchema,
 ]);
 type StructuredDataProps = z.infer<typeof _StructuredDataPropsSchema>;
 
@@ -75,6 +90,7 @@ type StructuredDataProps = z.infer<typeof _StructuredDataPropsSchema>;
  * - Organization: For company/brand information
  * - Product: For pricing plans and products
  * - Article: For blog posts and content
+ * - WebPage: For generic pages (legal, about, etc.)
  */
 export function StructuredData(props: StructuredDataProps) {
   let structuredData: JsonLdData;
@@ -101,6 +117,13 @@ export function StructuredData(props: StructuredDataProps) {
         name: props.name,
         path: props.path,
         price: props.price,
+      });
+      break;
+    case 'WebPage':
+      structuredData = createWebPageJsonLd({
+        description: props.description,
+        name: props.name,
+        path: props.path,
       });
       break;
     case 'WebApplication':

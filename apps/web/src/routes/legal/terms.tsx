@@ -1,13 +1,28 @@
 import { createFileRoute } from '@tanstack/react-router';
 
+import { StructuredData } from '@/components/seo';
 import TermsScreen from '@/containers/screens/legal/TermsScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 const pageTitle = 'Terms of Service - Roundtable';
 const pageDescription = 'Terms of Service for Roundtable - Read our terms and conditions for using the platform.';
 
+function TermsPage() {
+  return (
+    <>
+      <TermsScreen />
+      <StructuredData
+        type="WebPage"
+        name={pageTitle}
+        description={pageDescription}
+        path="/legal/terms"
+      />
+    </>
+  );
+}
+
 export const Route = createFileRoute('/legal/terms')({
-  component: TermsScreen,
+  component: TermsPage,
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {

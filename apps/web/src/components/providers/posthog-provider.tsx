@@ -8,6 +8,7 @@ import { getApiOriginUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
+import { WebVitalsTracker } from './web-vitals-tracker';
 
 declare global {
   // eslint-disable-next-line ts/consistent-type-definitions
@@ -119,6 +120,7 @@ export default function PostHogProvider({
     <PHProvider client={posthog}>
       <PostHogIdentifyUser />
       <PageViewTracker />
+      <WebVitalsTracker />
       {children}
     </PHProvider>
   );
