@@ -133,6 +133,12 @@ export function createWebPageJsonLd(opts: {
   };
 }
 
+/** Contributor type for Article schema */
+export type ArticleContributor = {
+  name: string;
+  type?: 'Person' | 'Organization';
+};
+
 /**
  * Create Article JSON-LD
  */
@@ -141,11 +147,19 @@ export function createArticleJsonLd(opts: {
   description: string;
   path: string;
   author?: string;
+  contributors?: ArticleContributor[];
+  keywords?: string[];
   datePublished?: string;
   dateModified?: string;
   image?: string;
 }): WithContext<Article> {
   const baseUrl = getAppBaseUrl();
+
+  // Build contributors array if provided
+  const contributorEntities = opts.contributors?.map(c => ({
+    '@type': c.type || 'Organization' as const,
+    'name': c.name,
+  }));
 
   return {
     '@context': 'https://schema.org',
@@ -167,6 +181,8 @@ export function createArticleJsonLd(opts: {
     'url': `${baseUrl}${opts.path}`,
     ...(opts.datePublished && { datePublished: opts.datePublished }),
     ...(opts.dateModified && { dateModified: opts.dateModified }),
+    ...(contributorEntities?.length && { contributor: contributorEntities }),
+    ...(opts.keywords?.length && { keywords: opts.keywords.join(', ') }),
   };
 }
 

@@ -41,6 +41,7 @@ Allow: /
 Allow: /auth/sign-in
 Allow: /chat/pricing
 Allow: /legal/
+Allow: /public/
 
 # Disallow protected and private content
 Disallow: /chat/
@@ -54,7 +55,65 @@ Disallow: /_build/
 Sitemap: ${baseUrl}/sitemap.xml
 
 # Crawl-delay for respectful crawling
-Crawl-delay: 1`;
+Crawl-delay: 1
+
+# =============================================================================
+# AI Crawlers - Answer Engine Optimization (AEO)
+# =============================================================================
+# These rules allow AI assistants to index public content for training
+# and answer generation while protecting private user conversations.
+
+# OpenAI GPTBot - Used for ChatGPT and AI training
+User-agent: GPTBot
+Allow: /
+Allow: /public/
+Allow: /llms.txt
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/
+
+# Anthropic Claude Web Crawler
+User-agent: Claude-Web
+Allow: /
+Allow: /public/
+Allow: /llms.txt
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Allow: /public/
+Allow: /llms.txt
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/
+
+# Amazon Alexa / AI services
+User-agent: Amazonbot
+Allow: /
+Allow: /public/
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/
+
+# Google AI (Bard/Gemini)
+User-agent: Google-Extended
+Allow: /
+Allow: /public/
+Allow: /llms.txt
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/
+
+# Common Crawl (used by many AI training datasets)
+User-agent: CCBot
+Allow: /
+Allow: /public/
+Disallow: /chat/
+Disallow: /settings/
+Disallow: /api/`;
 }
 
 export const Route = createFileRoute('/robots.txt')({

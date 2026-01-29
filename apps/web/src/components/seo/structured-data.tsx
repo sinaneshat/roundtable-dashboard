@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { JsonLdData } from '@/lib/seo';
 import {
   createArticleJsonLd,
+  createBreadcrumbListJsonLd,
   createOrganizationJsonLd,
   createProductJsonLd,
   createSoftwareAppJsonLd,
@@ -10,13 +11,21 @@ import {
   serializeJsonLd,
 } from '@/lib/seo';
 
+/** Contributor schema for Article structured data */
+const ContributorSchema = z.object({
+  /** Contributor name */
+  name: z.string(),
+  /** Type of contributor */
+  type: z.enum(['Person', 'Organization']).optional(),
+});
+
 /**
  * Props for the StructuredData component
  * Uses discriminated union for type-safe props based on schema type
  */
 const BasePropsSchema = z.object({
   /** Schema.org type for the structured data */
-  type: z.enum(['WebApplication', 'Organization', 'Product', 'Article', 'WebPage']).optional(),
+  type: z.enum(['WebApplication', 'Organization', 'Product', 'Article', 'WebPage', 'BreadcrumbList']).optional(),
 });
 
 /**
@@ -25,6 +34,8 @@ const BasePropsSchema = z.object({
 const ArticlePropsSchema = BasePropsSchema.extend({
   /** Author name */
   author: z.string().optional(),
+  /** Contributors (e.g., AI models that participated) */
+  contributors: z.array(ContributorSchema).optional(),
   /** Last modified date */
   dateModified: z.string().optional(),
   /** Publication date */
@@ -35,6 +46,8 @@ const ArticlePropsSchema = BasePropsSchema.extend({
   headline: z.string(),
   /** Image URL */
   image: z.string().optional(),
+  /** Keywords for the article */
+  keywords: z.array(z.string()).optional(),
   /** Path to the article */
   path: z.string(),
   type: z.literal('Article'),
@@ -71,6 +84,20 @@ const WebPagePropsSchema = BasePropsSchema.extend({
 });
 
 /**
+ * Schema for BreadcrumbList structured data props
+ */
+const BreadcrumbListPropsSchema = BasePropsSchema.extend({
+  /** Breadcrumb items in order */
+  items: z.array(z.object({
+    /** Display name for the breadcrumb */
+    name: z.string(),
+    /** Path to the page */
+    path: z.string(),
+  })),
+  type: z.literal('BreadcrumbList'),
+});
+
+/**
  * Discriminated union schema for StructuredData props
  */
 const _StructuredDataPropsSchema = z.union([
@@ -79,6 +106,7 @@ const _StructuredDataPropsSchema = z.union([
   ArticlePropsSchema,
   ProductPropsSchema,
   WebPagePropsSchema,
+  BreadcrumbListPropsSchema,
 ]);
 type StructuredDataProps = z.infer<typeof _StructuredDataPropsSchema>;
 
@@ -91,6 +119,7 @@ type StructuredDataProps = z.infer<typeof _StructuredDataPropsSchema>;
  * - Product: For pricing plans and products
  * - Article: For blog posts and content
  * - WebPage: For generic pages (legal, about, etc.)
+ * - BreadcrumbList: For navigation breadcrumbs
  */
 export function StructuredData(props: StructuredDataProps) {
   let structuredData: JsonLdData;
@@ -102,11 +131,13 @@ export function StructuredData(props: StructuredDataProps) {
     case 'Article':
       structuredData = createArticleJsonLd({
         author: props.author,
+        contributors: props.contributors,
         dateModified: props.dateModified,
         datePublished: props.datePublished,
         description: props.description,
         headline: props.headline,
         image: props.image,
+        keywords: props.keywords,
         path: props.path,
       });
       break;
@@ -125,6 +156,9 @@ export function StructuredData(props: StructuredDataProps) {
         name: props.name,
         path: props.path,
       });
+      break;
+    case 'BreadcrumbList':
+      structuredData = createBreadcrumbListJsonLd(props.items);
       break;
     case 'WebApplication':
     default:

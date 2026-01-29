@@ -173,20 +173,48 @@ function PublicChatThread() {
     ? `"${thread.title}" - AI discussion with ${modelCount} model${modelCount !== 1 ? 's' : ''} and ${messageCount} message${messageCount !== 1 ? 's' : ''} on Roundtable`
     : 'View this collaborative AI brainstorming session on Roundtable';
 
+  // Build contributors from AI model participants
+  // Use role if set, otherwise extract readable name from modelId (e.g., "anthropic/claude-3" -> "claude-3")
+  const contributors = participants.map(p => ({
+    name: p.role || p.modelId.split('/').pop() || p.modelId,
+    type: 'Organization' as const,
+  }));
+
+  // Keywords for SEO - derived from AI collaboration context
+  const keywords = [
+    'AI debate',
+    'multi-model AI',
+    'AI collaboration',
+    'AI discussion',
+    ...(modelCount > 1 ? ['AI comparison'] : []),
+  ];
+
   // Direct render - no Suspense/lazy that would cause skeleton flash during hydration
   // pendingComponent handles navigation skeleton, loader ensures data is ready for SSR
   return (
     <>
       <PublicChatThreadScreen slug={slug} initialData={initialData} errorState={errorState} />
       {!errorState && (
-        <StructuredData
-          type="Article"
-          headline={title}
-          description={description}
-          path={`/public/chat/${slug}`}
-          datePublished={thread?.createdAt}
-          dateModified={thread?.updatedAt}
-        />
+        <>
+          <StructuredData
+            type="Article"
+            headline={title}
+            description={description}
+            path={`/public/chat/${slug}`}
+            datePublished={thread?.createdAt}
+            dateModified={thread?.updatedAt}
+            contributors={contributors}
+            keywords={keywords}
+          />
+          <StructuredData
+            type="BreadcrumbList"
+            items={[
+              { name: 'Home', path: '/' },
+              { name: 'Shared Conversations', path: '/public' },
+              { name: title, path: `/public/chat/${slug}` },
+            ]}
+          />
+        </>
       )}
     </>
   );
