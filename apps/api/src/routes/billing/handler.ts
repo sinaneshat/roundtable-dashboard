@@ -1039,6 +1039,7 @@ async function trackRevenueFromWebhook(
         }
         const subscription = subscriptionResult.data;
         await revenueTracking.subscriptionCanceled({
+          currency: (subscription.currency ?? 'usd').toUpperCase(),
           product: subscription.items?.data[0]?.price?.nickname ?? undefined,
           subscription_id: subscription.id,
           subscription_status: 'canceled',

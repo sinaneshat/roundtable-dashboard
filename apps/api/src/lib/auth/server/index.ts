@@ -330,18 +330,6 @@ function createAuth() {
 
     secret: getAuthSecret(),
 
-    // Session configuration
-    session: {
-      cookieCache: {
-        enabled: true,
-        maxAge: 60 * 15, // 15 minutes cache
-        refreshCache: true, // Stateless refresh without DB lookup
-        strategy: 'compact', // Base64url + HMAC-SHA256 - smallest, best perf
-      },
-      expiresIn: 60 * 60 * 24 * 7, // 7 days
-      updateAge: 60 * 60 * 24, // 1 day
-    },
-
     // ✅ Only enable Google OAuth if credentials are configured
     // If not configured, only magic link authentication will be available
     socialProviders: (() => {

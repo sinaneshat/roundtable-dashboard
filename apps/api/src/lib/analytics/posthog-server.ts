@@ -32,6 +32,7 @@
  * Reference: https://posthog.com/docs/libraries/next-js
  * Pattern: src/lib/posthog-server.ts
  */
+import { env as workersEnv } from 'cloudflare:workers';
 import { PostHog } from 'posthog-node';
 import * as z from 'zod';
 
@@ -46,6 +47,24 @@ const ANONYMOUS_USER_ID = 'anonymous' as const;
 let posthogClient: PostHog | null = null;
 
 /**
+ * Get environment variable from Cloudflare Workers or process.env fallback
+ */
+function getEnvVar(key: 'POSTHOG_API_KEY' | 'POSTHOG_HOST' | 'WEBAPP_ENV'): string | undefined {
+  // 1. Try Cloudflare Workers bindings (production/preview)
+  try {
+    const value = workersEnv[key];
+    if (value) {
+      return value;
+    }
+  } catch {
+    // Workers env not available - continue to fallback
+  }
+
+  // 2. Fall back to process.env (local dev)
+  return process.env[key];
+}
+
+/**
  * Get or create PostHog server-side client instance
  *
  * Singleton pattern for edge environments (Cloudflare Workers).
@@ -56,9 +75,9 @@ let posthogClient: PostHog | null = null;
  * Enabled in preview and production environments.
  */
 export function getPostHogClient(): PostHog | null {
-  const apiKey = process.env.POSTHOG_API_KEY;
-  const apiHost = process.env.POSTHOG_HOST;
-  const environment = process.env.WEBAPP_ENV;
+  const apiKey = getEnvVar('POSTHOG_API_KEY');
+  const apiHost = getEnvVar('POSTHOG_HOST');
+  const environment = getEnvVar('WEBAPP_ENV');
 
   // Disable in local environment, enable in preview and production
   if (environment === 'local' || !apiKey || !apiHost) {
@@ -107,7 +126,7 @@ export function getDistinctIdFromCookie(cookieHeader: string | null): string {
     return ANONYMOUS_USER_ID;
   }
 
-  const apiKey = process.env.POSTHOG_API_KEY;
+  const apiKey = getEnvVar('POSTHOG_API_KEY');
   if (!apiKey) {
     return ANONYMOUS_USER_ID;
   }

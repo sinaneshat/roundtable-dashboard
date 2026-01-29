@@ -12,6 +12,23 @@ Roundtable: collaborative AI brainstorming platform.
 
 ---
 
+## Behavior Rules
+
+### REUSE OVER CREATE
+
+**Always reuse existing code. Never recreate or duplicate.**
+
+Before writing anything new:
+1. Search codebase for existing implementations (`Grep`, `Glob`)
+2. Look for similar patterns in other files
+3. Extend or build on what exists rather than creating from scratch
+4. Import and reuse existing helpers, utilities, services, schemas
+5. Only create new code when nothing similar exists
+
+This applies to: helpers, utilities, patterns, schemas, services, components, hooks, types, constants, configs - everything.
+
+---
+
 ## Type Safety Rules
 
 ### FORBIDDEN
@@ -27,6 +44,7 @@ Roundtable: collaborative AI brainstorming platform.
 | `db.transaction()` | Use `db.batch()` (D1 limitation) |
 | `// @ts-ignore`, `// @ts-expect-error` | Fix the underlying type issue |
 | Explicit return types | Lean on inference; omit unless necessary |
+| Creating duplicate helpers | Search for existing utilities first |
 
 ### REQUIRED
 
