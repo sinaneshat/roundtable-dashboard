@@ -101,10 +101,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         // Performance: DNS prefetch and preconnect for external resources
         { rel: 'dns-prefetch', href: 'https://challenges.cloudflare.com' },
         { rel: 'dns-prefetch', href: 'https://us.posthog.com' },
+        { rel: 'dns-prefetch', href: 'https://connect.facebook.net' },
         { rel: 'dns-prefetch', href: 'https://fonts.googleapis.com' },
         { rel: 'dns-prefetch', href: 'https://fonts.gstatic.com' },
         { rel: 'preconnect', href: 'https://challenges.cloudflare.com', crossOrigin: 'anonymous' },
         { rel: 'preconnect', href: 'https://us.posthog.com', crossOrigin: 'anonymous' },
+        { rel: 'preconnect', href: 'https://connect.facebook.net', crossOrigin: 'anonymous' },
         // Google Fonts for Noto Sans - preconnect to both domains for faster font loading
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
@@ -159,11 +161,26 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
               loader={() => import('@/components/providers/posthog-provider').then(m => ({ default: m.default }))}
               providerProps={{ apiKey: env.VITE_POSTHOG_API_KEY, children: null }}
             >
-              {children}
+              <IdleLazyProvider<{ children: ReactNode }>
+                loader={() => import('@/components/providers/meta-pixel-provider').then(m => ({ default: m.default }))}
+                providerProps={{ children: null }}
+              >
+                {children}
+              </IdleLazyProvider>
             </IdleLazyProvider>
           </IdleLazyProvider>
         </TurnstileProvider>
         <StructuredData type="WebApplication" />
+        {/* Meta Pixel noscript fallback for non-JS environments */}
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: 'none' }}
+            src="https://www.facebook.com/tr?id=2006071313583543&ev=PageView&noscript=1"
+            alt=""
+          />
+        </noscript>
         <Scripts />
       </body>
     </html>
