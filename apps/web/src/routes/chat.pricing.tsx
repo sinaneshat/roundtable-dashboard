@@ -15,7 +15,7 @@ import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { productsQueryOptions, sidebarThreadsQueryOptions } from '@/lib/data/query-options';
 
 const pageTitle = 'Pricing - Roundtable';
-const pageDescription = 'Choose your Roundtable plan - collaborative AI brainstorming with multiple AI models working together.';
+const pageDescription = 'Choose your Roundtable plan. AI models that debate together, see each other\'s answers, and converge on better solutions for your toughest questions.';
 
 const pricingSearchSchema = z.object({
   priceId: z.string().optional(),

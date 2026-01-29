@@ -22,7 +22,7 @@ export const BRAND = {
     primary: '#2563eb',
     secondary: '#64748b',
   } as const,
-  description: 'Chat with ChatGPT, Claude, Gemini and more AI models at once. Get diverse perspectives, brainstorm ideas, and solve problems with multiple AIs collaborating in real-time.',
+  description: 'ChatGPT, Claude, Gemini & Grok as your AI advisors. They debate your questions together, respond to each other, and converge on better answers.',
   displayName: 'Roundtable.now',
   domain: 'roundtable.now',
   domainDisplay: 'Roundtable.now',
@@ -74,7 +74,7 @@ export const BRAND = {
 
   support: 'soheil@deadpixel.ai',
 
-  tagline: 'Multiple AI Models, One Conversation',
+  tagline: 'Your AI Board of Directors',
 
   // Modern tech fonts
   typography: {

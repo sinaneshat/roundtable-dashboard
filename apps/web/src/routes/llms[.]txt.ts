@@ -33,13 +33,14 @@ function generateLlmsTxt(): string {
 
 ## What is ${BRAND.name}?
 
-${BRAND.name} is a collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas. Think of it as having a board of directors - but powered by AI.
+${BRAND.name} is your AI board of directors. Unlike parallel comparison tools, Roundtable is a true LLM council where models see and respond to each other in real-time. They debate, challenge, and build on each other's answers - converging on better solutions rather than just showing side-by-side outputs.
 
 ## Key Features
 
-- **Multi-Model Collaboration**: Multiple AI models discuss and build on each other's ideas
-- **Diverse Perspectives**: Get different viewpoints from various AI models
-- **Real-time Brainstorming**: Watch AI models collaborate in real-time
+- **True LLM Council**: Models (ChatGPT, Claude, Gemini, Grok) see and respond to each other - not just parallel queries
+- **AI Debate & Convergence**: Models debate, challenge, and build on each other's ideas to reach better answers
+- **Diverse Perspectives**: Get different viewpoints from various AI models with unique reasoning styles
+- **Real-time Collaboration**: Watch AI models collaborate and respond to each other in real-time
 - **Web Search Integration**: AI models can search the web for up-to-date information
 - **Custom Roles**: Create custom AI personas with specific expertise
 - **Conversation Export**: Export your brainstorming sessions
@@ -47,9 +48,10 @@ ${BRAND.name} is a collaborative AI brainstorming platform where multiple AI mod
 ## How It Works
 
 1. Start a conversation with a question or problem
-2. Multiple AI models (like Claude, GPT-4, Gemini) participate
-3. Each model brings unique perspectives and builds on others' ideas
-4. The result is richer, more comprehensive solutions
+2. Multiple AI models (ChatGPT, Claude, Gemini, Grok) participate
+3. Each model sees what others said and responds to their points
+4. Models debate, challenge assumptions, and build on each other's ideas
+5. The result is convergence on better, more thoroughly-examined answers
 
 ## Use Cases
 

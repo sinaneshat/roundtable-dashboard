@@ -7,7 +7,7 @@ import { StructuredData } from '@/components/seo';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 const pageTitle = 'Sign In - Roundtable';
-const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
+const pageDescription = 'Sign in to Roundtable - your AI board of directors where ChatGPT, Claude, and Gemini debate together and respond to each other.';
 
 // Validate search params (redirect for post-auth navigation, toast/message for user feedback)
 const signInSearchSchema = z.object({
